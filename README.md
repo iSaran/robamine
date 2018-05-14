@@ -10,3 +10,8 @@ The documentation for the latest release can be found
 [here](https://auth-arl.github.io/docs/rlrl/latest/index.html). For the
 latest master you need to produce it locally with `doxygen Doxyfile` inside the
 repository. Then see `docs/html/index.html`.
+
+## Contents
+
+* [rlrl](rlrl): C++ library for RL
+* [gym-rlrl](gym-rlrl): Python Gym Environments for our robots and testing RL in MuJoCo
