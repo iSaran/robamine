@@ -15,7 +15,7 @@ from baselines.ddpg.memory import Memory
 import baselines.ddpg.training as training
 
 from mpi4py import MPI
-import gym, gym_rlrl
+import gym, rlrl_py
 import tensorflow as tf
 
 def run(evaluation, noise_type, layer_norm, seed, **kwargs):

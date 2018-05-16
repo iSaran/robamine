@@ -1,7 +1,7 @@
 from setuptools import setup
 
-setup(name='gym_rlrl',
-      description='Gym Environments for AUTh-ARL robots',
+setup(name='rlrl_py',
+      description='Python codebase with Gym Environments and RL training for AUTh-ARL robots',
       version='0.0.1',
       author='Iason Sarantopoulos',
       author_email='iasons@auth.gr',

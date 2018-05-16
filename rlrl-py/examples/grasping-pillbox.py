@@ -1,5 +1,5 @@
 import gym
-import gym_rlrl
+import rlrl_py
 import numpy as np
 #
 env = gym.make('Floating-BHand-v0')
