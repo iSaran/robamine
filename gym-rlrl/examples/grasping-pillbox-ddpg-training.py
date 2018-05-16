@@ -1,5 +1,5 @@
 """
-The code was taken and improved from openai/baselines/ddpg/main.py
+The code was taken and customised from openai/baselines/ddpg/main.py
 """
 
 import os, argparse, time
@@ -115,7 +115,6 @@ def parse_args():
                          type=int,
                          default=0,
                          help='RNG seed')
-
 
     boolean_flag(parser, 'render-eval', default=False)
     boolean_flag(parser, 'render', default=False)
