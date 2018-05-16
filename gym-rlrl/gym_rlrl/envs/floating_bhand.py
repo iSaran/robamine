@@ -21,7 +21,6 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
         self.sim = MjSim(self.model)
         self.viewer = MjViewer(self.sim)
 
-
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
@@ -81,7 +80,7 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
     def step(self, action):
         reward = 0.0
         done = False
-        obs = np.array([10, 10, 10])
+        obs = np.array([10, 10, 10, 10, 10, 10])
         self.do_simulation(action)
         return obs, reward, done, {}
 
