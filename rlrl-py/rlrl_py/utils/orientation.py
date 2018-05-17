@@ -87,3 +87,18 @@ def get_homogeneous_transformation(pose):
             M[i, j] = R[i, j]
     M[3, 3] = 1
     return M
+
+def get_pose_from_homog(M):
+    """
+    Returns a pose [position, quaternion] from a homogeneous matrix
+    """
+    p = [None] * 3
+    R = mat.eye(3)
+
+    for i in range(0, 3):
+        p[i] = M[i, 3]
+        for j in range(0, 3):
+            R[i, j] = M[i, j]
+
+    q = rot2quat(R)
+    return np.concatenate((p, q))
