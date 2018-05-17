@@ -75,12 +75,23 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.get_obs()
 
     def get_obs(self):
-        return np.zeros(6)
+        # Read the wrist pose
+        wrist_pose = self.sim.data.get_joint_qpos("bh_wrist_joint")
+
+        # Parse the joint positions
+        hand_joints_pos = []
+        for joint_name in self.bhand_joint_names:
+            if joint_name != "bh_wrist_joint":
+                hand_joints_pos.append(self.sim.data.get_joint_qpos(joint_name))
+
+        # Parse the pose of the object
+        object_goal_pose = self.sim.data.get_joint_qpos("world_to_pillbox")
+        return np.concatenate((wrist_pose, hand_joints_pos))
 
     def step(self, action):
         reward = 0.0
         done = False
-        obs = np.array([10, 10, 10, 10, 10, 10])
+        obs = self.get_obs()
         self.do_simulation(action)
         return obs, reward, done, {}
 

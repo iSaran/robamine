@@ -75,3 +75,18 @@ def rot2quat(R, shape="wxyz"):
       q[3] = 0.25 * S
 
     return q / lin.norm(q);
+
+def get_homogeneous_transformation(pose):
+    """
+    Returns a homogeneous transformation given a pose [position, quaternion]
+    """
+    M = mat.zeros((4, 4))
+    p = pose[0:3]
+    R = quat2rot(pose[3:7])
+    for i in range(0, 3):
+        M[i, 3] = p[i]
+        for j in range(0, 3):
+            M[i, j] = R[i, j]
+    M[3, 3] = 1
+    print(M)
+    return R
