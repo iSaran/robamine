@@ -26,7 +26,8 @@ def run(evaluation, noise_type, layer_norm, seed, **kwargs):
         logger.set_level(logger.DISABLED)
 
     # Create envs
-    env = gym.make('Floating-BHand-v0')
+    env_id = 'Floating-BHand-v0'
+    env = gym.make(env_id)
     env = bench.Monitor(env, logger.get_dir() and os.path.join(logger.get_dir(), str(rank)))
     if evaluation and rank==0:
         eval_env = gym.make(env_id)
@@ -128,15 +129,18 @@ def parse_args():
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--reward-scale', type=float, default=1.)
     parser.add_argument('--clip-norm', type=float, default=None)
+
     parser.add_argument('--nb-epochs', type=int, default=500)  # with default settings, perform 1M steps total
     parser.add_argument('--nb-epoch-cycles', type=int, default=20)
+    parser.add_argument('--nb-rollout-steps', type=int, default=2000)  # per epoch cycle and MPI worker
+    parser.add_argument('--num-timesteps', type=int, default=None)
+
     parser.add_argument('--nb-train-steps', type=int, default=50)  # per epoch cycle and MPI worker
     parser.add_argument('--nb-eval-steps', type=int, default=100)  # per epoch cycle and MPI worker
-    parser.add_argument('--nb-rollout-steps', type=int, default=100)  # per epoch cycle and MPI worker
-    parser.add_argument('--num-timesteps', type=int, default=None)
     args = parser.parse_args()
     # we don't directly specify timesteps for this script, so make sure that if we do specify them
     # they agree with the other parameters
+    args.num_timesteps = args.nb_epochs * args.nb_epoch_cycles * args.nb_rollout_steps
     if args.num_timesteps is not None:
         assert(args.num_timesteps == args.nb_epochs * args.nb_epoch_cycles * args.nb_rollout_steps)
     dict_args = vars(args)
