@@ -28,15 +28,15 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Define the action space as the Wrench in BHand wrist and torques in 4
         # actuated joints of BHand
-        self.action_space = spaces.Box(low=np.array([-10, -10, -10, -2, -2, -2,
+        self.action_space = spaces.Box(low=np.array([-10, -10, -10, -2, -2,
                                                       -2, -2, -2, -2]),
-                                       high=np.array([10, 10, 10, 2, 2,
+                                       high=np.array([10, 10, 10, 2,
                                                        2, 2, 2, 2, 2]),
                                        dtype=np.float32)
 
         # Define the observation space as the measured Wrench in BHand wrist
-        self.observation_space = spaces.Box(low=np.array([-10, -10, -10, -2, -2, -2]),
-                                            high=np.array([10, 10, 10, 2, 2, 2]),
+        self.observation_space = spaces.Box(low=np.array([-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10]),
+                                            high=np.array([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]),
                                             dtype=np.float32)
 
 
@@ -53,7 +53,7 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # The joints that can be actuated in BHand. The rest are passive joints
         # which are coupled with these actuated
-        self.bhand_actuated_joint_names = ('bh_wrist_joint', 'bh_j11_joint',
+        self.bhand_actuated_joint_names = ('bh_wrist_joint',
                                            'bh_j12_joint', 'bh_j22_joint',
                                            'bh_j32_joint')
         self.bhand_actuated_joint_ids = []
@@ -100,14 +100,15 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
         return np.concatenate((wrist_wrt_object_pose, hand_joints_pos, object_target_pos_wrt_object))
 
     def step(self, action):
-        reward = 0.0
         done = False
         obs = self.get_obs()
-        self.do_simulation(action)
+        reward = self.get_reward(obs)
+        time = self.do_simulation(action)
+        if self.terminal_state(obs):
+            done = True
         return obs, reward, done, {}
 
     def do_simulation(self, action):
-        bhand_wrist_joint_ids = self.get_joint_id("bh_wrist_joint")
         time = self.sim.data.time
 
         # Set the bias to the applied generilized force in order to
@@ -119,6 +120,7 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Move forward the simulation
         self.sim.step()
+        return time
 
     def get_joint_id(self, joint_name = "all"):
         """
@@ -153,3 +155,20 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.distance = 1.685
         self.viewer.cam.elevation = 1.9354
         self.viewer.cam.azimuth = 36.5322
+
+
+    def get_reward(self, observation):
+        wrist_pos = observation[0:3]
+        goal_pos = observation[15:18]
+        reward = - 10 * np.power(np.linalg.norm(goal_pos), 2) - np.power(np.linalg.norm(wrist_pos), 2)
+        return reward
+
+    def terminal_state(self, observation):
+        if np.linalg.norm(observation[0:3]) > 0.5:
+            return True
+        if observation[2] > 0.05:
+            return True
+        if np.linalg.norm(observation[15:18]) < 0.01:
+            return True
+
+        return False
