@@ -45,11 +45,9 @@ def rot2quat(R, shape="wxyz"):
     q = [None] * 4
 
     tr = R[0, 0] + R[1, 1] + R[2, 2]
-    print(tr)
 
     if tr > 0:
         S = np.sqrt(tr + 1.0) * 2  # S=4*qwh
-        print("S = {}".format(S))
         q[0] = 0.25 * S
         q[1] = (R[2, 1] - R[1, 2]) / S
         q[2] = (R[0, 2] - R[2, 0]) / S
@@ -88,5 +86,4 @@ def get_homogeneous_transformation(pose):
         for j in range(0, 3):
             M[i, j] = R[i, j]
     M[3, 3] = 1
-    print(M)
-    return R
+    return M
