@@ -17,7 +17,7 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
         """
 
         path = os.path.join(os.path.dirname(__file__),
-                            "../../../../autharl_core/mujoco/descriptions/xml/robots/small_table_floating_bhand.xml")
+                            "assets/xml/robots/small_table_floating_bhand.xml")
 
         self.model = load_model_from_path(path)
         self.sim = MjSim(self.model)

@@ -1,0 +1,62 @@
+<mujoco model="LWR">
+  <compiler
+    angle="radian"
+    meshdir="../../meshes"/>
+  <option
+    iterations="200"
+    timestep="0.001"
+    solver="CG"/>
+  <size njmax="500" nconmax="100" />
+  <visual>
+    <map
+      fogstart="1.5"
+      fogend="3"/>
+    <quality
+      shadowsize="8192"/>
+  </visual>
+  <include file="../bhand/bhand_deps.xml"/>
+  <asset>
+    <mesh name="table" file="utils/table.stl"/>
+    <mesh name="monitor" file="utils/monitor.stl"/>
+    <mesh name="small_table" file="utils/small_table.stl"/>
+  </asset>
+  <worldbody>
+    <include file="../utils/arl_scene.xml"/>
+    <body
+      name="bh_wrist"
+      pos="0.2 1 0.8"
+      quat="0 1 0 0">
+      <inertial
+        pos="0 0 0"
+        quat="1 0 0 0"
+        mass="0.01"
+        diaginertia="1 1 1" />
+      <joint
+        name="bh_wrist_joint"
+        type="free"/>
+      <include file="../bhand/bhand_robot.xml"/>
+    </body>
+  </worldbody>
+  <equality>
+    <joint
+      name="bhandspread"
+      joint1="bh_j11_joint"
+      joint2="bh_j21_joint"
+      polycoef="0 1 0 0 0"/>
+    <joint
+      name="bh_f1_coupling"
+      joint1="bh_j12_joint"
+      joint2="bh_j13_joint"
+      polycoef="0 3 0 0 0"/>
+    <joint
+      name="bh_f2_coupling"
+      joint1="bh_j22_joint"
+      joint2="bh_j23_joint"
+      polycoef="0 3 0 0 0"/>
+    <joint
+      name="bh_f3_coupling"
+      joint1="bh_j32_joint"
+      joint2="bh_j33_joint"
+      polycoef="0 3 0 0 0"/>
+  </equality>
+</mujoco>

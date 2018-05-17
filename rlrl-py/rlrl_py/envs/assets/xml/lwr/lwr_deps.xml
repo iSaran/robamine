@@ -1,0 +1,10 @@
+<mujocoinclude>
+  <asset>
+    <mesh name="arm_base" file="lwr/arm_base.stl" />
+    <mesh name="arm_segment_a" file="lwr/arm_segment_a.stl" />
+    <mesh name="arm_segment_b" file="lwr/arm_segment_b.stl" />
+    <mesh name="arm_segment_last" file="lwr/arm_segment_last.stl" />
+    <mesh name="arm_wrist" file="lwr/arm_wrist.stl" />
+    <mesh name="arm_flanche" file="lwr/arm_flanche.stl" />
+  </asset>
+</mujocoinclude>

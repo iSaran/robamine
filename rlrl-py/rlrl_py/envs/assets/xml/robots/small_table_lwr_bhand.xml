@@ -1,0 +1,56 @@
+<mujoco model="LWR">
+  <compiler
+    angle="radian"
+    meshdir="../../meshes"/>
+  <size njmax="500" nconmax="100" />
+  <visual>
+    <map
+      fogstart="1.5"
+      fogend="3"/>
+    <quality
+      shadowsize="8192"/>
+  </visual>
+  <include file="../lwr/lwr_deps.xml"/>
+  <include file="../bhand/bhand_deps.xml"/>
+  <asset>
+    <mesh name="table" file="utils/table.stl"/>
+    <mesh name="monitor" file="utils/monitor.stl"/>
+    <mesh name="small_table" file="utils/small_table.stl"/>
+  </asset>
+  <worldbody>
+    <light
+      directional="false"
+      cutoff="90"
+      exponent="1"
+      diffuse="1 1 1"
+      specular="0 0 0"
+      pos="1 0 1.5"
+      dir="-1 0 -2.5"/>
+    <geom
+      name="ground"
+      type="plane"
+      pos="0 0 -0.74"
+      size="4 4 .05"
+      rgba="0.7 0.6 0.5 1"/>
+    <geom
+      name="table"
+      type="mesh"
+      mesh="table"
+      pos="-0.27 1.272 -0.663"
+      rgba="0.5 0.18 0.03 1"/>
+    <geom
+      name="monitor"
+      type="mesh"
+      mesh="monitor"
+      pos="-0.67 1.2 -0"
+      xyaxes="0 -1 0 1 0 0"
+      rgba="0 0 0 1"/>
+    <geom
+      name="small_table"
+      type="mesh"
+      mesh="small_table"
+      pos="0.15 1.1 0.35"
+      rgba="0.5 0.18 0.03 1"/>
+    <include file="lwr_with_bhand.xml"/>
+  </worldbody>
+</mujoco>

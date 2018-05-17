@@ -1,0 +1,23 @@
+<mujoco model="LWR">
+  <compiler
+    angle="radian"
+    meshdir="../../meshes"/>
+  <size njmax="500" nconmax="100" />
+  <visual>
+    <map
+      fogstart="1.5"
+      fogend="3"/>
+    <quality
+      shadowsize="8192"/>
+  </visual>
+  <include file="../lwr/lwr_deps.xml"/>
+  <include file="../bhand/bhand_deps.xml"/>
+  <asset>
+    <mesh name="table" file="utils/table.stl"/>
+    <mesh name="monitor" file="utils/monitor.stl"/>
+  </asset>
+  <worldbody>
+    <include file="../utils/arl_scene.xml"/>
+    <include file="lwr_with_bhand.xml"/>
+  </worldbody>
+</mujoco>

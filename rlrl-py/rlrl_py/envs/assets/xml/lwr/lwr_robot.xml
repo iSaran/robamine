@@ -1,0 +1,178 @@
+<!-- ======================================================
+  Copyright 2017-2018 Automation and Robotics Lab, AUTh.
+
+  Model     :: KUKA LWR4+
+    Source    : https://github.com/auth-arl/autharl_core
+    Downloaded  : 10Oct'15
+
+  Mujoco    :: Advanced physics simulation engine
+    Source    : www.roboti.us
+    Version   : 1.50
+    Released  : 26Nov15
+
+  Author    :: Iason Sarantopoulos
+    Contacts  : iasons@auth.gr
+    Last edits  : 17Jan'18
+====================================================== -->
+
+<mujocoinclude>
+  <body name="lwr_arm_base_link" pos="0 0 0">
+    <inertial
+      pos="3.12359e-09 1.21521e-08 0.0563907"
+      quat="0.5 0.5 -0.5 0.5"
+      mass="1.45916"
+      diaginertia="0.00388174 0.00295708 0.00295708" />
+    <geom
+      type="mesh"
+      mesh="arm_base"
+      rgba="0.9 0.44 0.0 1"/>
+    <body
+      name="lwr_arm_1_link"
+      pos="0 0 0.11">
+      <inertial
+        pos="-5.51768e-08 0.0386931 0.151891"
+        quat="-0.696437 0.122373 0.122373 0.696437"
+        mass="2.59818"
+        diaginertia="0.0143192 0.0140598 0.00483172" />
+      <joint
+        name="lwr_arm_0_joint"
+        pos="0 0 0"
+        axis="0 0 1"
+        limited="true"
+        damping="1e-3"
+        range="-2.96706 2.96706" />
+      <geom
+        quat="0 0 0 1"
+        type="mesh"
+        mesh="arm_segment_a"
+        rgba="0.9 0.44 0.0 1"/>
+      <body
+        name="lwr_arm_2_link"
+        pos="0 0 0.2">
+        <inertial
+          pos="-7.75033e-08 -0.0370809 0.0615321"
+          quat="0.137096 0.693691 0.693688 -0.137095"
+          mass="2.61292"
+          diaginertia="0.0167507 0.0161827 0.00448841" />
+        <joint
+          name="lwr_arm_1_joint"
+          pos="0 0 0"
+          axis="0 -1 0"
+          limited="true"
+          damping="1e-3"
+          range="-2.0944 2.0944" />
+        <geom
+          pos="0 0 0.2"
+          quat="0 0 1 0"
+          type="mesh"
+          mesh="arm_segment_b"
+          rgba="0.9 0.44 0.0 1"/>
+        <body
+          name="lwr_arm_3_link"
+          pos="0 0 0.2">
+          <inertial
+            pos="5.51768e-08 -0.0386931 0.151891"
+            quat="0.696437 0.122373 -0.122373 0.696437"
+            mass="2.59818"
+            diaginertia="0.0143192 0.0140598 0.00483172" />
+          <joint
+            name="lwr_arm_2_joint"
+            pos="0 0 0"
+            axis="0 0 1"
+            limited="true"
+            damping="1e-3"
+            range="-2.96706 2.96706" />
+          <geom
+            type="mesh"
+            mesh="arm_segment_a"
+            rgba="0.9 0.44 0.0 1"/>
+          <body
+            name="lwr_arm_4_link"
+            pos="0 0 0.2">
+            <inertial
+              pos="7.75034e-08 0.0370809 0.0615321"
+              quat="0.137095 -0.693688 0.693691 0.137096"
+              mass="2.61292"
+              diaginertia="0.0167507 0.0161827 0.00448841" />
+            <joint
+              name="lwr_arm_3_joint"
+              pos="0 0 0"
+              axis="0 1 0"
+              limited="true"
+              damping="1e-3"
+              range="-2.0944 2.0944" />
+            <geom
+              pos="0 0 0.2"
+              quat="0 -1 0 0"
+              type="mesh"
+              mesh="arm_segment_b"
+              rgba="0.9 0.44 0.0 1"/>
+            <body
+              name="lwr_arm_5_link"
+              pos="0 0 0.2">
+              <inertial
+                pos="0.000424356 0.0295884 0.110885"
+                quat="-0.693561 0.160821 0.152957 0.685357"
+                mass="1.94073"
+                diaginertia="0.00994831 0.00893415 0.00300977" />
+              <joint
+                name="lwr_arm_4_joint"
+                pos="0 0 0"
+                axis="0 0 1"
+                limited="true"
+                damping="1e-3"
+                range="-2.96706 2.96706" />
+              <geom
+                quat="0 0 0 1"
+                type="mesh"
+                mesh="arm_segment_last"
+                rgba="0.9 0.4 0.0 1"/>
+              <body
+                name="lwr_arm_6_link"
+                pos="0 0 0.19">
+                <inertial
+                  pos="-1.50692e-06 -0.0139838 -0.00115913"
+                  quat="-0.479635 -0.519656 0.478758 0.520288"
+                  mass="1.27744"
+                  diaginertia="0.0028614 0.00246613 0.00232355" />
+                <joint
+                  name="lwr_arm_5_joint"
+                  pos="0 0 0"
+                  axis="0 -1 0"
+                  limited="true"
+                  damping="1e-3"
+                  range="-2.0944 2.0944" />
+                <geom
+                  quat="0 0 0 1"
+                  type="mesh"
+                  mesh="arm_wrist"
+                  rgba="0.9 0.44 0.0 1"/>
+                <body
+                  name="lwr_arm_7_link"
+                  pos="0 0 0.078">
+                  <inertial
+                    pos="2.16814e-11 -3.56328e-11 -0.00866882"
+                    quat="-0.270598 0.653281 0.270598 0.653281"
+                    mass="0.0698888"
+                    diaginertia="4.69429e-05 2.5223e-05 2.5223e-05" />
+                  <joint
+                    name="lwr_arm_6_joint"
+                    pos="0 0 0"
+                    axis="0 0 1"
+                    limited="true"
+                    damping="1e-3"
+                    range="-2.96706 2.96706" />
+                  <geom
+                    quat="0.382683 0 0 0.92388"
+                    type="mesh"
+                    mesh="arm_flanche"
+                    rgba="0.9 0.44 0.0 1"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </body>
+</mujocoinclude>

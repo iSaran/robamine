@@ -1,0 +1,32 @@
+<mujoco model="LWR">
+  <compiler
+    angle="radian"
+    meshdir="../../meshes"/>
+  <size njmax="500" nconmax="100" />
+  <visual>
+    <map
+      fogstart="1.5"
+      fogend="3"/>
+    <quality
+      shadowsize="8192"/>
+  </visual>
+  <include file="../lwr/lwr_deps.xml"/>
+  <include file="../bhand/bhand_deps.xml"/>
+  <worldbody>
+    <light
+      directional="false"
+      cutoff="90"
+      exponent="1"
+      diffuse="1 1 1"
+      specular="0 0 0"
+      pos="1 0 1.5"
+      dir="-1 0 -2.5"/>
+    <geom
+      name="ground"
+      type="plane"
+      pos="0 0 0"
+      size="4 4 .05"
+      rgba="0.7 0.6 0.5 1"/>
+    <include file="lwr_with_bhand.xml"/>
+  </worldbody>
+</mujoco>

@@ -1,0 +1,71 @@
+<mujocoinclude>
+  <light
+    directional="false"
+    cutoff="90"
+    exponent="1"
+    diffuse="1 1 1"
+    specular="0 0 0"
+    pos="1 0 1.5"
+    dir="-1 0 -2.5"/>
+  <geom
+    name="ground"
+    type="plane"
+    pos="0 0 -0.74"
+    size="4 4 .05"
+    rgba="0.7 0.6 0.5 1"/>
+  <geom
+    name="table1"
+    type="box"
+    pos="0.17 0.37 -0.0125"
+    quat="1 0 0 0"
+    size="0.3 0.5 0.0125"
+    rgba="0.5 0.18 0.03 1"/>
+  <geom
+    name="table2"
+    type="box"
+    size="0.90 0.4 0.0125"
+    pos="-0.43 1.27 -0.0125"
+    quat="1 0 0 0"
+    rgba="0.5 0.18 0.03 1"/>
+  <geom
+    name="monitor"
+    type="mesh"
+    mesh="monitor"
+    pos="-0.67 1.2 -0"
+    xyaxes="0 -1 0 1 0 0"
+    rgba="0 0 0 1"/>
+  <body
+    name="pillbox"
+    pos="0.2 0.9 0.5"
+    quat="1 0 0 0">
+    <geom
+      type="box"
+      size="0.05 0.05 0.01"/>
+    <inertial
+      pos="0 0 0"
+      mass="0.100"
+      diaginertia="1 1 1" />
+    <joint
+      damping="1"
+      name="world_to_pillbox"
+      type="free"/>
+  </body>
+  <geom
+    name="smalltable"
+    type="box"
+    pos="0.17 1.1 0.35"
+    quat="1 0 0 0"
+    size="0.25 0.25 0.0125"
+    rgba="0.5 0.18 0.03 1"/>
+  <body
+    name="pillbox_target"
+    pos="0.2 0.6 0.385"
+    quat="1 0 0 0">
+    <geom
+      name="pillbox_target"
+      type="box"
+      size="0.05 0.05 0.01"
+      rgba="0.0 0.0 0.8 0.5"
+      contype="0" conaffinity="0" />
+  </body>
+</mujocoinclude>
