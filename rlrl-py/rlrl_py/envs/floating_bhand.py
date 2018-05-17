@@ -5,6 +5,8 @@ from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
 
+import rlrl_py.utils as arl
+
 class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self):
         """
@@ -75,8 +77,6 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.get_obs()
 
     def get_obs(self):
-        # Read the wrist pose
-        wrist_pose = self.sim.data.get_joint_qpos("bh_wrist_joint")
 
         # Parse the joint positions
         hand_joints_pos = []
@@ -85,8 +85,19 @@ class FloatingBHand(mujoco_env.MujocoEnv, utils.EzPickle):
                 hand_joints_pos.append(self.sim.data.get_joint_qpos(joint_name))
 
         # Parse the pose of the object
-        object_goal_pose = self.sim.data.get_joint_qpos("world_to_pillbox")
-        return np.concatenate((wrist_pose, hand_joints_pos))
+        object_pose = self.sim.data.get_joint_qpos("world_to_pillbox")
+        object_wrt_world = arl.get_homogeneous_transformation(object_pose)
+
+        # Read the wrist pose
+        wrist_pose = self.sim.data.get_joint_qpos("bh_wrist_joint")
+        wrist_wrt_world = arl.get_homogeneous_transformation(wrist_pose)
+        wrist_wrt_object = np.linalg.inv(object_wrt_world) * wrist_wrt_world
+        wrist_wrt_object_pose = arl.get_pose_from_homog(wrist_wrt_object)
+
+        object_target_pos_wrt_world = self.sim.data.get_body_xpos("pillbox_target")
+        object_target_pos_wrt_object = object_target_pos_wrt_world[0:3] - object_pose[0:3]
+
+        return np.concatenate((wrist_wrt_object_pose, hand_joints_pos, object_target_pos_wrt_object))
 
     def step(self, action):
         reward = 0.0
