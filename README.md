@@ -14,4 +14,4 @@ repository. Then see `docs/html/index.html`.
 ## Contents
 
 * [rlrl](rlrl): C++ library for RL
-* [gym-rlrl](gym-rlrl): Python Gym Environments for our robots and testing RL in MuJoCo
+* [rlrl-py](rlrl-py): Python Gym Environments for our robots and testing RL in MuJoCo
