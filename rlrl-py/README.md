@@ -101,3 +101,20 @@ Clone the repository and install the package:
 cd rlrl/rlrl-py
 pip install -e .
 ```
+
+## Run examples
+
+You can train the grasping of pillbox using DDPG with:
+
+```bash
+cd rlrl-py/examples
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so python grasping-pillbox-ddpg-training.py --env-id='Floating-BHand-v0'
+```
+
+Plotting the results using the log directory:
+
+```bash
+cd baselines/baselines
+python results_plotter.py --dirs=/tmp/openai-2018-07-11-14-55-45-282417
+
+```
