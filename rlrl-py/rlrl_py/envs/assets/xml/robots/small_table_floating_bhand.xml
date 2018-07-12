@@ -24,7 +24,7 @@
     <include file="../utils/arl_scene.xml"/>
     <body
       name="bh_wrist"
-      pos="0.2 0.7 0.36"
+      pos="0.2 0.72 0.32"
       quat="0 0 0.70711 0.70711">
       <inertial
         pos="0 0 0"
