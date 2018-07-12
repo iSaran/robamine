@@ -183,9 +183,9 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
-        self.viewer.cam.distance = 1.685
-        self.viewer.cam.elevation = 1.9354
-        self.viewer.cam.azimuth = 36.5322
+        self.viewer.cam.distance = 0.559478
+        self.viewer.cam.elevation = -21.928236
+        self.viewer.cam.azimuth = 9.089018
 
 
     def get_reward(self, observation):
