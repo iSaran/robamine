@@ -23,6 +23,21 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
         self.sim = MjSim(self.model)
         self.viewer = MjViewer(self.sim)
 
+        # Initialize the Bhand joint configuration to a prespecified config
+        self.init_config = {
+                "bh_j11_joint": 0.0,
+                "bh_j12_joint": 0.8,
+                "bh_j22_joint": 0.8,
+                "bh_j32_joint": 0.0
+                }
+        for key in self.init_config:
+            self.sim.data.qpos[self.sim.model.get_joint_qpos_addr(key)]  = self.init_config[key];
+        self.sim.data.qpos[self.sim.model.get_joint_qpos_addr("bh_j21_joint")]  = self.init_config["bh_j11_joint"];
+        self.sim.data.qpos[self.sim.model.get_joint_qpos_addr("bh_j13_joint")]  = 0.3333 * self.init_config["bh_j12_joint"];
+        self.sim.data.qpos[self.sim.model.get_joint_qpos_addr("bh_j23_joint")]  = 0.3333 * self.init_config["bh_j22_joint"];
+        self.sim.data.qpos[self.sim.model.get_joint_qpos_addr("bh_j33_joint")]  = 0.3333 * self.init_config["bh_j32_joint"];
+
+        # Store the init state for using it for resetting the model
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
@@ -68,6 +83,15 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.seed()
 
+        # Define a map from joint actuators names to addresses in sim.data.ctrl
+        # vector. This is specific for this XML model where this 4 actuators
+        # are defined.
+        self.joint_ctrl_addr = {
+                "bh_j11_joint": 0,
+                "bh_j12_joint": 1,
+                "bh_j22_joint": 2,
+                "bh_j32_joint": 3
+                }
 
     def reset_model(self):
         self.set_state(self.init_qpos, self.init_qvel)
@@ -118,6 +142,12 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
             else:
                 ref = bias
             self.sim.data.qfrc_applied[index[i]] = ref
+
+        # Command the joints to the initial joint configuration in order to
+        # have the joints fixed in this position (no falling or external forces
+        # are affecting the fingers)
+        for key in self.joint_ctrl_addr:
+            self.sim.data.ctrl[self.joint_ctrl_addr[key]] = self.init_config[key]
 
         # Move forward the simulation
         self.sim.step()
