@@ -26,12 +26,9 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        # Define the action space as the Wrench in BHand wrist and torques in 4
-        # actuated joints of BHand
-        self.action_space = spaces.Box(low=np.array([-10, -10, -10, -2, -2,
-                                                      -2, -2, -2, -2]),
-                                       high=np.array([10, 10, 10, 2,
-                                                       2, 2, 2, 2, 2]),
+        # Define the action space as the two forces on the wrist of the BHand
+        self.action_space = spaces.Box(low=np.array([-5, -5]),
+                                       high=np.array([5,  5]),
                                        dtype=np.float32)
 
         # Define the observation space as the measured Wrench in BHand wrist
@@ -113,10 +110,14 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Set the bias to the applied generilized force in order to
         # implement a kind of gravity compensation in bhand.
-        for index in self.bhand_actuated_joint_ids:
-            bias = self.sim.data.qfrc_bias[index]
-            ref = bias + action[self.map[index]]
-            self.sim.data.qfrc_applied[index] = ref
+        index = self.get_joint_id("bh_wrist_joint")
+        for i in range(0, len(index)):
+            bias = self.sim.data.qfrc_bias[index[i]]
+            if (i == 1 or i == 2):
+                ref = bias + action[i - 1]
+            else:
+                ref = bias
+            self.sim.data.qfrc_applied[index[i]] = ref
 
         # Move forward the simulation
         self.sim.step()
