@@ -59,4 +59,10 @@
       joint2="bh_j33_joint"
       polycoef="0 3 0 0 0"/>
   </equality>
+  <actuator>
+    <position joint="bh_j11_joint" name="bh_j11_joint" ctrlrange="0 3.14" kp="1000"/>
+    <position joint="bh_j12_joint" name="bh_j12_joint" ctrlrange="0 2.44" kp="10"/>
+    <position joint="bh_j22_joint" name="bh_j22_joint" ctrlrange="0 2.44" kp="10"/>
+    <position joint="bh_j33_joint" name="bh_j32_joint" ctrlrange="0 2.44" kp="10"/>
+  </actuator>
 </mujoco>
