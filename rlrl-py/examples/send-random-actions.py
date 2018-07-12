@@ -14,7 +14,7 @@ def run(env_id):
             env.render()
             # print(observation)
             action = env.action_space.sample()
-            # action = np.array([0, 0, 1, 0, 0, 0, 0, 0, 0, 0])
+            #action = np.array([0, 0])
             # print (action)
             observation, reward, done, info = env.step(action)
             if done:
