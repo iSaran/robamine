@@ -9,19 +9,27 @@ import rlrl_py.utils as arl
 
 class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self):
-        """
-        The constructor of the environment.
 
-        MujocoEnv class assumes that we have defined actuators in our model, so
-        this constructor does not call its parent's constructor.
-        """
-
+        # The path of the Mujoco XML model
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/small_table_floating_bhand.xml")
 
-        self.model = load_model_from_path(path)
-        self.sim = MjSim(self.model)
-        self.viewer = MjViewer(self.sim)
+        # The total joint names of the BHand as defined in the model
+        self.bhand_joint_names = ('bh_wrist_joint', 'bh_j11_joint',
+                                  'bh_j12_joint', 'bh_j13_joint',
+                                  'bh_j21_joint', 'bh_j22_joint',
+                                  'bh_j23_joint', 'bh_j32_joint',
+                                  'bh_j33_joint')
+
+        # Define a map from joint actuators names to addresses in sim.data.ctrl
+        # vector. This is specific for this XML model where this 4 actuators
+        # are defined.
+        self.joint_ctrl_addr = {
+                "bh_j11_joint": 0,
+                "bh_j12_joint": 1,
+                "bh_j22_joint": 2,
+                "bh_j32_joint": 3
+                }
 
         # Initialize the Bhand joint configuration to a prespecified config
         self.init_config = {
@@ -30,16 +38,10 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
                 "bh_j22_joint": 0.8,
                 "bh_j32_joint": 0.0
                 }
-        for key in self.init_config:
-            self.sim.data.qpos[self.sim.model.get_joint_qpos_addr(key)]  = self.init_config[key];
-        self.sim.data.qpos[self.sim.model.get_joint_qpos_addr("bh_j21_joint")]  = self.init_config["bh_j11_joint"];
-        self.sim.data.qpos[self.sim.model.get_joint_qpos_addr("bh_j13_joint")]  = 0.3333 * self.init_config["bh_j12_joint"];
-        self.sim.data.qpos[self.sim.model.get_joint_qpos_addr("bh_j23_joint")]  = 0.3333 * self.init_config["bh_j22_joint"];
-        self.sim.data.qpos[self.sim.model.get_joint_qpos_addr("bh_j33_joint")]  = 0.3333 * self.init_config["bh_j32_joint"];
 
-        # Store the init state for using it for resetting the model
-        self.init_qpos = self.sim.data.qpos.ravel().copy()
-        self.init_qvel = self.sim.data.qvel.ravel().copy()
+        mujoco_env.MujocoEnv.__init__(self, path, 2)
+        utils.EzPickle.__init__(self)
+        self.bhand_joint_ids = self.get_joint_id()
 
         # Define the action space as the two forces on the wrist of the BHand
         self.action_space = spaces.Box(low=np.array([-5, -5]),
@@ -50,18 +52,6 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
         self.observation_space = spaces.Box(low=np.array([-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10]),
                                             high=np.array([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]),
                                             dtype=np.float32)
-
-
-        # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
-        utils.EzPickle.__init__(self)
-
-        # The total joint names of the BHand
-        self.bhand_joint_names = ('bh_wrist_joint', 'bh_j11_joint',
-                                  'bh_j12_joint', 'bh_j13_joint',
-                                  'bh_j21_joint', 'bh_j22_joint',
-                                  'bh_j23_joint', 'bh_j32_joint',
-                                  'bh_j33_joint')
-        self.bhand_joint_ids = self.get_joint_id()
 
         # The joints that can be actuated in BHand. The rest are passive joints
         # which are coupled with these actuated
@@ -81,19 +71,16 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
                 index = index + 1
         print(self.map)
 
-        self.seed()
-
-        # Define a map from joint actuators names to addresses in sim.data.ctrl
-        # vector. This is specific for this XML model where this 4 actuators
-        # are defined.
-        self.joint_ctrl_addr = {
-                "bh_j11_joint": 0,
-                "bh_j12_joint": 1,
-                "bh_j22_joint": 2,
-                "bh_j32_joint": 3
-                }
-
     def reset_model(self):
+
+        # Set the initial joint positions of the hand
+        for key in self.init_config:
+            self.init_qpos[self.sim.model.get_joint_qpos_addr(key)]  = self.init_config[key];
+        self.init_qpos[self.sim.model.get_joint_qpos_addr("bh_j21_joint")]  = self.init_config["bh_j11_joint"];
+        self.init_qpos[self.sim.model.get_joint_qpos_addr("bh_j13_joint")]  = 0.3333 * self.init_config["bh_j12_joint"];
+        self.init_qpos[self.sim.model.get_joint_qpos_addr("bh_j23_joint")]  = 0.3333 * self.init_config["bh_j22_joint"];
+        self.init_qpos[self.sim.model.get_joint_qpos_addr("bh_j33_joint")]  = 0.3333 * self.init_config["bh_j32_joint"];
+
         self.set_state(self.init_qpos, self.init_qvel)
         return self.get_obs()
 
