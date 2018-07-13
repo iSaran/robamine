@@ -99,6 +99,10 @@
           <geom
             mesh="bhand_finger_dist_link_convex"
             euler="0 0 -.84"/>
+          <body
+            name="wam/bhand/finger_1/tip_link"
+            pos="0.047 0.0 0.0"
+            quat="-0.5 0.5 0.5 0.5"/>
         </body>
       </body>
     </body>
@@ -162,6 +166,10 @@
           <geom
             mesh="bhand_finger_dist_link_convex"
             euler="0 0 -.84"/>
+          <body
+            name="wam/bhand/finger_2/tip_link"
+            pos="0.047 0.0 0.0"
+            quat="-0.5 0.5 0.5 0.5"/>
         </body>
       </body>
     </body>
@@ -202,6 +210,10 @@
           euler="0 0 -.84"/>
         <geom
           mesh="bhand_finger_dist_link_convex" euler="0 0 -.84"/>
+        <body
+          name="wam/bhand/finger_3/tip_link"
+          pos="0.047 0.0 0.0"
+          quat="-0.5 0.5 0.5 0.5"/>
       </body>
     </body>
   </body>
