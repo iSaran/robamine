@@ -49,8 +49,8 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
                                        dtype=np.float32)
 
         # Define the observation space as the measured Wrench in BHand wrist
-        self.observation_space = spaces.Box(low=np.array([-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10]),
-                                            high=np.array([10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]),
+        self.observation_space = spaces.Box(low=np.array([-1, -1, -1, -1, -1, -1]),
+                                            high=np.array([1, 1, 1, 1, 1, 1]),
                                             dtype=np.float32)
 
         # The joints that can be actuated in BHand. The rest are passive joints
@@ -85,27 +85,31 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.get_obs()
 
     def get_obs(self):
+        centroid = (self.sim.data.get_body_xpos('wam/bhand/finger_1/tip_link') + self.sim.data.get_body_xpos('wam/bhand/finger_2/tip_link')) / 2
+        dominant_point = centroid - self.sim.data.get_body_xpos('pillbox')
+        print(dominant_point)
 
         # Parse the joint positions
-        hand_joints_pos = []
-        for joint_name in self.bhand_joint_names:
-            if joint_name != "bh_wrist_joint":
-                hand_joints_pos.append(self.sim.data.get_joint_qpos(joint_name))
+        # hand_joints_pos = []
+        # for joint_name in self.bhand_joint_names:
+        #     if joint_name != "bh_wrist_joint":
+        #         hand_joints_pos.append(self.sim.data.get_joint_qpos(joint_name))
 
         # Parse the pose of the object
-        object_pose = self.sim.data.get_joint_qpos("world_to_pillbox")
-        object_wrt_world = arl.get_homogeneous_transformation(object_pose)
+        #object_pose = self.sim.data.get_joint_qpos("world_to_pillbox")
+        #object_wrt_world = arl.get_homogeneous_transformation(object_pose)
 
         # Read the wrist pose
-        wrist_pose = self.sim.data.get_joint_qpos("bh_wrist_joint")
-        wrist_wrt_world = arl.get_homogeneous_transformation(wrist_pose)
-        wrist_wrt_object = np.linalg.inv(object_wrt_world) * wrist_wrt_world
-        wrist_wrt_object_pose = arl.get_pose_from_homog(wrist_wrt_object)
+        #wrist_pose = self.sim.data.get_joint_qpos("bh_wrist_joint")
+        #wrist_wrt_world = arl.get_homogeneous_transformation(wrist_pose)
+        #wrist_wrt_object = np.linalg.inv(object_wrt_world) * wrist_wrt_world
+        #wrist_wrt_object_pose = arl.get_pose_from_homog(wrist_wrt_object)
 
-        object_target_pos_wrt_world = self.sim.data.get_body_xpos("pillbox_target")
-        object_target_pos_wrt_object = object_target_pos_wrt_world[0:3] - object_pose[0:3]
+        target_pos = self.sim.data.get_body_xpos("pillbox") - self.sim.data.get_body_xpos("pillbox_target")
+        print(dominant_point)
 
-        return np.concatenate((wrist_wrt_object_pose, hand_joints_pos, object_target_pos_wrt_object))
+        print(np.concatenate((dominant_point, target_pos)))
+        return np.concatenate((dominant_point, target_pos))
 
     def step(self, action):
         done = False
@@ -183,10 +187,6 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def terminal_state(self, observation):
         if np.linalg.norm(observation[0:3]) > 0.5:
-            return True
-        if observation[2] > 0.05:
-            return True
-        if np.linalg.norm(observation[15:18]) < 0.01:
             return True
 
         return False
