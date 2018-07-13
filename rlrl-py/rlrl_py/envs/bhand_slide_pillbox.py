@@ -87,7 +87,6 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
     def get_obs(self):
         centroid = (self.sim.data.get_body_xpos('wam/bhand/finger_1/tip_link') + self.sim.data.get_body_xpos('wam/bhand/finger_2/tip_link')) / 2
         dominant_point = centroid - self.sim.data.get_body_xpos('pillbox')
-        print(dominant_point)
 
         # Parse the joint positions
         # hand_joints_pos = []
@@ -106,9 +105,6 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
         #wrist_wrt_object_pose = arl.get_pose_from_homog(wrist_wrt_object)
 
         target_pos = self.sim.data.get_body_xpos("pillbox") - self.sim.data.get_body_xpos("pillbox_target")
-        print(dominant_point)
-
-        print(np.concatenate((dominant_point, target_pos)))
         return np.concatenate((dominant_point, target_pos))
 
     def step(self, action):
@@ -117,6 +113,7 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
         reward = self.get_reward(obs)
         time = self.do_simulation(action)
         if self.terminal_state(obs):
+            reward = reward - 10000;
             done = True
         return obs, reward, done, {}
 
@@ -180,9 +177,18 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
 
 
     def get_reward(self, observation):
-        wrist_pos = observation[0:3]
-        goal_pos = observation[15:18]
-        reward = - 10 * np.power(np.linalg.norm(goal_pos), 2) - np.power(np.linalg.norm(wrist_pos), 2)
+        dominant_point = observation[0:3]
+        goal_pos = observation[3:6]
+
+        reward1 = - 1000 * np.power(np.linalg.norm(goal_pos), 2)
+
+        if np.linalg.norm(goal_pos) < 0.001:
+            reward2 = 1000
+        else:
+            reward2 = 0
+
+        reward3= - 1000 * np.power(dominant_point[0], 2) - 1000 * np.power(dominant_point[1], 2)
+        reward = reward1 + reward2 + reward3
         return reward
 
     def terminal_state(self, observation):
