@@ -10,11 +10,15 @@ def run(env_id):
 
     for i_episode in range(20):
         observation = env.reset()
-        for t in range(1000):
+        for t in range(10000):
             env.render()
             # print(observation)
             action = env.action_space.sample()
-            #action = np.array([0, 0])
+            action = np.array([0, -0.5])
+            if (t > 1000):
+                action = np.array([-1, -3])
+            if (t > 1500):
+                action = np.array([-1, -3])
             # print (action)
             observation, reward, done, info = env.step(action)
             if done:
