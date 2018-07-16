@@ -39,6 +39,11 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
                 "bh_j32_joint": 0.0
                 }
 
+        self.sensor_name = {
+                'optoforce_1': [0, 1, 2],
+                'optoforce_2': [3, 4, 5]
+                }
+
         mujoco_env.MujocoEnv.__init__(self, path, 2)
         utils.EzPickle.__init__(self)
         self.bhand_joint_ids = self.get_joint_id()
@@ -87,6 +92,8 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
     def get_obs(self):
         centroid = (self.sim.data.get_body_xpos('wam/bhand/finger_1/tip_link') + self.sim.data.get_body_xpos('wam/bhand/finger_2/tip_link')) / 2
         dominant_point = centroid - self.sim.data.get_body_xpos('pillbox')
+        optoforce1 = np.linalg.norm(self.sim.data.sensordata[self.sensor_name["optoforce_1"]])
+        optoforce2 = np.linalg.norm(self.sim.data.sensordata[self.sensor_name["optoforce_2"]])
 
         # Parse the joint positions
         # hand_joints_pos = []
@@ -105,7 +112,7 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
         #wrist_wrt_object_pose = arl.get_pose_from_homog(wrist_wrt_object)
 
         target_pos = self.sim.data.get_body_xpos("pillbox") - self.sim.data.get_body_xpos("pillbox_target")
-        return np.concatenate((dominant_point, target_pos))
+        return np.concatenate((dominant_point, target_pos, [optoforce1], [optoforce2]))
 
     def step(self, action):
         done = False
@@ -188,7 +195,13 @@ class BHandSlidePillbox(mujoco_env.MujocoEnv, utils.EzPickle):
             reward2 = 0
 
         reward3= - 1000 * np.power(dominant_point[0], 2) - 1000 * np.power(dominant_point[1], 2)
-        reward = reward1 + reward2 + reward3
+
+        optoforce1 = observation[6]
+        optoforce2 = observation[7]
+        reward4 = - 0.5 * (1 / optoforce1 + 1/optoforce2)
+
+        reward = reward1 + reward2 + reward3 + reward4
+        # print('reward1: ', reward1, 'reward2: ', reward2, 'reward3: ', reward3, 'reward4:', reward4)
         return reward
 
     def terminal_state(self, observation):
