@@ -24,7 +24,7 @@
     <include file="../utils/arl_scene.xml"/>
     <body
       name="bh_wrist"
-      pos="0.2 0.72 0.32"
+      pos="0.2 0.74 0.32"
       quat="0 0 0.70711 0.70711">
       <inertial
         pos="0 0 0"
@@ -34,7 +34,7 @@
       <joint
         name="bh_wrist_joint"
         type="free"/>
-      <include file="../bhand/bhand_robot.xml"/>
+      <include file="../bhand/bhand_robot_optoforce.xml"/>
     </body>
   </worldbody>
   <equality>
@@ -65,4 +65,9 @@
     <position joint="bh_j22_joint" name="bh_j22_joint" ctrlrange="0 2.44" kp="10"/>
     <position joint="bh_j33_joint" name="bh_j32_joint" ctrlrange="0 2.44" kp="10"/>
   </actuator>
+  <sensor>
+    <force name="optoforce_1" site="optoforce_1"/>
+    <force name="optoforce_2" site="optoforce_2"/>
+    <force name="optoforce_3" site="optoforce_3"/>
+  </sensor>
 </mujoco>
