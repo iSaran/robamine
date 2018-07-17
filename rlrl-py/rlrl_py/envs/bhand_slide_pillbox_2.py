@@ -45,9 +45,6 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
                 }
 
         self._max_episode_steps = 5000;  # used by HER
-        robot_env.RobotEnv.__init__(self, path, [], 10, 10)
-        utils.EzPickle.__init__(self)
-        self.bhand_joint_ids = self.get_joint_id()
 
         # Define the action space as the two forces on the wrist of the BHand
         self.action_space = spaces.Box(low=np.array([-5, -5]),
@@ -59,23 +56,9 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
                                             high=np.array([1, 1, 1, 1, 1, 1]),
                                             dtype=np.float32)
 
-        # The joints that can be actuated in BHand. The rest are passive joints
-        # which are coupled with these actuated
-        self.bhand_actuated_joint_names = ('bh_wrist_joint',
-                                           'bh_j12_joint', 'bh_j22_joint',
-                                           'bh_j32_joint')
-        self.bhand_actuated_joint_ids = []
-        for i in self.bhand_actuated_joint_names:
-            for j in self.get_joint_id(i):
-                self.bhand_actuated_joint_ids.append(j)
-
-        index = 0
-        self.map = {}
-        for i in self.bhand_actuated_joint_names:
-            for j in self.get_joint_id(i):
-                self.map[j] = index
-                index = index + 1
-        print(self.map)
+        robot_env.RobotEnv.__init__(self, path, [], 10, 10)
+        utils.EzPickle.__init__(self)
+        self.bhand_joint_ids = self.get_joint_id()
 
     def reset_model(self):
 
