@@ -7,6 +7,10 @@ import os
 
 import rlrl_py.utils as arl
 
+def goal_distance(goal_a, goal_b):
+    assert goal_a.shape == goal_b.shape
+    return np.linalg.norm(goal_a - goal_b, axis=-1)
+
 class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
     def __init__(self, distance_threshold = 0.005):
         """ Initializes a new BHand Slide Pillbox environment
@@ -43,7 +47,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
                 'optoforce_2': [3, 4, 5]
                 }
 
-        self._max_episode_steps = 5000;  # used by HER
+        self._max_episode_steps = 2000;  # used by HER
 
         # Initialize the Bhand joint configuration to a prespecified config
         self.init_config = {
@@ -65,7 +69,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
            "bh_j33_joint": 0.3333 * self.init_config["bh_j32_joint"],
            "world_to_pillbox": [0.2, 0.92, 0.3725, 1, 0, 0, 0],
            }
-        self.initial_obj_pos = [0.2, 0.92, 0.3725]
+        self.initial_obj_pos = init_qpos['world_to_pillbox'][0:3]
 
 
         # Define the action space as the two forces on the wrist of the BHand
@@ -88,7 +92,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
     # ----------------------------
 
     def compute_reward(self, achieved_goal, desired_goal, info):
-        distance = np.linalg.norm(achieved_goal - desired_goal)
+        distance = goal_distance(achieved_goal, desired_goal)
         return -(distance > self.distance_threshold).astype(np.float32)
 
     # RobotEnv methods
@@ -133,7 +137,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         return {
             'observation': obs.copy(),
             'achieved_goal': np.squeeze(obj_position.copy()),
-            'desired_goal': np.squeeze(self.goal.copy())
+            'desired_goal': self.goal.copy()
             }
 
         return obs_dict
@@ -165,9 +169,6 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         site_id = self.sim.model.site_name2id('target')
         self.sim.model.site_pos[site_id] = self.goal - offset
         self.sim.forward()
-
-
-
 
     def get_joint_id(self, joint_name = "all"):
         """
@@ -209,15 +210,12 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         mean = 0.035
         dev = 0.01
         sample_y = - np.random.normal(mean, dev, 1)
-        sampled_goal = [0, sample_y[0], 0]
+        sampled_goal = np.array([0, sample_y[0], 0])
         return sampled_goal
 
     def _is_success(self, achieved_goal, desired_goal):
-        epsilon = 0.005
-        if np.linalg.norm(achieved_goal - desired_goal) < epsilon:
-            return True
-        else:
-            return False
+        distance = goal_distance(achieved_goal, desired_goal)
+        return (distance < self.distance_threshold).astype(np.float32)
 
     def get_initial_state(self, model_path):
         # Load local copy of the Mujoco models to have access to joint names and ids
