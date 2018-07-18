@@ -22,7 +22,7 @@
     name="wam/bhand/bhand_palm_link"
     childclass="wam/bhand"
     pos="0 0 0.0"
-    quat="0 0 0 1">
+    quat="1 0 0 0">
     <inertial
       pos="-5.1098e-005 0.0050433 0.036671"
       quat="0.553098 0.439047 0.434456 0.559078"
