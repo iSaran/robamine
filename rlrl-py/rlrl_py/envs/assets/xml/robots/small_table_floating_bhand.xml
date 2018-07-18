@@ -60,6 +60,12 @@
       polycoef="0 3 0 0 0"/>
   </equality>
   <actuator>
+    <motor  gear="1 0 0 0 0 0" joint="bh_wrist_joint" name="bh_wrist_force_x_actuator"/>
+    <motor  gear="0 1 0 0 0 0" joint="bh_wrist_joint" name="bh_wrist_force_y_actuator"/>
+    <motor  gear="0 0 1 0 0 0" joint="bh_wrist_joint" name="bh_wrist_force_z_actuator"/>
+    <motor  gear="0 0 0 1 0 0" joint="bh_wrist_joint" name="bh_wrist_torque_x_actuator"/>
+    <motor  gear="0 0 0 0 1 0" joint="bh_wrist_joint" name="bh_wrist_torque_y_actuator"/>
+    <motor  gear="0 0 0 0 0 1" joint="bh_wrist_joint" name="bh_wrist_torque_z_actuator"/>
     <position joint="bh_j11_joint" name="bh_j11_joint" ctrlrange="0 3.14" kp="1000"/>
     <position joint="bh_j12_joint" name="bh_j12_joint" ctrlrange="0 2.44" kp="10"/>
     <position joint="bh_j22_joint" name="bh_j22_joint" ctrlrange="0 2.44" kp="10"/>

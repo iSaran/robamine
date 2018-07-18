@@ -24,24 +24,11 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         # The path of the Mujoco XML model
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/small_table_floating_bhand.xml")
+        self.model = load_model_from_path(path)
+        #print(self.model.actuator_name2id('bh_wrist_force_torque_actuator'))
 
-        # The total joint names of the BHand as defined in the model
-        self.bhand_joint_names = ('bh_wrist_joint', 'bh_j11_joint',
-                                  'bh_j12_joint', 'bh_j13_joint',
-                                  'bh_j21_joint', 'bh_j22_joint',
-                                  'bh_j23_joint', 'bh_j32_joint',
-                                  'bh_j33_joint')
-
-        # Define a map from joint actuators names to addresses in sim.data.ctrl
-        # vector. This is specific for this XML model where this 4 actuators
-        # are defined.
-        self.joint_ctrl_addr = {
-                "bh_j11_joint": 0,
-                "bh_j12_joint": 1,
-                "bh_j22_joint": 2,
-                "bh_j32_joint": 3
-                }
-
+        # TODO: Do not use hardcoded indeces, use native supported functions
+        # for extracting the addreses of the sensors in sensordata
         self.sensor_name = {
                 'optoforce_1': [0, 1, 2],
                 'optoforce_2': [3, 4, 5]
@@ -72,21 +59,8 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         self.initial_obj_pos = init_qpos['world_to_pillbox'][0:3]
 
 
-        # Define the action space as the two forces on the wrist of the BHand
-        # self.action_space = spaces.Box(low=np.array([-5, -5]),
-        #                                high=np.array([5,  5]),
-        #                                dtype=np.float32)
-
-        # # Define the observation space as the measured Wrench in BHand wrist
-        # self.observation_space = spaces.Box(low=np.array([-1, -1, -1, -1, -1, -1]),
-        #                                     high=np.array([1, 1, 1, 1, 1, 1]),
-        #                                     dtype=np.float32)
-        #
-        # Set the initial joint positions of the hand
-
         robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=2, n_substeps=1)
         utils.EzPickle.__init__(self)
-        self.bhand_joint_ids = self.get_joint_id()
 
     # GoalEnv methods
     # ----------------------------
@@ -104,20 +78,21 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
 
         # Set the bias to the applied generilized force in order to
         # implement a kind of gravity compensation in bhand.
-        index = self.get_joint_id("bh_wrist_joint")
-        for i in range(0, len(index)):
-            bias = self.sim.data.qfrc_bias[index[i]]
-            if (i == 1 or i == 2):
-                ref = bias + action[i - 1]
-            else:
-                ref = bias
-            self.sim.data.qfrc_applied[index[i]] = ref
+        for i in range(*self.model.get_joint_qvel_addr("bh_wrist_joint")):
+            bias = self.sim.data.qfrc_bias[i]
+            self.sim.data.qfrc_applied[i] = bias
 
         # Command the joints to the initial joint configuration in order to
         # have the joints fixed in this position (no falling or external forces
-        # are affecting the fingers)
-        for key in self.joint_ctrl_addr:
-            self.sim.data.ctrl[self.joint_ctrl_addr[key]] = self.init_config[key]
+        # are affecting the fingers) and also command the actions as forces on
+        # the wrist
+        for actuator in self.model.actuator_names:
+            if actuator.startswith('bh_j'):
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = self.init_config[actuator]
+            if actuator == 'bh_wrist_force_y_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = action[0]
+            if actuator == 'bh_wrist_force_z_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = action[1]
 
     def _get_obs(self):
         # Calculate the dominant point, i.e. the centroid of the dominant fingers
@@ -169,35 +144,6 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         site_id = self.sim.model.site_name2id('target')
         self.sim.model.site_pos[site_id] = self.goal - offset
         self.sim.forward()
-
-    def get_joint_id(self, joint_name = "all"):
-        """
-        Returns a list of the indeces in mjModel.qvel that correspond to
-        BHand's joints.
-
-        Returns
-        -------
-        list
-            The indeces (ids) of BHand's joints
-        """
-        output = []
-        if joint_name == "all":
-            for i in self.bhand_joint_names:
-                index = self.sim.model.get_joint_qvel_addr(i)
-                if type(index) is tuple:
-                    for i in range(index[0], index[1], 1):
-                        output.append(i)
-                elif type(index) is np.int32:
-                    output.append(index)
-        else:
-            index = self.sim.model.get_joint_qvel_addr(joint_name)
-            if type(index) is tuple:
-                for i in range(index[0], index[1], 1):
-                    output.append(i)
-            elif type(index) is np.int32:
-                output.append(index)
-        return output
-
 
     def terminal_state(self, observation):
         if np.linalg.norm(observation[0:3]) > 0.5:
