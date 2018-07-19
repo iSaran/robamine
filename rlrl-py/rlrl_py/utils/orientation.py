@@ -102,3 +102,27 @@ def get_pose_from_homog(M):
 
     q = rot2quat(R)
     return np.concatenate((p, q))
+
+def skew_symmetric(vector):
+    output = np.zeros((3, 3))
+    output[0, 1] = -vector[2]
+    output[0, 2] =  vector[1]
+    output[1, 0] =  vector[2]
+    output[1, 2] = -vector[0]
+    output[2, 0] = -vector[1]
+    output[2, 1] =  vector[0]
+    return output
+
+def screw_transformation(position, orientation):
+    output = np.zeros((6, 6))
+    output[0:3, 0:3] = orientation
+    output[3:6, 3:6] = orientation
+    output[3:6, 0:3] = np.matmul(skew_symmetric(position), orientation)
+    return output
+
+def rotation_6x6(orientation):
+    output = np.zeros((6, 6))
+    output[0:3, 0:3] = orientation
+    output[3:6, 3:6] = orientation
+    return output
+

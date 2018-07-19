@@ -34,7 +34,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
                 'optoforce_2': [3, 4, 5]
                 }
 
-        self._max_episode_steps = 2000;  # used by HER
+        self._max_episode_steps = 3000;  # used by HER
 
         # Initialize the Bhand joint configuration to a prespecified config
         self.init_config = {
@@ -82,6 +82,15 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
             bias = self.sim.data.qfrc_bias[i]
             self.sim.data.qfrc_applied[i] = bias
 
+        force_object = np.array([0, - 5 * (action[0] + 1) / 2, -5 * (action[1] + 1)/2, 0, 0, 0])
+
+        # Trasfer the desired action (force on the object frame to the wrist and command the wrist
+        wrist_pos = np.subtract(self.sim.data.get_body_xpos('pillbox'), self.sim.data.get_body_xpos('bh_wrist'))
+        wrist_rot = np.matmul(np.transpose(self.sim.data.get_body_xmat('bh_wrist')), self.initial_obj_rot_mat)
+        screw = arl.orientation.screw_transformation(wrist_pos, wrist_rot)
+        force_wrist = np.matmul(screw, force_object)
+        force_wrist_world = np.matmul(arl.orientation.rotation_6x6(self.sim.data.get_body_xmat('bh_wrist')), force_wrist)
+
         # Command the joints to the initial joint configuration in order to
         # have the joints fixed in this position (no falling or external forces
         # are affecting the fingers) and also command the actions as forces on
@@ -89,10 +98,18 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         for actuator in self.model.actuator_names:
             if actuator.startswith('bh_j'):
                 self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = self.init_config[actuator]
+            if actuator == 'bh_wrist_force_x_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = force_wrist_world[0]
             if actuator == 'bh_wrist_force_y_actuator':
-                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = action[0]
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = force_wrist_world[1]
             if actuator == 'bh_wrist_force_z_actuator':
-                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = action[1]
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = force_wrist_world[2]
+            if actuator == 'bh_wrist_torque_x_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = force_wrist_world[3]
+            if actuator == 'bh_wrist_torque_y_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = force_wrist_world[4]
+            if actuator == 'bh_wrist_torque_z_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = force_wrist_world[5]
 
     def _get_obs(self):
         # Calculate the dominant point, i.e. the centroid of the dominant fingers
@@ -134,6 +151,8 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
 
     def _reset_sim(self):
         self.sim.set_state(self.initial_state)
+        self.initial_obj_pos = self.sim.data.get_body_xpos('pillbox')
+        self.initial_obj_rot_mat = self.sim.data.get_body_xmat('pillbox')
         return True
 
     def _render_callback(self):
