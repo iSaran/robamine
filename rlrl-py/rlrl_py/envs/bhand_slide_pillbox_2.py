@@ -12,7 +12,7 @@ def goal_distance(goal_a, goal_b):
     return np.linalg.norm(goal_a - goal_b, axis=-1)
 
 class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self, distance_threshold = 0.005):
+    def __init__(self, distance_threshold = 0.01):
         """ Initializes a new BHand Slide Pillbox environment
 
         Args:
@@ -58,6 +58,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
            }
         self.initial_obj_pos = init_qpos['world_to_pillbox'][0:3]
 
+        self.first_time = True
 
         robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=2, n_substeps=1)
         utils.EzPickle.__init__(self)
@@ -156,12 +157,16 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         return True
 
     def _render_callback(self):
+        if self.first_time:
+            self.init_goal = self.goal
+            self.first_time = False
         index = self.sim.model.get_joint_qpos_addr("world_to_pillbox")
         initial_world_to_pillbox_pos = self.initial_state.qpos[index[0]:index[0]+3]
         world_to_pillbox_pos = self.sim.data.get_joint_qpos("world_to_pillbox")[0:3]
         offset = world_to_pillbox_pos - initial_world_to_pillbox_pos
         site_id = self.sim.model.site_name2id('target')
-        self.sim.model.site_pos[site_id] = self.goal - offset
+        self.goal = self.init_goal - offset
+        self.sim.model.site_pos[site_id] = self.goal
         self.sim.forward()
 
     def terminal_state(self, observation):
