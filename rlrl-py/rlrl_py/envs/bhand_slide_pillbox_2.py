@@ -121,11 +121,11 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         optoforce1 = np.linalg.norm(self.sim.data.sensordata[self.sensor_name["optoforce_1"]])
         optoforce2 = np.linalg.norm(self.sim.data.sensordata[self.sensor_name["optoforce_2"]])
 
-        # Concatenate all the above to the observation vector
-        obs = np.concatenate((dominant_point, [optoforce1], [optoforce2]))
-
         # Read the object's position
         obj_position = self.initial_obj_pos - self.sim.data.get_body_xpos('pillbox')
+
+        # Concatenate all the above to the observation vector
+        obs = np.concatenate((obj_position.copy(), dominant_point, [optoforce1], [optoforce2]))
 
         return {
             'observation': obs.copy(),
@@ -152,7 +152,6 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
 
     def _reset_sim(self):
         self.sim.set_state(self.initial_state)
-        self.initial_obj_pos = self.sim.data.get_body_xpos('pillbox')
         self.initial_obj_rot_mat = self.sim.data.get_body_xmat('pillbox')
         return True
 
@@ -165,8 +164,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         world_to_pillbox_pos = self.sim.data.get_joint_qpos("world_to_pillbox")[0:3]
         offset = world_to_pillbox_pos - initial_world_to_pillbox_pos
         site_id = self.sim.model.site_name2id('target')
-        self.goal = self.init_goal - offset
-        self.sim.model.site_pos[site_id] = self.goal
+        self.sim.model.site_pos[site_id] = self.goal - offset
         self.sim.forward()
 
     def terminal_state(self, observation):
