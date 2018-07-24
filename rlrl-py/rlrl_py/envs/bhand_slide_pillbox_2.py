@@ -71,6 +71,10 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
     # RobotEnv methods
     # ----------------------------
 
+    def _is_success(self, achieved_goal, desired_goal):
+        distance = goal_distance(achieved_goal, desired_goal)
+        return (distance < self.distance_threshold).astype(np.float32)
+
     def _set_action(self, action):
         assert action.shape == (2,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
@@ -178,10 +182,6 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         sample_y = - np.random.normal(mean, dev, 1)
         sampled_goal = np.array([0, sample_y[0], 0])
         return sampled_goal
-
-    def _is_success(self, achieved_goal, desired_goal):
-        distance = goal_distance(achieved_goal, desired_goal)
-        return (distance < self.distance_threshold).astype(np.float32)
 
     def get_initial_state(self, model_path):
         # Load local copy of the Mujoco models to have access to joint names and ids
