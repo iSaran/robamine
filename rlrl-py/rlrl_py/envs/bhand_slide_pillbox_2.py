@@ -34,8 +34,6 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
                 'optoforce_2': [3, 4, 5]
                 }
 
-        self._max_episode_steps = 3000;  # used by HER
-
         # Initialize the Bhand joint configuration to a prespecified config
         self.init_config = {
                 "bh_j11_joint": 0.0,
