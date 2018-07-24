@@ -22,9 +22,10 @@
   </asset>
   <worldbody>
     <include file="../utils/arl_scene.xml"/>
+    <site name="dominant_centroid" pos="0.0 0.0 0.0" size=".003 .003 .003" type="sphere" rgba="0.8 0.0 0.0 0.3"/>
     <body
       name="bh_wrist"
-      pos="0.2 0.74 0.32"
+      pos="0.2 0.74 0.31"
       quat="0.707106 -0.7070106 0 0">
       <inertial
         pos="0 0 0"

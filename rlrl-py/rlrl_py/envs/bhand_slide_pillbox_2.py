@@ -167,6 +167,9 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         offset = world_to_pillbox_pos - initial_world_to_pillbox_pos
         site_id = self.sim.model.site_name2id('target')
         self.sim.model.site_pos[site_id] = self.goal - offset
+
+        centroid_site_id = self.sim.model.site_name2id('dominant_centroid')
+        self.sim.model.site_pos[centroid_site_id] = (self.sim.data.get_body_xpos('wam/bhand/finger_1/tip_link') + self.sim.data.get_body_xpos('wam/bhand/finger_2/tip_link')) / 2
         self.sim.forward()
 
     def terminal_state(self, observation):
