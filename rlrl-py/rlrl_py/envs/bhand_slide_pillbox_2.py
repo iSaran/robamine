@@ -124,7 +124,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         optoforce2 = np.linalg.norm(self.sim.data.sensordata[self.sensor_name["optoforce_2"]])
 
         # Read the object's position
-        obj_position = self.initial_obj_pos - self.sim.data.get_body_xpos('pillbox')
+        obj_position = self.sim.data.get_body_xpos('pillbox') - self.initial_obj_pos
 
         # Concatenate all the above to the observation vector
         obs = np.concatenate((obj_position.copy(), dominant_point, [optoforce1], [optoforce2]))
