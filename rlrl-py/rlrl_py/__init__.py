@@ -11,7 +11,7 @@ register(
 )
 
 register(
-    id='BHand-Slide-Pillbox-v2',
+    id='BHandSlidePillbox-v2',
     entry_point='rlrl_py.envs:BHandSlidePillbox2',
     max_episode_steps=2000
 )
