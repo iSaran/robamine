@@ -12,7 +12,7 @@ def goal_distance(goal_a, goal_b):
     return np.linalg.norm(goal_a - goal_b, axis=-1)
 
 class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self, distance_threshold = 0.01):
+    def __init__(self, distance_threshold = 0.01, reward_type="sparse"):
         """ Initializes a new BHand Slide Pillbox environment
 
         Args:
@@ -20,6 +20,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         """
 
         self.distance_threshold = distance_threshold
+        self.reward_type = reward_type
 
         # The path of the Mujoco XML model
         path = os.path.join(os.path.dirname(__file__),
@@ -66,7 +67,10 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         distance = goal_distance(achieved_goal, desired_goal)
-        return -(distance > self.distance_threshold).astype(np.float32)
+        if self.reward_type == 'sparse':
+            return -(distance > self.distance_threshold).astype(np.float32)
+        else:
+            return distance
 
     # RobotEnv methods
     # ----------------------------
