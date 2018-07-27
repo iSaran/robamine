@@ -121,7 +121,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
     def _get_obs(self):
         # Calculate the dominant point, i.e. the centroid of the dominant fingers
         centroid = (self.sim.data.get_body_xpos('wam/bhand/finger_1/tip_link') + self.sim.data.get_body_xpos('wam/bhand/finger_2/tip_link')) / 2
-        dominant_point = centroid - self.sim.data.get_body_xpos('pillbox')
+        dominant_point = centroid - self.initial_obj_pos
 
         # Calculate the norms of the optoforce readings
         optoforce1 = np.linalg.norm(self.sim.data.sensordata[self.sensor_name["optoforce_1"]])
