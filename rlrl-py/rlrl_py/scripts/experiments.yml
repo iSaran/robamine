@@ -10,6 +10,7 @@
     - env: BHandSlidePillbox-v2
     - num_cpu: 1
     - n_epochs: 200
+  completed: True
 
 - name: ddpg-dense
   timestamp: '7/25/2018 14:37:25'
@@ -24,6 +25,7 @@
     - num_cpu: 4
     - n_epochs: 400
     - policy_save_interval: 0
+  completed: True
 
 - name: centroid-goal
   timestamp: '2018/07/27 15:00:00'
@@ -40,3 +42,4 @@
     - num_cpu: 4
     - n_epochs: 400
     - policy_save_interval: 0
+  completed: False
