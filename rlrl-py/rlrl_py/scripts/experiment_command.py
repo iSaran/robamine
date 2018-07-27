@@ -19,6 +19,7 @@ def get_exp_names_commands(yml):
 
         for param in yml[experiment]["params"]:
               command = command + " --" + param + "=" + str(yml[experiment]["params"][param])
+        command = command + " --logdir=" + yml[experiment]["dir"] + '/' + experiment
         commands[experiment] = command
     return exp_names, names_completed, commands
 
@@ -35,3 +36,4 @@ def get_param(yml, name, param):
 if __name__ == '__main__':
     yml = get_yml("./", "experiments")
     names, completed, commands = get_exp_names_commands(yml)
+    print(commands["centroid-goal"])
