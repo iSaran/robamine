@@ -32,14 +32,14 @@ ddpg-dense:
   completed: true
 
 centroid-goal:
-  timestamp: '2018/07/27 15:00:00'
+  timestamp: '2018/07/27 19:00:00'
   pc: triss
   dir: /home/iason/openai-py/logs/bhand-her
   comment: Adds dominant centroids on the goal in order to stay on the object
   code:
     - baselines: f2729693253c0ef4d4086231d36e0a4307ec1cb3
     - gym: 5c116fb3c91e872505300031d2bd60672b3a6e03
-    - rlrl:
+    - rlrl: 0529adfcd2ed599ecc761ba4df307cceb5224ddb
   train_script: 'rlrl/rlr-py/rlrl_py/scripts/baselines_wrappers/her/train.py'
   params:
     env: BHandSlidePillbox-v2
