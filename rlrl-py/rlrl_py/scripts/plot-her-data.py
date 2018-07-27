@@ -5,22 +5,27 @@ import csv
 import os
 import numpy as np
 
-set_of_experiments = 'her'
+import experiment_command as exps
+
+# set_of_experiments = 'her'
 #experiments = ['FetchSlide-v1', 'FetchPickAndPlace-v1', 'FetchReach-v1', 'FetchPush-v1', 'HandReach-v0', 'HandManipulateBlockRotateZ-v0', 'HandManipulateBlockRotateParallel-v0', 'HandManipulateBlockRotateXYZ-v0', 'HandManipulateBlockFull-v0', 'HandManipulatePenFull-v0']
 
-set_of_experiments = 'bhand-her'
-experiments = ['first-exp', 'ddpg-dense']
+# set_of_experiments = 'bhand-her'
+#
+database = exps.get_yml("./", "experiments")
+_, experiments, _ = exps.get_exp_names_commands(database)
 
 # The variable names existing in the progress.csv file in the directory of the experiment
 y_variables = ["stats_g/std", "test/mean_Q", "stats_o/mean", "test/episode", "stats_o/std", "train/success_rate", "stats_g/mean", "train/episode", "test/success_rate"]
 x_variable_name = "epoch"
 
-average_across_epochs = range(0, 200)
+scale = 1
 
 for exp in experiments:
+    average_across_epochs = range(0, database[exp]["params"]["n_epochs"])
     # Setup directories properly
     print('Processing experiment: ' + exp)
-    directory = '/home/iason/openai-py/logs/' + set_of_experiments + '/' + exp
+    directory = database[exp]["dir"] + "/" + exp
     if not os.path.exists(directory + '/plots'):
         os.makedirs(directory + '/plots')
 
