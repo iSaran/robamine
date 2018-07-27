@@ -1,24 +1,28 @@
 import yaml
 
+def get_yml(path, name):
+    yml_file = open(path + "/" + name + ".yml", 'r')
+    yml = yaml.load(yml_file)
+    return yml
 
-yml_path = './'
-yml_file = open(yml_path + "/experiments.yml", 'r')
-yml_exp = yaml.load(yml_file)
+def get_exp_names_commands(yml):
+    exp_names = []
+    commands = {}
 
-exp_names = []
-commands = {}
-
-for i in yml_exp:
-    command = "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so python train.py"
-    if i["name"] not in exp_names:
-        exp_names.append(i["name"])
-        for param in i["params"]:
-            for key in param:
-              command = command + " --" + key + "=" + str(param[key])
-        commands[i["name"]] = command
-    else:
-        raise RuntimeError("Names of the experiments should be unique")
+    for i in yml:
+        command = "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so python train.py"
+        if i["name"] not in exp_names:
+            exp_names.append(i["name"])
+            for param in i["params"]:
+                for key in param:
+                  command = command + " --" + key + "=" + str(param[key])
+            commands[i["name"]] = command
+        else:
+            raise RuntimeError("Names of the experiments should be unique")
+    return exp_names, commands
 
 
-print(commands['centroid-goal'])
-
+if __name__ == '__main__':
+    yml = get_yml("./", "experiments")
+    names, commands = get_exp_names_commands(yml)
+    print(commands['centroid-goal'])
