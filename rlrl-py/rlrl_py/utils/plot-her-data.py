@@ -5,15 +5,17 @@ import csv
 import os
 import numpy as np
 
-#experiments = ['FetchSlide-v1', 'FetchPickAndPlace-v1', 'FetchReach-v1', 'FetchPush-v1', 'HandReach-v0', 'HandManipulateBlockRotateZ-v0', 'HandManipulateBlockRotateParallel-v0', 'HandManipulateBlockRotateXYZ-v0', 'HandManipulateBlockFull-v0', 'HandManipulatePenRotate-v0', 'HandManipulatePenFull-v0']
 set_of_experiments = 'her'
-experiments = ['FetchSlide-v1', 'FetchPickAndPlace-v1', 'FetchReach-v1', 'FetchPush-v1', 'HandReach-v0', 'HandManipulateBlockRotateZ-v0', 'HandManipulateBlockRotateParallel-v0', 'HandManipulatePenFull-v0']
+#experiments = ['FetchSlide-v1', 'FetchPickAndPlace-v1', 'FetchReach-v1', 'FetchPush-v1', 'HandReach-v0', 'HandManipulateBlockRotateZ-v0', 'HandManipulateBlockRotateParallel-v0', 'HandManipulateBlockRotateXYZ-v0', 'HandManipulateBlockFull-v0', 'HandManipulatePenFull-v0']
+
+set_of_experiments = 'bhand-her'
+experiments = ['first-exp', 'ddpg-dense']
 
 # The variable names existing in the progress.csv file in the directory of the experiment
 y_variables = ["stats_g/std", "test/mean_Q", "stats_o/mean", "test/episode", "stats_o/std", "train/success_rate", "stats_g/mean", "train/episode", "test/success_rate"]
 x_variable_name = "epoch"
 
-average_across_epochs = range(0, 50)
+average_across_epochs = range(0, 200)
 
 for exp in experiments:
     # Setup directories properly
@@ -36,14 +38,12 @@ for exp in experiments:
             for row in reader:
                 y_variable.append(float(row[v_name]))
 
-            if average_across_epochs is not None:
-                y_variable = np.array(y_variable).reshape(len(average_across_epochs), len(x_variable)/len(average_across_epochs))
-                mean = np.mean(y_variable, axis=1)
-                std = np.std(y_variable, axis=1)
-                plt.plot(average_across_epochs, mean, color="#00b8e6", linewidth=2, label="Cross-validation score")
-                plt.fill_between(average_across_epochs, mean - std, mean + std, color="#ccf5ff")
-            else:
-                plt.plot(x_variable, y_variable, color="#33adff", label="Cross-validation score")
+            y_variable = np.array(y_variable).reshape(len(average_across_epochs), int(len(x_variable)/len(average_across_epochs)))
+            mean = np.mean(y_variable, axis=1)
+            std = np.std(y_variable, axis=1)
+            plt.plot(average_across_epochs, mean, color="#00b8e6", linewidth=2, label="Cross-validation score")
+            plt.fill_between(average_across_epochs, mean - std, mean + std, color="#ccf5ff")
+            plt.plot(average_across_epochs, y_variable, color="#33adff", label="Cross-validation score")
 
             #plt.plot(x_variable, y_variable)
             plt.xlabel('Epoch')
