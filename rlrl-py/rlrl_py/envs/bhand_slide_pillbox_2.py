@@ -66,18 +66,46 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
     # ----------------------------
 
     def compute_reward(self, achieved_goal, desired_goal, info):
-        distance = goal_distance(achieved_goal, desired_goal)
-        if self.reward_type == 'sparse':
-            return -(distance > self.distance_threshold).astype(np.float32)
+        if achieved_goal.ndim == 1:
+            ag_object = achieved_goal[0:3]
+            ag_dominant_centroid = achieved_goal[3:6]
+            dg_object = desired_goal[0:3]
+            dg_dominant_centroid = desired_goal[3:6]
         else:
-            return distance
+            ag_object = achieved_goal[:, 0:3]
+            ag_dominant_centroid = achieved_goal[:, 3:6]
+            dg_object = desired_goal[:, 0:3]
+            dg_dominant_centroid = desired_goal[:, 3:6]
+
+        distance_object = goal_distance(ag_object, dg_object)
+        distance_dominant_centroid = goal_distance(ag_dominant_centroid, dg_dominant_centroid)
+        if self.reward_type == 'sparse':
+            object_reached = distance_object < self.distance_threshold
+            dominant_centroid_reached = distance_dominant_centroid < self.distance_threshold
+            both_reached = np.logical_and(object_reached, dominant_centroid_reached)
+            reward = -(~both_reached).astype(np.float32)
+            return reward
+        else:
+            return distance_object + distance_dominant_centroid
 
     # RobotEnv methods
     # ----------------------------
 
     def _is_success(self, achieved_goal, desired_goal):
-        distance = goal_distance(achieved_goal, desired_goal)
-        return (distance < self.distance_threshold).astype(np.float32)
+        if achieved_goal.ndim == 1:
+            ag_object = achieved_goal[0:3]
+            ag_dominant_centroid = achieved_goal[3:6]
+            dg_object = desired_goal[0:3]
+            dg_dominant_centroid = desired_goal[3:6]
+        else:
+            ag_object = achieved_goal[:, 0:3]
+            ag_dominant_centroid = achieved_goal[:, 3:6]
+            dg_object = desired_goal[:, 0:3]
+            dg_dominant_centroid = desired_goal[:, 3:6]
+
+        distance_object = goal_distance(ag_object, dg_object)
+        distance_dominant_centroid = goal_distance(ag_dominant_centroid, dg_dominant_centroid)
+        return (distance_object < self.distance_threshold and distance_dominant_centroid < self.distance_threshold).astype(np.float32)
 
     def _set_action(self, action):
         assert action.shape == (2,)
@@ -132,10 +160,11 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
 
         # Concatenate all the above to the observation vector
         obs = np.concatenate((obj_position.copy(), dominant_point, [optoforce1], [optoforce2]))
+        achieved_goal = np.concatenate((np.squeeze(obj_position.copy()), np.squeeze(dominant_point.copy())))
 
         return {
             'observation': obs.copy(),
-            'achieved_goal': np.squeeze(obj_position.copy()),
+            'achieved_goal': achieved_goal.copy(),
             'desired_goal': self.goal.copy()
             }
 
@@ -170,7 +199,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         world_to_pillbox_pos = self.sim.data.get_joint_qpos("world_to_pillbox")[0:3]
         offset = world_to_pillbox_pos - initial_world_to_pillbox_pos
         site_id = self.sim.model.site_name2id('target')
-        self.sim.model.site_pos[site_id] = self.goal - offset
+        self.sim.model.site_pos[site_id] = self.goal[0:3] - offset
 
         centroid_site_id = self.sim.model.site_name2id('dominant_centroid')
         self.sim.model.site_pos[centroid_site_id] = (self.sim.data.get_body_xpos('wam/bhand/finger_1/tip_link') + self.sim.data.get_body_xpos('wam/bhand/finger_2/tip_link')) / 2
@@ -187,7 +216,7 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         mean = 0.035
         dev = 0.01
         sample_y = - np.random.normal(mean, dev, 1)
-        sampled_goal = np.array([0, sample_y[0], 0])
+        sampled_goal = np.array([0, sample_y[0], 0, 0, sample_y[0] - 0.015, 0.02])
         return sampled_goal
 
     def get_initial_state(self, model_path):
