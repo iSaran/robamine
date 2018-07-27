@@ -1,0 +1,42 @@
+- name: first-exp
+  timestamp: '7/25/2018 14:37:25'
+  pc: triss
+  dir: /home/iason/openai-py/logs/bhand-her
+  comment: fainetai na emathe, ta plots den einai kala alla to best policy exei 100% epituxia se 10 dokimes
+  code:
+    - baselines: aa36b22
+    - rlrl: 7669a819a9af175fe524227147458130ca3e51c1
+  params:
+    - env: BHandSlidePillbox-v2
+    - num_cpu: 1
+    - n_epochs: 200
+
+- name: ddpg-dense
+  timestamp: '7/25/2018 14:37:25'
+  pc: triss
+  dir: /home/iason/openai-py/logs/bhand-her
+  comment: den fainetai na douleuei.. deixnei oti ftanei grigora sto miden Q-mean alla to success rate menei sto 0
+  code:
+    - baselines: aa36b22
+    - rlrl: master changed hardcoded the reward to dense (distance)
+  params:
+    - env: BHandSlidePillbox-v2
+    - num_cpu: 4
+    - n_epochs: 400
+    - policy_save_interval: 0
+
+- name: centroid-goal
+  timestamp: '2018/07/27 15:00:00'
+  pc: triss
+  dir: /home/iason/openai-py/logs/bhand-her
+  comment: Adds dominant centroids on the goal in order to stay on the object
+  code:
+    - baselines: f2729693253c0ef4d4086231d36e0a4307ec1cb3
+    - gym: 5c116fb3c91e872505300031d2bd60672b3a6e03
+    - rlrl:
+  train_script: 'rlrl/rlr-py/rlrl_py/scripts/baselines_wrappers/her/train.py'
+  params:
+    - env: BHandSlidePillbox-v2
+    - num_cpu: 4
+    - n_epochs: 400
+    - policy_save_interval: 0
