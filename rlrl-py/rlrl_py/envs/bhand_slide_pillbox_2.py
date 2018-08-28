@@ -66,16 +66,8 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
     # ----------------------------
 
     def compute_reward(self, achieved_goal, desired_goal, info):
-        if achieved_goal.ndim == 1:
-            ag_object = achieved_goal[0:3]
-            ag_dominant_centroid = achieved_goal[3:6]
-            dg_object = desired_goal[0:3]
-            dg_dominant_centroid = desired_goal[3:6]
-        else:
-            ag_object = achieved_goal[:, 0:3]
-            ag_dominant_centroid = achieved_goal[:, 3:6]
-            dg_object = desired_goal[:, 0:3]
-            dg_dominant_centroid = desired_goal[:, 3:6]
+        ag_object, ag_dominant_centroid = self.get_subgoals(achieved_goal)
+        dg_object, dg_dominant_centroid = self.get_subgoals(desired_goal)
 
         distance_object = goal_distance(ag_object, dg_object)
         distance_dominant_centroid = goal_distance(ag_dominant_centroid, dg_dominant_centroid)
@@ -92,16 +84,8 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
     # ----------------------------
 
     def _is_success(self, achieved_goal, desired_goal):
-        if achieved_goal.ndim == 1:
-            ag_object = achieved_goal[0:3]
-            ag_dominant_centroid = achieved_goal[3:6]
-            dg_object = desired_goal[0:3]
-            dg_dominant_centroid = desired_goal[3:6]
-        else:
-            ag_object = achieved_goal[:, 0:3]
-            ag_dominant_centroid = achieved_goal[:, 3:6]
-            dg_object = desired_goal[:, 0:3]
-            dg_dominant_centroid = desired_goal[:, 3:6]
+        ag_object, ag_dominant_centroid = self.get_subgoals(achieved_goal)
+        dg_object, dg_dominant_centroid = self.get_subgoals(desired_goal)
 
         distance_object = goal_distance(ag_object, dg_object)
         distance_dominant_centroid = goal_distance(ag_dominant_centroid, dg_dominant_centroid)
@@ -221,7 +205,6 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
 
     def get_initial_state(self, model_path):
         # Load local copy of the Mujoco models to have access to joint names and ids
-
         if model_path.startswith('/'):
             path = model_path
         else:
@@ -241,3 +224,27 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
         object_pos = sim.data.get_body_xpos('pillbox')
 
         return init_qpos, object_pos
+
+    # Auxialiary methods
+    # ----------------------------
+    def get_subgoals(self, goal):
+        if goal.ndim == 1:
+            subgoal_1 = goal[0:3]
+            subgoal_2 = goal[3:6]
+        else:
+            subgoal_1 = goal[:, 0:3]
+            subgoal_2 = goal[:, 3:6]
+        return subgoal_1, subgoal_2
+
+    def map_to_new_range(self, value, range_old, range_new):
+        """ Maps a value from range x \in [x_min, x_max] to y \in [y_min, y_max]
+
+        Arguments
+        ---------
+        value: The value to be mapped
+        range_old: The range the value alreade belongs
+        range_new: The new range to map the value
+        """
+        assert range_old[1] > range_old[0]
+        assert range_new[1] > range_new[0]
+        return (((value - range_old[0]) * (range_new[1] - range_new[0])) / (range_old[1] - range_old[0])) + range_new[0]
