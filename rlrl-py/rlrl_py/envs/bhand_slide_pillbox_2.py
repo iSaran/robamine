@@ -12,49 +12,50 @@ def goal_distance(goal_a, goal_b):
     return np.linalg.norm(goal_a - goal_b, axis=-1)
 
 class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self, distance_threshold = 0.01, reward_type="sparse"):
+    def __init__(self, distance_threshold = 0.01, reward_type="sparse", min_action = [-5, -5], max_action = [0, 0]):
         """ Initializes a new BHand Slide Pillbox environment
 
         Args:
             distance_threshold (float): the threshold after which the goal is considered achieved
         """
 
+        # Parse arguments
         self.distance_threshold = distance_threshold
         self.reward_type = reward_type
+        self.min_action = min_action
+        self.max_action = max_action
 
-        # The path of the Mujoco XML model
+        # Create MuJoCo Model
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/small_table_floating_bhand.xml")
         self.model = load_model_from_path(path)
-        #print(self.model.actuator_name2id('bh_wrist_force_torque_actuator'))
 
-        # TODO: Do not use hardcoded indeces, use native supported functions
-        # for extracting the addreses of the sensors in sensordata
+        # TODO(isaran): Do not use hardcoded indeces, use native supported functions
+        # for extracting the addresses of the sensors in sensordata
         self.sensor_name = {
-                'optoforce_1': [0, 1, 2],
-                'optoforce_2': [3, 4, 5]
-                }
+            'optoforce_1': [0, 1, 2],
+            'optoforce_2': [3, 4, 5]
+        }
 
         # Initialize the Bhand joint configuration to a prespecified config
         self.init_config = {
-                "bh_j11_joint": 0.0,
-                "bh_j12_joint": 0.8,
-                "bh_j22_joint": 0.8,
-                "bh_j32_joint": 0.0
-                }
+            "bh_j11_joint": 0.0,
+            "bh_j12_joint": 0.8,
+            "bh_j22_joint": 0.8,
+            "bh_j32_joint": 0.0
+        }
 
-        #target_pillbox = self._sample_goal();
         init_qpos = {
-           "bh_j11_joint": self.init_config["bh_j11_joint"],
-           "bh_j12_joint": self.init_config["bh_j12_joint"],
-           "bh_j22_joint": self.init_config["bh_j22_joint"],
-           "bh_j32_joint": self.init_config["bh_j32_joint"],
-           "bh_j21_joint": self.init_config["bh_j11_joint"],
-           "bh_j13_joint": 0.3333 * self.init_config["bh_j12_joint"],
-           "bh_j23_joint": 0.3333 * self.init_config["bh_j22_joint"],
-           "bh_j33_joint": 0.3333 * self.init_config["bh_j32_joint"],
-           "world_to_pillbox": [0.2, 0.92, 0.3725, 1, 0, 0, 0],
-           }
+            "bh_j11_joint": self.init_config["bh_j11_joint"],
+            "bh_j12_joint": self.init_config["bh_j12_joint"],
+            "bh_j22_joint": self.init_config["bh_j22_joint"],
+            "bh_j32_joint": self.init_config["bh_j32_joint"],
+            "bh_j21_joint": self.init_config["bh_j11_joint"],
+            "bh_j13_joint": 0.3333 * self.init_config["bh_j12_joint"],
+            "bh_j23_joint": 0.3333 * self.init_config["bh_j22_joint"],
+            "bh_j33_joint": 0.3333 * self.init_config["bh_j32_joint"],
+            "world_to_pillbox": [0.2, 0.92, 0.3725, 1, 0, 0, 0],
+        }
         self.initial_obj_pos = init_qpos['world_to_pillbox'][0:3]
 
         self.first_time = True
