@@ -101,7 +101,10 @@ class BHandSlidePillbox2(robot_env.RobotEnv, utils.EzPickle):
             bias = self.sim.data.qfrc_bias[i]
             self.sim.data.qfrc_applied[i] = bias
 
-        force_object = np.array([0, - 5 * (action[0] + 1) / 2, -5 * (action[1] + 1)/2, 0, 0, 0])
+        y = self.map_to_new_range(action[0], (-1, 1), (self.min_action[0], self.max_action[0]))
+        z = self.map_to_new_range(action[1], (-1, 1), (self.min_action[1], self.max_action[1]))
+        print(y, ', ', z)
+        force_object = np.array([0, y, z, 0, 0, 0])
 
         # Trasfer the desired action (force on the object frame to the wrist and command the wrist
         wrist_pos = np.subtract(self.sim.data.get_body_xpos('pillbox'), self.sim.data.get_body_xpos('bh_wrist'))
