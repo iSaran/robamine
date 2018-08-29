@@ -6,13 +6,14 @@ from gym.envs.robotics import robot_env
 import os
 
 import rlrl_py.utils as arl
+import random
 
 def goal_distance(goal_a, goal_b):
     assert goal_a.shape == goal_b.shape
     return np.linalg.norm(goal_a - goal_b, axis=-1)
 
 class BHandSlidePillbox3(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self, distance_threshold = 0.01, reward_type="sparse", min_action = [-5, -5], max_action = [0, 0]):
+    def __init__(self, distance_threshold = 0.01, reward_type="sparse", min_action = -5, max_action = 0):
         """ Initializes a new BHand Slide Pillbox environment
 
         Args:
@@ -60,7 +61,7 @@ class BHandSlidePillbox3(robot_env.RobotEnv, utils.EzPickle):
 
         self.first_time = True
 
-        robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=2, n_substeps=1)
+        robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=1, n_substeps=1)
         utils.EzPickle.__init__(self)
 
     # GoalEnv methods
@@ -93,7 +94,7 @@ class BHandSlidePillbox3(robot_env.RobotEnv, utils.EzPickle):
         return (distance_object < self.distance_threshold and distance_dominant_centroid < self.distance_threshold).astype(np.float32)
 
     def _set_action(self, action):
-        assert action.shape == (2,)
+        assert action.shape == (1,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
 
         # Set the bias to the applied generilized force in order to
@@ -102,15 +103,25 @@ class BHandSlidePillbox3(robot_env.RobotEnv, utils.EzPickle):
             bias = self.sim.data.qfrc_bias[i]
             self.sim.data.qfrc_applied[i] = bias
 
-        y = self.map_to_new_range(action[0], (-1, 1), (self.min_action[0], self.max_action[0]))
-        z = self.map_to_new_range(action[1], (-1, 1), (self.min_action[1], self.max_action[1]))
-        force_object = np.array([0, y, z, 0, 0, 0])
+        if (self.sim.data.time > 1):
+            print('-----')
+            x = self.disturbance[0]
+            y = self.disturbance[1]
+            print(x)
+            print(y)
+            print('-----')
+        else:
+            x = 0
+            y = 0
+        z = self.map_to_new_range(action, (-1, 1), (self.min_action, self.max_action))
+        force_object = np.array([x, y, z, 0, 0, 0])
 
         # Trasfer the desired action (force on the object frame to the wrist and command the wrist
         wrist_pos = np.subtract(self.sim.data.get_body_xpos('pillbox'), self.sim.data.get_body_xpos('bh_wrist'))
         wrist_rot = np.matmul(np.transpose(self.sim.data.get_body_xmat('bh_wrist')), self.initial_obj_rot_mat)
         screw = arl.orientation.screw_transformation(wrist_pos, wrist_rot)
         force_wrist = np.matmul(screw, force_object)
+        print(force_wrist)
         force_wrist_world = np.matmul(arl.orientation.rotation_6x6(self.sim.data.get_body_xmat('bh_wrist')), force_wrist)
 
         # Command the joints to the initial joint configuration in order to
@@ -132,6 +143,7 @@ class BHandSlidePillbox3(robot_env.RobotEnv, utils.EzPickle):
                 self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = force_wrist_world[4]
             if actuator == 'bh_wrist_torque_z_actuator':
                 self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = force_wrist_world[5]
+
 
     def _get_obs(self):
         # Calculate the dominant point, i.e. the centroid of the dominant fingers
@@ -175,6 +187,10 @@ class BHandSlidePillbox3(robot_env.RobotEnv, utils.EzPickle):
     def _reset_sim(self):
         self.sim.set_state(self.initial_state)
         self.initial_obj_rot_mat = self.sim.data.get_body_xmat('pillbox')
+
+        self.disturbance = np.random.normal(2, 1, 2)
+        self.disturbance[0] = random.choice([-1, 1]) * self.disturbance[0]
+        self.disturbance = [0, 0]
         return True
 
     def _render_callback(self):
