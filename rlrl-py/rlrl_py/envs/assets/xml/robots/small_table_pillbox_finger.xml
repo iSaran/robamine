@@ -1,0 +1,83 @@
+<mujoco model="LWR">
+  <compiler
+    angle="radian"
+    meshdir="../../meshes"
+    inertiafromgeom="true" />
+  <option
+    iterations="200"
+    timestep="0.001"
+    solver="CG"/>
+  <size njmax="500" nconmax="100" />
+  <visual>
+    <map
+      fogstart="1.5"
+      fogend="3"
+      force="0.3"
+      />
+    <quality
+      shadowsize="8192"/>
+    <scale
+      forcewidth="0.03"
+      contactwidth="0.05"
+      contactheight="0.03"
+      framelength="0.3"
+      framewidth="0.02"/>
+  </visual>
+  <asset>
+    <mesh name="small_table" file="utils/small_table.stl"/>
+  </asset>
+  <worldbody>
+    <light
+      directional="false"
+      cutoff="90"
+      exponent="1"
+      diffuse="1 1 1"
+      specular="0 0 0"
+      pos="1 0 1.5"
+      dir="-1 0 -2.5"/>
+    <body
+      name="smalltable"
+      pos="0 0 0"
+      quat="1 0 0 0">
+      <geom
+        name="smalltable"
+        friction="0.5 0.005 0.0001"
+        type="box"
+        size="0.25 0.25 0.0125"
+        rgba="0.5 0.18 0.03 1"/>
+    </body>
+    <body
+      name="pillbox"
+      pos="0 0.15 0.02"
+      quat="1 0 0 0">
+      <geom
+        name="pillbox"
+        friction="0.5 0.005 0.0001"
+        type="box"
+        size="0.05 0.05 0.01"
+        mass = "0.100"/>
+      <joint
+        damping="1"
+        name="world_to_pillbox"
+        type="free"/>
+      <site name="target" pos="0 0 0.0" size="0.05 0.05 0.01" rgba="0 0.3 0.8 0.3" type="box"/>
+    </body>
+    <body
+      name="finger"
+      pos="0 0.15 0.05"
+      quat="0 0.707 -0.707 0">
+      <joint
+        name="finger_free_joint"
+        type="free"/>
+      <geom name="optoforce" pos="0 0.0 0.0" rgba="0.0 0.4 0.6 1" size=".015" type="sphere" mass ="1" />
+      </body>
+  </worldbody>
+  <actuator>
+    <motor  gear="1 0 0 0 0 0" joint="finger_free_joint" name="finger_force_x_actuator"/>
+    <motor  gear="0 1 0 0 0 0" joint="finger_free_joint" name="finger_force_y_actuator"/>
+    <motor  gear="0 0 1 0 0 0" joint="finger_free_joint" name="finger_force_z_actuator"/>
+    <motor  gear="0 0 0 1 0 0" joint="finger_free_joint" name="finger_torque_x_actuator"/>
+    <motor  gear="0 0 0 0 1 0" joint="finger_free_joint" name="finger_torque_y_actuator"/>
+    <motor  gear="0 0 0 0 0 1" joint="finger_free_joint" name="finger_torque_z_actuator"/>
+  </actuator>
+</mujoco>

@@ -21,3 +21,9 @@ register(
     entry_point='rlrl_py.envs:BHandSlidePillbox3',
     max_episode_steps=2000
 )
+
+register(
+    id='FingerSlide-v1',
+    entry_point='rlrl_py.envs:FingerSlide',
+    max_episode_steps=2000
+)

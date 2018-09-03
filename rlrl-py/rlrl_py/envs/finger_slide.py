@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+import numpy as np
+from mujoco_py import load_model_from_path, MjSim, MjViewer
+
+from mujoco_py import functions
+from mujoco_py.generated import const
+
+from gym import utils, spaces
+from gym.envs.robotics import robot_env
+import os
+
+import rlrl_py.utils as arl
+import random
+
+class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
+    def __init__(self):
+        # Create MuJoCo Model
+        path = os.path.join(os.path.dirname(__file__),
+                            "assets/xml/robots/small_table_pillbox_finger.xml")
+        self.model = load_model_from_path(path)
+
+        self.first_time = True
+
+        self.n_actions = 1
+        init_qpos = {
+        }
+        robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=self.n_actions, n_substeps=1)
+        utils.EzPickle.__init__(self)
+
+    # GoalEnv methods
+    # ----------------------------
+
+    def compute_reward(self, achieved_goal, desired_goal, info):
+        return 0.0
+
+    # RobotEnv methods
+    # ----------------------------
+
+    def _is_success(self, achieved_goal, desired_goal):
+        return False
+
+    def _set_action(self, action):
+        assert action.shape == (self.n_actions,)
+        action = action.copy()  # ensure that we don't change the action outside of this scope
+
+        # Calculate the bias, i.e. the sum of coriolis, centrufugal, gravitational force
+        addr = self.model.get_joint_qvel_addr("finger_free_joint")
+        bias = self.sim.data.qfrc_bias[addr[0]:addr[1]]
+
+        commanded = [-1, 0, 1, 0.0, 0.0, 0.0]
+        d = self.sim.data.contact[0]
+        print('number of geoms:', self.model.ngeom)
+        print('max length of contacts:', self.model.nconmax)
+        print('number of contacts:', self.sim.data.ncon)
+        # functions.mj_id2name(self.model, OBJ_GEOM, 0)
+        print('ksekinaw')
+        for i in range(0, self.sim.data.ncon):
+            # print('geom1: ', self.model.geom_id2name(self.sim.data.contact[i].geom1), ' geom2: ', self.model.geom_id2name(self.sim.data.contact[i].geom2))
+            contact = self.sim.data.contact[i]
+            if (self.model.geom_id2name(contact.geom1) == "optoforce") or (self.model.geom_id2name(contact.geom2) == "optoforce"):
+                print('optoforce contact!!!!!!!!!!!!! dist:', contact.dist)
+                print('optoforce contact!!!!!!!!!!!!! pos:', contact.pos)
+                print('optoforce contact!!!!!!!!!!!!! frame:', contact.frame)
+                print()
+                result = np.ndarray(shape=6)
+                functions.mj_contactForce(self.model, self.sim.data, i, result)
+                print('looool', result)
+        print('teleiwsa')
+
+        # Set the bias to the applied generilized force in order to
+        # implement a kind of gravity compensation in bhand.
+       ######################################################## for i in range(*self.model.get_joint_qvel_addr("finger_free_joint")):
+       ########################################################     bias = self.sim.data.qfrc_bias[i]
+       ########################################################     self.sim.data.qfrc_applied[i] = bias
+
+       ######################################################## # z = self.map_to_new_range(action, (-1, 1), (self.min_action[1], self.max_action[1]))
+       ######################################################## z = -0.1
+       ######################################################## finger_wrench = np.array([0, -z, 0, 0, 0, 0])
+       ######################################################## world_wrench = finger_wrench
+
+       ######################################################## # Trasfer the desired action (force on the object frame to the wrist and command the wrist
+       #  finger_to_world_pos = self.sim.data.get_body_xpos('finger')
+        commanded[0:3] = np.matmul(self.sim.data.get_body_xmat('finger'), commanded[0:3])
+       #  finger_to_world_rot_6x6 = arl.orientation.rotation_6x6(finger_to_world_rot)
+       #  world_wrench = np.matmul(finger_to_world_rot_6x6, commanded)
+       #  commanded = world_wrench
+       #  print(commanded)
+       ######################################################## #########33functions.mj_inverse(self.model, self.sim.data)
+       ######################################################## #########33ids = self.model.get_joint_qvel_addr("finger_free_joint")
+       ######################################################## #########33print(self.sim.data.qfrc_inverse[ids[0]:ids[1]])
+       ######################################################## #########33print(world_wrench)
+       ######################################################## #########33world_wrench = self.sim.data.qfrc_inverse[ids[0]:ids[1]]
+       ######################################################## # wrist_pos = np.subtract(self.sim.data.get_body_xpos('pillbox'), self.sim.data.get_body_xpos('bh_wrist'))
+       ######################################################## # wrist_rot = np.matmul(np.transpose(self.sim.data.get_body_xmat('bh_wrist')), self.initial_obj_rot_mat)
+       ######################################################## # screw = arl.orientation.screw_transformation(wrist_pos, wrist_rot)
+       ######################################################## # force_wrist = np.matmul(screw, force_object)
+       ######################################################## # force_wrist_world = np.matmul(arl.orientation.rotation_6x6(self.sim.data.get_body_xmat('bh_wrist')), force_wrist)
+
+       # Command the joints to the initial joint configuration in order to
+       # have the joints fixed in this position (no falling or external forces
+       # are affecting the fingers) and also command the actions as forces on
+       # the wrist
+        applied_force = bias + commanded
+        #print(self.model.actuator_name2id('finger_torque_z_actuator'))
+        for actuator in self.model.actuator_names:
+            if actuator == 'finger_force_x_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[0]
+            if actuator == 'finger_force_y_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[1]
+            if actuator == 'finger_force_z_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[2]
+            if actuator == 'finger_torque_x_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[3]
+            if actuator == 'finger_torque_y_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[4]
+            if actuator == 'finger_torque_z_actuator':
+                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[5]
+
+    def _get_obs(self):
+        return {
+            'observation': np.zeros(shape=(3, 1)),
+            'achieved_goal': np.zeros(shape=(3, 1)),
+            'desired_goal': np.zeros(shape=(3, 1))
+            }
+
+    def _env_setup(self, initial_qpos):
+        for name, value in initial_qpos.items():
+            self.sim.data.set_joint_qpos(name, value)
+        self.sim.forward()
+
+    def _viewer_setup(self):
+        body_id = self.sim.model.body_name2id('pillbox')
+        lookat = self.sim.data.body_xpos[body_id]
+        for idx, value in enumerate(lookat):
+            self.viewer.cam.lookat[idx] = value
+        # Set the camera configuration (spherical coordinates)
+        self.viewer.cam.distance = 0.846
+        self.viewer.cam.elevation = -21.774
+        self.viewer.cam.azimuth = -148.306
+
+    def _reset_sim(self):
+        self.sim.set_state(self.initial_state)
+        self.initial_obj_rot_mat = self.sim.data.get_body_xmat('pillbox')
+
+        self.disturbance = np.random.normal(2, 1, 2)
+        self.disturbance[0] = random.choice([-1, 1]) * self.disturbance[0]
+        self.disturbance = [0, 0]
+        return True
+
+    def _render_callback(self):
+        if self.first_time:
+            self.init_goal = self.goal
+            self.first_time = False
+
+    def terminal_state(self, observation):
+        if np.linalg.norm(observation[0:3]) > 0.5:
+            return True
+
+        return False
+
+    def _sample_goal(self):
+        "Samples a goal for the object w.r.t the frame of the object."
+        mean = 0.035
+        dev = 0.01
+        sample_y = - np.random.normal(mean, dev, 1)
+        sampled_goal = np.array([0, sample_y[0], 0, 0, sample_y[0] - 0.015, 0.02])
+        return sampled_goal
