@@ -48,30 +48,8 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         bias = self.sim.data.qfrc_bias[addr[0]:addr[1]]
 
         commanded = [-1, 0, 1, 0.0, 0.0, 0.0]
-        d = self.sim.data.contact[0]
-        print('number of geoms:', self.model.ngeom)
-        print('max length of contacts:', self.model.nconmax)
-        print('number of contacts:', self.sim.data.ncon)
-        # functions.mj_id2name(self.model, OBJ_GEOM, 0)
-        print('ksekinaw')
-        for i in range(0, self.sim.data.ncon):
-            # print('geom1: ', self.model.geom_id2name(self.sim.data.contact[i].geom1), ' geom2: ', self.model.geom_id2name(self.sim.data.contact[i].geom2))
-            contact = self.sim.data.contact[i]
-            if (self.model.geom_id2name(contact.geom1) == "optoforce") or (self.model.geom_id2name(contact.geom2) == "optoforce"):
-                print('optoforce contact!!!!!!!!!!!!! dist:', contact.dist)
-                print('optoforce contact!!!!!!!!!!!!! pos:', contact.pos)
-                print('optoforce contact!!!!!!!!!!!!! frame:', contact.frame)
-                print()
-                result = np.ndarray(shape=6)
-                functions.mj_contactForce(self.model, self.sim.data, i, result)
-                print('looool', result)
-        print('teleiwsa')
 
-        # Set the bias to the applied generilized force in order to
-        # implement a kind of gravity compensation in bhand.
-       ######################################################## for i in range(*self.model.get_joint_qvel_addr("finger_free_joint")):
-       ########################################################     bias = self.sim.data.qfrc_bias[i]
-       ########################################################     self.sim.data.qfrc_applied[i] = bias
+        print(self.get_contact_force("optoforce", "pillbox"))
 
        ######################################################## # z = self.map_to_new_range(action, (-1, 1), (self.min_action[1], self.max_action[1]))
        ######################################################## z = -0.1
@@ -165,3 +143,14 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         sample_y = - np.random.normal(mean, dev, 1)
         sampled_goal = np.array([0, sample_y[0], 0, 0, sample_y[0] - 0.015, 0.02])
         return sampled_goal
+
+    def get_contact_force(self, geom1_name, geom2_name):
+        result = np.zeros(shape=6)
+        have_contact = False
+        for i in range(0, self.sim.data.ncon):
+            contact = self.sim.data.contact[i]
+            if (self.model.geom_id2name(contact.geom1) == geom1_name) and (self.model.geom_id2name(contact.geom2) == geom2_name):
+                functions.mj_contactForce(self.model, self.sim.data, i, result)
+                have_contact = True
+        return result[0:3]
+
