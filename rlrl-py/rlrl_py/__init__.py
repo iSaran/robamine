@@ -25,5 +25,5 @@ register(
 register(
     id='FingerSlide-v1',
     entry_point='rlrl_py.envs:FingerSlide',
-    max_episode_steps=3000
+    max_episode_steps=2000
 )
