@@ -29,12 +29,16 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     # ----------------------------
 
     def compute_reward(self, achieved_goal, desired_goal, info):
-        return 0.0
+        if (np.linalg.norm(achieved_goal - desired_goal) < 0.005):
+            return 0.0
+        return -1.0
 
     # RobotEnv methods
     # ----------------------------
 
     def _is_success(self, achieved_goal, desired_goal):
+        if (np.linalg.norm(achieved_goal - desired_goal) < 0.005):
+            return True
         return False
 
     def _set_action(self, action):
@@ -63,27 +67,28 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
             else:
                 dist = T2.pos(t)
             disturbance = [dist, 0.0, 0, 0.00, 0.0, 0.0]
-            self.send_applied_wrench(disturbance, 'pillbox')
-
-        #print(self.get_contact_force("optoforce", "pillbox"))
-
-       ######################################################## #########33functions.mj_inverse(self.model, self.sim.data)
-       ######################################################## #########33ids = self.model.get_joint_qvel_addr("finger_free_joint")
-       ######################################################## #########33print(self.sim.data.qfrc_inverse[ids[0]:ids[1]])
-       ######################################################## #########33print(world_wrench)
-       ######################################################## #########33world_wrench = self.sim.data.qfrc_inverse[ids[0]:ids[1]]
-       ######################################################## # wrist_pos = np.subtract(self.sim.data.get_body_xpos('pillbox'), self.sim.data.get_body_xpos('bh_wrist'))
-       ######################################################## # wrist_rot = np.matmul(np.transpose(self.sim.data.get_body_xmat('bh_wrist')), self.initial_obj_rot_mat)
-       ######################################################## # screw = arl.orientation.screw_transformation(wrist_pos, wrist_rot)
-       ######################################################## # force_wrist = np.matmul(screw, force_object)
-       ######################################################## # force_wrist_world = np.matmul(arl.orientation.rotation_6x6(self.sim.data.get_body_xmat('bh_wrist')), force_wrist)
+        else:
+            disturbance = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.send_applied_wrench(disturbance, 'pillbox')
 
     def _get_obs(self):
-        return {
-            'observation': np.zeros(shape=(3, 1)),
-            'achieved_goal': np.zeros(shape=(3, 1)),
-            'desired_goal': np.zeros(shape=(3, 1))
-            }
+        # Calculate the distance betwe
+        finger_pos = self.sim.data.get_body_xpos('optoforce')
+        pillbox_pos = self.sim.data.get_body_xpos('pillbox')
+        distance = np.linalg.norm(finger_pos - pillbox_pos)
+        observation = np.zeros(shape=(1, 1))
+        observation[0] = distance
+        obs = { 'observation': distance,
+                'achieved_goal': distance,
+                'desired_goal': self.goal
+              }
+        return obs
+
+    def _sample_goal(self):
+        desired = np.zeros(shape=(1, 1))
+        desired[0] = 0.03
+        return desired
+
 
     def _env_setup(self, initial_qpos):
         for name, value in initial_qpos.items():
@@ -119,14 +124,6 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
             return True
 
         return False
-
-    def _sample_goal(self):
-        "Samples a goal for the object w.r.t the frame of the object."
-        mean = 0.035
-        dev = 0.01
-        sample_y = - np.random.normal(mean, dev, 1)
-        sampled_goal = np.array([0, sample_y[0], 0, 0, sample_y[0] - 0.015, 0.02])
-        return sampled_goal
 
     def get_contact_force(self, geom1_name, geom2_name):
         result = np.zeros(shape=6)
