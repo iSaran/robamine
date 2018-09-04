@@ -18,12 +18,10 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/small_table_pillbox_finger.xml")
         self.model = load_model_from_path(path)
-
         self.first_time = True
 
         self.n_actions = 1
-        init_qpos = {
-        }
+        init_qpos = {}
         robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=self.n_actions, n_substeps=1)
         utils.EzPickle.__init__(self)
 
@@ -42,27 +40,22 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     def _set_action(self, action):
         assert action.shape == (self.n_actions,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
+        action = self.map_to_new_range(action, [-1, 1], [-0.5, 0])
 
         # Calculate the bias, i.e. the sum of coriolis, centrufugal, gravitational force
+        # Command the joints to the initial joint configuration in order to
+        # have the joints fixed in this position (no falling or external forces
+        # are affecting the fingers) and also command the actions as forces on
+        # the wrist
         addr = self.model.get_joint_qvel_addr("finger_free_joint")
         bias = self.sim.data.qfrc_bias[addr[0]:addr[1]]
+        commanded = [0, 0.0, action, 0.00, 0.0, 0.0]
+        #commanded[0:3] = np.matmul(self.sim.data.get_body_xmat('finger'), commanded[0:3])
+        applied_force = bias + commanded
 
-        commanded = [-1, 0, 1, 0.0, 0.0, 0.0]
 
-        print(self.get_contact_force("optoforce", "pillbox"))
+        #print(self.get_contact_force("optoforce", "pillbox"))
 
-       ######################################################## # z = self.map_to_new_range(action, (-1, 1), (self.min_action[1], self.max_action[1]))
-       ######################################################## z = -0.1
-       ######################################################## finger_wrench = np.array([0, -z, 0, 0, 0, 0])
-       ######################################################## world_wrench = finger_wrench
-
-       ######################################################## # Trasfer the desired action (force on the object frame to the wrist and command the wrist
-       #  finger_to_world_pos = self.sim.data.get_body_xpos('finger')
-        commanded[0:3] = np.matmul(self.sim.data.get_body_xmat('finger'), commanded[0:3])
-       #  finger_to_world_rot_6x6 = arl.orientation.rotation_6x6(finger_to_world_rot)
-       #  world_wrench = np.matmul(finger_to_world_rot_6x6, commanded)
-       #  commanded = world_wrench
-       #  print(commanded)
        ######################################################## #########33functions.mj_inverse(self.model, self.sim.data)
        ######################################################## #########33ids = self.model.get_joint_qvel_addr("finger_free_joint")
        ######################################################## #########33print(self.sim.data.qfrc_inverse[ids[0]:ids[1]])
@@ -74,12 +67,6 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
        ######################################################## # force_wrist = np.matmul(screw, force_object)
        ######################################################## # force_wrist_world = np.matmul(arl.orientation.rotation_6x6(self.sim.data.get_body_xmat('bh_wrist')), force_wrist)
 
-       # Command the joints to the initial joint configuration in order to
-       # have the joints fixed in this position (no falling or external forces
-       # are affecting the fingers) and also command the actions as forces on
-       # the wrist
-        applied_force = bias + commanded
-        #print(self.model.actuator_name2id('finger_torque_z_actuator'))
         for actuator in self.model.actuator_names:
             if actuator == 'finger_force_x_actuator':
                 self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[0]
@@ -154,3 +141,15 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
                 have_contact = True
         return result[0:3]
 
+    def map_to_new_range(self, value, range_old, range_new):
+        """ Maps a value from range x \in [x_min, x_max] to y \in [y_min, y_max]
+
+        Arguments
+        ---------
+        value: The value to be mapped
+        range_old: The range the value alreade belongs
+        range_new: The new range to map the value
+        """
+        assert range_old[1] > range_old[0]
+        assert range_new[1] > range_new[0]
+        return (((value - range_old[0]) * (range_new[1] - range_new[0])) / (range_old[1] - range_old[0])) + range_new[0]
