@@ -12,6 +12,11 @@ import os
 import rlrl_py.utils as arl
 import random
 
+def goal_distance(goal_a, goal_b):
+    assert goal_a.shape == goal_b.shape
+    return np.linalg.norm(goal_a - goal_b, axis=-1)
+
+
 class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     def __init__(self):
         # Create MuJoCo Model
@@ -29,17 +34,15 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     # ----------------------------
 
     def compute_reward(self, achieved_goal, desired_goal, info):
-        if (np.linalg.norm(achieved_goal - desired_goal) < 0.005):
-            return 0.0
-        return -1.0
+        distance = goal_distance(achieved_goal, desired_goal)
+        return -(distance > 0.005).astype(np.float32)
 
     # RobotEnv methods
     # ----------------------------
 
     def _is_success(self, achieved_goal, desired_goal):
-        if (np.linalg.norm(achieved_goal - desired_goal) < 0.005):
-            return True
-        return False
+        distance = goal_distance(achieved_goal, desired_goal)
+        return (distance < 0.005).astype(np.float32)
 
     def _set_action(self, action):
         assert action.shape == (self.n_actions,)
@@ -78,8 +81,8 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         distance = np.linalg.norm(finger_pos - pillbox_pos)
         observation = np.zeros(shape=(1, 1))
         observation[0] = distance
-        obs = { 'observation': distance,
-                'achieved_goal': distance,
+        obs = { 'observation': observation,
+                'achieved_goal': observation,
                 'desired_goal': self.goal
               }
         return obs
