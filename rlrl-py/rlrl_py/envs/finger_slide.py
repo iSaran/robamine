@@ -40,7 +40,7 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     def _set_action(self, action):
         assert action.shape == (self.n_actions,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
-        action = self.map_to_new_range(action, [-1, 1], [-0.5, 0])
+        action = self.map_to_new_range(action, [-1, 1], [-1, 0])
 
         # Calculate the bias, i.e. the sum of coriolis, centrufugal, gravitational force
         # Command the joints to the initial joint configuration in order to
@@ -49,11 +49,21 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         # the wrist
         addr = self.model.get_joint_qvel_addr("finger_free_joint")
         bias = self.sim.data.qfrc_bias[addr[0]:addr[1]]
-        commanded = [0, 0.0, action, 0.00, 0.0, 0.0]
+        commanded = [0.0, 0.0, action, 0.0, 0.0, 0.0]
         #commanded[0:3] = np.matmul(self.sim.data.get_body_xmat('finger'), commanded[0:3])
         applied_force = bias + commanded
         self.send_applied_wrench(applied_force, 'finger')
 
+        t = self.sim.data.time
+        if t > 1:
+            T = arl.trajectory.Trajectory([1, 1.125], [0, 1])
+            T2 = arl.trajectory.Trajectory([1.125, 1], [1, 0])
+            if t < 1.5:
+                dist = T.pos(t)
+            else:
+                dist = T2.pos(t)
+            disturbance = [dist, 0.0, 0, 0.00, 0.0, 0.0]
+            self.send_applied_wrench(disturbance, 'pillbox')
 
         #print(self.get_contact_force("optoforce", "pillbox"))
 
