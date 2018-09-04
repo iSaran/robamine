@@ -52,6 +52,7 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         commanded = [0, 0.0, action, 0.00, 0.0, 0.0]
         #commanded[0:3] = np.matmul(self.sim.data.get_body_xmat('finger'), commanded[0:3])
         applied_force = bias + commanded
+        self.send_applied_wrench(applied_force, 'finger')
 
 
         #print(self.get_contact_force("optoforce", "pillbox"))
@@ -66,20 +67,6 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
        ######################################################## # screw = arl.orientation.screw_transformation(wrist_pos, wrist_rot)
        ######################################################## # force_wrist = np.matmul(screw, force_object)
        ######################################################## # force_wrist_world = np.matmul(arl.orientation.rotation_6x6(self.sim.data.get_body_xmat('bh_wrist')), force_wrist)
-
-        for actuator in self.model.actuator_names:
-            if actuator == 'finger_force_x_actuator':
-                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[0]
-            if actuator == 'finger_force_y_actuator':
-                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[1]
-            if actuator == 'finger_force_z_actuator':
-                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[2]
-            if actuator == 'finger_torque_x_actuator':
-                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[3]
-            if actuator == 'finger_torque_y_actuator':
-                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[4]
-            if actuator == 'finger_torque_z_actuator':
-                self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = applied_force[5]
 
     def _get_obs(self):
         return {
@@ -153,3 +140,10 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         assert range_old[1] > range_old[0]
         assert range_new[1] > range_new[0]
         return (((value - range_old[0]) * (range_new[1] - range_new[0])) / (range_old[1] - range_old[0])) + range_new[0]
+
+    def send_applied_wrench(self, wrench, actuator_name):
+        for actuator in self.model.actuator_names:
+            for i in range(0, 6):
+                name = actuator_name + '_' + str(i) + '_wrench_actuator'
+                if actuator == name:
+                    self.sim.data.ctrl[self.model.actuator_name2id(actuator)] = wrench[i]

@@ -73,11 +73,18 @@
     </body>
   </worldbody>
   <actuator>
-    <motor  gear="1 0 0 0 0 0" joint="finger_free_joint" name="finger_force_x_actuator"/>
-    <motor  gear="0 1 0 0 0 0" joint="finger_free_joint" name="finger_force_y_actuator"/>
-    <motor  gear="0 0 1 0 0 0" joint="finger_free_joint" name="finger_force_z_actuator"/>
-    <motor  gear="0 0 0 1 0 0" joint="finger_free_joint" name="finger_torque_x_actuator"/>
-    <motor  gear="0 0 0 0 1 0" joint="finger_free_joint" name="finger_torque_y_actuator"/>
-    <motor  gear="0 0 0 0 0 1" joint="finger_free_joint" name="finger_torque_z_actuator"/>
+    <motor  gear="1 0 0 0 0 0" joint="finger_free_joint" name="finger_0_wrench_actuator"/>
+    <motor  gear="0 1 0 0 0 0" joint="finger_free_joint" name="finger_1_wrench_actuator"/>
+    <motor  gear="0 0 1 0 0 0" joint="finger_free_joint" name="finger_2_wrench_actuator"/>
+    <motor  gear="0 0 0 1 0 0" joint="finger_free_joint" name="finger_3_wrench_actuator"/>
+    <motor  gear="0 0 0 0 1 0" joint="finger_free_joint" name="finger_4_wrench_actuator"/>
+    <motor  gear="0 0 0 0 0 1" joint="finger_free_joint" name="finger_5_wrench_actuator"/>
+
+    <motor  gear="1 0 0 0 0 0" joint="world_to_pillbox" name="pillbox_0_wrench_actuator"/>
+    <motor  gear="0 1 0 0 0 0" joint="world_to_pillbox" name="pillbox_1_wrench_actuator"/>
+    <motor  gear="0 0 1 0 0 0" joint="world_to_pillbox" name="pillbox_2_wrench_actuator"/>
+    <motor  gear="0 0 0 1 0 0" joint="world_to_pillbox" name="pillbox_3_wrench_actuator"/>
+    <motor  gear="0 0 0 0 1 0" joint="world_to_pillbox" name="pillbox_4_wrench_actuator"/>
+    <motor  gear="0 0 0 0 0 1" joint="world_to_pillbox" name="pillbox_5_wrench_actuator"/>
   </actuator>
 </mujoco>
