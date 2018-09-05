@@ -23,7 +23,6 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/sphere_position.xml")
         self.model = load_model_from_path(path)
-        self.first_time = True
 
         self.n_actions = 3
         init_qpos = {}
@@ -92,12 +91,12 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
         self.sim.forward()
 
     def _viewer_setup(self):
-        body_id = self.sim.model.body_name2id('optoforce')
+        body_id = self.sim.model.body_name2id('world_frame')
         lookat = self.sim.data.body_xpos[body_id]
         for idx, value in enumerate(lookat):
             self.viewer.cam.lookat[idx] = value
         # Set the camera configuration (spherical coordinates)
-        self.viewer.cam.distance = 0.846
+        self.viewer.cam.distance = 5
         self.viewer.cam.elevation = -21.774
         self.viewer.cam.azimuth = -148.306
 
@@ -106,21 +105,18 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
         return True
 
     def _render_callback(self):
-        if self.first_time:
-            self.init_goal = self.goal
-            self.first_time = False
         site_id = self.sim.model.site_name2id('target')
         self.sim.model.site_pos[site_id] = self.goal[0:3]
         self.sim.forward()
+
+    # Auxiliary Methods
+    # ----------------------------
 
     def terminal_state(self, observation):
         if np.linalg.norm(observation[0:3]) > 0.5:
             return True
 
         return False
-
-    # Auxiliary Methods
-    # ----------------------------
 
     def get_contact_force(self, geom1_name, geom2_name):
         result = np.zeros(shape=6)
