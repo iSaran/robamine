@@ -18,7 +18,10 @@ def goal_distance(goal_a, goal_b):
 
 
 class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self, n_substeps = 20):
+    def __init__(self, distance_threshold = 0.05, n_substeps = 20):
+
+        self.distance_threshold = distance_threshold
+
         # Create MuJoCo Model
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/sphere_position.xml")
@@ -35,14 +38,14 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         distance = goal_distance(achieved_goal, desired_goal)
-        return -(distance > 0.01).astype(np.float32)
+        return -(distance > self.distance_threshold).astype(np.float32)
 
     # RobotEnv methods
     # ----------------------------
 
     def _is_success(self, achieved_goal, desired_goal):
         distance = goal_distance(achieved_goal, desired_goal)
-        return (distance < 0.01).astype(np.float32)
+        return (distance < self.distance_threshold).astype(np.float32)
 
     def _set_action(self, action):
         assert action.shape == (self.n_actions,)
