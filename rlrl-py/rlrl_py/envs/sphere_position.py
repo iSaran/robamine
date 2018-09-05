@@ -12,10 +12,6 @@ import os
 import rlrl_py.utils as arl
 import random
 
-def goal_distance(goal_a, goal_b):
-    assert goal_a.shape == goal_b.shape
-    return np.linalg.norm(goal_a - goal_b, axis=-1)
-
 
 class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
     def __init__(self, distance_threshold = 0.05, target_range = 0.5, n_substeps = 20):
@@ -34,19 +30,24 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
         robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=self.n_actions, n_substeps=n_substeps)
         utils.EzPickle.__init__(self)
 
-    # GoalEnv methods
+    # Reward related methods
     # ----------------------------
+
+    def goal_distance(self, goal_a, goal_b):
+        assert goal_a.shape == goal_b.shape
+        return np.linalg.norm(goal_a - goal_b, axis=-1)
 
     def compute_reward(self, achieved_goal, desired_goal, info):
-        distance = goal_distance(achieved_goal, desired_goal)
+        distance = self.goal_distance(achieved_goal, desired_goal)
         return -(distance > self.distance_threshold).astype(np.float32)
 
-    # RobotEnv methods
-    # ----------------------------
-
     def _is_success(self, achieved_goal, desired_goal):
-        distance = goal_distance(achieved_goal, desired_goal)
+        distance = self.goal_distance(achieved_goal, desired_goal)
         return (distance < self.distance_threshold).astype(np.float32)
+
+
+    # Action/State methods
+    # ----------------------------
 
     def _set_action(self, action):
         assert action.shape == (self.n_actions,)
@@ -82,6 +83,8 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
             sampled_goal = self.sim.data.get_body_xpos('optoforce') + np.random.uniform(-self.target_range, self.target_range, 3)
         return sampled_goal
 
+    # Simulation Setup and Initialization Methods
+    # ----------------------------
 
     def _env_setup(self, initial_qpos):
         for name, value in initial_qpos.items():
@@ -115,6 +118,9 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
             return True
 
         return False
+
+    # Auxiliary Methods
+    # ----------------------------
 
     def get_contact_force(self, geom1_name, geom2_name):
         result = np.zeros(shape=6)
