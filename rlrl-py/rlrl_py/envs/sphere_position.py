@@ -18,9 +18,10 @@ def goal_distance(goal_a, goal_b):
 
 
 class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self, distance_threshold = 0.05, n_substeps = 20):
+    def __init__(self, distance_threshold = 0.05, target_range = 0.5, n_substeps = 20):
 
         self.distance_threshold = distance_threshold
+        self.target_range = target_range
 
         # Create MuJoCo Model
         path = os.path.join(os.path.dirname(__file__),
@@ -75,10 +76,10 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
         return obs
 
     def _sample_goal(self):
-        "Samples a goal for the object w.r.t the frame of the object."
-        mean = 0
-        dev = 0.3
-        sampled_goal = np.random.normal(mean, dev, 3)
+        "Samples a goal for the target"
+        sampled_goal = np.zeros(shape=(3,))
+        while np.linalg.norm(sampled_goal) < 2 * self.distance_threshold:
+            sampled_goal = self.sim.data.get_body_xpos('optoforce') + np.random.uniform(-self.target_range, self.target_range, 3)
         return sampled_goal
 
 
