@@ -79,10 +79,14 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         finger_pos = self.sim.data.get_body_xpos('optoforce')
         pillbox_pos = self.sim.data.get_body_xpos('pillbox')
         distance = np.linalg.norm(finger_pos - pillbox_pos)
-        observation = np.zeros(shape=(1, 1))
-        observation[0] = distance
+        opto_force = self.get_contact_force("optoforce", "pillbox")
+        observation = np.concatenate(([distance], opto_force.copy()))
+
+        achieved = np.zeros(shape=(1, 1))
+        achieved[0] = distance
+
         obs = { 'observation': observation,
-                'achieved_goal': observation,
+                'achieved_goal': achieved,
                 'desired_goal': self.goal
               }
         return obs
@@ -135,7 +139,8 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
             contact = self.sim.data.contact[i]
             if (self.model.geom_id2name(contact.geom1) == geom1_name) and (self.model.geom_id2name(contact.geom2) == geom2_name):
                 functions.mj_contactForce(self.model, self.sim.data, i, result)
-                have_contact = True
+                frame = np.reshape(contact.frame, (-1, 3))
+                result[0:3] = np.matmul(frame, result[0:3])
         return result[0:3]
 
     def map_to_new_range(self, value, range_old, range_new):
