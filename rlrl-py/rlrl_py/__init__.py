@@ -31,5 +31,5 @@ register(
 register(
     id='SpherePosition-v1',
     entry_point='rlrl_py.envs:SpherePosition',
-    max_episode_steps=3000
+    max_episode_steps=50
 )

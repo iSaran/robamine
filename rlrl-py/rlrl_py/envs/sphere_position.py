@@ -18,7 +18,7 @@ def goal_distance(goal_a, goal_b):
 
 
 class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self):
+    def __init__(self, n_substeps = 20):
         # Create MuJoCo Model
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/sphere_position.xml")
@@ -27,7 +27,7 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
 
         self.n_actions = 3
         init_qpos = {}
-        robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=self.n_actions, n_substeps=1)
+        robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=self.n_actions, n_substeps=n_substeps)
         utils.EzPickle.__init__(self)
 
     # GoalEnv methods
