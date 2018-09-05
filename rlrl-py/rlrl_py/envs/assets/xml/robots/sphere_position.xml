@@ -1,0 +1,60 @@
+<mujoco model="LWR">
+  <compiler
+    angle="radian"
+    meshdir="../../meshes"
+    inertiafromgeom="true" />
+  <option
+    iterations="200"
+    timestep="0.001"
+    solver="CG"/>
+  <size njmax="500" nconmax="100" />
+  <visual>
+    <map
+      fogstart="1.5"
+      fogend="3"
+      force="0.3"
+      />
+    <quality
+      shadowsize="8192"/>
+    <scale
+      forcewidth="0.03"
+      contactwidth="0.05"
+      contactheight="0.03"
+      framelength="0.3"
+      framewidth="0.02"/>
+  </visual>
+  <worldbody>
+    <geom
+      name="ground"
+      type="plane"
+      pos="0 0 -0.74"
+      size="4 4 .05"
+      rgba="0.7 0.6 0.5 1"/>
+    <light
+      directional="false"
+      cutoff="90"
+      exponent="1"
+      diffuse="1 1 1"
+      specular="0 0 0"
+      pos="1 0 1.5"
+      dir="-1 0 -2.5"/>
+    <body
+      name="optoforce"
+      pos="0 0 0"
+      quat="1 0 0 0">
+      <joint
+        name="finger_free_joint"
+        type="free"/>
+      <geom name="optoforce"  rgba="0.0 0.4 0.6 1" size=".1" type="sphere" mass ="0.2" />
+    </body>
+    <site name="target" pos="0 0 0.0" size=".1" rgba="1 0.3 0.8 0.3" type="sphere"/>
+  </worldbody>
+  <actuator>
+    <motor gear="1 0 0 0 0 0" joint="finger_free_joint" name="finger_0_wrench_actuator"/>
+    <motor gear="0 1 0 0 0 0" joint="finger_free_joint" name="finger_1_wrench_actuator"/>
+    <motor gear="0 0 1 0 0 0" joint="finger_free_joint" name="finger_2_wrench_actuator"/>
+    <motor gear="0 0 0 1 0 0" joint="finger_free_joint" name="finger_3_wrench_actuator"/>
+    <motor gear="0 0 0 0 1 0" joint="finger_free_joint" name="finger_4_wrench_actuator"/>
+    <motor gear="0 0 0 0 0 1" joint="finger_free_joint" name="finger_5_wrench_actuator"/>
+  </actuator>
+</mujoco>
