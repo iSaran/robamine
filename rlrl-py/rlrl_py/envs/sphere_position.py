@@ -14,7 +14,7 @@ import random
 
 
 class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self, distance_threshold = 0.05, target_range = 0.5, n_substeps = 20):
+    def __init__(self, distance_threshold = 0.05, target_range = 0.2, n_substeps = 20):
 
         self.distance_threshold = distance_threshold
         self.target_range = target_range
@@ -51,6 +51,7 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
     def _set_action(self, action):
         assert action.shape == (self.n_actions,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
+        arl.set_mocap_pose(self.sim, action * 0.05, [])
 
         # Calculate the bias, i.e. the sum of coriolis, centrufugal, gravitational force
         # Command the joints to the initial joint configuration in order to
@@ -63,13 +64,16 @@ class SpherePosition(robot_env.RobotEnv, utils.EzPickle):
         commanded[0:3] = action
         #commanded[0:3] = np.matmul(self.sim.data.get_body_xmat('finger'), commanded[0:3])
         applied_force = bias + commanded
-        self.send_applied_wrench(applied_force, 'finger')
+
+        # Uncomment this line if you want to send forces and not positions in mocap
+        # self.send_applied_wrench(applied_force, 'finger')
 
     def _get_obs(self):
         # Calculate the distance betwe
         finger_pos = self.sim.data.get_body_xpos('optoforce')
+        obs = np.concatenate((finger_pos.copy(), self.goal.copy()))
 
-        obs = { 'observation': finger_pos,
+        obs = { 'observation': obs,
                 'achieved_goal': finger_pos,
                 'desired_goal': self.goal
               }
