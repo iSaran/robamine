@@ -27,6 +27,8 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         self.model = load_model_from_path(path)
         self.first_time = True
 
+        self.last_commanded = np.zeros(shape=(6,))
+
         self.n_actions = 1
         init_qpos = {}
         robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=self.n_actions, n_substeps=1)
@@ -49,7 +51,9 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     def _set_action(self, action):
         assert action.shape == (self.n_actions,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
-        action = self.map_to_new_range(action, [-1, 1], [-1, 0])
+        action = self.map_to_new_range(action, [-1, 1], [-10, 10])
+
+        dt = self.model.opt.timestep
 
         # Calculate the bias, i.e. the sum of coriolis, centrufugal, gravitational force
         # Command the joints to the initial joint configuration in order to
@@ -58,7 +62,8 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         # the wrist
         addr = self.model.get_joint_qvel_addr("finger_free_joint")
         bias = self.sim.data.qfrc_bias[addr[0]:addr[1]]
-        commanded = [0.0, 0.0, action, 0.0, 0.0, 0.0]
+        commanded = np.array([0.0, 0.0, action, 0.0, 0.0, 0.0])
+        commanded = self.last_commanded + dt * commanded
         #commanded[0:3] = np.matmul(self.sim.data.get_body_xmat('finger'), commanded[0:3])
         applied_force = bias + commanded
         self.send_applied_wrench(applied_force, 'finger')
@@ -76,13 +81,19 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
             disturbance = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.send_applied_wrench(disturbance, 'pillbox')
 
+        self.last_commanded = commanded
+
     def _get_obs(self):
         # Calculate the distance betwe
         finger_pos = self.sim.data.get_body_xpos('optoforce')
         pillbox_pos = self.sim.data.get_body_xpos('pillbox')
         distance = np.linalg.norm(finger_pos - pillbox_pos)
         opto_force = self.get_contact_force("optoforce", "pillbox")
-        observation = np.concatenate(([distance], opto_force.copy()))
+
+        addr = self.model.get_joint_qvel_addr("world_to_pillbox")
+        pillbox_vel = self.sim.data.qvel[addr[0]:addr[1]][:3]
+
+        observation = np.concatenate(([distance], opto_force.copy(), pillbox_vel.copy()))
 
         achieved = np.zeros(shape=(1, 1))
         achieved[0] = distance

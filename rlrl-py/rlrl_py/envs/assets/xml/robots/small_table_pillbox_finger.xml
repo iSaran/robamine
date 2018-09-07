@@ -69,7 +69,7 @@
       <joint
         name="finger_free_joint"
         type="free"/>
-      <geom name="optoforce"  rgba="0.0 0.4 0.6 1" size=".02" type="sphere" mass ="0.2" />
+      <geom name="optoforce"  rgba="0.0 0.4 0.6 1" size=".02 .02 .02" type="box" mass ="0.2" />
     </body>
   </worldbody>
   <actuator>
