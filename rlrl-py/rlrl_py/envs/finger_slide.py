@@ -14,7 +14,6 @@ import random
 
 class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     def __init__(self, distance_threshold = 0.005, n_substeps = 20):
-
         self.distance_threshold = distance_threshold
         # Create MuJoCo Model
         path = os.path.join(os.path.dirname(__file__),
@@ -50,7 +49,7 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     def _set_action(self, action):
         assert action.shape == (self.n_actions,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
-        action = self.map_to_new_range(action, [-1, 1], [-5, 5])
+        action = self.map_to_new_range(action, [-1, 1], [-1, 1])
 
         dt = self.model.opt.timestep
 
@@ -69,8 +68,8 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
 
         t = self.sim.data.time
         if t > 1:
-            T = arl.trajectory.Trajectory([1, 1.125], [0, 1])
-            T2 = arl.trajectory.Trajectory([1.125, 1], [1, 0])
+            T = arl.trajectory.Trajectory([1, 2.6], [0, 1])
+            T2 = arl.trajectory.Trajectory([2.6, 1], [1, 0])
             if t < 1.5:
                 dist = T.pos(t)
             else:
@@ -83,29 +82,27 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         self.last_commanded = commanded
 
     def _get_obs(self):
-        # Calculate the distance betwe
         finger_pos = self.sim.data.get_body_xpos('optoforce')
         pillbox_pos = self.sim.data.get_body_xpos('pillbox')
-        distance = np.linalg.norm(finger_pos - pillbox_pos)
-        opto_force = self.get_contact_force("optoforce", "pillbox")
+
+        opto_force = self.get_total_wrench_from_contacts("pillbox", "optoforce")
 
         addr = self.model.get_joint_qvel_addr("world_to_pillbox")
         pillbox_vel = self.sim.data.qvel[addr[0]:addr[1]][:3]
 
-        observation = np.concatenate(([distance], opto_force.copy(), pillbox_vel.copy()))
+        addr = self.model.get_joint_qvel_addr("finger_free_joint")
+        opto_vel = self.sim.data.qvel[addr[0]:addr[1]][:3]
 
-        achieved = np.zeros(shape=(1, 1))
-        achieved[0] = distance
+        observation = np.concatenate((finger_pos, pillbox_pos, opto_vel.copy(), pillbox_vel.copy(), opto_force.copy()))
 
         obs = { 'observation': observation,
-                'achieved_goal': achieved,
+                'achieved_goal': pillbox_vel.copy(),
                 'desired_goal': self.goal
               }
         return obs
 
     def _sample_goal(self):
-        desired = np.zeros(shape=(1, 1))
-        desired[0] = 0.03
+        desired = np.zeros(shape=(3,))
         return desired
 
     # Simulation Setup and Initialization Methods
@@ -143,6 +140,23 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
 
     # Auxiliary Methods
     # -----------------
+
+    def get_total_wrench_from_contacts(self, geom1_name, geom2_name):
+        """ Returns the total applied wrench on a geometry by summing the contact wrenches
+        """
+        result = np.zeros(shape=6)
+        total = np.zeros(shape=6)
+        for i in range(0, self.sim.data.ncon):
+            contact = self.sim.data.contact[i]
+            if (self.model.geom_id2name(contact.geom1) == geom1_name) and (self.model.geom_id2name(contact.geom2) == geom2_name):
+                geom2_pos = self.sim.data.get_body_xpos(geom2_name)
+                functions.mj_contactForce(self.model, self.sim.data, i, result)
+                frame = np.reshape(contact.frame, (-1, 3))
+                gamma = arl.orientation.screw_transformation(contact.pos - geom2_pos, frame)
+                result = np.matmul(gamma, result)
+                total += result
+        return total
+
 
     def terminal_state(self, observation):
         if np.linalg.norm(observation[0:3]) > 0.5:
