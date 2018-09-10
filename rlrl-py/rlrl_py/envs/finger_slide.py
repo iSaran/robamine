@@ -12,11 +12,6 @@ import os
 import rlrl_py.utils as arl
 import random
 
-def goal_distance(goal_a, goal_b):
-    assert goal_a.shape == goal_b.shape
-    return np.linalg.norm(goal_a - goal_b, axis=-1)
-
-
 class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     def __init__(self, distance_threshold = 0.005, n_substeps = 20):
 
@@ -34,24 +29,28 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=self.n_actions, n_substeps=1)
         utils.EzPickle.__init__(self)
 
-    # GoalEnv methods
-    # ----------------------------
+    # Reward related methods
+    # ----------------------
+
+    def goal_distance(self, goal_a, goal_b):
+        assert goal_a.shape == goal_b.shape
+        return np.linalg.norm(goal_a - goal_b, axis=-1)
 
     def compute_reward(self, achieved_goal, desired_goal, info):
-        distance = goal_distance(achieved_goal, desired_goal)
+        distance = self.goal_distance(achieved_goal, desired_goal)
         return -(distance > self.distance_threshold).astype(np.float32)
 
-    # RobotEnv methods
-    # ----------------------------
-
     def _is_success(self, achieved_goal, desired_goal):
-        distance = goal_distance(achieved_goal, desired_goal)
+        distance = self.goal_distance(achieved_goal, desired_goal)
         return (distance < self.distance_threshold).astype(np.float32)
+
+    # Action/State methods
+    # --------------------
 
     def _set_action(self, action):
         assert action.shape == (self.n_actions,)
         action = action.copy()  # ensure that we don't change the action outside of this scope
-        action = self.map_to_new_range(action, [-1, 1], [-10, 10])
+        action = self.map_to_new_range(action, [-1, 1], [-5, 5])
 
         dt = self.model.opt.timestep
 
@@ -109,6 +108,8 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         desired[0] = 0.03
         return desired
 
+    # Simulation Setup and Initialization Methods
+    # -------------------------------------------
 
     def _env_setup(self, initial_qpos):
         for name, value in initial_qpos.items():
@@ -138,6 +139,9 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
         if self.first_time:
             self.init_goal = self.goal
             self.first_time = False
+
+    # Auxiliary Methods
+    # -----------------
 
     def terminal_state(self, observation):
         if np.linalg.norm(observation[0:3]) > 0.5:
