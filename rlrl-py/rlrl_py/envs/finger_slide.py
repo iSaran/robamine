@@ -129,6 +129,7 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
     def _reset_sim(self):
         self.sim.set_state(self.initial_state)
         self.initial_obj_rot_mat = self.sim.data.get_body_xmat('pillbox')
+        self.last_commanded = np.zeros(shape=(6,))
 
         self.disturbance = np.random.normal(2, 1, 2)
         self.disturbance[0] = random.choice([-1, 1]) * self.disturbance[0]
