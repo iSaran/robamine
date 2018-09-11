@@ -5,3 +5,4 @@ from rlrl_py.envs.bhand_slide_pillbox_3 import BHandSlidePillbox3
 from rlrl_py.envs.finger_slide import FingerSlide
 from rlrl_py.envs.sphere_position import SpherePosition
 from rlrl_py.envs.sphere_reacher import SphereReacher
+from rlrl_py.envs.sphere_reacher_incremental import SphereReacherIncremental

@@ -10,6 +10,12 @@ register(
 )
 
 register(
+    id='SphereReacherIncremental-v1',
+    entry_point='rlrl_py.envs:SphereReacherIncremental',
+    max_episode_steps=100
+)
+
+register(
     id='Floating-BHand-v0',
     entry_point='rlrl_py.envs:FloatingBHand'
 )
