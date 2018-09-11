@@ -18,7 +18,7 @@ def goal_distance(goal_a, goal_b):
 
 
 class SphereReacher(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self, distance_threshold = 0.005, target_range = 0.2, n_substeps = 20):
+    def __init__(self, distance_threshold = 0.005, target_range = 0.2, num_substeps = 10):
 
         self.distance_threshold = distance_threshold
         self.target_range = target_range
@@ -31,7 +31,7 @@ class SphereReacher(robot_env.RobotEnv, utils.EzPickle):
         self.init_opto_pos = [0, 0, 0.033]
         self.n_actions = 2
         init_qpos = {}
-        robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=self.n_actions, n_substeps=1)
+        robot_env.RobotEnv.__init__(self, path, init_qpos, n_actions=self.n_actions, n_substeps=num_substeps)
         utils.EzPickle.__init__(self)
 
     # GoalEnv methods

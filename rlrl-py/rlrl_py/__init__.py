@@ -6,7 +6,7 @@ from gym.envs.registration import register
 register(
     id='SphereReacher-v1',
     entry_point='rlrl_py.envs:SphereReacher',
-    max_episode_steps=2000
+    max_episode_steps=100
 )
 
 register(
