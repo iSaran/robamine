@@ -1,0 +1,10 @@
+actor:
+  n_units: [400, 300]  # The number of units for each hidden layer
+  learning_rate: 1e-4
+  final_layer_init: [-0.003, 0.003]
+  tau: 0.001  # A small value (tau << 1) for slowly trach the weights of the learned networks to the target nets
+critic:
+  n_units: [400, 300]  # The number of units for each hidden layer
+  learning_rate: 1e-3
+  final_layer_init: [-0.003, 0.003]
+  tau: 0.001  # A small value (tau << 1) for slowly trach the weights of the learned networks to the target nets
