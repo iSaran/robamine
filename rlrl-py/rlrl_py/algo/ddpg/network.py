@@ -1,20 +1,17 @@
 class Network:
-    def __init__(self, sess, state_dim, action_dim, n_units, final_layer_init, tau):
+    '''Abstract class which defines an interface for e Neural Network
+    '''
+    def __init__(self, sess, input_dim, hidden_dims, out_dims):
         self.sess = sess
-        self.state_dim = state_dim
-        self.action_dim = action_dim
-        self.n_units = n_units
-        self.final_layer_init = final_layer_init
-        self.tau = tau
+        self.input_dim = input_dim
+        self.hidden_dims = hidden_dims
+        self.out_dim = out_dims
+
+        # Create online/learned network and the target network for the Actor
+        self.inputs, self.out, self.net_params = self.create_architecture()
 
     def create_architecture(self):
-        pass
+        raise NotImplementedError
 
-    def train(self):
-        pass
-
-    def predict(self):
-        pass
-
-    def predict_target(self):
-        pass
+    def predict(self, inputs):
+        return self.sess.run(self.out, feed_dict={self.inputs: inputs})

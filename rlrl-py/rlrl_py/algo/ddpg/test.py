@@ -1,7 +1,9 @@
 from replay_buffer import ReplayBuffer
-from actor import Actor
+from actor import Actor, TargetActor
+from critic import Critic, TargetCritic
 import yaml
 import tensorflow as tf
+import tflearn
 
 
 if __name__ == '__main__':
@@ -22,7 +24,10 @@ if __name__ == '__main__':
     params = yaml.load(yml_file)
 
     with tf.Session() as sess:
-        actor = Actor(sess, state_dim=10, action_dim=2, n_units=params['actor']['n_units'], final_layer_init=params['actor']['final_layer_init'], tau=params['actor']['tau'])
+        #actor = Actor(sess, state_dim=10, action_dim=2, n_units=params['actor']['n_units'], final_layer_init=params['actor']['final_layer_init'], tau=params['actor']['tau'], batch_size=params['actor']['tau'], learning_rate = 11)
 
-        writer = tf.summary.FileWriter("/tmp/basic", sess.graph)
-
+        actor = Actor(sess, 10, [10, 10], 20, [-2, 2], 64, 0.001)
+        target_actor = TargetActor(actor, 0.001)
+        critic = Critic(sess, (10, 5), [10, 10], 20, [-2, 2], 64, 0.001)
+        target_critic = TargetCritic(critic, 0.001)
+        #writer = tf.summary.FileWriter("/tmp/basic", sess.graph)
