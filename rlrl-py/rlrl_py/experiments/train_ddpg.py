@@ -15,7 +15,7 @@ if __name__ == '__main__':
                 params['actor']['learning_rate'], params['tau'],
                 params['critic']['hidden_units'],
                 params['critic']['final_layer_init'],
-                params['critic']['learning_rate'])
+                params['critic']['learning_rate'], params['exploration_noise_sigma'])
 
         agent.train()
 

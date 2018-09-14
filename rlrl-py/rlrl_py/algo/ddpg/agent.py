@@ -3,14 +3,16 @@ from rlrl_py.algo.core import Agent
 from rlrl_py.algo.ddpg.replay_buffer import ReplayBuffer
 from rlrl_py.algo.ddpg.actor import Actor, TargetActor
 from rlrl_py.algo.ddpg.critic import Critic, TargetCritic
+from rlrl_py.algo.ddpg.ou_noise import OrnsteinUhlenbeckActionNoise
 #from rlrl_py.algo.ddpg.actor import Actor
 import tensorflow as tf
+import numpy as np
 
 class DDPG(Agent):
     def __init__(self, sess, env, random_seed, n_episodes, render,
             replay_buffer_size, actor_hidden_units, actor_final_layer_init,
             batch_size, actor_learning_rate, tau, critic_hidden_units,
-            critic_final_layer_init, critic_learning_rate):
+            critic_final_layer_init, critic_learning_rate, exploration_noise_sigma):
         self.sess = sess
         Agent.__init__(self, env, random_seed, n_episodes, render)
 
@@ -34,9 +36,12 @@ class DDPG(Agent):
         self.replay_buffer = ReplayBuffer(self.batch_size, random_seed)
 
 
+        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim), sigma = exploration_noise_sigma)
+
+
     def do_exploration(self, state):
         obs = state['observation'].reshape(1, state['observation'].shape[0])
-        return self.actor.predict(obs).squeeze()
+        return self.actor.predict(obs).squeeze() + self.exploration_noise()
 
     def learn(self, state, action, reward, next_state, done):
 

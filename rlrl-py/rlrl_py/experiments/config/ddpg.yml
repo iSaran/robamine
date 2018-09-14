@@ -5,6 +5,7 @@ render: True
 replay_buffer_size: 1000000
 batch_size: 64
 tau: 0.001  # A small value (tau << 1) for slowly trach the weights of the learned networks to the target nets
+exploration_noise_sigma: 0.1
 
 actor:
   hidden_units: [400, 300]  # The number of units for each hidden layer
