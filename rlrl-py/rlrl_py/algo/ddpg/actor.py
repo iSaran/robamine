@@ -7,7 +7,7 @@ class Actor(Network):
     '''
     def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate):
         self.final_layer_init = final_layer_init
-        Network.__init__(self, sess, input_dim, hidden_dims, out_dim)
+        Network.__init__(self, sess, input_dim, hidden_dims, out_dim, "Actor")
 
         # Create a placeholder for the gradient, which will be provided by the critic
         self.action_gradient = tf.placeholder(tf.float32, [None, self.out_dim])
@@ -25,8 +25,8 @@ class Actor(Network):
 
         # Create the hidden layers
         for dim in self.hidden_dims:
-            net = tflearn.fully_connected(net, dim)
-            net = tflearn.layers.normalization.batch_normalization(net)
+            net = tflearn.fully_connected(net, dim, name = self.name + 'FullyConnected')
+            net = tflearn.layers.normalization.batch_normalization(net, name = self.name + 'BatchNormalization')
             net = tflearn.activations.relu(net)
 
         # Create the output layer
@@ -36,7 +36,7 @@ class Actor(Network):
         # actions. TODO(isaran): Not sure if it is needed as long as you have
         # outputs in [-1, 1]
         w_init = tflearn.initializations.uniform(minval=self.final_layer_init[0], maxval=self.final_layer_init[1])
-        out = tflearn.fully_connected(net, self.out_dim, activation='tanh', weights_init=w_init )
+        out = tflearn.fully_connected(net, self.out_dim, activation='tanh', weights_init=w_init, name = self.name + 'FullyConnected')
 
         net_params = tf.trainable_variables()[existing_num_trainable_params:]
         return inputs, out, net_params
@@ -52,7 +52,7 @@ class TargetActor(Actor):
     '''
     def __init__(self, actor, tau):
         self.final_layer_init = actor.final_layer_init
-        Network.__init__(self, actor.sess, actor.input_dim, actor.hidden_dims, actor.out_dim)
+        Network.__init__(self, actor.sess, actor.input_dim, actor.hidden_dims, actor.out_dim, "TargetActor")
 
         # Operation for updating target network with learned network weights.
         self.actor_net_params = actor.net_params

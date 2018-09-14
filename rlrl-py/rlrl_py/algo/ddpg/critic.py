@@ -5,7 +5,7 @@ import tensorflow as tf
 class Critic(Network):
     def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate):
         self.final_layer_init = final_layer_init
-        Network.__init__(self, sess, input_dim, hidden_dims, out_dim)
+        Network.__init__(self, sess, input_dim, hidden_dims, out_dim, "Critic")
         assert len(self.input_dim) == 2, len(self.hidden_dims) == 2
 
         self.q_value = tf.placeholder(tf.float32, [None, 1])
@@ -32,21 +32,22 @@ class Critic(Network):
         action_inputs = tflearn.input_data(shape=[None, action_dim])
 
         # First hidden layer with only the states
-        net = tflearn.fully_connected(state_inputs, hidden_dim_1)
-        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.fully_connected(state_inputs, hidden_dim_1, name = self.name + 'FullyConnected')
+
+        net = tflearn.layers.normalization.batch_normalization(net, name = self.name + 'BatchNormalization')
         net = tflearn.activations.relu(net)
 
         # Add the action tensor in the 2nd hidden layer
         # Use two temp layers to get the corresponding weights and biases
-        t1 = tflearn.fully_connected(net, hidden_dim_2)
-        t2 = tflearn.fully_connected(action_inputs, hidden_dim_2)
+        t1 = tflearn.fully_connected(net, hidden_dim_2, name = self.name + 'FullyConnected')
+        t2 = tflearn.fully_connected(action_inputs, hidden_dim_2, name = self.name + 'FullyConnected')
 
         net = tflearn.activation(tf.matmul(net, t1.W) + tf.matmul(action_inputs, t2.W) + t2.b, activation='relu')
 
         # linear layer connected to 1 output representing Q(s,a)
         # Weights are init to Uniform[-3e-3, 3e-3]
         w_init = tflearn.initializations.uniform(minval=self.final_layer_init[0], maxval=self.final_layer_init[1])
-        out = tflearn.fully_connected(net, 1, weights_init=w_init)
+        out = tflearn.fully_connected(net, 1, weights_init=w_init, name = self.name + 'FullyConnected')
 
         net_params = tf.trainable_variables()[existing_num_trainable_params:]
         return [state_inputs, action_inputs], out, net_params
@@ -57,7 +58,7 @@ class Critic(Network):
 class TargetCritic(Critic):
     def __init__(self, critic, tau):
         self.final_layer_init = critic.final_layer_init
-        Network.__init__(self, critic.sess, critic.input_dim, critic.hidden_dims, critic.out_dim)
+        Network.__init__(self, critic.sess, critic.input_dim, critic.hidden_dims, critic.out_dim, "TargetCritic")
 
         # Operation for updating target network with learned network weights.
         self.critic_net_params = critic.net_params

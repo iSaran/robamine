@@ -3,11 +3,12 @@ import gym
 class Network:
     '''Abstract class which defines an interface for e Neural Network
     '''
-    def __init__(self, sess, input_dim, hidden_dims, out_dims):
+    def __init__(self, sess, input_dim, hidden_dims, out_dims, name = ""):
         self.sess = sess
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims
         self.out_dim = out_dims
+        self.name = name
 
         # Create online/learned network and the target network for the Actor
         self.inputs, self.out, self.net_params = self.create_architecture()
@@ -17,6 +18,13 @@ class Network:
 
     def predict(self, inputs):
         return self.sess.run(self.out, feed_dict={self.inputs: inputs})
+
+    def get_params(self, name = None):
+        if name is None:
+            return self.sess.run(self.net_params)
+        else:
+            k = [v for v in self.net_params if v.name == name][0]
+            return self.sess.run(k)
 
 class Agent:
     def __init__(self, env, random_seed, n_episodes, render):
