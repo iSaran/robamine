@@ -20,14 +20,14 @@ class DDPG(Agent):
         action_dim = int(self.env.action_space.shape[0])
         self.actor = Actor(self.sess, state_dim, actor_hidden_units, action_dim, actor_final_layer_init, batch_size, actor_learning_rate)
         self.target_actor = TargetActor(self.actor, actor_tau)
-        self.target_actor.update_params()
 
         self.sess.run(tf.global_variables_initializer())
+        self.target_actor.update_params()
 
     def do_exploration(self, state):
         obs = state['observation'].reshape(1, state['observation'].shape[0])
         return self.actor.predict(obs).squeeze()
 
     def learn(self):
-        target_actor.update_params()
+        self.target_actor.update_params()
 
