@@ -1,9 +1,15 @@
+env: 'SphereReacher-v1'
+n_episodes: 500
+random_seed: 32438934543
+render: True
+replay_buffer_size: 1000000
+batch_size: 64
+
 actor:
-  n_units: [400, 300]  # The number of units for each hidden layer
+  hidden_units: [400, 300]  # The number of units for each hidden layer
   learning_rate: 1e-4
   final_layer_init: [-0.003, 0.003]
   tau: 0.001  # A small value (tau << 1) for slowly trach the weights of the learned networks to the target nets
-  batch_size: 64
 critic:
   n_units: [400, 300]  # The number of units for each hidden layer
   learning_rate: 1e-3

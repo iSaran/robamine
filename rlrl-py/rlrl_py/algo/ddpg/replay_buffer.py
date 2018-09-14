@@ -4,10 +4,11 @@ import numpy as np
 
 class ReplayBuffer:
 
-    def __init__(self, buffer_size):
+    def __init__(self, buffer_size, seed=9876):
         self.buffer_size = buffer_size
         self.buffer = deque()
         self.count = 0
+        random.seed(seed)
 
     def sample_batch(self, given_batch_size):
         batch = []

@@ -1,4 +1,4 @@
-from network import Network
+from rlrl_py.algo.core import Network
 import tflearn
 import tensorflow as tf
 
@@ -42,7 +42,7 @@ class Actor(Network):
         return inputs, out, net_params
 
     def train(self, inputs, a_gradient):
-        self.sess.run(self.optimize, feed_dict={self.inputs = inputs, self.action_gradient = a_gradient})
+        self.sess.run(self.optimize, feed_dict={self.inputs: inputs, self.action_gradient: a_gradient})
 
     def get_action(self):
         return self.sess.run(self.target)
