@@ -28,6 +28,6 @@ class DDPG(Agent):
         obs = state['observation'].reshape(1, state['observation'].shape[0])
         return self.actor.predict(obs).squeeze()
 
-    def learn(self):
+    def learn(self, state, action, reward, next_state, done):
         self.target_actor.update_params()
 

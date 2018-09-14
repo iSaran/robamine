@@ -49,7 +49,7 @@ class Agent:
                 action = self.do_exploration(state)
                 next_state, reward, done, info = self.env.step(action)
 
-                self.learn()
+                self.learn(state, action, reward, next_state, done)
 
                 episode_reward += reward
                 state = next_state
@@ -58,6 +58,6 @@ class Agent:
     def do_exploration(self, state):
         return self.env.action_space.sample()
 
-    def learn(self):
+    def learn(self, state, action, reward, next_state, done):
         pass
 
