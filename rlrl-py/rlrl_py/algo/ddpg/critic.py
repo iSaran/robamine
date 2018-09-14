@@ -67,5 +67,12 @@ class TargetCritic(Critic):
                 tf.multiply(self.critic_net_params[i], tau) + tf.multiply(self.net_params[i], 1. - tau))
                 for i in range(len(self.net_params))]
 
+        # Define an operation to set my params the same as the critic's for initialization
+        self.equal_params = [self.net_params[i].assign(self.critic_net_params[i]) for i in range(len(self.net_params))]
+
+
     def update_params(self):
         self.sess.run(self.update_net_params)
+
+    def equalize_params(self):
+        self.sess.run(self.equal_params)

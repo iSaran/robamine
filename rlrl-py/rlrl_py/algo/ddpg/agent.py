@@ -21,8 +21,10 @@ class DDPG(Agent):
         # Initialize the Critic network and its target net
         # ...
 
+        # Initialize target networks with weights equal to the learned networks
         self.sess.run(tf.global_variables_initializer())
-        self.target_actor.update_params()
+        self.target_actor.equalize_params()
+        # self.target_critic.equalize_params()
 
         # Initialize replay buffer
         self.batch_size = batch_size
