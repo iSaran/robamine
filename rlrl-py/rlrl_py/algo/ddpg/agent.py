@@ -2,13 +2,15 @@ import gym
 from rlrl_py.algo.core import Agent
 from rlrl_py.algo.ddpg.replay_buffer import ReplayBuffer
 from rlrl_py.algo.ddpg.actor import Actor, TargetActor
+from rlrl_py.algo.ddpg.critic import Critic, TargetCritic
 #from rlrl_py.algo.ddpg.actor import Actor
 import tensorflow as tf
 
 class DDPG(Agent):
     def __init__(self, sess, env, random_seed, n_episodes, render,
             replay_buffer_size, actor_hidden_units, actor_final_layer_init,
-            batch_size, actor_learning_rate, actor_tau):
+            batch_size, actor_learning_rate, tau, critic_hidden_units,
+            critic_final_layer_init, critic_learning_rate):
         self.sess = sess
         Agent.__init__(self, env, random_seed, n_episodes, render)
 
@@ -16,19 +18,21 @@ class DDPG(Agent):
         state_dim = int(self.env.observation_space.spaces['observation'].shape[0])
         action_dim = int(self.env.action_space.shape[0])
         self.actor = Actor(self.sess, state_dim, actor_hidden_units, action_dim, actor_final_layer_init, batch_size, actor_learning_rate)
-        self.target_actor = TargetActor(self.actor, actor_tau)
+        self.target_actor = TargetActor(self.actor, tau)
 
         # Initialize the Critic network and its target net
-        # ...
+        self.critic = Critic(self.sess, (state_dim, action_dim), critic_hidden_units, 1, critic_final_layer_init, critic_learning_rate)
+        self.target_critic = TargetCritic(self.critic, tau)
 
         # Initialize target networks with weights equal to the learned networks
         self.sess.run(tf.global_variables_initializer())
         self.target_actor.equalize_params()
-        # self.target_critic.equalize_params()
+        self.target_critic.equalize_params()
 
         # Initialize replay buffer
         self.batch_size = batch_size
         self.replay_buffer = ReplayBuffer(self.batch_size, random_seed)
+
 
     def do_exploration(self, state):
         obs = state['observation'].reshape(1, state['observation'].shape[0])

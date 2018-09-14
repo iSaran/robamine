@@ -12,7 +12,10 @@ if __name__ == '__main__':
                 params['n_episodes'], params['render'],
                 params['replay_buffer_size'], params['actor']['hidden_units'],
                 params['actor']['final_layer_init'], params['batch_size'],
-                params['actor']['learning_rate'], params['actor']['tau'])
+                params['actor']['learning_rate'], params['tau'],
+                params['critic']['hidden_units'],
+                params['critic']['final_layer_init'],
+                params['critic']['learning_rate'])
 
         agent.train()
 

@@ -1,9 +1,9 @@
-from network import Network
+from rlrl_py.algo.core import Network
 import tflearn
 import tensorflow as tf
 
 class Critic(Network):
-    def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate):
+    def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, learning_rate):
         self.final_layer_init = final_layer_init
         Network.__init__(self, sess, input_dim, hidden_dims, out_dim, "Critic")
         assert len(self.input_dim) == 2, len(self.hidden_dims) == 2
@@ -53,7 +53,7 @@ class Critic(Network):
         return [state_inputs, action_inputs], out, net_params
 
     def train(self, inputs, a_gradient):
-        self.sess.run(self.optimize, feed_dict={self.inputs = inputs, self.action_gradient = a_gradient})
+        self.sess.run(self.optimize, feed_dict={self.inputs: inputs, self.action_gradient: a_gradient})
 
 class TargetCritic(Critic):
     def __init__(self, critic, tau):
