@@ -3,8 +3,9 @@ import tflearn
 import tensorflow as tf
 
 class Critic(Network):
-    def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, learning_rate):
+    def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, learning_rate, gamma):
         self.final_layer_init = final_layer_init
+        self.gamma = gamma
         Network.__init__(self, sess, input_dim, hidden_dims, out_dim, "Critic")
         assert len(self.input_dim) == 2, len(self.hidden_dims) == 2
 
@@ -50,7 +51,7 @@ class Critic(Network):
         out = tflearn.fully_connected(net, 1, weights_init=w_init, name = self.name + 'FullyConnected')
 
         net_params = tf.trainable_variables()[existing_num_trainable_params:]
-        return [state_inputs, action_inputs], out, net_params
+        return (state_inputs, action_inputs), out, net_params
 
     def train(self, inputs, a_gradient):
         self.sess.run(self.optimize, feed_dict={self.inputs: inputs, self.action_gradient: a_gradient})

@@ -15,3 +15,4 @@ critic:
   hidden_units: [400, 300]  # The number of units for each hidden layer
   learning_rate: 1e-3
   final_layer_init: [-0.003, 0.003]
+  gamma: 0.999

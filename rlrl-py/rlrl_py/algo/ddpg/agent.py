@@ -12,18 +12,18 @@ class DDPG(Agent):
     def __init__(self, sess, env, random_seed, n_episodes, render,
             replay_buffer_size, actor_hidden_units, actor_final_layer_init,
             batch_size, actor_learning_rate, tau, critic_hidden_units,
-            critic_final_layer_init, critic_learning_rate, exploration_noise_sigma):
+            critic_final_layer_init, critic_learning_rate, critic_gamma, exploration_noise_sigma):
         self.sess = sess
         Agent.__init__(self, env, random_seed, n_episodes, render)
 
         # Initialize the Actor network and its target net
-        state_dim = int(self.env.observation_space.spaces['observation'].shape[0])
+        state_dim = int(self.env.observation_space.shape[0])
         action_dim = int(self.env.action_space.shape[0])
         self.actor = Actor(self.sess, state_dim, actor_hidden_units, action_dim, actor_final_layer_init, batch_size, actor_learning_rate)
         self.target_actor = TargetActor(self.actor, tau)
 
         # Initialize the Critic network and its target net
-        self.critic = Critic(self.sess, (state_dim, action_dim), critic_hidden_units, 1, critic_final_layer_init, critic_learning_rate)
+        self.critic = Critic(self.sess, (state_dim, action_dim), critic_hidden_units, 1, critic_final_layer_init, critic_learning_rate, critic_gamma)
         self.target_critic = TargetCritic(self.critic, tau)
 
         # Initialize target networks with weights equal to the learned networks
@@ -40,11 +40,10 @@ class DDPG(Agent):
 
 
     def do_exploration(self, state):
-        obs = state['observation'].reshape(1, state['observation'].shape[0])
+        obs = state.reshape(1, state.shape[0])
         return self.actor.predict(obs).squeeze() + self.exploration_noise()
 
     def learn(self, state, action, reward, next_state, done):
-
         # Store the transition into the replay buffer
         self.replay_buffer.add(state, action, reward, next_state, done)
 
@@ -55,3 +54,18 @@ class DDPG(Agent):
 
         # Sample a mini batch from the replay buffer
         state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.batch_size)
+
+        # Calculate the target of the Q value from the target network
+        next_action_batch = self.target_actor.predict(next_state_batch)
+        target_q = self.target_critic.predict((next_state_batch, next_action_batch))
+        y_i = []
+        for k in range(self.batch_size):
+            if terminal_batch[k]:
+                y_i.append(reward_batch[k])
+            else:
+                y_i.append(reward_batch[k] + self.critic.gamma * target_q[k])
+
+        ##############3# Update Critic by minimizing the loss
+
+        ##############3self.target_actor.update_params()
+

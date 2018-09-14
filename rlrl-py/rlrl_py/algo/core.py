@@ -30,8 +30,9 @@ class Agent:
     def __init__(self, env, random_seed, n_episodes, render):
         # Environment setup
         self.env = gym.make(env)
+        self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
         self.env.seed(random_seed)
-        self.episode_horizon = int(self.env._max_episode_steps)
+        self.episode_horizon = int(self.env.env._max_episode_steps)
 
         self.n_episodes = n_episodes
         self.render = render
