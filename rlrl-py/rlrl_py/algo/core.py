@@ -1,19 +1,22 @@
 import gym
 
 class Network:
-    '''Abstract class which defines an interface for e Neural Network
+    '''Base class which defines an interface for a Neural Network
     '''
-    def __init__(self, sess, input_dim, hidden_dims, out_dims, name = ""):
+    def __init__(self, sess, input_dim, hidden_dims, out_dim, name = ""):
         self.sess = sess
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims
-        self.out_dim = out_dims
+        self.out_dim = out_dim
         self.name = name
 
         # Create online/learned network and the target network for the Actor
         self.inputs, self.out, self.net_params = self.create_architecture()
 
     def create_architecture(self):
+        ''' Creates the architecture of the NN. It should be implemented by any
+        class which inherits.
+        '''
         raise NotImplementedError
 
     def predict(self, inputs):
@@ -27,6 +30,8 @@ class Network:
             return self.sess.run(k)
 
 class Agent:
+    '''Base class which defines an RL agent
+    '''
     def __init__(self, env, random_seed, n_episodes, render):
         # Environment setup
         self.env = gym.make(env)
@@ -47,9 +52,13 @@ class Agent:
                 if (self.render):
                     self.env.render()
 
+                # Select an action based on the exploration policy
                 action = self.do_exploration(state)
+
+                # Execute the action on the environment  and observe reward and next state
                 next_state, reward, done, info = self.env.step(action)
 
+                # Learn
                 self.learn(state, action, reward, next_state, done)
 
                 episode_reward += reward
@@ -61,4 +70,8 @@ class Agent:
 
     def learn(self, state, action, reward, next_state, done):
         pass
+
+    def evaluate(self):
+        pass
+
 

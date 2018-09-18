@@ -27,7 +27,7 @@ class ReplayBuffer:
 
         return state_batch, action_batch, reward_batch, state_batch, timestep_batch
 
-    def add(self, state, action, reward, next_state, timestep):
+    def store(self, state, action, reward, next_state, timestep):
         experience = (state, action, reward, next_state, timestep)
         if self.count < self.buffer_size:
             self.count += 1

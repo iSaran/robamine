@@ -38,14 +38,13 @@ class DDPG(Agent):
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim), sigma = exploration_noise_sigma)
 
-
     def do_exploration(self, state):
         obs = state.reshape(1, state.shape[0])
         return self.actor.predict(obs).squeeze() + self.exploration_noise()
 
     def learn(self, state, action, reward, next_state, done):
         # Store the transition into the replay buffer
-        self.replay_buffer.add(state, action, reward, next_state, done)
+        self.replay_buffer.store(state, action, reward, next_state, done)
 
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
