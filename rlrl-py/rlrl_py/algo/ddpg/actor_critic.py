@@ -77,10 +77,25 @@ class TargetActor(Actor):
         self.sess.run(self.equal_params)
 
 class Critic(Network):
-    def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, learning_rate, gamma):
+    def __init__(self, sess, input_dim, hidden_dims, final_layer_init=(-0.003, 0.003), learning_rate=0.001, gamma=0.999):
+        """
+        Contructs a Critic Network.
+
+        Parameters
+        ----------
+        sess : A Tensorflow session
+        input_dim : tuple
+            A tuple with the dimensions of the states and the actions
+        hidden_dims: list of int
+            A list with the number of units of the hidden layers. Each member
+            of the list corresponds to a hidden layer.
+        final_layer_init: list of size 2
+            The range to which the parameters of the final layer will be initialized
+        learning_rate: float
+            The learning rate for the Adam optimizer. Defaults to 0.001.
+        """
         self.final_layer_init = final_layer_init
-        self.gamma = gamma
-        Network.__init__(self, sess, input_dim, hidden_dims, out_dim, "Critic")
+        Network.__init__(self, sess, input_dim, hidden_dims, 1, "Critic")
         assert len(self.input_dim) == 2, len(self.hidden_dims) == 2
 
         self.q_value = tf.placeholder(tf.float32, [None, 1])

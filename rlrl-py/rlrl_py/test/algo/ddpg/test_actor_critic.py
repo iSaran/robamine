@@ -29,7 +29,7 @@ class TestActorCritic(unittest.TestCase):
 
             # Test that the op works
             inputs = [[3, 3, 3], [2, 2, 2]]
-            network_output = sess.run(actor.out, feed_dict = {actor.inputs: inputs})
+            network_output = actor.predict(inputs)
             true = np.reshape([1.3060998e-06, 3.5555320e-07, 8.7073329e-07, 2.3703552e-07], (2,2))
             self.assertTrue(np.allclose(network_output, true))
 
@@ -63,6 +63,44 @@ class TestActorCritic(unittest.TestCase):
             expected_value = tau * next_value_target + (1 - tau) * prev_value_target
             true_value = sess.run(target_actor.net_params[0][0][0])
             self.assertAlmostEqual(expected_value, true_value)
+
+    def test_critic(self):
+        with tf.Session() as sess:
+            tf.set_random_seed(1)
+            # Create an actor
+            critic = Critic(sess, input_dim=(3, 2), hidden_dims=(3, 4))
+            sess.run(tf.global_variables_initializer())
+
+            print(critic.net_params)
+            # Test that the names and the shapes of the network's parameters are correct
+            param_name = ['CriticFullyConnected/W:0', 'CriticFullyConnected/b:0',
+                    'CriticBatchNormalization/beta:0',
+                    'CriticBatchNormalization/gamma:0',
+                    'CriticFullyConnected_1/W:0', 'CriticFullyConnected_1/b:0',
+                    'CriticFullyConnected_2/W:0', 'CriticFullyConnected_2/b:0',
+                    'CriticFullyConnected_3/W:0', 'CriticFullyConnected_3/b:0']
+            param_shape = [(3, 3), (3,), (3,), (3,), (3, 4), (4,), (2, 4), (4,), (4, 1), (1,)]
+            self.assertEqual(len(critic.net_params), len(param_name))
+
+            for i in range(len(param_name)):
+                self.assertEqual(critic.net_params[i].name, param_name[i])
+                self.assertEqual(critic.net_params[i].shape, param_shape[i])
+
+            # Test that the op works
+            state_input = np.reshape([[3, 3, 3], [2, 2, 2]], (2, 3))
+            action_input = np.reshape([[3, 3], [2, 2]], (2, 2))
+            inputs = (state_input, action_input)
+            network_output = critic.predict(inputs)
+            print(network_output)
+            #true = np.reshape([1.3060998e-06, 3.5555320e-07, 8.7073329e-07, 2.3703552e-07], (2,2))
+            #self.assertTrue(np.allclose(network_output, true))
+
+            #grad_q = [[1, 1], [1, 1]]
+            #unnormalized_gradient = sess.run(actor.unnormalized_gradients, feed_dict = {actor.inputs: inputs, actor.grad_q_wrt_a: grad_q})
+            #self.assertTrue(isinstance(unnormalized_gradient, list))
+            #self.assertEqual(len(unnormalized_gradient), len(param_name))
+            #true = [[0., -0.00014419, 0.], [0., -0.00014419, 0.], [0., -0.00014419, 0.]]
+            #self.assertTrue(np.allclose(unnormalized_gradient[0], true))
 
 if __name__ == '__main__':
     unittest.main()
