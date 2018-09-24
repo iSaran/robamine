@@ -4,15 +4,23 @@ import tensorflow as tf
 import time
 
 def get_now_timestamp():
-        now_raw = datetime.now()
-        return str(now_raw.year) + '.' + \
-               '{:02d}'.format(now_raw.month) + '.' + \
-               '{:02d}'.format(now_raw.day) + '.' + \
-               '{:02d}'.format(now_raw.hour) + '.' \
-               '{:02d}'.format(now_raw.minute) + '.' \
-               '{:02d}'.format(now_raw.second) + '.' \
-               '{:02d}'.format(now_raw.microsecond)
+    """
+    Returns a timestamp for the current datetime as a string for using it in
+    log file naming.
+    """
+    now_raw = datetime.now()
+    return str(now_raw.year) + '.' + \
+           '{:02d}'.format(now_raw.month) + '.' + \
+           '{:02d}'.format(now_raw.day) + '.' + \
+           '{:02d}'.format(now_raw.hour) + '.' \
+           '{:02d}'.format(now_raw.minute) + '.' \
+           '{:02d}'.format(now_raw.second) + '.' \
+           '{:02d}'.format(now_raw.microsecond)
+
 class Logger:
+    """
+    Class for logging data, saving models during training using Tensorflow.
+    """
     def __init__(self, sess, directory, agent_name, env_name):
         self.sess = sess
         self.agent_name = agent_name
@@ -29,7 +37,8 @@ class Logger:
         self.episode_reward = tf.Variable(0.)
         tf.summary.scalar("Reward per episode", self.episode_reward)
 
-        self.summary_vars = [self.episode_reward]
+        self.summary_vars = {}
+        self.summary_vars['episode_reward'] = self.episode_reward
         self.summary_ops = tf.summary.merge_all()
 
         self.writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
@@ -38,7 +47,7 @@ class Logger:
 
     def log(self, data, episode):
         self.data = data
-        summary_str = self.sess.run(self.summary_ops, feed_dict={self.summary_vars[0]: data})
+        summary_str = self.sess.run(self.summary_ops, feed_dict={self.summary_vars['episode_reward']: data})
         self.writer.add_summary(summary_str, episode)
         self.writer.flush()
 
