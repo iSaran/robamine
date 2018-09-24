@@ -61,7 +61,7 @@ class DDPG(Agent):
             if terminal_batch[k]:
                 y_i.append(reward_batch[k])
             else:
-                y_i.append(reward_batch[k] + self.critic.gamma * target_q[k])
+                y_i.append(reward_batch[k] + self.gamma * target_q[k])
 
         ##############3# Update Critic by minimizing the loss
 
