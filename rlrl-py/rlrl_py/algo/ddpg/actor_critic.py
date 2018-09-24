@@ -107,19 +107,18 @@ class Critic(Network):
         # this will sum up the gradients of each critic output in the minibatch
         # w.r.t. that action. Each output is independent of all
         # actions except for one.
-        self.action_grads = tf.gradients(self.out, self.inputs[1])
+        self.grad_q_wrt_actions = tf.gradients(self.out, self.inputs[1])
 
     def create_architecture(self):
         # Check the number of trainable params before you create the network
-
         existing_num_trainable_params = len(tf.trainable_variables())
 
         state_dim, action_dim = self.input_dim
         hidden_dim_1, hidden_dim_2 = self.hidden_dims
 
         # Create the input layers for state and actions
-        state_inputs = tflearn.input_data(shape=[None, state_dim])
-        action_inputs = tflearn.input_data(shape=[None, action_dim])
+        state_inputs = tflearn.input_data(shape=[None, state_dim], name = self.name + 'InputData')
+        action_inputs = tflearn.input_data(shape=[None, action_dim], name = self.name + 'InputData')
 
         # First hidden layer with only the states
         net = tflearn.fully_connected(state_inputs, hidden_dim_1, name = self.name + 'FullyConnected')
@@ -142,8 +141,11 @@ class Critic(Network):
         net_params = tf.trainable_variables()[existing_num_trainable_params:]
         return (state_inputs, action_inputs), out, net_params
 
-    def train(self, inputs, a_gradient):
-        self.sess.run(self.optimize, feed_dict={self.inputs: inputs, self.action_gradient: a_gradient})
+    def train(self, inputs, q_value):
+        return self.sess.run(self.optimize, feed_dict={self.inputs: inputs, self.q_value: q_value})
+
+    def get_grad_q_wrt_actions(self, inputs):
+        return self.sess.run(self.grad_q_wrt_actions, feed_dict = {self.inputs: inputs})
 
 class TargetCritic(Critic):
     def __init__(self, critic, tau):
