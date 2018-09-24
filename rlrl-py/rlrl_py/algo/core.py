@@ -1,4 +1,6 @@
 import gym
+import tensorflow as tf
+import rlrl_py.algo.util as util
 
 class Network:
     '''Base class which defines an interface for a Neural Network
@@ -32,24 +34,26 @@ class Network:
 class Agent:
     '''Base class which defines an RL agent
     '''
-    def __init__(self, env, random_seed, n_episodes, render):
+    def __init__(self, sess, env, random_seed=10000000, log_dir='/tmp', name=None):
         # Environment setup
         self.env = gym.make(env)
         self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
         self.env.seed(random_seed)
         self.episode_horizon = int(self.env.env._max_episode_steps)
 
-        self.n_episodes = n_episodes
-        self.render = render
+        self.sess = sess
+        self.name = name
 
-    def train(self):
-        for episode in range(self.n_episodes):
+        self.logger = util.Logger(sess, log_dir, self.name, env)
+
+    def train(self, n_episodes, render=True):
+        for episode in range(n_episodes):
             state = self.env.reset()
             episode_reward = 0
 
             for t in range(self.episode_horizon):
 
-                if (self.render):
+                if (render):
                     self.env.render()
 
                 # Select an action based on the exploration policy
@@ -63,7 +67,12 @@ class Agent:
 
                 episode_reward += reward
                 state = next_state
-            print('End of episode:', episode, 'with total reward: ', episode_reward)
+
+                if done:
+                    break
+
+            self.logger.log(episode_reward, episode)
+            self.logger.print_console(episode, n_episodes)
 
     def do_exploration(self, state):
         return self.env.action_space.sample()
@@ -73,5 +82,3 @@ class Agent:
 
     def evaluate(self):
         pass
-
-

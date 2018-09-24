@@ -77,7 +77,7 @@ class TargetActor(Actor):
         self.sess.run(self.equal_params)
 
 class Critic(Network):
-    def __init__(self, sess, input_dim, hidden_dims, final_layer_init=(-0.003, 0.003), learning_rate=0.001, gamma=0.999):
+    def __init__(self, sess, input_dim, hidden_dims, final_layer_init=(-0.003, 0.003), learning_rate=0.001):
         """
         Contructs a Critic Network.
 
