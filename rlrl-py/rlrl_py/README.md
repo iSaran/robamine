@@ -13,3 +13,8 @@ Run unit tests with:
 ```bash
 python -m unittest -v
 ```
+
+In case you have an error due to MuJoCo please run as follows:
+```bash
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so python -m unittest -v
+```
