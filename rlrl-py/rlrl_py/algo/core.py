@@ -47,6 +47,24 @@ class Agent:
         self.logger = util.Logger(sess, log_dir, self.name, env)
 
     def train(self, n_episodes, render=True):
+        """
+        Provides the training or optimization loop. For a given number of
+        episodes this function runs the basic RL loop for each timestep of the
+        episode:
+            - Selects an action based on the exploration policy
+            - Performs the action to the environment and reads the next state
+              and the reward.
+            - Learns from this experience (i.e. optimizes the learned policy
+              based on some algorithm).
+        self.predict method) and provides stats.
+
+        Parameters
+        ----------
+        n_episodes:
+            The number of episodes to train for.
+        render:
+            True if rendering is desired during training.
+        """
         for episode in range(n_episodes):
             state = self.env.reset()
             episode_reward = 0
@@ -57,7 +75,7 @@ class Agent:
                     self.env.render()
 
                 # Select an action based on the exploration policy
-                action = self.do_exploration(state)
+                action = self.explore(state)
 
                 # Execute the action on the environment  and observe reward and next state
                 next_state, reward, done, info = self.env.step(action)
@@ -74,11 +92,83 @@ class Agent:
             self.logger.log(episode_reward, episode)
             self.logger.print_console(episode, n_episodes)
 
-    def do_exploration(self, state):
-        return self.env.action_space.sample()
-
     def learn(self, state, action, reward, next_state, done):
+        """
+        The function which implements the algorithm for learning from the
+        experience (i.e. optimize the learn policy). Used by the loop in
+        self.train()
+        """
         pass
 
-    def evaluate(self):
+    def explore(self, state):
+        """
+        Provides explorative actions. In the general case the policy for
+        exploration may be different from the actual policy that we want to
+        optimize (and thus the explore and the evaluate functions may be
+        different).
+
+        Parameters
+        ----------
+
+        state:
+            The current state of the environment.
+
+        Returns
+        -------
+        An action to be performed for exploration.
+        """
+        return self.env.action_space.sample()
+
+    def evaluate(self, n_episodes, render=True):
+        """
+        Provides the evaluation loop. For a given number of episodes this
+        function runs the optimal policy that the agent has learned (see
+        self.predict method) and provides stats.
+
+        Parameters
+        ----------
+        n_episodes:
+            The number of episodes to evaluate for.
+        render:
+            True if rendering is desired during evaluation.
+        """
+        for episode in range(n_episodes):
+            state = self.env.reset()
+            episode_reward = 0
+
+            for t in range(self.episode_horizon):
+
+                if (render):
+                    self.env.render()
+
+                # Select an action based on the exploration policy
+                action = self.predict(state)
+
+                # Execute the action on the environment  and observe reward and next state
+                next_state, reward, done, info = self.env.step(action)
+
+                episode_reward += reward
+                state = next_state
+
+                if done:
+                    break
+
+            self.logger.log(episode_reward, episode)
+            self.logger.print_console(episode, n_episodes)
+
+    def predict(self, state):
+        """
+        Provides the optimal actions based on the learned policy. It is the
+        actual policy.
+
+        Parameters
+        ----------
+
+        state:
+            The current state of the environment.
+
+        Returns
+        -------
+        An optimal action.
+        """
         pass
