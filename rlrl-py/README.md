@@ -118,3 +118,18 @@ cd baselines/baselines
 python results_plotter.py --dirs=/tmp/openai-2018-07-11-14-55-45-282417
 
 ```
+
+#  Generate documentation
+
+Install sphinx, the rtd theme and the `numpydoc` extension:
+
+```bash
+pip install Sphinx sphinx_rtd_theme numpydoc
+```
+
+Then build the documentation (in will be build in `doc/_build/index.html`):
+
+```bash
+cd doc
+make html
+```
