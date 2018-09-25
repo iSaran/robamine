@@ -155,7 +155,7 @@ class TestReplayBuffer(unittest.TestCase):
             replay_buffer.store(t['state'], t['action'], t['reward'], t['next_state'], t['terminal'])
 
         self.assertEqual(replay_buffer.size(), 4)
-        self.assertEqual(replay_buffer.buffer[2][0], [3, 8, 1, 0])
+        self.assertEqual(replay_buffer(2)[0], [3, 8, 1, 0])
 
     def test_sample(self):
         transitions = []

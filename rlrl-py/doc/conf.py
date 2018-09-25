@@ -41,7 +41,8 @@ sys.path.insert(0, os.path.abspath('../rlrl_py'))
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinxcontrib.bibtex'
 ]
 
 # Napoleon Configuration

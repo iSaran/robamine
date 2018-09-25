@@ -30,8 +30,11 @@ Indices and tables
 * :ref:`search`
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 20
    :caption: Contents:
 
    api/algo/main
+   api/env/main
+   zreferences
+
 

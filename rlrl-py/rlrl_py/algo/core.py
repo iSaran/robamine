@@ -1,6 +1,6 @@
 """
-Core Module
-===========
+Core
+====
 
 This module contains the core classes of the package for defining basic
 interfaces. These base classes can be extended for implementing different RL

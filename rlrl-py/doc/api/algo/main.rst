@@ -10,3 +10,4 @@ The RL Algorithms are implemented in the ``algo`` subpackage.
    :caption: Contents:
 
    core
+   ddpg
