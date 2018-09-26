@@ -45,6 +45,7 @@ class Agent:
 
     def __init__(self, sess, env, random_seed=1e6, log_dir='/tmp', name=None):
         # Environment setup
+        self.env_name = env
         self.env = gym.make(env)
         self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
         self.env.seed(random_seed)
@@ -72,11 +73,17 @@ class Agent:
         render : bool
             True of rendering is required. False otherwise.
         """
+
+        stats = util.Stats(self.name, self.env_name, n_episodes, dt=0.02, logger=self.logger)
+
         for episode in range(n_episodes):
             state = self.env.reset()
-            episode_reward = 0
+
+            stats.init_for_episode()
 
             for t in range(self.episode_horizon):
+
+                stats.init_for_timestep()
 
                 if (render):
                     self.env.render()
@@ -90,14 +97,14 @@ class Agent:
                 # Learn
                 self.learn(state, action, reward, next_state, done)
 
-                episode_reward += reward
                 state = next_state
 
                 if done:
                     break
 
-            self.logger.log(episode_reward, episode)
-            self.logger.print_console(episode, n_episodes)
+                stats.update_for_timestep(reward, t)
+
+            stats.update_for_episode(episode, print_stats=True)
 
     def explore(self, state):
         """

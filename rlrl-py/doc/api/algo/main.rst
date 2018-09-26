@@ -11,3 +11,4 @@ The RL Algorithms are implemented in the ``algo`` subpackage.
 
    core
    ddpg
+   util
