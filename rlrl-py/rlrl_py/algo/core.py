@@ -47,16 +47,17 @@ class Agent:
         # Environment setup
         self.env_name = env
         self.env = gym.make(env)
-        self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
+        # TODO(isaran): Maybe a wrapper needs for the goal environments
+        # self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
         self.env.seed(random_seed)
-        self.episode_horizon = int(self.env.env._max_episode_steps)
+        self.episode_horizon = int(self.env._max_episode_steps)
 
         self.sess = sess
         self.name = name
 
         self.logger = util.Logger(sess, log_dir, self.name, env)
 
-    def train(self, n_episodes, render=True):
+    def train(self, n_episodes, n_epochs = 1, render=True):
         """
         Performs the policy improvement loop. For a given number of episodes this function runs the basic RL loop for each timestep of the episode, i.e.:
 
@@ -70,41 +71,49 @@ class Agent:
         ----------
         n_episodes : int
             The number of episodes to train the model.
+        n_epochs : int
+            The number of epochs to divide the episodes.
         render : bool
             True of rendering is required. False otherwise.
         """
 
-        stats = util.Stats(self.name, self.env_name, n_episodes, dt=0.02, logger=self.logger)
+        assert n_episodes % n_epochs == 0
+        n_episodes_per_epoch = int(n_episodes / n_epochs)
 
-        for episode in range(n_episodes):
-            state = self.env.reset()
+        stats = util.Stats(self.name, self.env_name, n_episodes, n_epochs, dt=0.02, logger=self.logger)
 
-            stats.init_for_episode()
+        for epoch in range(n_epochs):
+            stats.init_for_epoch()
+            for episode in range(n_episodes_per_epoch):
+                stats.init_for_episode()
+                state = self.env.reset()
 
-            for t in range(self.episode_horizon):
+                for t in range(self.episode_horizon):
 
-                stats.init_for_timestep()
+                    stats.init_for_timestep()
 
-                if (render):
-                    self.env.render()
+                    if (render):
+                        self.env.render()
 
-                # Select an action based on the exploration policy
-                action = self.explore(state)
+                    # Select an action based on the exploration policy
+                    action = self.explore(state)
 
-                # Execute the action on the environment  and observe reward and next state
-                next_state, reward, done, info = self.env.step(action)
+                    # Execute the action on the environment  and observe reward and next state
+                    next_state, reward, done, info = self.env.step(action)
 
-                # Learn
-                self.learn(state, action, reward, next_state, done)
+                    # Learn
+                    self.learn(state, action, reward, next_state, done)
 
-                state = next_state
+                    state = next_state
 
-                stats.update_for_timestep(reward, t)
+                    stats.update_for_timestep(reward, t)
 
-                if done:
-                    break
+                    if done:
+                        break
 
-            stats.update_for_episode(episode, print_stats=True)
+                stats.update_for_episode(info)
+            stats.update_for_epoch(print_stats=True)
+
 
     def explore(self, state):
         """
