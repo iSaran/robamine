@@ -57,7 +57,7 @@ class Agent:
 
         self.logger = util.Logger(sess, log_dir, self.name, env)
 
-    def train(self, n_episodes, n_epochs = 1, render=True):
+    def train(self, n_episodes, n_epochs = 1, render=True, episodes_to_evaluate=0):
         """
         Performs the policy improvement loop. For a given number of episodes this function runs the basic RL loop for each timestep of the episode, i.e.:
 
@@ -75,12 +75,14 @@ class Agent:
             The number of epochs to divide the episodes.
         render : bool
             True of rendering is required. False otherwise.
+        episodes_to_evaluate : int
+            The number of episodes to evaluate the agent during training (at the end of each epoch)
         """
 
         assert n_episodes % n_epochs == 0
         n_episodes_per_epoch = int(n_episodes / n_epochs)
 
-        stats = util.Stats(self.name, self.env_name, n_episodes, n_epochs, dt=0.02, logger=self.logger)
+        stats = util.Stats(self.name, self.env_name, n_episodes, n_epochs, dt=0.02, logger=self.logger, name = "Training")
 
         for epoch in range(n_epochs):
             stats.init_for_epoch()
@@ -112,8 +114,17 @@ class Agent:
                         break
 
                 stats.update_for_episode(info)
-            stats.update_for_epoch(print_stats=True)
 
+            stats.update_for_epoch()
+
+            # Evaluate the agent (run the learned policy for a number of episodes)
+            eval_stats = self.evaluate(episodes_to_evaluate)
+
+            stats.print_header()
+            stats.print_progress()
+            stats.print()
+            if (episodes_to_evaluate > 0):
+                eval_stats.print()
 
     def explore(self, state):
         """
@@ -160,7 +171,10 @@ class Agent:
 
     def evaluate(self, n_episodes = 1, render=True):
         """
-        Performs the policy evaluation loop. For a given number of episodes this function runs the basic RL loop for each timestep of the episode performing only optimal actions (no exploration as it happens in :meth:`.train`):
+        Performs the policy evaluation loop. For a given number of episodes
+        this function runs the basic RL loop for each timestep of the episode
+        performing only optimal actions (no exploration as it happens in
+        :meth:`.train`):
 
         * Selects an action based on the optimal policy (calls :meth:`.predict`)
         * Performs the action to the environment and reads the next state
@@ -173,11 +187,15 @@ class Agent:
         render : bool
             True of rendering is required. False otherwise.
         """
+        stats = util.Stats(self.name, self.env_name, n_episodes, n_epochs=1, dt=0.02, logger=self.logger, name = "Evaluation")
+        stats.init_for_epoch()
         for episode in range(n_episodes):
+            stats.init_for_episode()
             state = self.env.reset()
             episode_reward = 0
 
             for t in range(self.episode_horizon):
+                stats.init_for_timestep()
 
                 if (render):
                     self.env.render()
@@ -191,11 +209,13 @@ class Agent:
                 episode_reward += reward
                 state = next_state
 
+                stats.update_for_timestep(reward, t)
+
                 if done:
                     break
-
-            self.logger.log(episode_reward, episode)
-            self.logger.print_console(episode, n_episodes)
+            stats.update_for_episode(info)
+        stats.update_for_epoch()
+        return stats
 
     def predict(self, state):
         """

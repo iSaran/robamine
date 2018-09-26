@@ -151,14 +151,17 @@ class Stats:
         The real timestep in seconds
     logger : :class:`.Logger`
         Used for logging
+    name : str
+        A name for these stats
     """
-    def __init__(self, agent_name, env_name, n_episodes, n_epochs, dt, logger = None):
+    def __init__(self, agent_name, env_name, n_episodes, n_epochs, dt, logger = None, name = ""):
         # Util staff
         self.agent_name = agent_name
         self.env_name = env_name
         self.dt = dt
         self.start_time = time.time()
         self.logger = logger
+        self.name = name
 
         # Epoch staff
         self.current_epoch = 1
@@ -203,23 +206,13 @@ class Stats:
         """
         pass
 
-    def update_for_epoch(self, print_stats = False):
+    def update_for_epoch(self):
         """
         Update the stats that need to be updated at the end of an
         epoch.
-
-        Prameters
-        ---------
-        current_episode : int
-            The current episode
-        print_stats : bool
-            True if printing stats in the console is desired at the end of the epoch
         """
         self.average_epoch_reward /= self.n_episodes_per_epoch
         self.success_rate /= self.n_episodes_per_epoch
-
-        if print_stats:
-            self.print_console()
 
         if self.logger is not None:
             self.logger.log(self.episode_total_reward, self.current_episode)
@@ -247,9 +240,6 @@ class Stats:
             self.success_rate = float('nan')
         self.current_episode += 1
 
-        #if print_stats:
-        #    self.print_console()
-
         if self.logger is not None:
             self.logger.log(self.episode_total_reward, self.current_episode)
 
@@ -268,28 +258,26 @@ class Stats:
         self.episode_total_reward += reward
         self.current_timestep += 1
 
-    def print_console(self):
-        """
-        Prints basic stats in console for monitoring long training loops.
-        """
+    def print_header(self):
+        print('')
         print('===================================================')
         print('| Algorithm:', self.agent_name, ', Environment:', self.env_name)
         print('---------------------------------------------------')
+
+    def print_progress(self):
         print('| Progress:')
         print('|   Epoch: ', self.current_epoch, 'from', self.n_epochs)
         print('|   Episode: ', self.current_episode - 1, 'from', self.n_episodes)
         print('|   Progress: ', "{0:.2f}".format((self.current_episode - 1) / self.n_episodes * 100), '%')
         print('|   Time Elapsed:', self.get_time_elapsed())
         print('|   Experience Time:', transform_sec_to_timestamp(self.current_timestep * self.dt))
-        print('| Training:')
+
+    def print(self):
+        print('|', self.name, 'stats for', self.n_episodes_per_epoch, 'episodes :')
         print('|   Epoch Average Reward: ', self.average_epoch_reward)
         print('|   Epoch Max Reward: ', self.max_epoch_reward)
         print('|   Epoch Min Reward: ', self.min_epoch_reward)
         print('|   Epoch Success Rate: ', "{0:.2f}".format(self.success_rate * 100), '%')
-        print('| Evaluation:')
-        print('|   Epoch Success Rate: ', "{0:.2f}".format(self.success_rate * 100), '%')
-        print('===================================================')
-        print('')
 
     def get_time_elapsed(self):
             end = time.time()

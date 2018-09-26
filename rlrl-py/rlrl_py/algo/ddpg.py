@@ -536,12 +536,12 @@ class DDPG(Agent):
 
         # Initialize the Actor network and its target net
         state_dim = int(self.env.observation_space.shape[0])
-        action_dim = int(self.env.action_space.shape[0])
-        self.actor = Actor(self.sess, state_dim, actor_hidden_units, action_dim, final_layer_init, batch_size, actor_learning_rate)
+        self.action_dim = int(self.env.action_space.shape[0])
+        self.actor = Actor(self.sess, state_dim, actor_hidden_units, self.action_dim, final_layer_init, batch_size, actor_learning_rate)
         self.target_actor = TargetActor(self.actor, tau)
 
         # Initialize the Critic network and its target net
-        self.critic = Critic(self.sess, (state_dim, action_dim), critic_hidden_units, final_layer_init, critic_learning_rate)
+        self.critic = Critic(self.sess, (state_dim, self.action_dim), critic_hidden_units, final_layer_init, critic_learning_rate)
         self.target_critic = TargetCritic(self.critic, tau)
 
         # Initialize target networks with weights equal to the learned networks
@@ -553,7 +553,7 @@ class DDPG(Agent):
         self.batch_size = batch_size
         self.replay_buffer = ReplayBuffer(self.batch_size, random_seed)
 
-        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim), sigma = exploration_noise_sigma)
+        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = exploration_noise_sigma)
 
     def explore(self, state):
         """
@@ -573,6 +573,24 @@ class DDPG(Agent):
         """
         obs = state.reshape(1, state.shape[0])
         return self.actor.predict(obs).squeeze() + self.exploration_noise()
+
+    def predict(self, state):
+        """
+        Represents the learned policy which provides optimal actions. It is used from :meth:`.evaluate`
+
+        Parameters
+        ----------
+
+        state : numpy array
+            The current state of the environment.
+
+        Returns
+        -------
+        numpy array:
+            The optimal action to be performed.
+        """
+        obs = state.reshape(1, state.shape[0])
+        return np.reshape(self.actor.predict(obs), (self.action_dim,))
 
     def learn(self, state, action, reward, next_state, done):
         """
