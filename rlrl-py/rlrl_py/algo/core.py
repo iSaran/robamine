@@ -99,10 +99,10 @@ class Agent:
 
                 state = next_state
 
+                stats.update_for_timestep(reward, t)
+
                 if done:
                     break
-
-                stats.update_for_timestep(reward, t)
 
             stats.update_for_episode(episode, print_stats=True)
 
