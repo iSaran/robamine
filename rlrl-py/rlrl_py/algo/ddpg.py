@@ -579,21 +579,8 @@ class DDPG(Agent):
         Implements the DDPG for each timestep of the episode:
 
             * Stores the transition in the replay buffer and samples a minibatch from it.
-            * Policy evaluation (train critic):
-
-                * Calculates the target Q value batch :math:`y_i`:
-
-                    * Feeds the next state batch to the target actor and calculates a next action batch :math:`a = \mu^\prime(s_{i+1} | \\theta^{\mu^{\prime}})`
-                    * Feeds the next action batch and the next state batch to the target Critic for calculating :math:`Q^\prime(s_{i+1}, a)`.
-                    * Uses the target Q and the reward for calculating :math:`y_i`
-
-                * Train critic by  minimizing the loss (mean square between the critic predictions and the targets :math:`y_i`)
-
-            * Policy improvement (train actor):
-
-                * Calculate the gradient of the Q w.r.t. the actions from the output of the critic.
-                * Apply the policy gradient to optimize actor
-
+            * Policy evaluation (see :meth:`.evaluate_policy`)
+            * Policy improvement (see :meth:`.improve_policy`)
             * Update target networks.
 
         Parameters
@@ -622,19 +609,67 @@ class DDPG(Agent):
         # Sample a mini batch from the replay buffer
         state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.batch_size)
 
-        # Calculate the target of the Q value from the target network
-        next_action_batch = self.target_actor.predict(next_state_batch)
-        target_q = self.target_critic.predict((next_state_batch, next_action_batch))
+        self.evaluate_policy(state_batch, action_batch, reward_batch, next_state_batch, terminal_batch)
+        self.improve_policy(state_batch)
+
+        self.target_actor.update_params()
+        self.target_critic.update_params()
+
+    def evaluate_policy(self, state_batch, action_batch, reward_batch, next_state_batch, terminal_batch):
+        """
+        Performs policy evaluation, i.e. trains the Critic. This means that it
+        calculates the target Q values :math:`y_i`, using the target Actor and
+        critic and use them in loss to train the Critic. :
+
+            * Calculates the target Q value batch :math:`y_i`:
+
+                * Feeds the next state batch to the target actor and calculates a next action batch :math:`a = \mu^\prime(s_{i+1} | \\theta^{\mu^{\prime}})`
+                * Feeds the next action batch and the next state batch to the target Critic for calculating :math:`Q^\prime(s_{i+1}, a)`.
+                * Uses the target Q and the reward for calculating :math:`y_i`
+
+            * Train critic by  minimizing the loss (mean square between the critic predictions and the targets :math:`y_i`)
+
+        Parameters
+        ----------
+        state_batch : np.ndarray
+            The state batch
+        action_batch : np.ndarray
+            The action batch
+        reward_batch : float
+            The reward batch
+        next_state_batch : np.ndarray
+            The batch of the next state
+        terminal_batch : float
+            The batch of the terminal states
+        """
+
+        mu_target_next = self.target_actor.predict(next_state_batch)
+        Q_target_next = self.target_critic.predict((next_state_batch, mu_target_next))
+
         y_i = []
         for k in range(self.batch_size):
             if terminal_batch[k]:
                 y_i.append(reward_batch[k])
             else:
-                y_i.append(reward_batch[k] + self.gamma * target_q[k])
+                y_i.append(reward_batch[k] + self.gamma * Q_target_next[k])
 
-        # Update Critic by minimizing the loss
-       #  self.critic.learn((state_batch, action_batch), y_i)
+        y_i = np.reshape(y_i, (64, 1))
 
-       #  # Update the actor policy using the sampled policy gradient
-       #  predicted_action_batch = self.actor.predict(state_batch)
-       #  grads = critic.action.action_grads()
+        self.critic.learn((state_batch, action_batch), y_i)
+
+    def improve_policy(self, state_batch):
+        """
+        Performs policy improvement, i.e. trains the Actor using the gradient of the Q value from the Critic
+
+            * Calculate :math:`\\nabla _a Q` from the output of the critic.
+            * Apply the policy gradient to optimize actor
+
+        Parameters
+        ----------
+        state_batch : np.ndarray
+            The state batch
+        """
+
+        mu = self.actor.predict(state_batch)
+        grads = self.critic.get_grad_q_wrt_actions((state_batch, mu))
+        self.actor.learn(state_batch, grads[0])
