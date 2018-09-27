@@ -622,7 +622,7 @@ class DDPG(Agent):
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
         if self.replay_buffer.size() < self.batch_size:
-            return
+            return self.critic.predict((np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0])))).squeeze()
 
         # Sample a mini batch from the replay buffer
         state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.batch_size)
@@ -632,6 +632,8 @@ class DDPG(Agent):
 
         self.target_actor.update_params()
         self.target_critic.update_params()
+
+        return self.critic.predict((np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0])))).squeeze()
 
     def evaluate_policy(self, state_batch, action_batch, reward_batch, next_state_batch, terminal_batch):
         """

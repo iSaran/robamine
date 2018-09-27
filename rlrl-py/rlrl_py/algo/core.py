@@ -57,7 +57,7 @@ class Agent:
 
         self.logger = util.Logger(sess, log_dir, self.name, env)
 
-    def train(self, n_episodes, n_epochs = 1, render=True, episodes_to_evaluate=0):
+    def train(self, n_episodes, n_epochs = 1, render=False, episodes_to_evaluate=0):
         """
         Performs the policy improvement loop. For a given number of episodes this function runs the basic RL loop for each timestep of the episode, i.e.:
 
@@ -104,11 +104,11 @@ class Agent:
                     next_state, reward, done, info = self.env.step(action)
 
                     # Learn
-                    self.learn(state, action, reward, next_state, done)
+                    Q = self.learn(state, action, reward, next_state, done)
 
                     state = next_state
 
-                    stats.update_for_timestep(reward, t)
+                    stats.update_for_timestep(reward, Q, t)
 
                     if done:
                         break
@@ -169,7 +169,7 @@ class Agent:
         """
         pass
 
-    def evaluate(self, n_episodes = 1, render=True):
+    def evaluate(self, n_episodes = 1, render=False):
         """
         Performs the policy evaluation loop. For a given number of episodes
         this function runs the basic RL loop for each timestep of the episode
@@ -187,7 +187,10 @@ class Agent:
         render : bool
             True of rendering is required. False otherwise.
         """
-        stats = util.Stats(self.name, self.env_name, n_episodes, n_epochs=1, dt=0.02, logger=self.logger, name = "Evaluation")
+        if n_episodes == 0:
+            return
+
+        stats = util.Stats(self.name, self.env_name, n_episodes, n_epochs=1, dt=0.02, logger=None, name = "Evaluation")
         stats.init_for_epoch()
         for episode in range(n_episodes):
             stats.init_for_episode()
