@@ -120,12 +120,6 @@ class Agent:
             # Evaluate the agent (run the learned policy for a number of episodes)
             eval_stats = self.evaluate(episodes_to_evaluate)
 
-            stats.print_header()
-            stats.print_progress()
-            stats.print()
-            if (episodes_to_evaluate > 0):
-                eval_stats.print()
-
     def explore(self, state):
         """
         Represents the exploration policy. It is used by :meth:`.train` to

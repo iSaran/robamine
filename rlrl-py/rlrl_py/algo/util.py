@@ -60,20 +60,28 @@ class Logger:
         os.makedirs(self.log_path)
         print('rlrl_py logging to directory: ', self.log_path)
 
-        self.episode_reward = tf.Variable(0.)
-        tf.summary.scalar("Reward per episode", self.episode_reward)
+        self.data = {}
+        self.data['episode_total_reward'] = tf.Variable(0.)
+        self.data['episode_average_q'] = tf.Variable(0.)
 
-        self.summary_vars = {}
-        self.summary_vars['episode_reward'] = self.episode_reward
+        self.data['epoch_reward/mean'] = tf.Variable(0.)
+        self.data['epoch_reward/min'] = tf.Variable(0.)
+        self.data['epoch_reward/max'] = tf.Variable(0.)
+        self.data['epoch_reward/std'] = tf.Variable(0.)
+
+        for key in self.data:
+            tf.summary.scalar(key, self.data[key])
+
         self.summary_ops = tf.summary.merge_all()
 
         self.writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
-
-    def log(self, data, episode):
-        self.data = data
-        summary_str = self.sess.run(self.summary_ops, feed_dict={self.summary_vars['episode_reward']: data})
-        self.writer.add_summary(summary_str, episode)
+    def log(self, data, x):
+        feed_dict = {}
+        for key in data:
+            feed_dict[self.data[key]] = data[key]
+        summary_str = self.sess.run(self.summary_ops, feed_dict=feed_dict)
+        self.writer.add_summary(summary_str, x)
         self.writer.flush()
 
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
@@ -166,30 +174,34 @@ class Stats:
         # Epoch staff
         self.current_epoch = 1
         self.n_epochs = n_epochs
-        self.average_epoch_reward = 0
-        self.max_epoch_reward = -1e6
-        self.min_epoch_reward = 1e6
         assert n_episodes % n_epochs == 0
         self.n_episodes_per_epoch = int(n_episodes / n_epochs)
+        self.epoch_reward = np.zeros(shape=(self.n_episodes_per_epoch))
         self.success_rate = 0
+        self.current_episode_in_epoch = 0
 
         # Episode staff
         self.current_episode = 1
         self.n_episodes = n_episodes
         self.episode_total_reward = 0
+        self.episode_average_q = 0
+
 
         # Timestep staff
         self.current_timestep = 1
+        self.n_timesteps = 200
 
     def init_for_epoch(self):
         """
         Initialize the stats that need to be initialize at the beginning of an
         epoch.
         """
-        self.average_epoch_reward = 0
-        self.max_epoch_reward = -1e6
-        self.min_epoch_reward = 1e6
+        self.epoch_reward_mean = 0
+        self.epoch_max_reward = -1e6
+        self.epoch_min_reward = 1e6
         self.success_rate = 0
+        self.epoch_reward = np.zeros(shape=(self.n_episodes_per_epoch))
+        self.current_episode_in_epoch = 0
         pass
 
     def init_for_episode(self):
@@ -198,6 +210,7 @@ class Stats:
         episode.
         """
         self.episode_total_reward = 0
+        self.episode_average_q = 0
 
     def init_for_timestep(self):
         """
@@ -211,39 +224,46 @@ class Stats:
         Update the stats that need to be updated at the end of an
         epoch.
         """
-        self.average_epoch_reward /= self.n_episodes_per_epoch
         self.success_rate /= self.n_episodes_per_epoch
 
         if self.logger is not None:
-            self.logger.log(self.episode_total_reward, self.current_episode)
+            data = {}
+            data['epoch_reward/mean'] = np.mean(self.epoch_reward)
+            data['epoch_reward/min'] = np.mean(self.epoch_reward)
+            data['epoch_reward/max'] = np.std(self.epoch_reward)
+            data['epoch_reward/std'] = np.max(self.epoch_reward)
+            self.logger.log(data, self.current_epoch)
 
+        self.print_header()
+        self.print_progress()
+        self.print(data)
         self.current_epoch += 1
-
 
     def update_for_episode(self, info, print_stats = False):
         """
         Update the stats that need to be updated at the end of an
         episode.
 
-        Prameters
+        Parameters
         ---------
         print_stats : bool
             True if printing stats in the console is desired at the end of the episode
         """
-        self.average_epoch_reward += self.episode_total_reward
-        self.min_epoch_reward = min(self.min_epoch_reward, self.episode_total_reward)
-        self.max_epoch_reward = max(self.max_epoch_reward, self.episode_total_reward)
+        self.epoch_reward[self.current_episode_in_epoch] = self.episode_total_reward
+        self.episode_average_q /= self.n_timesteps
 
         if 'is_success' in info:
             self.success_rate += info['is_success']
         else:
             self.success_rate = float('nan')
-        self.current_episode += 1
 
         if self.logger is not None:
-            self.logger.log(self.episode_total_reward, self.current_episode)
+            data = {}
+            data['episode_total_reward'] = self.episode_total_reward
+            data['episode_average_q'] = self.episode_average_q
+            self.logger.log(data, self.current_episode)
 
-    def update_for_timestep(self, reward, current_timestep):
+    def update_for_timestep(self, reward, q_value, current_timestep):
         """
         Update the stats that need to be updated at the end of a
         time step.
@@ -256,6 +276,7 @@ class Stats:
             The current timestep
         """
         self.episode_total_reward += reward
+        self.episode_average_q += q_value
         self.current_timestep += 1
 
     def print_header(self):
@@ -272,12 +293,10 @@ class Stats:
         print('|   Time Elapsed:', self.get_time_elapsed())
         print('|   Experience Time:', transform_sec_to_timestamp(self.current_timestep * self.dt))
 
-    def print(self):
+    def print(self, data):
         print('|', self.name, 'stats for', self.n_episodes_per_epoch, 'episodes :')
-        print('|   Epoch Average Reward: ', self.average_epoch_reward)
-        print('|   Epoch Max Reward: ', self.max_epoch_reward)
-        print('|   Epoch Min Reward: ', self.min_epoch_reward)
-        print('|   Epoch Success Rate: ', "{0:.2f}".format(self.success_rate * 100), '%')
+        for key in data:
+            print('| ', key, ': ', data[key])
 
     def get_time_elapsed(self):
             end = time.time()
