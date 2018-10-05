@@ -1,4 +1,7 @@
-#!/usr/bin/env python3
+"""
+Sphere Reacher
+==============
+"""
 import numpy as np
 from mujoco_py import load_model_from_path, MjSim, MjViewer
 
@@ -16,12 +19,12 @@ def goal_distance(goal_a, goal_b):
     assert goal_a.shape == goal_b.shape
     return np.linalg.norm(goal_a - goal_b, axis=-1)
 
-
 class SphereReacher(robot_env.RobotEnv, utils.EzPickle):
-    def __init__(self, distance_threshold = 0.005, target_range = 0.2, num_substeps = 10):
+    def __init__(self, distance_threshold = 0.005, target_range = 0.2, num_substeps = 10, shaped = False):
 
         self.distance_threshold = distance_threshold
         self.target_range = target_range
+        self.shaped = shaped
         # Create MuJoCo Model
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/sphere_reacher.xml")
@@ -41,6 +44,8 @@ class SphereReacher(robot_env.RobotEnv, utils.EzPickle):
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         distance = goal_distance(achieved_goal, desired_goal)
+        if self.shaped:
+            return -distance
         return -(distance > self.distance_threshold).astype(np.float32)
 
     # RobotEnv methods
