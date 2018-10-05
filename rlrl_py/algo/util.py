@@ -200,6 +200,7 @@ class Stats:
         self.name = name
 
         self.n_episodes = n_episodes
+        self.n_epochs = n_epochs
         assert n_episodes % n_epochs == 0
         self.n_episodes_per_epoch = int(n_episodes / n_epochs)
 
@@ -210,6 +211,8 @@ class Stats:
         self.epoch = 0
         self.epoch_reward = np.empty(self.n_episodes_per_epoch)
         self.epoch_q = np.empty(self.n_episodes_per_epoch)
+
+        self.step = 0
 
     def update_for_timestep(self, reward, q_value):
         """
@@ -225,6 +228,7 @@ class Stats:
         """
         self.episode_reward.append(reward)
         self.episode_q.append(q_value)
+        self.step += 1
 
     def update_for_episode(self, info, print_stats = False):
         """
@@ -276,19 +280,18 @@ class Stats:
         self.epoch += 1
         self.episode = 0
 
-    def print_header(self):
+    def print_progress(self):
         print('')
         print('===================================================')
         print('| Algorithm:', self.agent_name, ', Environment:', self.env_name)
         print('---------------------------------------------------')
-
-    def print_progress(self):
         print('| Progress:')
         print('|   Epoch: ', self.epoch, 'from', self.n_epochs)
-        print('|   Episode: ', self.episode - 1, 'from', self.n_episodes)
-        print('|   Progress: ', "{0:.2f}".format((self.episode - 1) / self.n_episodes * 100), '%')
+        print('|   Episode: ', self.episode + self.epoch * self.n_episodes_per_epoch, 'from', self.n_episodes)
+        print('|   Progress: ', "{0:.2f}".format(self.episode + self.epoch * self.n_episodes_per_epoch / self.n_episodes * 100), '%')
         print('|   Time Elapsed:', self.get_time_elapsed())
         print('|   Experience Time:', transform_sec_to_timestamp(self.step * self.dt))
+        print('===================================================')
 
     def print(self, data):
         print('|', self.name, 'stats for', self.n_episodes_per_epoch, 'episodes :')

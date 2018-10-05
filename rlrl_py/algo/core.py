@@ -112,6 +112,7 @@ class Agent:
                 stats.update_for_episode(info)
 
             stats.update_for_epoch()
+            stats.print_progress()
 
             # Evaluate the agent (run the learned policy for a number of episodes)
             eval_stats = self.evaluate(episodes_to_evaluate)
