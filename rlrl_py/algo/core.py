@@ -85,14 +85,10 @@ class Agent:
         stats = util.Stats(self.name, self.env_name, n_episodes, n_epochs, dt=0.02, logger=self.logger, name = "Training")
 
         for epoch in range(n_epochs):
-            stats.init_for_epoch()
             for episode in range(n_episodes_per_epoch):
-                stats.init_for_episode()
                 state = self.env.reset()
 
                 for t in range(self.episode_horizon):
-
-                    stats.init_for_timestep()
 
                     if (render):
                         self.env.render()
@@ -108,7 +104,7 @@ class Agent:
 
                     state = next_state
 
-                    stats.update_for_timestep(reward, Q, t)
+                    stats.update_for_timestep(reward, Q)
 
                     if done:
                         break
