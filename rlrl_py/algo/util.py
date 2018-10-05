@@ -62,7 +62,8 @@ class Logger:
 
         # Create the variables and the operation for the Tensorflow summaries
         self.episode_data = {}
-        self.episode_data['episode_reward'] = tf.Variable(0.)
+        self.episode_data['episode/reward'] = tf.Variable(0.)
+        self.episode_data['episode/q_mean'] = tf.Variable(0.)
         episode_summaries = []
         for key in self.episode_data:
             episode_summaries.append(tf.summary.scalar(key, self.episode_data[key]))
@@ -73,6 +74,10 @@ class Logger:
         self.epoch_data['epoch_reward/min'] = tf.Variable(0.)
         self.epoch_data['epoch_reward/max'] = tf.Variable(0.)
         self.epoch_data['epoch_reward/std'] = tf.Variable(0.)
+        self.epoch_data['epoch_q/mean'] = tf.Variable(0.)
+        self.epoch_data['epoch_q/min'] = tf.Variable(0.)
+        self.epoch_data['epoch_q/max'] = tf.Variable(0.)
+        self.epoch_data['epoch_q/std'] = tf.Variable(0.)
         epoch_summaries = []
         for key in self.epoch_data:
             epoch_summaries.append(tf.summary.scalar(key, self.epoch_data[key]))
@@ -200,9 +205,11 @@ class Stats:
 
         self.episode = 0
         self.episode_reward = []
+        self.episode_q = []
 
         self.epoch = 0
         self.epoch_reward = np.empty(self.n_episodes_per_epoch)
+        self.epoch_q = np.empty(self.n_episodes_per_epoch)
 
     def update_for_timestep(self, reward, q_value):
         """
@@ -217,6 +224,7 @@ class Stats:
             The current timestep
         """
         self.episode_reward.append(reward)
+        self.episode_q.append(q_value)
 
     def update_for_episode(self, info, print_stats = False):
         """
@@ -230,15 +238,19 @@ class Stats:
         """
 
         episode_reward_sum = np.sum(np.array(self.episode_reward))
+        episode_q_mean = np.mean(np.array(self.episode_q))
         if self.logger is not None:
             data = {}
-            data['episode_reward'] = episode_reward_sum
+            data['episode/reward'] = episode_reward_sum
+            data['episode/q_mean'] = episode_q_mean
             self.logger.log_episode(data, self.episode + self.epoch * self.n_episodes_per_epoch)
 
         self.epoch_reward[self.episode] = episode_reward_sum
+        self.epoch_q[self.episode] = episode_q_mean
 
         # Initilize staff for the next loop
         self.episode_reward = []
+        self.episode_q = []
         self.episode += 1
 
     def update_for_epoch(self):
@@ -252,10 +264,15 @@ class Stats:
             data['epoch_reward/std'] = np.std(self.epoch_reward)
             data['epoch_reward/min'] = np.min(self.epoch_reward)
             data['epoch_reward/max'] = np.max(self.epoch_reward)
+            data['epoch_q/mean'] = np.mean(self.epoch_q)
+            data['epoch_q/std'] = np.std(self.epoch_q)
+            data['epoch_q/min'] = np.min(self.epoch_q)
+            data['epoch_q/max'] = np.max(self.epoch_q)
             self.logger.log_epoch(data, self.epoch)
 
         # Initilize staff for the next loop
         self.epoch_reward = np.empty(self.n_episodes_per_epoch)
+        self.epoch_q = np.empty(self.n_episodes_per_epoch)
         self.epoch += 1
         self.episode = 0
 
