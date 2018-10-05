@@ -43,4 +43,4 @@ __pycache__
 *MUJOCO_LOG.TXT*
 
 # Ignore Sphinx built documentation
-*/doc/_build/
+*doc/_build/
