@@ -85,6 +85,16 @@ class Logger:
 
         self.writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
+        self.episode_file = open(os.path.join(self.log_path, 'episode_log.txt'), "w+")
+        self.episode_file.write('episode,reward,q_mean\n')
+
+        self.epoch_file = open(os.path.join(self.log_path, 'epoch.txt'), "w+")
+        self.epoch_file.write('epoch,reward_mean,reward_min,reward_max,reward_std,q_mean,q_min,q_max,q_std\n')
+
+    def __del__(self):
+        self.episode_file.close()
+        self.epoch_file.close()
+
     def log_episode(self, data, x):
         feed_dict = {}
         for key in data:
@@ -93,6 +103,8 @@ class Logger:
         self.writer.add_summary(summary_str, x)
         self.writer.flush()
 
+        self.episode_file.write("%d,%f,%f\n" % (x, data['episode/reward'], data['episode/q_mean']))
+
     def log_epoch(self, data, x):
         feed_dict = {}
         for key in data:
@@ -100,6 +112,8 @@ class Logger:
         summary_str = self.sess.run(self.epoch_summary_ops, feed_dict=feed_dict)
         self.writer.add_summary(summary_str, x)
         self.writer.flush()
+
+        self.epoch_file.write("%d,%f,%f,%f,%f,%f,%f,%f,%f\n" % (x, data['epoch_reward/mean'], data['epoch_reward/std'], data['epoch_reward/min'], data['epoch_reward/max'], data['epoch_q/mean'], data['epoch_q/std'], data['epoch_q/min'], data['epoch_q/max']))
 
 
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
