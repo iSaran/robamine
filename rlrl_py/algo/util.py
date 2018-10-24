@@ -11,6 +11,9 @@ import time
 import tensorflow as tf
 import numpy as np
 
+import matplotlib.pyplot as plt
+import csv
+
 def get_now_timestamp():
     """
     Returns a timestamp for the current datetime as a string for using it in
@@ -85,10 +88,10 @@ class Logger:
 
         self.writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
-        self.episode_file = open(os.path.join(self.log_path, 'episode_log.txt'), "w+")
+        self.episode_file = open(os.path.join(self.log_path, 'episode.log'), "w+")
         self.episode_file.write('episode,reward,q_mean\n')
 
-        self.epoch_file = open(os.path.join(self.log_path, 'epoch.txt'), "w+")
+        self.epoch_file = open(os.path.join(self.log_path, 'epoch.log'), "w+")
         self.epoch_file.write('epoch,reward_mean,reward_min,reward_max,reward_std,q_mean,q_min,q_max,q_std\n')
 
     def __del__(self):
@@ -113,7 +116,7 @@ class Logger:
         self.writer.add_summary(summary_str, x)
         self.writer.flush()
 
-        self.epoch_file.write("%d,%f,%f,%f,%f,%f,%f,%f,%f\n" % (x, data['epoch_reward/mean'], data['epoch_reward/std'], data['epoch_reward/min'], data['epoch_reward/max'], data['epoch_q/mean'], data['epoch_q/std'], data['epoch_q/min'], data['epoch_q/max']))
+        self.epoch_file.write("%d,%f,%f,%f,%f,%f,%f,%f,%f\n" % (x, data['epoch_reward/mean'], data['epoch_reward/min'], data['epoch_reward/max'], data['epoch_reward/std'], data['epoch_q/mean'], data['epoch_q/min'], data['epoch_q/max'], data['epoch_q/std']))
 
 
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
@@ -315,4 +318,90 @@ class Stats:
     def get_time_elapsed(self):
             end = time.time()
             return transform_sec_to_timestamp(end - self.start_time)
+
+class Plotter:
+    def __init__(self, directory, linewidth=1, _format='eps', dpi=1000):
+        self.directory = directory
+        self.linewidth = linewidth
+        self.format = _format
+        self.dpi = dpi
+
+        self.plot_directory = os.path.join(directory, 'plots')
+        if not os.path.exists(self.plot_directory):
+            os.makedirs(self.plot_directory)
+
+    def plot_episode(self):
+        # Read the x_variable for this experiment
+        episode = []
+        episode_reward = []
+        episode_q_mean = []
+
+        with open(os.path.join(self.directory, 'episode.log'), 'r') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                episode.append(int(row['episode']))
+                episode_reward.append(float(row['reward']))
+                episode_q_mean.append(float(row['q_mean']))
+
+        # Plot reward
+        plt.plot(episode, episode_reward, color="#00b8e6", linewidth=2, label="Total reward per episode")
+        plt.xlabel('Episode')
+        plt.ylabel('Total reward')
+        plt.grid(color='#a6a6a6', linestyle='--', linewidth=0.5 )
+        plt.savefig(os.path.join(self.plot_directory, 'episode_reward.png'))
+        plt.clf()
+
+        # Plot reward
+        plt.plot(episode, episode_q_mean, color="#00b8e6", linewidth=2, label="Mean Q value per episode")
+        plt.xlabel('Episode')
+        plt.ylabel('Mean Q value')
+        plt.grid(color='#a6a6a6', linestyle='--', linewidth=0.5 )
+        plt.savefig(os.path.join(self.plot_directory, 'episode_q_value.png'))
+        plt.clf()
+
+    def plot_epoch(self):
+        # Read the x_variable for this experiment
+        epoch = []
+        epoch_reward_mean = []
+        epoch_reward_min = []
+        epoch_reward_max = []
+        epoch_reward_std = []
+        epoch_q_mean = []
+        epoch_q_min = []
+        epoch_q_max = []
+        epoch_q_std = []
+
+        with open(os.path.join(self.directory, 'epoch.log'), 'r') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                epoch.append(int(row['epoch']))
+                epoch_reward_mean.append(float(row['reward_mean']))
+                epoch_reward_min.append(float(row['reward_min']))
+                epoch_reward_max.append(float(row['reward_max']))
+                epoch_reward_std.append(float(row['reward_std']))
+                epoch_q_mean.append(float(row['q_mean']))
+                epoch_q_min.append(float(row['q_min']))
+                epoch_q_max.append(float(row['q_max']))
+                epoch_q_std.append(float(row['q_std']))
+
+        plt.plot(epoch, epoch_reward_mean, color="#00b8e6", linewidth=1, label="Reward Mean")
+        plt.fill_between(epoch, np.array(epoch_reward_mean) - np.array(epoch_reward_std), np.array(epoch_reward_mean) + np.array(epoch_reward_std), color="#ccf5ff")
+        plt.plot(epoch, epoch_reward_max, linewidth=1, label="Reward Mean")
+        plt.plot(epoch, epoch_reward_min, linewidth=1, label="Reward Mean")
+        plt.xlabel('Episode')
+        plt.ylabel('Total reward')
+        plt.grid(color='#a6a6a6', linestyle='--', linewidth=0.5 )
+        plt.savefig(os.path.join(self.plot_directory, 'epoch_reward_mean.png'))
+        plt.clf()
+
+        plt.plot(epoch, epoch_q_mean, color="#00b8e6", linewidth=self.linewidth, label="Mean Q Value")
+        plt.fill_between(epoch, np.array(epoch_q_mean) - np.array(epoch_q_std), np.array(epoch_q_mean) + np.array(epoch_q_std), color="#ccf5ff", label="Mean plus minus std")
+        plt.plot(epoch, epoch_q_max, linewidth=self.linewidth, linestyle='-.', label="Max Q value")
+        plt.plot(epoch, epoch_q_min, linewidth=self.linewidth, linestyle='-.', label="Min Q value")
+        plt.xlabel('Episode')
+        plt.ylabel('Total q')
+        plt.grid(color='#a6a6a6', linestyle='--', linewidth=self.linewidth * 0.5)
+        plt.legend()
+        plt.savefig(os.path.join(self.plot_directory, 'epoch_q_mean') + '.' + self.format, format=self.format, dpi=self.dpi)
+        plt.clf()
 
