@@ -65,7 +65,10 @@ class Logger:
 
         self.console = Console(self.log_path)
 
-        self.console.info('Logging to directory: ' + self.log_path)
+        self.console.info('Time and date: ' + str(datetime.now()))
+        self.console.info('Agent: ' + self.agent_name)
+        self.console.info('Environment: ' + self.env_name)
+        self.console.info('Logging directory: ' + self.log_path)
 
         # Create the log file
         self.file = {}
@@ -396,7 +399,25 @@ class Plotter:
                 plt.savefig(os.path.join(os.path.join(self.directory, stream), i +'.' + self.format), format=self.format, dpi=self.dpi)
                 plt.clf()
 
-class Verbosity(Enum):
+class OrderedEnum(Enum):
+    def __ge__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value >= other.value
+        return NotImplemented
+    def __gt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value > other.value
+        return NotImplemented
+    def __le__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value <= other.value
+        return NotImplemented
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        return NotImplemented
+
+class Verbosity(OrderedEnum):
     no = 0
     info = 1
     debug = 2
@@ -412,9 +433,8 @@ class ConsoleColors:
     UNDERLINE = '\033[4m'
 
 class Console:
-
     def __init__(self, directory, console = True):
-        self.verbosity_level = Verbosity.debug
+        self.verbosity_level = Verbosity.info
         self.console = console
         self.prefix = '[rlrl_py]'
 
@@ -437,12 +457,12 @@ class Console:
 
         self.file.write(prefix + " " + string + '\n')
 
-        if self.console:
+        if self.console and self.verbosity_level >= Verbosity.info:
             print(prefix + " " + string)
 
     def debug(self, string, algorithm = None, env = None):
 
-        if self.verbosity_level == Verbosity.no or self.verbosity_level == Verbosity.info:
+        if self.verbosity_level == Verbosity.no:
             return
 
         prefix = self.prefix + '[debug]'
@@ -454,7 +474,7 @@ class Console:
 
         self.file.write(prefix + " " + string + '\n')
 
-        if self.console:
+        if self.console and self.verbosity_level >= Verbosity.debug:
             print(ConsoleColors.DEBUG + prefix + " " + string + ConsoleColors.ENDC)
 
     def set_verbosity_level(self, verbosity_level):
