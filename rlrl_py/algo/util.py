@@ -83,6 +83,12 @@ class Logger:
 
         self.tf_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
+    def flush(self):
+        for i in self.file:
+            self.file[i].flush()
+        self.console.file.flush()
+
+
     def setup_stream(self, stream, stats):
         """
         Set up a stream. Basically writes the names of the variables to be

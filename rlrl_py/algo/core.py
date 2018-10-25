@@ -118,6 +118,7 @@ class Agent:
             if ((episode + 1) % episode_batch_size == 0):
                 stats.update_batch((episode + 1) / episode_batch_size - 1)
                 stats.print_progress(self.name, self.env_name, episode, n_episodes)
+                self.logger.flush()
 
             # Evaluate the agent (run the learned policy for a number of episodes)
             #eval_stats = self.evaluate(episodes_to_evaluate)
