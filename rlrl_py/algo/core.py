@@ -17,7 +17,10 @@ class Agent:
 
     Example
     -------
-    Assume you want to implement the Best RL Algorithm (BRLA). Create a class which inherits from :class:`.Agent` and implement its member methods. Then, you should be able to train this agent for 1 million episodes in the ``MyRobot`` environment as simple as:
+    Assume you want to implement the Best RL Algorithm (BRLA). Create a class
+    which inherits from :class:`.Agent` and implement its member methods. Then,
+    you should be able to train this agent for 1 million episodes in the
+    ``MyRobot`` environment as simple as:
 
     .. code-block:: python
 
@@ -57,9 +60,11 @@ class Agent:
 
         self.logger = util.Logger(sess, log_dir, self.name, env)
 
-    def train(self, n_episodes, n_epochs = 1, render=False, episodes_to_evaluate=0):
+    def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0):
         """
-        Performs the policy improvement loop. For a given number of episodes this function runs the basic RL loop for each timestep of the episode, i.e.:
+        Performs the policy improvement loop. For a given number of episodes
+        this function runs the basic RL loop for each timestep of the episode,
+        i.e.:
 
         * Selects an action based on the exploration policy (see :meth:`.explore`)
         * Performs the action to the environment and reads the next state
@@ -71,51 +76,51 @@ class Agent:
         ----------
         n_episodes : int
             The number of episodes to train the model.
-        n_epochs : int
-            The number of epochs to divide the episodes.
+        episode_batch_size : int
+            The number of episodes per episode batch. Used to divide episode
+            for extracting valuable statistics
         render : bool
             True of rendering is required. False otherwise.
         episodes_to_evaluate : int
             The number of episodes to evaluate the agent during training (at the end of each epoch)
         """
 
-        assert n_episodes % n_epochs == 0
-        n_episodes_per_epoch = int(n_episodes / n_epochs)
+        assert n_episodes % episode_batch_size == 0
 
-        stats = util.Stats(self.name, self.env_name, n_episodes, n_epochs, dt=0.02, logger=self.logger, name = "Training")
+        stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "Training")
 
-        for epoch in range(n_epochs):
-            for episode in range(n_episodes_per_epoch):
-                state = self.env.reset()
+        for episode in range(n_episodes):
+            state = self.env.reset()
 
-                for t in range(self.episode_horizon):
+            for t in range(self.episode_horizon):
 
-                    if (render):
-                        self.env.render()
+                if (render):
+                    self.env.render()
 
-                    # Select an action based on the exploration policy
-                    action = self.explore(state)
+                # Select an action based on the exploration policy
+                action = self.explore(state)
 
-                    # Execute the action on the environment  and observe reward and next state
-                    next_state, reward, done, info = self.env.step(action)
+                # Execute the action on the environment and observe reward and next state
+                next_state, reward, done, info = self.env.step(action)
 
-                    # Learn
-                    Q = self.learn(state, action, reward, next_state, done)
+                # Learn
+                Q = self.learn(state, action, reward, next_state, done)
 
-                    state = next_state
+                state = next_state
 
-                    stats.update_for_timestep(reward, Q)
+                stats.update_timestep({'reward': reward, 'q_value': Q})
 
-                    if done:
-                        break
+                if done:
+                    break
 
-                stats.update_for_episode(info)
+            stats.update_episode(episode)
 
-            stats.update_for_epoch()
-            stats.print_progress()
+            if ((episode + 1) % episode_batch_size == 0):
+                stats.update_batch((episode + 1) / episode_batch_size - 1)
+                stats.print_progress(self.name, self.env_name, episode, n_episodes)
 
             # Evaluate the agent (run the learned policy for a number of episodes)
-            eval_stats = self.evaluate(episodes_to_evaluate)
+            #eval_stats = self.evaluate(episodes_to_evaluate)
 
     def explore(self, state):
         """

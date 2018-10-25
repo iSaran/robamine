@@ -48,13 +48,12 @@ def transform_sec_to_timestamp(seconds):
 
 class Logger:
     """
-    Class for logging data, saving models during training using Tensorflow.
+    Class for logging data into logfiles, saving models during training using Tensorflow.
     """
-    def __init__(self, sess, directory, agent_name, env_name):
+    def __init__(self, sess, directory, agent_name, env_name, streams=['episode', 'batch']):
         self.sess = sess
         self.agent_name = agent_name
         self.env_name = env_name
-        self.counter = 0
 
         # Create the log path
         if not os.path.exists(directory):
@@ -63,60 +62,56 @@ class Logger:
         os.makedirs(self.log_path)
         print('rlrl_py logging to directory: ', self.log_path)
 
-        # Create the variables and the operation for the Tensorflow summaries
-        self.episode_data = {}
-        self.episode_data['episode/reward'] = tf.Variable(0.)
-        self.episode_data['episode/q_mean'] = tf.Variable(0.)
-        episode_summaries = []
-        for key in self.episode_data:
-            episode_summaries.append(tf.summary.scalar(key, self.episode_data[key]))
-        self.episode_summary_ops = tf.summary.merge(episode_summaries)
+        # Create the log file
+        self.file = {}
+        for i in streams:
+            if not os.path.exists(os.path.join(self.log_path, i)):
+                os.makedirs(os.path.join(self.log_path, i))
+            self.file[i] = open(os.path.join(os.path.join(self.log_path, i), i + '.log'), "w+")
 
-        self.epoch_data = {}
-        self.epoch_data['epoch_reward/mean'] = tf.Variable(0.)
-        self.epoch_data['epoch_reward/min'] = tf.Variable(0.)
-        self.epoch_data['epoch_reward/max'] = tf.Variable(0.)
-        self.epoch_data['epoch_reward/std'] = tf.Variable(0.)
-        self.epoch_data['epoch_q/mean'] = tf.Variable(0.)
-        self.epoch_data['epoch_q/min'] = tf.Variable(0.)
-        self.epoch_data['epoch_q/max'] = tf.Variable(0.)
-        self.epoch_data['epoch_q/std'] = tf.Variable(0.)
-        epoch_summaries = []
-        for key in self.epoch_data:
-            epoch_summaries.append(tf.summary.scalar(key, self.epoch_data[key]))
-        self.epoch_summary_ops = tf.summary.merge(epoch_summaries)
+        self.stats = {}
 
-        self.writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
+    def setup_stream(self, stream, stats):
+        """
+        Set up a stream. Basically writes the names of the variables to be
+        logged in the first row of the log file, defined by a stream. It should
+        be called before the log function.
 
-        self.episode_file = open(os.path.join(self.log_path, 'episode.log'), "w+")
-        self.episode_file.write('episode,reward,q_mean\n')
+        Parameters
+        ---------
+        stream : str
+            The name of the stream
+        stats : list
+            A list of name variables to be logged.
+        """
+        self.stats[stream] = stats
 
-        self.epoch_file = open(os.path.join(self.log_path, 'epoch.log'), "w+")
-        self.epoch_file.write('epoch,reward_mean,reward_min,reward_max,reward_std,q_mean,q_min,q_max,q_std\n')
+        # Setup the first row (the name of the logged variables)
+        self.file[stream].write(stream)
+        for i in self.stats[stream]:
+            self.file[stream].write(',' + i)
+        self.file[stream].write('\n')
 
     def __del__(self):
-        self.episode_file.close()
-        self.epoch_file.close()
+        for key in self.file:
+            self.file[key].close()
 
-    def log_episode(self, data, x):
-        feed_dict = {}
-        for key in data:
-            feed_dict[self.episode_data[key]] = data[key]
-        summary_str = self.sess.run(self.episode_summary_ops, feed_dict=feed_dict)
-        self.writer.add_summary(summary_str, x)
-        self.writer.flush()
+    def log(self, x, y, stream):
+        """
+        Logs a new row of data into the file.
 
-        self.episode_file.write("%d,%f,%f\n" % (x, data['episode/reward'], data['episode/q_mean']))
-
-    def log_epoch(self, data, x):
-        feed_dict = {}
-        for key in data:
-            feed_dict[self.epoch_data[key]] = data[key]
-        summary_str = self.sess.run(self.epoch_summary_ops, feed_dict=feed_dict)
-        self.writer.add_summary(summary_str, x)
-        self.writer.flush()
-
-        self.epoch_file.write("%d,%f,%f,%f,%f,%f,%f,%f,%f\n" % (x, data['epoch_reward/mean'], data['epoch_reward/min'], data['epoch_reward/max'], data['epoch_reward/std'], data['epoch_q/mean'], data['epoch_q/min'], data['epoch_q/max'], data['epoch_q/std']))
+        Parameters
+        ----------
+        x : scalar
+            The x value, e.g. the time
+        y : dict
+            The y values of the data, with keys the name of the variables defined by setup_stream.
+        """
+        # Log a row.
+        self.file[stream].write('%d' % x)
+        for i in self.stats[stream]:
+            self.file[stream].write(',%f' % y[i])
+        self.file[stream].write('\n')
 
 
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
@@ -169,37 +164,14 @@ class Stats:
 
     Attributes
     ----------
-    agent_name : str
-        The name of the agent
-    env_name : str
-        The name of the environment
     dt : float
         The real timestep in seconds
 
-    n_episodes : int
-        The total number of episodes :math:`N` for an epoch
-    n_epochs : int
-        The total number of epochs :math:`M`
-
-    episode : int
-        The current episode :math:`n \in [0, 1, ..., N]`, during an epoch
-    epoch : int
-        The current epoch :math:`m \in [0, 1, ..., M]`, during a training process
-
-    episode_reward : float
-        The total reward of the current episode: :math:`\sum_{t = 0}^T r(t)`
     episode_q_mean : float
         The mean value of Q across an episode: :math:`\\frac{1}{T}\sum_{t = 0}^T Q(s(t), a(t))`
 
     Parameters
     ---------
-    agent_name : str
-        The name of the agent
-    env_name : str
-        The name of the environment
-    n_episodes : int
-        The total number of episodes
-    n_epochs : The number of epochs that divide the episodes
     dt : float
         The real timestep in seconds
     logger : :class:`.Logger`
@@ -207,47 +179,70 @@ class Stats:
     name : str
         A name for these stats
     """
-    def __init__(self, agent_name, env_name, n_episodes, n_epochs, dt, logger = None, name = ""):
+    def __init__(self, dt, logger = None, timestep_stats = ['reward', 'q_value'], episode_stats = {'reward': ['mean', 'min', 'max', 'std'], 'q_value': ['mean', 'min', 'max', 'std']}, batch_stats = {'mean_reward': ['mean', 'min', 'max', 'std'], 'mean_q_value': ['mean', 'min', 'max', 'std']}, name = ""):
         # Util staff
-        self.agent_name = agent_name
-        self.env_name = env_name
         self.dt = dt
         self.start_time = time.time()
         self.logger = logger
         self.name = name
 
-        self.n_episodes = n_episodes
-        self.n_epochs = n_epochs
-        assert n_episodes % n_epochs == 0
-        self.n_episodes_per_epoch = int(n_episodes / n_epochs)
-
-        self.episode = 0
-        self.episode_reward = []
-        self.episode_q = []
-
-        self.epoch = 0
-        self.epoch_reward = np.empty(self.n_episodes_per_epoch)
-        self.epoch_q = np.empty(self.n_episodes_per_epoch)
-
         self.step = 0
 
-    def update_for_timestep(self, reward, q_value):
+        self.timestep_stats = timestep_stats
+        self.episode_stats = episode_stats
+        self.batch_stats = batch_stats
+
+        self.episode_stats_names = []
+        self.batch_stats_names = []
+        self.timestep_data = {}
+        self.episode_data = {}
+        for i in self.timestep_stats:
+            self.timestep_data[i] = []
+
+        for episode_stat in self.episode_stats:
+            for operation in self.episode_stats[episode_stat]:
+                self.episode_stats_names.append(operation + '_' + episode_stat)
+                self.episode_data[operation + '_' + episode_stat] = []
+
+        for batch_stat in self.batch_stats:
+            for operation in self.batch_stats[batch_stat]:
+                self.batch_stats_names.append(operation + '_' + batch_stat)
+
+        self.logger.setup_stream('episode', self.episode_stats_names)
+        self.logger.setup_stream('batch', self.batch_stats_names)
+
+    def perform_operation(self, data, operation):
+        if operation == 'total':
+            return np.squeeze(np.sum(np.array(data)))
+        elif operation == 'mean':
+            return np.squeeze(np.mean(np.array(data)))
+        elif operation == 'min':
+            return np.squeeze(np.min(np.array(data)))
+        elif operation == 'max':
+            return np.squeeze(np.max(np.array(data)))
+        elif operation == 'std':
+            return np.squeeze(np.std(np.array(data)))
+        else:
+            raise ValueError('The operation is not valid. Valid operations are total, mean, min, max, std')
+
+    def update_timestep(self, data):
         """
         Update the stats that need to be updated at the end of a
         time step.
 
-        Prameters
+        Parameters
         ---------
         reward : float
             The reward of this timestep
         current_timestep : int
             The current timestep
         """
-        self.episode_reward.append(reward)
-        self.episode_q.append(q_value)
+        for i in self.timestep_stats:
+            self.timestep_data[i].append(data[i])
+
         self.step += 1
 
-    def update_for_episode(self, info, print_stats = False):
+    def update_episode(self, episode, print_stats = False):
         """
         Update the stats that need to be updated at the end of an
         episode.
@@ -258,150 +253,113 @@ class Stats:
             True if printing stats in the console is desired at the end of the episode
         """
 
-        episode_reward_sum = np.sum(np.array(self.episode_reward))
-        episode_q_mean = np.mean(np.array(self.episode_q))
-        if self.logger is not None:
-            data = {}
-            data['episode/reward'] = episode_reward_sum
-            data['episode/q_mean'] = episode_q_mean
-            self.logger.log_episode(data, self.episode + self.epoch * self.n_episodes_per_epoch)
+        data_log = {}
+        for stat in self.timestep_stats:
+            for operation in self.episode_stats[stat]:
+                data_log[operation + '_' + stat] = self.perform_operation(self.timestep_data[stat], operation)
+                self.episode_data[operation + '_' + stat].append(data_log[operation + '_' + stat])
 
-        self.epoch_reward[self.episode] = episode_reward_sum
-        self.epoch_q[self.episode] = episode_q_mean
+        if self.logger is not None:
+            self.logger.log(episode, data_log, stream='episode')
 
         # Initilize staff for the next loop
-        self.episode_reward = []
-        self.episode_q = []
-        self.episode += 1
+        for i in self.timestep_stats:
+            self.timestep_data[i] = []
 
-    def update_for_epoch(self):
+    def update_batch(self, batch):
         """
         Update the stats that need to be updated at the end of an
         epoch.
         """
+        data_log = {}
+        for stat in self.batch_stats:
+            for operation in self.batch_stats[stat]:
+                data_log[operation + '_' + stat] = self.perform_operation(self.episode_data[stat], operation)
+
         if self.logger is not None:
-            data = {}
-            data['epoch_reward/mean'] = np.mean(self.epoch_reward)
-            data['epoch_reward/std'] = np.std(self.epoch_reward)
-            data['epoch_reward/min'] = np.min(self.epoch_reward)
-            data['epoch_reward/max'] = np.max(self.epoch_reward)
-            data['epoch_q/mean'] = np.mean(self.epoch_q)
-            data['epoch_q/std'] = np.std(self.epoch_q)
-            data['epoch_q/min'] = np.min(self.epoch_q)
-            data['epoch_q/max'] = np.max(self.epoch_q)
-            self.logger.log_epoch(data, self.epoch)
+            self.logger.log(batch, data_log, stream='batch')
 
         # Initilize staff for the next loop
-        self.epoch_reward = np.empty(self.n_episodes_per_epoch)
-        self.epoch_q = np.empty(self.n_episodes_per_epoch)
-        self.epoch += 1
-        self.episode = 0
+        for i in self.timestep_stats:
+            self.timestep_data[i] = []
 
-    def print_progress(self):
+        for episode_stat in self.episode_stats:
+            for operation in self.episode_stats[episode_stat]:
+                self.episode_data[operation + '_' + episode_stat] = []
+
+    def print_progress(self, agent_name, env_name, episode, n_episodes):
         print('')
         print('===================================================')
-        print('| Algorithm:', self.agent_name, ', Environment:', self.env_name)
+        print('| Algorithm:', agent_name, ', Environment:', env_name)
         print('---------------------------------------------------')
         print('| Progress:')
-        print('|   Epoch: ', self.epoch, 'from', self.n_epochs)
-        print('|   Episode: ', self.episode + self.epoch * self.n_episodes_per_epoch, 'from', self.n_episodes)
-        print('|   Progress: ', "{0:.2f}".format(self.episode + self.epoch * self.n_episodes_per_epoch / self.n_episodes * 100), '%')
+        print('|   Episode: ', episode, 'from', n_episodes)
+        print('|   Progress: ', "{0:.2f}".format(episode / n_episodes * 100), '%')
         print('|   Time Elapsed:', self.get_time_elapsed())
         print('|   Experience Time:', transform_sec_to_timestamp(self.step * self.dt))
         print('===================================================')
 
-    def print(self, data):
-        print('|', self.name, 'stats for', self.n_episodes_per_epoch, 'episodes :')
-        for key in data:
-            print('| ', key, ': ', data[key])
-
     def get_time_elapsed(self):
-            end = time.time()
-            return transform_sec_to_timestamp(end - self.start_time)
+        end = time.time()
+        return transform_sec_to_timestamp(end - self.start_time)
 
 class Plotter:
-    def __init__(self, directory, linewidth=1, _format='eps', dpi=1000):
+    def __init__(self, directory, streams, linewidth=1, _format='eps', dpi=1000):
         self.directory = directory
+        self.streams = streams
         self.linewidth = linewidth
         self.format = _format
         self.dpi = dpi
 
-        self.plot_directory = os.path.join(directory, 'plots')
-        if not os.path.exists(self.plot_directory):
-            os.makedirs(self.plot_directory)
+    def extract_var_names(self, prefixes=['mean', 'min', 'max', 'std']):
+        var_names = {}
+        for stream in self.streams:
+            var_names[stream] = set()
 
-    def plot_episode(self):
-        # Read the x_variable for this experiment
-        episode = []
-        episode_reward = []
-        episode_q_mean = []
+            with open(os.path.join(os.path.join(self.directory, stream), stream + '.log'), 'r') as csvfile:
+                reader = csv.reader(csvfile, delimiter=',')
+                y_label = next(reader)
+                x_label = y_label[0]
+                del y_label[0]
 
-        with open(os.path.join(self.directory, 'episode.log'), 'r') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                episode.append(int(row['episode']))
-                episode_reward.append(float(row['reward']))
-                episode_q_mean.append(float(row['q_mean']))
+                for label in y_label:
+                    found_at_least_one_prefix = False
+                    for prefix in prefixes:
+                        if label.startswith(prefix + '_'):
+                            label_without_prefix = label[len(prefix) + 1:]
+                            var_names[stream].add(label_without_prefix)
+                            found_at_least_one_prefix = True
+                    if not found_at_least_one_prefix:
+                        var_names[stream].add(label)
+        return var_names
 
-        # Plot reward
-        plt.plot(episode, episode_reward, color="#00b8e6", linewidth=2, label="Total reward per episode")
-        plt.xlabel('Episode')
-        plt.ylabel('Total reward')
-        plt.grid(color='#a6a6a6', linestyle='--', linewidth=0.5 )
-        plt.savefig(os.path.join(self.plot_directory, 'episode_reward.png'))
-        plt.clf()
+    def plot(self):
+        y_var_label = self.extract_var_names()
+        for stream in self.streams:
+            x = []
+            y = {}
+            with open(os.path.join(os.path.join(self.directory, stream), stream + '.log'), 'r') as csvfile:
+                reader = csv.reader(csvfile, delimiter=',')
+                y_label = next(reader)
+                x_label = y_label[0]
+                del y_label[0]
 
-        # Plot reward
-        plt.plot(episode, episode_q_mean, color="#00b8e6", linewidth=2, label="Mean Q value per episode")
-        plt.xlabel('Episode')
-        plt.ylabel('Mean Q value')
-        plt.grid(color='#a6a6a6', linestyle='--', linewidth=0.5 )
-        plt.savefig(os.path.join(self.plot_directory, 'episode_q_value.png'))
-        plt.clf()
+                for i in y_label:
+                    y[i] = []
+                for row in reader:
+                    x.append(int(row[0]))
+                    for i in range(len(row) - 1):
+                        y[y_label[i]].append(float(row[i + 1]))
 
-    def plot_epoch(self):
-        # Read the x_variable for this experiment
-        epoch = []
-        epoch_reward_mean = []
-        epoch_reward_min = []
-        epoch_reward_max = []
-        epoch_reward_std = []
-        epoch_q_mean = []
-        epoch_q_min = []
-        epoch_q_max = []
-        epoch_q_std = []
-
-        with open(os.path.join(self.directory, 'epoch.log'), 'r') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                epoch.append(int(row['epoch']))
-                epoch_reward_mean.append(float(row['reward_mean']))
-                epoch_reward_min.append(float(row['reward_min']))
-                epoch_reward_max.append(float(row['reward_max']))
-                epoch_reward_std.append(float(row['reward_std']))
-                epoch_q_mean.append(float(row['q_mean']))
-                epoch_q_min.append(float(row['q_min']))
-                epoch_q_max.append(float(row['q_max']))
-                epoch_q_std.append(float(row['q_std']))
-
-        plt.plot(epoch, epoch_reward_mean, color="#00b8e6", linewidth=1, label="Reward Mean")
-        plt.fill_between(epoch, np.array(epoch_reward_mean) - np.array(epoch_reward_std), np.array(epoch_reward_mean) + np.array(epoch_reward_std), color="#ccf5ff")
-        plt.plot(epoch, epoch_reward_max, linewidth=1, label="Reward Mean")
-        plt.plot(epoch, epoch_reward_min, linewidth=1, label="Reward Mean")
-        plt.xlabel('Episode')
-        plt.ylabel('Total reward')
-        plt.grid(color='#a6a6a6', linestyle='--', linewidth=0.5 )
-        plt.savefig(os.path.join(self.plot_directory, 'epoch_reward_mean.png'))
-        plt.clf()
-
-        plt.plot(epoch, epoch_q_mean, color="#00b8e6", linewidth=self.linewidth, label="Mean Q Value")
-        plt.fill_between(epoch, np.array(epoch_q_mean) - np.array(epoch_q_std), np.array(epoch_q_mean) + np.array(epoch_q_std), color="#ccf5ff", label="Mean plus minus std")
-        plt.plot(epoch, epoch_q_max, linewidth=self.linewidth, linestyle='-.', label="Max Q value")
-        plt.plot(epoch, epoch_q_min, linewidth=self.linewidth, linestyle='-.', label="Min Q value")
-        plt.xlabel('Episode')
-        plt.ylabel('Total q')
-        plt.grid(color='#a6a6a6', linestyle='--', linewidth=self.linewidth * 0.5)
-        plt.legend()
-        plt.savefig(os.path.join(self.plot_directory, 'epoch_q_mean') + '.' + self.format, format=self.format, dpi=self.dpi)
-        plt.clf()
-
+            # Plot reward
+            for i in y_var_label[stream]:
+                plt.plot(x, y['mean_' + i], color="#00b8e6", linewidth=self.linewidth * 1.5, label='Mean value')
+                plt.plot(x, y['min_' + i], color="#ff5733", linestyle='--', linewidth=self.linewidth, label='Min value')
+                plt.plot(x, y['max_' + i], color="#9CFF33", linestyle='--', linewidth=self.linewidth, label='Max value')
+                plt.fill_between(x, np.array(y['mean_' + i]) - np.array(y['std_' + i]), np.array(y['mean_' + i]) + np.array(y['std_' + i]), color="#ccf5ff", label='Mean pm std')
+                plt.xlabel(x_label)
+                plt.ylabel(i)
+                plt.grid(color='#a6a6a6', linestyle='--', linewidth=0.5*self.linewidth)
+                plt.legend()
+                plt.savefig(os.path.join(os.path.join(self.directory, stream), i +'.' + self.format), format=self.format, dpi=self.dpi)
+                plt.clf()
