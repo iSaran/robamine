@@ -551,7 +551,7 @@ class DDPG(Agent):
 
         # Initialize replay buffer
         self.batch_size = batch_size
-        self.replay_buffer = ReplayBuffer(self.batch_size, random_seed)
+        self.replay_buffer = ReplayBuffer(replay_buffer_size, random_seed)
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = exploration_noise_sigma)
 
