@@ -61,6 +61,7 @@ class Agent:
         self.logger = util.Logger(sess, log_dir, self.name, env)
         self.train_stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
         self.eval_stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], batch_stats = None, name = "eval")
+        self.eval_episode_batch = 0
 
     def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0):
         """
@@ -218,6 +219,9 @@ class Agent:
                     break
 
             self.eval_stats.update_episode(episode)
+
+        self.eval_stats.update_batch(self.eval_episode_batch)
+        self.eval_episode_batch += 1
 
     def predict(self, state):
         """
