@@ -395,12 +395,21 @@ class Verbosity(Enum):
     info = 1
     debug = 2
 
+class ConsoleColors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    DEBUG = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 class Console:
 
-    def __init__(self, directory, console = True, logfile = True):
+    def __init__(self, directory, console = True):
         self.verbosity_level = Verbosity.debug
         self.console = console
-        self.logfile = logfile
         self.prefix = '[rlrl_py]'
 
         self.file = open(os.path.join(directory, 'console.log'), "w+")
@@ -420,10 +429,10 @@ class Console:
         if env is not None:
             prefix = prefix + '[' + env + ']'
 
+        self.file.write(prefix + " " + string + '\n')
+
         if self.console:
             print(prefix + " " + string)
-        if self.logfile:
-            self.file.write(prefix + " " + string + '\n')
 
     def debug(self, string, algorithm = None, env = None):
 
@@ -437,11 +446,10 @@ class Console:
         if env is not None:
             prefix = prefix + '[' + env + ']'
 
-        if self.console:
-            print(prefix + " " + string)
-        if self.logfile:
-            self.file.write(prefix + " " + string + '\n')
+        self.file.write(prefix + " " + string + '\n')
 
+        if self.console:
+            print(ConsoleColors.DEBUG + prefix + " " + string + ConsoleColors.ENDC)
 
     def set_verbosity_level(self, verbosity_level):
         self.verbosity_level = verbosity_level
