@@ -59,6 +59,8 @@ class Agent:
         self.name = name
 
         self.logger = util.Logger(sess, log_dir, self.name, env)
+        self.train_stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
+        self.eval_stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], batch_stats = None, name = "eval")
 
     def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0):
         """
@@ -87,7 +89,6 @@ class Agent:
 
         assert n_episodes % episode_batch_size == 0
 
-        stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "Training")
 
         self.logger.console.debug('Starting Training')
         for episode in range(n_episodes):
@@ -114,16 +115,17 @@ class Agent:
 
                 state = next_state
 
-                stats.update_timestep({'reward': reward, 'q_value': Q})
+                self.train_stats.update_timestep({'reward': reward, 'q_value': Q})
 
                 if done:
                     break
 
-            stats.update_episode(episode)
+            self.train_stats.update_episode(episode)
 
             if ((episode + 1) % episode_batch_size == 0):
-                stats.update_batch((episode + 1) / episode_batch_size - 1)
-                stats.print_progress(self.name, self.env_name, episode, n_episodes)
+                self.train_stats.update_batch((episode + 1) / episode_batch_size - 1)
+                self.train_stats.print_progress(self.name, self.env_name, episode, n_episodes)
+                self.evaluate(episodes_to_evaluate)
                 self.logger.flush()
 
             # Evaluate the agent (run the learned policy for a number of episodes)
@@ -190,10 +192,7 @@ class Agent:
         render : bool
             True of rendering is required. False otherwise.
         """
-        if n_episodes == 0:
-            return
 
-        stats = util.Stats(self.name, self.env_name, n_episodes, n_epochs=1, dt=0.02, logger=None, name = "Evaluation")
         stats.init_for_epoch()
         for episode in range(n_episodes):
             stats.init_for_episode()

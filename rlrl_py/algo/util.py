@@ -52,7 +52,7 @@ class Logger:
     """
     Class for logging data into logfiles, saving models during training using Tensorflow.
     """
-    def __init__(self, sess, directory, agent_name, env_name, streams=['episode', 'batch']):
+    def __init__(self, sess, directory, agent_name, env_name):
         self.sess = sess
         self.agent_name = agent_name
         self.env_name = env_name
@@ -72,17 +72,11 @@ class Logger:
 
         # Create the log file
         self.file = {}
-        for i in streams:
-            if not os.path.exists(os.path.join(self.log_path, i)):
-                os.makedirs(os.path.join(self.log_path, i))
-            self.file[i] = open(os.path.join(os.path.join(self.log_path, i), i + '.log'), "w+")
 
         # Initialize variable for storing stats names for logging
         self.stats = {}
         self.tf_stats = {}
         self.tf_summary_ops = {}
-        for i in streams:
-            self.tf_stats[i] = {}
 
         self.tf_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
@@ -105,6 +99,12 @@ class Logger:
         stats : list
             A list of name variables to be logged.
         """
+        if not os.path.exists(os.path.join(self.log_path, stream)):
+            os.makedirs(os.path.join(self.log_path, stream))
+        self.file[stream] = open(os.path.join(os.path.join(self.log_path, stream), stream + '.log'), "w+")
+
+        self.tf_stats[stream] = {}
+
         self.stats[stream] = stats
 
         # Setup the first row (the name of the logged variables)
@@ -239,12 +239,15 @@ class Stats:
                 self.episode_stats_names.append(operation + '_' + episode_stat)
                 self.episode_data[operation + '_' + episode_stat] = []
 
-        for batch_stat in self.batch_stats:
-            for operation in self.batch_stats[batch_stat]:
-                self.batch_stats_names.append(operation + '_' + batch_stat)
+        if self.batch_stats is not None:
+            for batch_stat in self.batch_stats:
+                for operation in self.batch_stats[batch_stat]:
+                    self.batch_stats_names.append(operation + '_' + batch_stat)
 
-        self.logger.setup_stream('episode', self.episode_stats_names)
-        self.logger.setup_stream('batch', self.batch_stats_names)
+        self.logger.setup_stream(self.name + '_episode', self.episode_stats_names)
+
+        if self.batch_stats is not None:
+            self.logger.setup_stream(self.name + '_batch', self.batch_stats_names)
 
     def perform_operation(self, data, operation):
         if operation == 'total':
@@ -295,7 +298,7 @@ class Stats:
                 self.episode_data[operation + '_' + stat].append(data_log[operation + '_' + stat])
 
         if self.logger is not None:
-            self.logger.log(episode, data_log, stream='episode')
+            self.logger.log(episode, data_log, stream=self.name + '_episode')
 
         # Initilize staff for the next loop
         for i in self.timestep_stats:
@@ -312,7 +315,7 @@ class Stats:
                 data_log[operation + '_' + stat] = self.perform_operation(self.episode_data[stat], operation)
 
         if self.logger is not None:
-            self.logger.log(batch, data_log, stream='batch')
+            self.logger.log(batch, data_log, stream=self.name + '_batch')
 
         # Initilize staff for the next loop
         for i in self.timestep_stats:
