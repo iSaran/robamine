@@ -193,11 +193,8 @@ class Agent:
             True of rendering is required. False otherwise.
         """
 
-        stats.init_for_epoch()
         for episode in range(n_episodes):
-            stats.init_for_episode()
             state = self.env.reset()
-            episode_reward = 0
 
             for t in range(self.episode_horizon):
                 stats.init_for_timestep()
@@ -211,16 +208,16 @@ class Agent:
                 # Execute the action on the environment  and observe reward and next state
                 next_state, reward, done, info = self.env.step(action)
 
-                episode_reward += reward
+                Q = self.q_value(state, action)
+
                 state = next_state
 
-                stats.update_for_timestep(reward, t)
+                self.eval_stats.update_timestep({'reward': reward, 'q_value': Q})
 
                 if done:
                     break
-            stats.update_for_episode(info)
-        stats.update_for_epoch()
-        return stats
+
+            self.eval_stats.update_episode(episode)
 
     def predict(self, state):
         """
