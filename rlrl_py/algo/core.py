@@ -89,21 +89,27 @@ class Agent:
 
         stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "Training")
 
+        self.logger.console.debug('Starting Training')
         for episode in range(n_episodes):
             state = self.env.reset()
+            self.logger.console.debug('Episode: ' + str(episode))
 
             for t in range(self.episode_horizon):
 
                 if (render):
                     self.env.render()
 
-                # Select an action based on the exploration policy
+                self.logger.console.debug('Timestep: ' + str(t))
+
+                self.logger.console.debug('Selecting an action based on the exploration policy')
                 action = self.explore(state)
 
                 # Execute the action on the environment and observe reward and next state
+                self.logger.console.debug('Executing the action on the environment and observe reward and next state')
                 next_state, reward, done, info = self.env.step(action)
 
                 # Learn
+                self.logger.console.debug('Learn based on this transition')
                 Q = self.learn(state, action, reward, next_state, done)
 
                 state = next_state

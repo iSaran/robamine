@@ -616,15 +616,17 @@ class DDPG(Agent):
             1 if the next state is a terminal state, 0 otherwise.
         """
 
-        # Store the transition into the replay buffer
+
+        self.logger.console.debug("Storing transition into replay buffer")
         self.replay_buffer.store(state, action, reward, next_state, done)
+        self.logger.console.debug('Size of replay buffer: ' + str(self.replay_buffer.size()))
 
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
         if self.replay_buffer.size() < self.batch_size:
             return self.critic.predict((np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0])))).squeeze()
 
-        # Sample a mini batch from the replay buffer
+        self.logger.console.debug("Sampling a minibatch from the replay buffer")
         state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.batch_size)
 
         self.evaluate_policy(state_batch, action_batch, reward_batch, next_state_batch, terminal_batch)
@@ -663,6 +665,7 @@ class DDPG(Agent):
             The batch of the terminal states
         """
 
+        self.logger.console.debug("Evaluating policy")
         mu_target_next = self.target_actor.predict(next_state_batch)
         Q_target_next = self.target_critic.predict((next_state_batch, mu_target_next))
 
@@ -690,6 +693,7 @@ class DDPG(Agent):
             The state batch
         """
 
+        self.logger.console.debug("Improving policy")
         mu = self.actor.predict(state_batch)
         grads = self.critic.get_grad_q_wrt_actions((state_batch, mu))
         self.actor.learn(state_batch, grads[0])
