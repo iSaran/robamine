@@ -14,6 +14,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 
+from enum import Enum
+
 def get_now_timestamp():
     """
     Returns a timestamp for the current datetime as a string for using it in
@@ -60,7 +62,10 @@ class Logger:
             os.makedirs(directory)
         self.log_path = os.path.join(directory, 'rlrl_py_logger_' + self.agent_name.replace(" ", "_") + "_" + self.env_name.replace(" ", "_") + '_' + get_now_timestamp())
         os.makedirs(self.log_path)
-        print('rlrl_py logging to directory: ', self.log_path)
+
+        self.console = Console(self.log_path)
+
+        self.console.info('Logging to directory: ' + self.log_path)
 
         # Create the log file
         self.file = {}
@@ -263,7 +268,7 @@ class Stats:
 
         self.step += 1
 
-    def update_episode(self, episode, print_stats = False):
+    def update_episode(self, episode):
         """
         Update the stats that need to be updated at the end of an
         episode.
@@ -309,16 +314,16 @@ class Stats:
                 self.episode_data[operation + '_' + episode_stat] = []
 
     def print_progress(self, agent_name, env_name, episode, n_episodes):
-        print('')
-        print('===================================================')
-        print('| Algorithm:', agent_name, ', Environment:', env_name)
-        print('---------------------------------------------------')
-        print('| Progress:')
-        print('|   Episode: ', episode, 'from', n_episodes)
-        print('|   Progress: ', "{0:.2f}".format(episode / n_episodes * 100), '%')
-        print('|   Time Elapsed:', self.get_time_elapsed())
-        print('|   Experience Time:', transform_sec_to_timestamp(self.step * self.dt))
-        print('===================================================')
+        self.logger.console.info('')
+        self.logger.console.info('===================================================')
+        self.logger.console.info('| Algorithm: ' + agent_name + ', Environment:' + env_name)
+        self.logger.console.info('---------------------------------------------------')
+        self.logger.console.info('| Progress:')
+        self.logger.console.info('|   Episode: ' + str(episode) + ' from ' + str(n_episodes))
+        self.logger.console.info('|   Progress: ' + "{0:.2f}".format(episode / n_episodes * 100) + '%')
+        self.logger.console.info('|   Time Elapsed: ' + self.get_time_elapsed())
+        self.logger.console.info('|   Experience Time: ' + transform_sec_to_timestamp(self.step * self.dt))
+        self.logger.console.info('===================================================')
 
     def get_time_elapsed(self):
         end = time.time()
@@ -384,3 +389,60 @@ class Plotter:
                 plt.legend()
                 plt.savefig(os.path.join(os.path.join(self.directory, stream), i +'.' + self.format), format=self.format, dpi=self.dpi)
                 plt.clf()
+
+class Verbosity(Enum):
+    no = 0
+    info = 1
+    debug = 2
+
+class Console:
+
+    def __init__(self, directory, console = True, logfile = True):
+        self.verbosity_level = Verbosity.debug
+        self.console = console
+        self.logfile = logfile
+        self.prefix = '[rlrl_py]'
+
+        self.file = open(os.path.join(directory, 'console.log'), "w+")
+
+    def __del__(self):
+        self.file.close()
+
+    def info(self, string, algorithm = None, env = None):
+
+        if self.verbosity_level == Verbosity.no:
+            return
+
+        prefix = self.prefix + '[info]'
+
+        if algorithm is not None:
+            prefix = prefix + '[' + algorithm + ']'
+        if env is not None:
+            prefix = prefix + '[' + env + ']'
+
+        if self.console:
+            print(prefix + " " + string)
+        if self.logfile:
+            self.file.write(prefix + " " + string + '\n')
+
+    def debug(self, string, algorithm = None, env = None):
+
+        if self.verbosity_level == Verbosity.no or self.verbosity_level == Verbosity.info:
+            return
+
+        prefix = self.prefix + '[debug]'
+
+        if algorithm is not None:
+            prefix = prefix + '[' + algorithm + ']'
+        if env is not None:
+            prefix = prefix + '[' + env + ']'
+
+        if self.console:
+            print(prefix + " " + string)
+        if self.logfile:
+            self.file.write(prefix + " " + string + '\n')
+
+
+    def set_verbosity_level(self, verbosity_level):
+        self.verbosity_level = verbosity_level
+
