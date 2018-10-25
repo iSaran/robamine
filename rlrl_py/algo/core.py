@@ -89,7 +89,6 @@ class Agent:
 
         assert n_episodes % episode_batch_size == 0
 
-
         self.logger.console.debug('Starting Training')
         for episode in range(n_episodes):
             state = self.env.reset()
@@ -111,7 +110,8 @@ class Agent:
 
                 # Learn
                 self.logger.console.debug('Learn based on this transition')
-                Q = self.learn(state, action, reward, next_state, done)
+                self.learn(state, action, reward, next_state, done)
+                Q = self.q_value(state, action)
 
                 state = next_state
 
@@ -238,6 +238,9 @@ class Agent:
             The optimal action to be performed.
         """
         pass
+
+    def q_value(self, state, action):
+        raise NotImplementedError
 
 class Network:
     """

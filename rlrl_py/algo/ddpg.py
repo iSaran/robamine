@@ -624,7 +624,7 @@ class DDPG(Agent):
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
         if self.replay_buffer.size() < self.batch_size:
-            return self.critic.predict((np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0])))).squeeze()
+            return
 
         self.logger.console.debug("Sampling a minibatch from the replay buffer")
         state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.batch_size)
@@ -634,8 +634,6 @@ class DDPG(Agent):
 
         self.target_actor.update_params()
         self.target_critic.update_params()
-
-        return self.critic.predict((np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0])))).squeeze()
 
     def evaluate_policy(self, state_batch, action_batch, reward_batch, next_state_batch, terminal_batch):
         """
@@ -697,3 +695,6 @@ class DDPG(Agent):
         mu = self.actor.predict(state_batch)
         grads = self.critic.get_grad_q_wrt_actions((state_batch, mu))
         self.actor.learn(state_batch, grads[0])
+
+    def q_value(self, state, action):
+        return self.critic.predict((np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0])))).squeeze()
