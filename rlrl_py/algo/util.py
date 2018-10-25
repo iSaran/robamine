@@ -69,7 +69,14 @@ class Logger:
                 os.makedirs(os.path.join(self.log_path, i))
             self.file[i] = open(os.path.join(os.path.join(self.log_path, i), i + '.log'), "w+")
 
+        # Initialize variable for storing stats names for logging
         self.stats = {}
+        self.tf_stats = {}
+        self.tf_summary_ops = {}
+        for i in streams:
+            self.tf_stats[i] = {}
+
+        self.tf_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
     def setup_stream(self, stream, stats):
         """
@@ -92,6 +99,14 @@ class Logger:
             self.file[stream].write(',' + i)
         self.file[stream].write('\n')
 
+        # Log for Tensorboard
+        for variable_name in self.stats[stream]:
+            self.tf_stats[stream][stream + '/' + variable_name] = tf.Variable(0.)
+        summaries = []
+        for tf_variable_name in self.tf_stats[stream]:
+            summaries.append(tf.summary.scalar(tf_variable_name, self.tf_stats[stream][tf_variable_name]))
+        self.tf_summary_ops[stream] = tf.summary.merge(summaries)
+
     def __del__(self):
         for key in self.file:
             self.file[key].close()
@@ -113,6 +128,12 @@ class Logger:
             self.file[stream].write(',%f' % y[i])
         self.file[stream].write('\n')
 
+        feed_dict = {}
+        for var_name in y:
+            feed_dict[self.tf_stats[stream][stream + '/' + var_name]] = y[var_name]
+        summary_str = self.sess.run(self.tf_summary_ops[stream], feed_dict=feed_dict)
+        self.tf_writer.add_summary(summary_str, x)
+        self.tf_writer.flush()
 
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
 # based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
