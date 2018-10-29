@@ -535,7 +535,6 @@ class DDPG(Agent):
             critic_learning_rate=1e-3, gamma=0.999, exploration_noise_sigma=0.1):
         self.sess = sess
         self.gamma = gamma
-        Agent.__init__(self, sess, env, random_seed, log_dir, name="DDPG")
 
         # Initialize the Actor network and its target net
         state_dim = int(self.env.observation_space.shape[0])
@@ -558,8 +557,7 @@ class DDPG(Agent):
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = exploration_noise_sigma)
 
-        # Seed everything
-        self.seed(random_seed)
+        super(DDPG, self).__init__(sess, env, random_seed, log_dir, "DDPG")
 
     def explore(self, state):
         """
