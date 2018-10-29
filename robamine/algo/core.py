@@ -13,6 +13,7 @@ from robamine.algo.util import Logger, Stats, get_now_timestamp
 from robamine import rb_logging
 import logging
 import os
+import pickle
 
 logger = logging.getLogger('robamine.algo.core')
 
@@ -135,6 +136,7 @@ class Agent:
                 self.train_stats.print_progress(self.name, self.env.spec.id, episode, n_episodes)
                 self.evaluate(episodes_to_evaluate, render_eval)
                 self.logger.flush()
+                # self.save()
 
             # Evaluate the agent (run the learned policy for a number of episodes)
             #eval_stats = self.evaluate(episodes_to_evaluate)
@@ -257,6 +259,12 @@ class Agent:
     def q_value(self, state, action):
         raise NotImplementedError
 
+    def save(self):
+        raise NotImplementedError
+
+    def restore(self):
+        raise NotImplementedError
+
 class Network:
     """
     Base class for creating a Neural Network. During the construction of an object the :meth:`.create_architecture` is called.
@@ -349,3 +357,19 @@ class Network:
         else:
             k = [v for v in self.net_params if v.name == name][0]
             return self.sess.run(k)
+
+    def to_dict(self):
+        return {'input_dim': self.input_dim,
+                'hidden_dims': self.hidden_dims,
+                'out_dim': self.out_dim,
+                'name': self.name,
+                'inputs': self.inputs,
+                'out': self.out,
+                'net_params': self.net_params
+               }
+
+    @classmethod
+    def from_dict(cls, sess, data):
+        net = cls(sess, data['input_dim'], data['hidden_dims'], data['out_dim'], data['name'], \
+                        data['inputs'], data['out'], data['net_params'])
+        return cls

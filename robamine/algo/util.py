@@ -163,6 +163,9 @@ class Logger:
         self.tf_writer.add_summary(summary_str, x)
         self.tf_writer.flush()
 
+    def get_dir(self):
+        return self.log_path
+
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
 # based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
 class OrnsteinUhlenbeckActionNoise:

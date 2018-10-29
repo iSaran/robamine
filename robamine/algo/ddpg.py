@@ -36,6 +36,8 @@ import random
 import numpy as np
 import tensorflow as tf
 import gym
+import pickle
+import os
 
 from robamine.algo.core import Network, Agent
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, Logger, Stats
@@ -297,6 +299,25 @@ class Actor(Network):
     def predict(self, state):
         return self.sess.run(self.out, feed_dict={self.state_input: state})
 
+    def to_dict(self):
+        data = super(DDPG, self).to_dict()
+        data['final_layer_init'] = self.final_layer_init
+        data['batch_size'] = self.batch_size
+        data['learning_rate'] = self.learning_rate
+        return data
+
+    @classmethod
+    def from_dict(cls, data):
+        net = cls(data['input_dim'], data['hidden_dims'], data['out_dim'], data['final_layer_init'], data['batch_size'], data['learning_rate'])
+        net.inputs, net.out, net.net_params = data['inputs'], data['out'], data['net_params']
+
+        # Calculate the gradient of the policy's actions w.r.t. the policy's
+        # parameters and multiply it by the gradient of Q w.r.t the actions
+        net.unnormalized_gradients = tf.gradients(net.out, net.net_params, -net.grad_q_wrt_a)
+        net.gradients = list(map(lambda x: tf.div(x, net.batch_size), net.unnormalized_gradients))
+        net.optimize = tf.train.AdamOptimizer(net.learning_rate).apply_gradients(zip(net.gradients, net.net_params))
+        return net
+
 class Target(Network):
     """
     The target network of the actor.
@@ -358,7 +379,6 @@ class Target(Network):
                 self.equal_params = [self.net_params[i].assign(self.base_net_params[i]) for i in range(len(base.net_params))]
 
         return self
-
 
     def update_params(self):
         """
@@ -762,3 +782,22 @@ class DDPG(Agent):
     def seed(self, seed):
         super().seed(seed)
         self.exploration_noise.seed(seed)
+
+    def save(self):
+        store_file = os.path.join(self.logger.get_dir(), 'agent.pkl')
+        self.logger.console.info('Saving agent to ' + store_file)
+        data = {}
+        data['replay_buffer'] = self.replay_buffer
+        data['noise'] = self.exploration_noise
+        data['random_seed'] = self.random_seed
+        data['actor'] = self.actor
+        with open(store_file, 'wb') as pickle_file:
+            pickle.dump(data, pickle_file)
+
+    def load(self, path_to_file):
+        with open(path_to_file, 'rb') as pickle_file:
+            data = pickle.load(pickle_file)
+        self.replay_buffer = data['replay_buffer']
+        self.exploration_noise = data['exploration_noise']
+        self.random_seed = data['random_seed']
+        self.seed(self.random_seed)
