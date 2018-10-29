@@ -13,6 +13,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import csv
+import pandas as pd
 
 from enum import Enum
 
@@ -362,40 +363,35 @@ class Plotter:
         for stream in self.streams:
             var_names[stream] = set()
 
-            with open(os.path.join(os.path.join(self.directory, stream), stream + '.log'), 'r') as csvfile:
-                reader = csv.reader(csvfile, delimiter=',')
-                y_label = next(reader)
-                x_label = y_label[0]
-                del y_label[0]
+            data = pd.read_csv(os.path.join(os.path.join(self.directory, stream), stream + '.log'))
+            y_label = list(data.columns.values)
+            x_label = y_label[0]
+            del y_label[0]
 
-                for label in y_label:
-                    found_at_least_one_prefix = False
-                    for prefix in prefixes:
-                        if label.startswith(prefix + '_'):
-                            label_without_prefix = label[len(prefix) + 1:]
-                            var_names[stream].add(label_without_prefix)
-                            found_at_least_one_prefix = True
-                    if not found_at_least_one_prefix:
-                        var_names[stream].add(label)
+            for label in y_label:
+                found_at_least_one_prefix = False
+                for prefix in prefixes:
+                    if label.startswith(prefix + '_'):
+                        label_without_prefix = label[len(prefix) + 1:]
+                        var_names[stream].add(label_without_prefix)
+                        found_at_least_one_prefix = True
+                if not found_at_least_one_prefix:
+                    var_names[stream].add(label)
         return var_names
 
     def plot(self):
         y_var_label = self.extract_var_names()
         for stream in self.streams:
-            x = []
-            y = {}
-            with open(os.path.join(os.path.join(self.directory, stream), stream + '.log'), 'r') as csvfile:
-                reader = csv.reader(csvfile, delimiter=',')
-                y_label = next(reader)
-                x_label = y_label[0]
-                del y_label[0]
+            data = pd.read_csv(os.path.join(os.path.join(self.directory, stream), stream + '.log'))
+            y_label = list(data.columns.values)
+            x_label = y_label[0]
+            del y_label[0]
 
-                for i in y_label:
-                    y[i] = []
-                for row in reader:
-                    x.append(int(row[0]))
-                    for i in range(len(row) - 1):
-                        y[y_label[i]].append(float(row[i + 1]))
+            x = data[x_label]
+
+            y = {}
+            for i in y_label:
+                y[i] = data[i]
 
             # Plot reward
             for i in y_var_label[stream]:
