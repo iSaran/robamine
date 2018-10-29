@@ -3,11 +3,16 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-rlrl_py's Documentation
-=======================
+Main
+====
 
 .. note::
-   This package has been tested in Ubuntu 16.04 and Python 3 and it is under heavy development.
+   This package has been tested only in Ubuntu 16.04 and Python 3.
+
+.. warning::
+   Be aware that this package is under heavy development, which means that
+   besides the code is currently unstable, the documentation may not be
+   complete or match the actual functionality.
 
 `rlrl_py` (Reinforcement Learning for Robotics Library) is a python package for testing Reinforcement Learning algorithms (RL) for robotic tasks focusing on robotic grasping and manipulation. It uses `OpenAI Gym <http://www.github.com/openai/gym>`_ for using environments and `Tensorflow <http://www.tensorflow.org>`_ for deep learning. Due to the focusing on robotic tasks all the environments are using the `MuJoCo <http://www.mujoco.org>`_ physics engine.
 
@@ -30,11 +35,10 @@ Indices and tables
 * :ref:`search`
 
 .. toctree::
-   :maxdepth: 20
    :caption: Contents:
 
+   self
+   install
+   examples
    api/algo/main
-   api/env/main
    zreferences
-
-
