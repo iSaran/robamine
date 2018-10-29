@@ -45,7 +45,7 @@ class SphereReacher(robot_env.RobotEnv, utils.EzPickle):
     def compute_reward(self, achieved_goal, desired_goal, info):
         distance = goal_distance(achieved_goal, desired_goal)
         if self.shaped:
-            return -distance
+            return -distance**
         return -(distance > self.distance_threshold).astype(np.float32)
 
     # RobotEnv methods
