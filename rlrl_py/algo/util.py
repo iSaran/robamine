@@ -405,6 +405,8 @@ class Plotter:
                 plt.fill_between(x, np.array(y['mean_' + i]) - np.array(y['std_' + i]), np.array(y['mean_' + i]) + np.array(y['std_' + i]), color="#ccf5ff", label='Mean pm std')
                 plt.xlabel(x_label)
                 plt.ylabel(i)
+                plt.xlim(x[0], x[len(x) - 1])
+                plt.title(i)
                 plt.grid(color='#a6a6a6', linestyle='--', linewidth=0.5*self.linewidth)
                 plt.legend()
                 plt.savefig(os.path.join(os.path.join(self.directory, stream), i +'.' + self.format), format=self.format, dpi=self.dpi)
