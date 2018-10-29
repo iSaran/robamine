@@ -36,6 +36,7 @@ import random
 import numpy as np
 import tflearn
 import tensorflow as tf
+import gym
 
 from rlrl_py.algo.core import Network, Agent
 from rlrl_py.algo.util import OrnsteinUhlenbeckActionNoise
@@ -534,6 +535,7 @@ class DDPG(Agent):
             batch_size=64, actor_learning_rate=1e-4, tau=1e-3, critic_hidden_units=(400, 300),
             critic_learning_rate=1e-3, gamma=0.999, exploration_noise_sigma=0.1):
         self.sess = sess
+        self.env = gym.make(env)
         self.gamma = gamma
 
         # Initialize the Actor network and its target net
