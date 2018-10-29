@@ -46,13 +46,12 @@ class Agent:
         A name for the agent.
     """
 
-    def __init__(self, sess, env, random_seed=1e6, log_dir='/tmp', name=None):
+    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', name=None):
         # Environment setup
         self.env_name = env
         self.env = gym.make(env)
         # TODO(isaran): Maybe a wrapper needs for the goal environments
         # self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
-        self.env.seed(random_seed)
         self.episode_horizon = int(self.env._max_episode_steps)
 
         self.sess = sess
@@ -62,6 +61,8 @@ class Agent:
         self.train_stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
         self.eval_stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
         self.eval_episode_batch = 0
+
+        self.seed(random_seed)
 
     def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0, render_eval = False):
         """
@@ -249,6 +250,10 @@ class Agent:
 
     def q_value(self, state, action):
         raise NotImplementedError
+
+    def seed(self, seed):
+        self.env.seed(seed)
+        tf.set_random_seed(seed)
 
 class Network:
     """

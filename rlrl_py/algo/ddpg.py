@@ -67,11 +67,11 @@ class ReplayBuffer:
         A seed for initializing the random batch sampling and have reproducable
         results.
     """
-    def __init__(self, buffer_size, seed=1):
+    def __init__(self, buffer_size, seed=999):
         self.buffer_size = buffer_size
         self.buffer = deque()
         self.count = 0
-        random.seed(seed)
+        self.seed(seed)
 
     def __call__(self, index):
         """
@@ -170,6 +170,9 @@ class ReplayBuffer:
             The number of existing transitions.
         """
         return self.count
+
+    def seed(self, seed):
+        random.seed(seed)
 
 class Actor(Network):
     """
@@ -526,7 +529,7 @@ class DDPG(Agent):
     exploration_noise_sigma : float
         The sigma for the OrnsteinUhlenbeck Noise for exploration.
     """
-    def __init__(self, sess, env, random_seed=10000000, log_dir='/tmp',
+    def __init__(self, sess, env, random_seed=999, log_dir='/tmp',
             replay_buffer_size=1e6, actor_hidden_units=(400, 300), final_layer_init=(-3e-3, 3e-3),
             batch_size=64, actor_learning_rate=1e-4, tau=1e-3, critic_hidden_units=(400, 300),
             critic_learning_rate=1e-3, gamma=0.999, exploration_noise_sigma=0.1):
@@ -554,6 +557,9 @@ class DDPG(Agent):
         self.replay_buffer = ReplayBuffer(replay_buffer_size, random_seed)
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = exploration_noise_sigma)
+
+        # Seed everything
+        self.seed(random_seed)
 
     def explore(self, state):
         """
@@ -698,3 +704,8 @@ class DDPG(Agent):
 
     def q_value(self, state, action):
         return self.critic.predict((np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0])))).squeeze()
+
+    def seed(self, seed):
+        super(DDPG, self).seed(seed)
+        self.exploration_noise.seed(seed)
+        self.replay_buffer.seed(seed)
