@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-import rlrl_py.algo.util as util
+from rlrl_py.algo.util import Logger, Stats
 
 class Agent:
     """
@@ -48,7 +48,7 @@ class Agent:
 
     def __init__(self, sess, env, random_seed=999, log_dir='/tmp', name=None):
         # Environment setup
-        self.env_name = env
+        self.log_dir = log_dir
         self.env = gym.make(env)
         # TODO(isaran): Maybe a wrapper needs for the goal environments
         # self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
@@ -57,9 +57,9 @@ class Agent:
         self.sess = sess
         self.name = name
 
-        self.logger = util.Logger(sess, log_dir, self.name, env)
-        self.train_stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
-        self.eval_stats = util.Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
+        self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id)
+        self.train_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
+        self.eval_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
         self.eval_episode_batch = 0
 
         self.seed(random_seed)
@@ -126,7 +126,7 @@ class Agent:
 
             if ((episode + 1) % episode_batch_size == 0):
                 self.train_stats.update_batch((episode + 1) / episode_batch_size - 1)
-                self.train_stats.print_progress(self.name, self.env_name, episode, n_episodes)
+                self.train_stats.print_progress(self.name, self.env.spec.id, episode, n_episodes)
                 self.evaluate(episodes_to_evaluate, render_eval)
                 self.logger.flush()
 
