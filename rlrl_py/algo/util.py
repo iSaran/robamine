@@ -309,6 +309,10 @@ class Stats:
         Update the stats that need to be updated at the end of an
         epoch.
         """
+        if self.batch_stats is None:
+            self.logger.console.warn('update_batch(): Batch stats are None, nothing to do.')
+            return
+
         data_log = {}
         for stat in self.batch_stats:
             for operation in self.batch_stats[stat]:
@@ -422,8 +426,9 @@ class OrderedEnum(Enum):
 
 class Verbosity(OrderedEnum):
     no = 0
-    info = 1
-    debug = 2
+    warn = 1
+    info = 2
+    debug = 3
 
 class ConsoleColors:
     HEADER = '\033[95m'
@@ -446,39 +451,54 @@ class Console:
     def __del__(self):
         self.file.close()
 
-    def info(self, string, algorithm = None, env = None):
+    def info(self, string):
 
         if self.verbosity_level == Verbosity.no:
             return
 
         prefix = self.prefix + '[info]'
 
-        if algorithm is not None:
-            prefix = prefix + '[' + algorithm + ']'
-        if env is not None:
-            prefix = prefix + '[' + env + ']'
-
         self.file.write(prefix + " " + string + '\n')
 
         if self.console and self.verbosity_level >= Verbosity.info:
             print(prefix + " " + string)
 
-    def debug(self, string, algorithm = None, env = None):
+    def debug(self, string):
 
         if self.verbosity_level == Verbosity.no:
             return
 
         prefix = self.prefix + '[debug]'
 
-        if algorithm is not None:
-            prefix = prefix + '[' + algorithm + ']'
-        if env is not None:
-            prefix = prefix + '[' + env + ']'
-
         self.file.write(prefix + " " + string + '\n')
 
         if self.console and self.verbosity_level >= Verbosity.debug:
             print(ConsoleColors.DEBUG + prefix + " " + string + ConsoleColors.ENDC)
+
+    def warn(self, string):
+        if self.verbosity_level == Verbosity.no:
+            return
+
+        prefix = self.prefix + '[warn]'
+
+        self.file.write(prefix + " " + string + '\n')
+
+        if self.console and self.verbosity_level >= Verbosity.warn:
+            print(ConsoleColors.WARNING + ConsoleColors.BOLD + prefix + " " + string + ConsoleColors.ENDC)
+
+    def error(self, string, raise_exception = True):
+        if self.verbosity_level == Verbosity.no:
+            return
+
+        prefix = self.prefix + '[error]'
+
+        self.file.write(prefix + " " + string + '\n')
+
+        if self.console and self.verbosity_level >= Verbosity.warn:
+            print(ConsoleColors.FAIL + ConsoleColors.BOLD + prefix + " " + string + ConsoleColors.ENDC)
+
+        if raise_exception:
+            raise RuntimeError(string)
 
     def set_verbosity_level(self, verbosity_level):
         self.verbosity_level = verbosity_level
