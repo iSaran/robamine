@@ -250,6 +250,7 @@ class Stats:
             self.logger.setup_stream(self.name + '_batch', self.batch_stats_names)
 
     def perform_operation(self, data, operation):
+        self.logger.console.debug('Stats: Performing ' + operation + ' in data of size: ' + str(np.array(data).shape))
         if operation == 'total':
             return np.squeeze(np.sum(np.array(data)))
         elif operation == 'mean':
@@ -290,6 +291,7 @@ class Stats:
         print_stats : bool
             True if printing stats in the console is desired at the end of the episode
         """
+        self.logger.console.debug('Stats: Updating for episode.')
 
         data_log = {}
         for stat in self.timestep_stats:
@@ -309,6 +311,8 @@ class Stats:
         Update the stats that need to be updated at the end of an
         epoch.
         """
+        self.logger.console.debug('Stats: Updating for batch.')
+
         if self.batch_stats is None:
             self.logger.console.warn('update_batch(): Batch stats are None, nothing to do.')
             return
