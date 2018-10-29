@@ -153,7 +153,7 @@ class Agent:
         numpy array
             An action to be performed for exploration.
         """
-        return self.env.action_space.sample()
+        raise NotImplementedError
 
     def learn(self, state, action, reward, next_state, done):
         """
@@ -174,7 +174,7 @@ class Agent:
         terminal : float
             1 if the next state is a terminal state, 0 otherwise.
         """
-        pass
+        raise NotImplementedError
 
     def evaluate(self, n_episodes = 1, render=False):
         """
@@ -246,7 +246,7 @@ class Agent:
         numpy array:
             The optimal action to be performed.
         """
-        pass
+        raise NotImplementedError
 
     def q_value(self, state, action):
         raise NotImplementedError
