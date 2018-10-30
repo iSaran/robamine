@@ -22,7 +22,7 @@ class TestAgent(unittest.TestCase):
                 x_d, y_d = pl_2.extract_data(stream)
                 for y_var in y_d:
                     error = np.array(y_d[y_var]) - np.array(y[y_var])
-                    self.assertEqual(np.max(error), 0.0)
+                    self.assertEqual(np.max(error), 0.0, 'max error not zero during processing {0} in stream {1}'.format(y_var, stream))
 
 class TestActorCritic(unittest.TestCase):
     def test_actor(self):

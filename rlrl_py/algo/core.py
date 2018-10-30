@@ -102,18 +102,22 @@ class Agent:
                     self.env.render()
 
                 self.logger.console.debug('Timestep: ' + str(t))
+                self.logger.console.debug('Given state:' + state.__str__())
 
-                self.logger.console.debug('Selecting an action based on the exploration policy')
+                #self.logger.console.debug('Actor params:' + self.actor.get_params().__str__())
                 action = self.explore(state)
+                self.logger.console.debug('Action to explore:' + action.__str__())
 
                 # Execute the action on the environment and observe reward and next state
-                self.logger.console.debug('Executing the action on the environment and observe reward and next state')
                 next_state, reward, done, info = self.env.step(action)
+                self.logger.console.debug('Next state by the environment:' + next_state.__str__())
+                self.logger.console.debug('Reward by the environment:' + str(reward))
 
                 # Learn
                 self.logger.console.debug('Learn based on this transition')
                 self.learn(state, action, reward, next_state, done)
                 Q = self.q_value(state, action)
+                self.logger.console.debug('Q value by the agent:' + str(Q))
 
                 state = next_state
 

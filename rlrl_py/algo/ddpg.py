@@ -578,7 +578,11 @@ class DDPG(Agent):
             An action to be performed for exploration.
         """
         obs = state.reshape(1, state.shape[0])
-        return self.actor.predict(obs).squeeze() + self.exploration_noise()
+        prediction = self.actor.predict(obs).squeeze()
+        noise = self.exploration_noise()
+        self.logger.console.debug('DDPG explore: prediction:' + prediction.__str__())
+        self.logger.console.debug('DDPG explore: noise:' + noise.__str__())
+        return prediction + noise
 
     def predict(self, state):
         """
