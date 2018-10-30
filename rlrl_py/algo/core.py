@@ -46,7 +46,7 @@ class Agent:
         A name for the agent.
     """
 
-    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', name=None):
+    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', name=None, console=True):
         # Environment setup
         self.log_dir = log_dir
         self.env = gym.make(env)
@@ -57,7 +57,7 @@ class Agent:
         self.sess = sess
         self.name = name
 
-        self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id)
+        self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id, console)
         self.train_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
         self.eval_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
         self.eval_episode_batch = 0

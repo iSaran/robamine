@@ -53,7 +53,7 @@ class Logger:
     """
     Class for logging data into logfiles, saving models during training using Tensorflow.
     """
-    def __init__(self, sess, directory, agent_name, env_name):
+    def __init__(self, sess, directory, agent_name, env_name, console = True):
         self.sess = sess
         self.agent_name = agent_name
         self.env_name = env_name
@@ -64,7 +64,7 @@ class Logger:
         self.log_path = os.path.join(directory, 'rlrl_py_logger_' + self.agent_name.replace(" ", "_") + "_" + self.env_name.replace(" ", "_") + '_' + get_now_timestamp())
         os.makedirs(self.log_path)
 
-        self.console = Console(self.log_path)
+        self.console = Console(self.log_path, console)
 
         self.console.info('Time and date: ' + str(datetime.now()))
         self.console.info('Agent: ' + self.agent_name)
@@ -383,9 +383,24 @@ class Plotter:
                     var_names[stream].add(label)
         return var_names
 
+    def extract_data(self, stream):
+        data = pd.read_csv(os.path.join(os.path.join(self.directory, stream), stream + '.log'))
+        y_label = list(data.columns.values)
+        x_label = y_label[0]
+        del y_label[0]
+
+        x = data[x_label]
+
+        y = {}
+        for i in y_label:
+            y[i] = data[i]
+
+        return x, y
+
     def plot(self):
         y_var_label = self.extract_var_names()
         for stream in self.streams:
+            # TODO: use extract data instead of duplicating code
             data = pd.read_csv(os.path.join(os.path.join(self.directory, stream), stream + '.log'))
             y_label = list(data.columns.values)
             x_label = y_label[0]

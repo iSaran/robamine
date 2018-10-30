@@ -11,7 +11,7 @@
 Run unit tests with:
 
 ```bash
-python -m unittest -v
+python -m unittest discover rlrl_py
 ```
 
 In case you have an error due to MuJoCo please run as follows:
