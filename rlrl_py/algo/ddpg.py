@@ -223,6 +223,7 @@ class Actor(Network):
         # Here we store the grad of Q w.r.t the actions. This gradient is
         # provided by the Critic and is used to implement the policy gradient
         # below.
+        self.inputs = tf.placeholder(tf.float32,[None, self.input_dim])
         self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.out_dim])
 
         # Calculate the gradient of the policy's actions w.r.t. the policy's
@@ -249,24 +250,21 @@ class Actor(Network):
         # Check the number of trainable params before you create the network
         existing_num_trainable_params = len(tf.trainable_variables())
 
-        # Create the input layer
-        inputs = tflearn.input_data(shape=[None, self.input_dim])
-        net = inputs
+        # Input layer
+        net = self.inputs
 
         # Create the hidden layers
+        fan_in = self.input_dim
         for dim in self.hidden_dims:
-            net = tflearn.fully_connected(net, dim, name = self.name + 'FullyConnected')
-            net = tflearn.layers.normalization.batch_normalization(net, name = self.name + 'BatchNormalization')
-            net = tflearn.activations.relu(net)
+            weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fanin))
+            net = tf.layers.dense(inputs=net, units=dim, kernel_initializer=weight_initializer, bias_initializer=weight_initializer, name=self.name+'Dense')
+            net = tf.layers.batch_normalization(inputs=net, name=self.name+'BatchNorm')
+            net = tf.nn.relu(inputs=net)
 
-        # Create the output layer
-        # The final weights and biases are initialized from a uniform
-        # distributionto ensure the initial outputs for the policy estimates is
-        # near zero, with a tah layer. The tanh layer is used for bound the
-        # actions. TODO(isaran): Not sure if it is needed as long as you have
-        # outputs in [-1, 1]
-        w_init = tflearn.initializations.uniform(minval=self.final_layer_init[0], maxval=self.final_layer_init[1])
-        out = tflearn.fully_connected(net, self.out_dim, activation='tanh', weights_init=w_init, name = self.name + 'FullyConnected')
+        # Final layer
+        weight_initializer = tf.initializers.random_uniform(minval=self.final_layer_init[0], maxval=self.final_layer_init[1])
+        net = tf.layers.dense(inputs=net, units=self.out_dim, kernel_initializer= weight_initializer, bias_initializer= weight_initializer)
+        out = tf.nn.tanh(inputs=net)
 
         net_params = tf.trainable_variables()[existing_num_trainable_params:]
         return inputs, out, net_params
