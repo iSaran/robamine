@@ -530,7 +530,7 @@ class DDPG(Agent):
     exploration_noise_sigma : float
         The sigma for the OrnsteinUhlenbeck Noise for exploration.
     """
-    def __init__(self, sess, env, random_seed=999, log_dir='/tmp',
+    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', console = True,
             replay_buffer_size=1e6, actor_hidden_units=(400, 300), final_layer_init=(-3e-3, 3e-3),
             batch_size=64, actor_learning_rate=1e-4, tau=1e-3, critic_hidden_units=(400, 300),
             critic_learning_rate=1e-3, gamma=0.999, exploration_noise_sigma=0.1):
@@ -559,7 +559,7 @@ class DDPG(Agent):
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = exploration_noise_sigma)
 
-        super(DDPG, self).__init__(sess, env, random_seed, log_dir, "DDPG")
+        super(DDPG, self).__init__(sess, env, random_seed, log_dir, "DDPG", console)
 
     def explore(self, state):
         """
