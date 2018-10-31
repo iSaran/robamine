@@ -295,35 +295,18 @@ class Network:
         The name of the Neural Network
     """
 
-    def __init__(self, sess, input_dim, hidden_dims, out_dim, name = ""):
+    def __init__(self, sess, input_dim, hidden_dims, out_dim, name):
         self.sess = sess
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims
         self.out_dim = out_dim
         self.name = name
 
-        # Create online/learned network and the target network for the Actor
-        self.inputs, self.out, self.net_params = self.create_architecture()
+        with tf.variable_scope(self.name) as self.tf_scope:
+            self.inputs = tf.placeholder(tf.float32,[None, self.input_dim], name='inputs')
 
-    def create_architecture(self):
-        """
-        Creates the architecture of the neural network. Implemented in child classes.
-
-        Returns
-        -------
-        tf.Tensor
-            A Tensor representing the input layer of the network.
-        list of tf.Variable
-            The network learnable parameters.
-        tf.Tensor
-            A Tensor representing the output layer of the network.
-
-        Raises
-        ------
-        NotImplementedError
-            If the method has not been implemented by the child class.
-        """
-        raise NotImplementedError
+        self.out = None
+        self.net_params = None
 
     def predict(self, inputs):
         """

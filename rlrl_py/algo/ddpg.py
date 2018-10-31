@@ -40,6 +40,29 @@ import gym
 
 from rlrl_py.algo.core import Network, Agent
 from rlrl_py.algo.util import OrnsteinUhlenbeckActionNoise
+import math
+
+def actor_nn_architecture(inputs, hidden_dims, out_dim, final_layer_init):
+    # Check the number of trainable params before you create the network
+    existing_num_trainable_params = len(tf.trainable_variables())
+    input_dim = inputs.get_shape().as_list()[1]
+
+    # Input layer
+    net = inputs
+    fan_in = input_dim  # TODO: this seems wrong, use every layers input, but is not critical
+    for dim in hidden_dims:
+        weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fan_in))
+        net = tf.layers.dense(inputs=net, units=dim, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
+        net = tf.layers.batch_normalization(inputs=net)
+        net = tf.nn.relu(net)
+
+        # Final layer
+        weight_initializer = tf.initializers.random_uniform(minval=final_layer_init[0], maxval=final_layer_init[1])
+        net = tf.layers.dense(inputs=net, units=out_dim, kernel_initializer= weight_initializer, bias_initializer= weight_initializer)
+
+        out = tf.nn.tanh(net)
+        net_params = tf.trainable_variables()[existing_num_trainable_params:]
+    return out, net_params
 
 class ReplayBuffer:
     """
@@ -216,58 +239,29 @@ class Actor(Network):
     learning_rate : float
         The learning rate for the optimizer
     """
-    def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate):
-        self.final_layer_init = final_layer_init
-        Network.__init__(self, sess, input_dim, hidden_dims, out_dim, "Actor")
+    def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name = None):
+        n = 'ddpg_actor'
+        if name is not None:
+            n = n + '_' + name
+        super().__init__(sess, input_dim, hidden_dims, out_dim, n)
+        self.final_layer_init, self.batch_size, self.learning_rate = final_layer_init, batch_size, learning_rate
 
-        # Here we store the grad of Q w.r.t the actions. This gradient is
-        # provided by the Critic and is used to implement the policy gradient
-        # below.
-        self.inputs = tf.placeholder(tf.float32,[None, self.input_dim])
-        self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.out_dim])
+        with tf.variable_scope(self.tf_scope, auxiliary_name_scope=False) as scope:
+            with tf.name_scope(scope.original_name_scope):
+                with tf.variable_scope('network'):
+                    self.out, self.net_params = actor_nn_architecture(self.inputs, self.hidden_dims, self.out_dim, self.final_layer_init)
 
-        # Calculate the gradient of the policy's actions w.r.t. the policy's
-        # parameters and multiply it by the gradient of Q w.r.t the actions
-        self.unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a)
-        self.gradients = list(map(lambda x: tf.div(x, batch_size), self.unnormalized_gradients))
+                # Here we store the grad of Q w.r.t the actions. This gradient is
+                # provided by the Critic and is used to implement the policy gradient
+                # below.
+                self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.out_dim], name='grad_Q_actions')
 
-        self.optimize = tf.train.AdamOptimizer(learning_rate).apply_gradients(zip(self.gradients, self.net_params))
+                # Calculate the gradient of the policy's actions w.r.t. the policy's
+                # parameters and multiply it by the gradient of Q w.r.t the actions
+                unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a, name='sum_grad_Q_grad_mu')
+                gradients = list(map(lambda x: tf.div(x, self.batch_size, name='div_by_N'), unnormalized_gradients))
+                self.optimizer = tf.train.AdamOptimizer(self.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.net_params))
 
-    def create_architecture(self):
-        """
-        Creates the architecture of the Actor as described in Section 7 Experimental Details of :cite:`lillicrap15`.
-
-        Returns
-        -------
-        tf.Tensor
-            A Tensor representing the input layer of the network.
-        list of tf.Variable
-            The network learnable parameters.
-        tf.Tensor
-            A Tensor representing the output layer of the network.
-        """
-
-        # Check the number of trainable params before you create the network
-        existing_num_trainable_params = len(tf.trainable_variables())
-
-        # Input layer
-        net = self.inputs
-
-        # Create the hidden layers
-        fan_in = self.input_dim
-        for dim in self.hidden_dims:
-            weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fanin))
-            net = tf.layers.dense(inputs=net, units=dim, kernel_initializer=weight_initializer, bias_initializer=weight_initializer, name=self.name+'Dense')
-            net = tf.layers.batch_normalization(inputs=net, name=self.name+'BatchNorm')
-            net = tf.nn.relu(inputs=net)
-
-        # Final layer
-        weight_initializer = tf.initializers.random_uniform(minval=self.final_layer_init[0], maxval=self.final_layer_init[1])
-        net = tf.layers.dense(inputs=net, units=self.out_dim, kernel_initializer= weight_initializer, bias_initializer= weight_initializer)
-        out = tf.nn.tanh(inputs=net)
-
-        net_params = tf.trainable_variables()[existing_num_trainable_params:]
-        return inputs, out, net_params
 
     def learn(self, inputs, a_gradient):
         """
@@ -286,9 +280,12 @@ class Actor(Network):
         a_gradient : tf.Tensor
             The gradient of the Q value with respect to the actions. This is provided by Critic.
         """
-        self.sess.run(self.optimize, feed_dict={self.inputs: inputs, self.grad_q_wrt_a: a_gradient})
+        if self.optimizer is None:
+            self.logger.console.error(self.name + ': The network is not created or initialized.')
 
-class TargetActor(Actor):
+        self.sess.run(self.optimizer, feed_dict={self.inputs: inputs, self.grad_q_wrt_a: a_gradient})
+
+class Target(Network):
     """
     The target network of the actor.
 
@@ -299,19 +296,34 @@ class TargetActor(Actor):
     tau : float
         A number less than 1, used to update the target's parameters
     """
-    def __init__(self, actor, tau):
-        self.final_layer_init = actor.final_layer_init
-        Network.__init__(self, actor.sess, actor.input_dim, actor.hidden_dims, actor.out_dim, "TargetActor")
+    def __init__(self, base, tau, name=None):
+        n = base.name + '_target'
+        if name is not None:
+            n = n + '_' + name
+        super().__init__(base.sess, base.input_dim, base.hidden_dims, base.out_dim, n)
 
         # Operation for updating target network with learned network weights.
-        self.actor_net_params = actor.net_params
-        self.update_net_params = \
-            [self.net_params[i].assign( \
-                tf.multiply(self.actor_net_params[i], tau) + tf.multiply(self.net_params[i], 1. - tau))
-                for i in range(len(self.net_params))]
+        print(type(self))
+        self.base_net_params = base.net_params
 
-        # Define an operation to set my params the same as the actor's for initialization
-        self.equal_params = [self.net_params[i].assign(self.actor_net_params[i]) for i in range(len(self.net_params))]
+        # Create the hidden layers
+        with tf.variable_scope(self.tf_scope) as scope:
+            with tf.name_scope(scope.original_name_scope):
+                with tf.variable_scope('network'):
+                    if (self.name.startswith('ddpg_actor')):
+                        self.out, self.net_params = actor_nn_architecture(self.inputs, base.hidden_dims, base.out_dim, base.final_layer_init)
+                    elif (self.name.startswith('ddpg_critic')):
+                        self.out, self.net_params = critic_nn_architecture(self.inputs, self.hidden_dims, self.out_dim, self.final_layer_init)
+
+                with tf.variable_scope('update_params_with_base'):
+                    self.update_net_params = \
+                        [self.net_params[i].assign( \
+                            tf.multiply(self.base_net_params[i], tau) + tf.multiply(self.net_params[i], 1. - tau))
+                            for i in range(len(self.net_params))]
+
+                # Define an operation to set my params the same as the actor's for initialization
+                with tf.variable_scope('set_params_equal_to_base'):
+                    self.equal_params = [self.net_params[i].assign(self.base_net_params[i]) for i in range(len(base.net_params))]
 
     def update_params(self):
         """
