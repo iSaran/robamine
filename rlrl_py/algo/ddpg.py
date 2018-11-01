@@ -227,7 +227,7 @@ class Actor(Network):
 
     @classmethod
     def create(cls, sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name = None):
-        self = cls(sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name = None)
+        self = cls(sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name)
 
         with tf.variable_scope(self.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
@@ -427,7 +427,7 @@ class Critic(Network):
 
     @classmethod
     def create(cls, sess, state_dim, action_dim, hidden_dims, final_layer_init=[-0.003, 0.003], learning_rate=0.001, name=None):
-        self = cls(sess, state_dim, action_dim, hidden_dims, final_layer_init, learning_rate, name = None)
+        self = cls(sess, state_dim, action_dim, hidden_dims, final_layer_init, learning_rate, name)
 
         with tf.variable_scope(self.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_dim], name='state_input')
