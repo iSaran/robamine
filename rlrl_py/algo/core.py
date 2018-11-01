@@ -50,6 +50,7 @@ class Agent:
         # Environment setup
         self.log_dir = log_dir
         self.env = gym.make(env)
+        self.env.seed(random_seed)
         # TODO(isaran): Maybe a wrapper needs for the goal environments
         # self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
         self.episode_horizon = int(self.env._max_episode_steps)
@@ -248,10 +249,6 @@ class Agent:
 
     def q_value(self, state, action):
         raise NotImplementedError
-
-    def seed(self, seed):
-        self.env.seed(seed)
-        tf.set_random_seed(seed)
 
 class Network:
     """

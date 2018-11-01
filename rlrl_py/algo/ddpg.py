@@ -73,7 +73,6 @@ class ReplayBuffer:
         self.buffer_size = buffer_size
         self.buffer = deque()
         self.count = 0
-        self.seed(seed)
 
     def __call__(self, index):
         """
@@ -172,9 +171,6 @@ class ReplayBuffer:
             The number of existing transitions.
         """
         return self.count
-
-    def seed(self, seed):
-        random.seed(seed)
 
 class Actor(Network):
     """
@@ -590,8 +586,6 @@ class DDPG(Agent):
         self.eval_episode_batch = 0
 
         self.logger.init_tf_writer()
-        self.seed(random_seed)
-
     def explore(self, state):
         """
         Represents the exploration policy which is the predictions of the Actor
@@ -741,6 +735,5 @@ class DDPG(Agent):
         return self.critic.predict(np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0]))).squeeze()
 
     def seed(self, seed):
-        super(DDPG, self).seed(seed)
+        super().seed(seed)
         self.exploration_noise.seed(seed)
-        self.replay_buffer.seed(seed)

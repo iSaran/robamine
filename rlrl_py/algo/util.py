@@ -16,6 +16,12 @@ import csv
 import pandas as pd
 
 from enum import Enum
+import random
+
+def seed_everything(random_seed):
+    random.seed(random_seed)
+    tf.set_random_seed(random_seed)
+    np.random.seed(random_seed)
 
 def get_now_timestamp():
     """
@@ -174,7 +180,6 @@ class OrnsteinUhlenbeckActionNoise:
         self.dt = dt
         self.x0 = x0
         self.reset()
-        self.seed(seed)
 
     def __call__(self):
         x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.mu.shape)
@@ -186,9 +191,6 @@ class OrnsteinUhlenbeckActionNoise:
 
     def __repr__(self):
         return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
-
-    def seed(self, seed):
-        np.random.seed(seed)
 
 class Stats:
     """

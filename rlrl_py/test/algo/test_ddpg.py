@@ -5,17 +5,18 @@ import numpy as np
 import os
 
 from rlrl_py.algo.ddpg import DDPG, Actor, Target, Critic, ReplayBuffer
-from rlrl_py.algo.util import Plotter
+from rlrl_py.algo.util import Plotter, seed_everything
 
 class TestAgent(unittest.TestCase):
     def test_reproducability_with_pendulum(self):
         with tf.Session() as sess:
+            seed_everything(999)
             agent = DDPG(sess, 'Pendulum-v0', random_seed=999, console = False)
             agent.train(n_episodes=20, episode_batch_size=5, episodes_to_evaluate=5)
 
             streams = ['train_episode', 'train_batch', 'eval_episode', 'eval_batch']
             pl = Plotter(agent.logger.log_path, streams)
-            pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rlrl_py_logger_DDPG_Pendulum-v0_2018.10.30.18.24.28.778583'), streams)
+            pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rlrl_py_logger_DDPG_Pendulum-v0_2018.11.01.19.33.06.466759'), streams)
 
             for stream in streams:
                 x, y = pl.extract_data(stream)
