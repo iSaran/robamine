@@ -57,12 +57,6 @@ class Agent:
         self.sess = sess
         self.name = name
 
-        self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id, console)
-        self.train_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
-        self.eval_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
-        self.eval_episode_batch = 0
-
-        Agent.seed(self, random_seed)
 
     def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0, render_eval = False):
         """

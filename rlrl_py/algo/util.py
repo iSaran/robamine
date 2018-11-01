@@ -79,6 +79,12 @@ class Logger:
         self.tf_stats = {}
         self.tf_summary_ops = {}
 
+        self.tf_writer = None
+
+        with tf.variable_scope('rl_logger') as self.tf_scope:
+            pass
+
+    def init_tf_writer(self):
         self.tf_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
 
     def flush(self):
@@ -115,8 +121,12 @@ class Logger:
         self.file[stream].write('\n')
 
         # Log for Tensorboard
-        for variable_name in self.stats[stream]:
-            self.tf_stats[stream][stream + '/' + variable_name] = tf.Variable(0.)
+        with tf.variable_scope(self.tf_scope, auxiliary_name_scope=False) as scope:
+            with tf.name_scope(scope.original_name_scope):
+                with tf.variable_scope(stream):
+                    for variable_name in self.stats[stream]:
+                        self.tf_stats[stream][stream + '/' + variable_name] = tf.Variable(0., name=variable_name)
+
         summaries = []
         for tf_variable_name in self.tf_stats[stream]:
             summaries.append(tf.summary.scalar(tf_variable_name, self.tf_stats[stream][tf_variable_name]))
@@ -147,6 +157,10 @@ class Logger:
         for var_name in y:
             feed_dict[self.tf_stats[stream][stream + '/' + var_name]] = y[var_name]
         summary_str = self.sess.run(self.tf_summary_ops[stream], feed_dict=feed_dict)
+
+        if self.tf_writer is None:
+            self.console.error('TF writer is not initialized. Please run Logger.init_tf_writer() before you start logging.')
+
         self.tf_writer.add_summary(summary_str, x)
         self.tf_writer.flush()
 

@@ -38,7 +38,7 @@ import tensorflow as tf
 import gym
 
 from rlrl_py.algo.core import Network, Agent
-from rlrl_py.algo.util import OrnsteinUhlenbeckActionNoise
+from rlrl_py.algo.util import OrnsteinUhlenbeckActionNoise, Logger, Stats
 import math
 
 
@@ -584,6 +584,12 @@ class DDPG(Agent):
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = exploration_noise_sigma)
 
+        self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id, console)
+        self.train_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
+        self.eval_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
+        self.eval_episode_batch = 0
+
+        self.logger.init_tf_writer()
         self.seed(random_seed)
 
     def explore(self, state):
