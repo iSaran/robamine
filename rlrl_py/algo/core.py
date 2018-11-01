@@ -62,7 +62,7 @@ class Agent:
         self.eval_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
         self.eval_episode_batch = 0
 
-        self.seed(random_seed)
+        Agent.seed(self, random_seed)
 
     def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0, render_eval = False):
         """
@@ -297,16 +297,19 @@ class Network:
 
     def __init__(self, sess, input_dim, hidden_dims, out_dim, name):
         self.sess = sess
+
         self.input_dim = input_dim
         self.hidden_dims = hidden_dims
         self.out_dim = out_dim
         self.name = name
 
-        with tf.variable_scope(self.name) as self.tf_scope:
-            self.inputs = tf.placeholder(tf.float32,[None, self.input_dim], name='inputs')
-
+        self.input = None
         self.out = None
         self.net_params = None
+
+    @classmethod
+    def create(cls):
+        raise NotImplementedError
 
     def predict(self, inputs):
         """
@@ -322,7 +325,7 @@ class Network:
         tf.Tensor
             A Tensor with the predicted output values.
         """
-        return self.sess.run(self.out, feed_dict={self.inputs: inputs})
+        raise NotImplementedError
 
     def learn(self, inputs, output):
         """

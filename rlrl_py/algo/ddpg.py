@@ -34,7 +34,6 @@ Or you can use parameters different from the defaults:
 from collections import deque
 import random
 import numpy as np
-import tflearn
 import tensorflow as tf
 import gym
 
@@ -42,27 +41,6 @@ from rlrl_py.algo.core import Network, Agent
 from rlrl_py.algo.util import OrnsteinUhlenbeckActionNoise
 import math
 
-def actor_nn_architecture(inputs, hidden_dims, out_dim, final_layer_init):
-    # Check the number of trainable params before you create the network
-    existing_num_trainable_params = len(tf.trainable_variables())
-    input_dim = inputs.get_shape().as_list()[1]
-
-    # Input layer
-    net = inputs
-    fan_in = input_dim  # TODO: this seems wrong, use every layers input, but is not critical
-    for dim in hidden_dims:
-        weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fan_in))
-        net = tf.layers.dense(inputs=net, units=dim, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
-        net = tf.layers.batch_normalization(inputs=net)
-        net = tf.nn.relu(net)
-
-        # Final layer
-        weight_initializer = tf.initializers.random_uniform(minval=final_layer_init[0], maxval=final_layer_init[1])
-        net = tf.layers.dense(inputs=net, units=out_dim, kernel_initializer= weight_initializer, bias_initializer= weight_initializer)
-
-        out = tf.nn.tanh(net)
-        net_params = tf.trainable_variables()[existing_num_trainable_params:]
-    return out, net_params
 
 class ReplayBuffer:
     """
@@ -239,31 +217,60 @@ class Actor(Network):
     learning_rate : float
         The learning rate for the optimizer
     """
-    def __init__(self, sess, input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name = None):
+    def __init__(self, sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name = None):
         n = 'ddpg_actor'
         if name is not None:
             n = n + '_' + name
-        super().__init__(sess, input_dim, hidden_dims, out_dim, n)
+        super().__init__(sess, state_input_dim, hidden_dims, out_dim, n)
         self.final_layer_init, self.batch_size, self.learning_rate = final_layer_init, batch_size, learning_rate
+        self.state_input = None
 
-        with tf.variable_scope(self.tf_scope, auxiliary_name_scope=False) as scope:
-            with tf.name_scope(scope.original_name_scope):
-                with tf.variable_scope('network'):
-                    self.out, self.net_params = actor_nn_architecture(self.inputs, self.hidden_dims, self.out_dim, self.final_layer_init)
+    @classmethod
+    def create(cls, sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name = None):
+        self = cls(sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name = None)
 
-                # Here we store the grad of Q w.r.t the actions. This gradient is
-                # provided by the Critic and is used to implement the policy gradient
-                # below.
-                self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.out_dim], name='grad_Q_actions')
+        with tf.variable_scope(self.name):
+            self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
+            with tf.variable_scope('network'):
+                self.out, self.net_params = self.architecture(self.state_input, self.hidden_dims, self.out_dim, final_layer_init)
 
-                # Calculate the gradient of the policy's actions w.r.t. the policy's
-                # parameters and multiply it by the gradient of Q w.r.t the actions
-                unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a, name='sum_grad_Q_grad_mu')
-                gradients = list(map(lambda x: tf.div(x, self.batch_size, name='div_by_N'), unnormalized_gradients))
-                self.optimizer = tf.train.AdamOptimizer(self.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.net_params))
+            # Here we store the grad of Q w.r.t the actions. This gradient is
+            # provided by the Critic and is used to implement the policy gradient
+            # below.
+            self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.out_dim], name='gradQ_a')
 
+            # Calculate the gradient of the policy's actions w.r.t. the policy's
+            # parameters and multiply it by the gradient of Q w.r.t the actions
+            unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a, name='sum_gradQa_grad_mutheta')
+            gradients = list(map(lambda x: tf.div(x, self.batch_size, name='div_by_N'), unnormalized_gradients))
+            self.optimizer = tf.train.AdamOptimizer(self.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.net_params))
 
-    def learn(self, inputs, a_gradient):
+        return self
+
+    @staticmethod
+    def architecture(state_input, hidden_dims, out_dim, final_layer_init):
+        # Check the number of trainable params before you create the network
+        existing_num_trainable_params = len(tf.trainable_variables())
+
+        # Input layer
+        net = state_input
+        state_input_dim = state_input.get_shape().as_list()[1]
+        fan_in = state_input_dim  # TODO: this seems wrong, use every layers input, but is not critical
+        for dim in hidden_dims:
+            weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fan_in))
+            net = tf.layers.dense(inputs=net, units=dim, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
+            net = tf.layers.batch_normalization(inputs=net)
+            net = tf.nn.relu(net)
+
+        # Final layer
+        weight_initializer = tf.initializers.random_uniform(minval=final_layer_init[0], maxval=final_layer_init[1])
+        net = tf.layers.dense(inputs=net, units=out_dim, kernel_initializer= weight_initializer, bias_initializer= weight_initializer)
+
+        out = tf.nn.tanh(net)
+        net_params = tf.trainable_variables()[existing_num_trainable_params:]
+        return out, net_params
+
+    def learn(self, state, a_gradient):
         """
         Trains the neural network, using the gradient of the Q value with
         respect to actions, which is provided by Critic. This gradient is
@@ -283,7 +290,10 @@ class Actor(Network):
         if self.optimizer is None:
             self.logger.console.error(self.name + ': The network is not created or initialized.')
 
-        self.sess.run(self.optimizer, feed_dict={self.inputs: inputs, self.grad_q_wrt_a: a_gradient})
+        self.sess.run(self.optimizer, feed_dict={self.state_input: state, self.grad_q_wrt_a: a_gradient})
+
+    def predict(self, state):
+        return self.sess.run(self.out, feed_dict={self.state_input: state})
 
 class Target(Network):
     """
@@ -297,33 +307,56 @@ class Target(Network):
         A number less than 1, used to update the target's parameters
     """
     def __init__(self, base, tau, name=None):
+        assert isinstance(base, Actor) or isinstance(base, Critic), 'The base network should either an Actor or a Critic'
+
         n = base.name + '_target'
         if name is not None:
             n = n + '_' + name
+
         super().__init__(base.sess, base.input_dim, base.hidden_dims, base.out_dim, n)
 
+        self.base_is_actor = False
+        if isinstance(base, Actor):
+            self.base_is_actor = True
+
         # Operation for updating target network with learned network weights.
-        print(type(self))
         self.base_net_params = base.net_params
+        self.state_input = None
+        self.action_input = None
 
-        # Create the hidden layers
-        with tf.variable_scope(self.tf_scope) as scope:
-            with tf.name_scope(scope.original_name_scope):
-                with tf.variable_scope('network'):
-                    if (self.name.startswith('ddpg_actor')):
-                        self.out, self.net_params = actor_nn_architecture(self.inputs, base.hidden_dims, base.out_dim, base.final_layer_init)
-                    elif (self.name.startswith('ddpg_critic')):
-                        self.out, self.net_params = critic_nn_architecture(self.inputs, self.hidden_dims, self.out_dim, self.final_layer_init)
+        self.update_net_params = None
+        self.equal_params = None
 
-                with tf.variable_scope('update_params_with_base'):
-                    self.update_net_params = \
-                        [self.net_params[i].assign( \
-                            tf.multiply(self.base_net_params[i], tau) + tf.multiply(self.net_params[i], 1. - tau))
-                            for i in range(len(self.net_params))]
+    @classmethod
+    def create(cls, base, tau):
+        self = cls(base, tau)
 
-                # Define an operation to set my params the same as the actor's for initialization
-                with tf.variable_scope('set_params_equal_to_base'):
-                    self.equal_params = [self.net_params[i].assign(self.base_net_params[i]) for i in range(len(base.net_params))]
+        with tf.variable_scope(self.name):
+            if isinstance(base, Actor):
+                self.state_input = tf.placeholder(tf.float32, [None, base.input_dim], name='state_input')
+            elif isinstance(base, Critic):
+                self.state_input = tf.placeholder(tf.float32, [None, base.input_dim[0]], name='state_input')
+                self.action_input = tf.placeholder(tf.float32, [None, base.input_dim[1]], name='action_input')
+
+            with tf.variable_scope('network'):
+
+                if isinstance(base, Actor):
+                    self.out, self.net_params = Actor.architecture(self.state_input, base.hidden_dims, base.out_dim, base.final_layer_init)
+                elif isinstance(base, Critic):
+                    self.out, self.net_params = Critic.architecture(self.state_input, self.action_input, base.hidden_dims, base.final_layer_init)
+
+            with tf.variable_scope('update_params_with_base'):
+                self.update_net_params = \
+                    [self.net_params[i].assign( \
+                        tf.multiply(self.base_net_params[i], tau) + tf.multiply(self.net_params[i], 1. - tau))
+                        for i in range(len(self.net_params))]
+
+            # Define an operation to set my params the same as the actor's for initialization
+            with tf.variable_scope('set_params_equal_to_base'):
+                self.equal_params = [self.net_params[i].assign(self.base_net_params[i]) for i in range(len(base.net_params))]
+
+        return self
+
 
     def update_params(self):
         """
@@ -338,6 +371,12 @@ class Target(Network):
         actor. Used in the initialization of the algorithm.
         """
         self.sess.run(self.equal_params)
+
+    def predict(self, state, action = None):
+        if self.base_is_actor:
+            return self.sess.run(self.out, feed_dict={self.state_input: state})
+        else:
+            return self.sess.run(self.out, feed_dict={self.state_input: state, self.action_input: action})
 
 class Critic(Network):
     """
@@ -377,23 +416,40 @@ class Critic(Network):
     learning_rate : float
         The learning rate for the optimizer
     """
-    def __init__(self, sess, input_dim, hidden_dims, final_layer_init=(-0.003, 0.003), learning_rate=0.001):
-        self.final_layer_init = final_layer_init
-        Network.__init__(self, sess, input_dim, hidden_dims, 1, "Critic")
-        assert len(self.input_dim) == 2, len(self.hidden_dims) == 2
+    def __init__(self, sess, state_dim, action_dim, hidden_dims, final_layer_init=(-0.003, 0.003), learning_rate=0.001, name=None):
+        n = 'ddpg_critic'
+        if name is not None:
+            n = n + '_' + name
+        super().__init__(sess, (state_dim, action_dim), hidden_dims, 1, n)
+        self.final_layer_init, self.learning_rate = final_layer_init, learning_rate
+        self.state_input = None
+        self.action_input = None
 
-        self.q_value = tf.placeholder(tf.float32, [None, 1])
-        self.loss = tflearn.mean_square(self.q_value, self.out)
-        self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(self.loss)
+    @classmethod
+    def create(cls, sess, state_dim, action_dim, hidden_dims, final_layer_init=[-0.003, 0.003], learning_rate=0.001, name=None):
+        self = cls(sess, state_dim, action_dim, hidden_dims, final_layer_init, learning_rate, name = None)
 
-        # Get the gradient of the net w.r.t. the action.
-        # For each action in the minibatch (i.e., for each x in xs),
-        # this will sum up the gradients of each critic output in the minibatch
-        # w.r.t. that action. Each output is independent of all
-        # actions except for one.
-        self.grad_q_wrt_actions = tf.gradients(self.out, self.inputs[1])
+        with tf.variable_scope(self.name):
+            self.state_input = tf.placeholder(tf.float32, [None, state_dim], name='state_input')
+            self.action_input = tf.placeholder(tf.float32, [None, action_dim], name='action_input')
+            with tf.variable_scope('network'):
+                self.out, self.net_params = self.architecture(self.state_input, self.action_input, self.hidden_dims, final_layer_init)
 
-    def create_architecture(self):
+            self.q_value = tf.placeholder(tf.float32, [None, 1], name='Q_value')
+            self.loss = tf.losses.mean_squared_error(self.q_value, self.out)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate, name='optimize_mse').minimize(self.loss)
+
+            # # Get the gradient of the net w.r.t. the action.
+            # # For each action in the minibatch (i.e., for each x in xs),
+            # # this will sum up the gradients of each critic output in the minibatch
+            # # w.r.t. that action. Each output is independent of all
+            # # actions except for one.
+            self.grad_q_wrt_actions = tf.gradients(self.out, self.action_input, name='gradQ_a')
+
+        return self
+
+    @staticmethod
+    def architecture(state, action, hidden_units, final_layer_init):
         """
         Creates the architecture of the Critic as described in Section 7 Experimental Details of :cite:`lillicrap15`.
 
@@ -406,39 +462,35 @@ class Critic(Network):
         tf.Tensor
             A Tensor representing the output layer of the network.
         """
-
         # Check the number of trainable params before you create the network
         existing_num_trainable_params = len(tf.trainable_variables())
 
-        state_dim, action_dim = self.input_dim
-        hidden_dim_1, hidden_dim_2 = self.hidden_dims
+        state_dim, action_dim = state.get_shape().as_list()[1], action.get_shape().as_list()[1]
+        hidden_units_1, hidden_units_2 = hidden_units
 
-        # Create the input layers for state and actions
-        state_inputs = tflearn.input_data(shape=[None, state_dim], name = self.name + 'InputData')
-        action_inputs = tflearn.input_data(shape=[None, action_dim], name = self.name + 'InputData')
+        fan_in = fan_in = state_dim  # TODO: this seems wrong, use every layers input, but is not critical
+        weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fan_in))
 
         # First hidden layer with only the states
-        net = tflearn.fully_connected(state_inputs, hidden_dim_1, name = self.name + 'FullyConnected')
+        net = tf.layers.dense(inputs=state, units=hidden_units_1, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
+        net = tf.layers.batch_normalization(inputs=net)
+        net = tf.nn.relu(net)
 
-        net = tflearn.layers.normalization.batch_normalization(net, name = self.name + 'BatchNormalization')
-        net = tflearn.activations.relu(net)
+        # Second layer with actions
+        action_and_first_layer = tf.concat([net, action], axis=1)
+        net = tf.layers.dense(inputs=action_and_first_layer, units=hidden_units_2, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
+        net = tf.layers.batch_normalization(inputs=net)
+        net = tf.nn.relu(net)
 
-        # Add the action tensor in the 2nd hidden layer
-        # Use two temp layers to get the corresponding weights and biases
-        t1 = tflearn.fully_connected(net, hidden_dim_2, name = self.name + 'FullyConnected')
-        t2 = tflearn.fully_connected(action_inputs, hidden_dim_2, name = self.name + 'FullyConnected')
+        # Output layer
+        weight_initializer = tf.initializers.random_uniform(minval=final_layer_init[0], maxval=final_layer_init[1])
+        net = tf.layers.dense(inputs=net, units=1, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
 
-        net = tflearn.activation(tf.matmul(net, t1.W) + tf.matmul(action_inputs, t2.W) + t2.b, activation='relu')
-
-        # linear layer connected to 1 output representing Q(s,a)
-        # Weights are init to Uniform[-3e-3, 3e-3]
-        w_init = tflearn.initializations.uniform(minval=self.final_layer_init[0], maxval=self.final_layer_init[1])
-        out = tflearn.fully_connected(net, 1, weights_init=w_init, name = self.name + 'FullyConnected')
-
+        out = net
         net_params = tf.trainable_variables()[existing_num_trainable_params:]
-        return (state_inputs, action_inputs), out, net_params
+        return out, net_params
 
-    def learn(self, inputs, q_value):
+    def learn(self, state, action, q_value):
         """
         Trains the neural network, using the target Q value provided by the
         target network.
@@ -450,9 +502,12 @@ class Critic(Network):
         q_value : tf.Tensor
             The target Q value.
         """
-        return self.sess.run(self.optimize, feed_dict={self.inputs: inputs, self.q_value: q_value})
+        return self.sess.run(self.optimizer, feed_dict={self.state_input: state, self.action_input: action, self.q_value: q_value})
 
-    def get_grad_q_wrt_actions(self, inputs):
+    def predict(self, state, action):
+        return self.sess.run(self.out, feed_dict={self.state_input: state, self.action_input: action})
+
+    def get_grad_q_wrt_actions(self, state, action):
         """
         Returns the gradient of the predicted Q value (output of Critic) with
         respect the actions (the second input of the Critic). To be used for
@@ -463,47 +518,7 @@ class Critic(Network):
         inputs : tf.Tensor
             A tuple of two minibatches of states and actions.
         """
-        return self.sess.run(self.grad_q_wrt_actions, feed_dict = {self.inputs: inputs})
-
-class TargetCritic(Critic):
-    """
-    The target network of the critic.
-
-    Parameters
-    ----------
-    actor : :class:`.critic`
-        The Critic
-    tau : float
-        A number less than 1, used to update the target's parameters
-    """
-    def __init__(self, critic, tau):
-        self.final_layer_init = critic.final_layer_init
-        Network.__init__(self, critic.sess, critic.input_dim, critic.hidden_dims, critic.out_dim, "TargetCritic")
-
-        # Operation for updating target network with learned network weights.
-        self.critic_net_params = critic.net_params
-        self.update_net_params = \
-            [self.net_params[i].assign( \
-                tf.multiply(self.critic_net_params[i], tau) + tf.multiply(self.net_params[i], 1. - tau))
-                for i in range(len(self.net_params))]
-
-        # Define an operation to set my params the same as the critic's for initialization
-        self.equal_params = [self.net_params[i].assign(self.critic_net_params[i]) for i in range(len(self.net_params))]
-
-
-    def update_params(self):
-        """
-        Updates the parameters of the target network based on the current
-        parameters of the critic network.
-        """
-        self.sess.run(self.update_net_params)
-
-    def equalize_params(self):
-        """
-        Set the parameters of the target network equal to the parameters of the
-        critic. Used in the initialization of the algorithm.
-        """
-        self.sess.run(self.equal_params)
+        return self.sess.run(self.grad_q_wrt_actions, feed_dict={self.state_input: state, self.action_input: action})
 
 class DDPG(Agent):
     """
@@ -544,19 +559,19 @@ class DDPG(Agent):
             replay_buffer_size=1e6, actor_hidden_units=(400, 300), final_layer_init=(-3e-3, 3e-3),
             batch_size=64, actor_learning_rate=1e-4, tau=1e-3, critic_hidden_units=(400, 300),
             critic_learning_rate=1e-3, gamma=0.999, exploration_noise_sigma=0.1):
-        self.sess = sess
-        self.env = gym.make(env)
+
+        super().__init__(sess, env, random_seed, log_dir, "DDPG", console)
         self.gamma = gamma
 
         # Initialize the Actor network and its target net
         state_dim = int(self.env.observation_space.shape[0])
         self.action_dim = int(self.env.action_space.shape[0])
-        self.actor = Actor(self.sess, state_dim, actor_hidden_units, self.action_dim, final_layer_init, batch_size, actor_learning_rate)
-        self.target_actor = TargetActor(self.actor, tau)
+        self.actor = Actor.create(self.sess, state_dim, actor_hidden_units, self.action_dim, final_layer_init, batch_size, actor_learning_rate)
+        self.target_actor = Target.create(self.actor, tau)
 
         # Initialize the Critic network and its target net
-        self.critic = Critic(self.sess, (state_dim, self.action_dim), critic_hidden_units, final_layer_init, critic_learning_rate)
-        self.target_critic = TargetCritic(self.critic, tau)
+        self.critic = Critic.create(self.sess, state_dim, self.action_dim, critic_hidden_units, final_layer_init, critic_learning_rate)
+        self.target_critic = Target.create(self.critic, tau)
 
         # Initialize target networks with weights equal to the learned networks
         self.sess.run(tf.global_variables_initializer())
@@ -569,7 +584,7 @@ class DDPG(Agent):
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = exploration_noise_sigma)
 
-        super(DDPG, self).__init__(sess, env, random_seed, log_dir, "DDPG", console)
+        self.seed(random_seed)
 
     def explore(self, state):
         """
@@ -587,7 +602,7 @@ class DDPG(Agent):
         numpy array
             An action to be performed for exploration.
         """
-        obs = state.reshape(1, state.shape[0])
+        obs = np.array(state.reshape(1, state.shape[0]))
         prediction = self.actor.predict(obs).squeeze()
         noise = self.exploration_noise()
         self.logger.console.debug('DDPG explore: prediction:' + prediction.__str__())
@@ -685,7 +700,7 @@ class DDPG(Agent):
 
         self.logger.console.debug("Evaluating policy")
         mu_target_next = self.target_actor.predict(next_state_batch)
-        Q_target_next = self.target_critic.predict((next_state_batch, mu_target_next))
+        Q_target_next = self.target_critic.predict(next_state_batch, mu_target_next)
 
         y_i = []
         for k in range(self.batch_size):
@@ -696,7 +711,7 @@ class DDPG(Agent):
 
         y_i = np.reshape(y_i, (64, 1))
 
-        self.critic.learn((state_batch, action_batch), y_i)
+        self.critic.learn(state_batch, action_batch, y_i)
 
     def improve_policy(self, state_batch):
         """
@@ -713,11 +728,11 @@ class DDPG(Agent):
 
         self.logger.console.debug("Improving policy")
         mu = self.actor.predict(state_batch)
-        grads = self.critic.get_grad_q_wrt_actions((state_batch, mu))
+        grads = self.critic.get_grad_q_wrt_actions(state_batch, mu)
         self.actor.learn(state_batch, grads[0])
 
     def q_value(self, state, action):
-        return self.critic.predict((np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0])))).squeeze()
+        return self.critic.predict(np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0]))).squeeze()
 
     def seed(self, seed):
         super(DDPG, self).seed(seed)
