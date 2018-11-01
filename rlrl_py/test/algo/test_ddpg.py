@@ -29,17 +29,17 @@ class TestActorCritic(unittest.TestCase):
         with tf.Session() as sess:
             tf.set_random_seed(1)
             # Create an actor
-            actor = Actor.create(sess, 3, hidden_dims=[3, 4], out_dim=2, final_layer_init=[-0.003, 0.003], batch_size=10, learning_rate=1e-3)
+            actor = Actor.create(sess, 3, hidden_dims=[3, 4], out_dim=2, final_layer_init=[-0.003, 0.003], batch_size=10, learning_rate=1e-3, name='1')
             sess.run(tf.global_variables_initializer())
 
             # Test that the names and the shapes of the network's parameters are correct
-            param_name = ['ddpg_actor/network/dense/kernel:0', 'ddpg_actor/network/dense/bias:0',
-                    'ddpg_actor/network/batch_normalization/gamma:0',
-                    'ddpg_actor/network/batch_normalization/beta:0',
-                    'ddpg_actor/network/dense_1/kernel:0', 'ddpg_actor/network/dense_1/bias:0',
-                    'ddpg_actor/network/batch_normalization_1/gamma:0',
-                    'ddpg_actor/network/batch_normalization_1/beta:0',
-                    'ddpg_actor/network/dense_2/kernel:0', 'ddpg_actor/network/dense_2/bias:0']
+            param_name = ['ddpg_actor_1/network/dense/kernel:0', 'ddpg_actor_1/network/dense/bias:0',
+                    'ddpg_actor_1/network/batch_normalization/gamma:0',
+                    'ddpg_actor_1/network/batch_normalization/beta:0',
+                    'ddpg_actor_1/network/dense_1/kernel:0', 'ddpg_actor_1/network/dense_1/bias:0',
+                    'ddpg_actor_1/network/batch_normalization_1/gamma:0',
+                    'ddpg_actor_1/network/batch_normalization_1/beta:0',
+                    'ddpg_actor_1/network/dense_2/kernel:0', 'ddpg_actor_1/network/dense_2/bias:0']
             param_shape = [(3, 3), (3,), (3,), (3,), (3, 4),
                     (4,), (4,), (4,), (4, 2), (2,)]
             self.assertEqual(len(actor.net_params), len(param_name))
@@ -82,26 +82,26 @@ class TestActorCritic(unittest.TestCase):
         with tf.Session() as sess:
             tf.set_random_seed(1)
             # Create an actor
-            critic = Critic.create(sess, 3, 2, hidden_dims=(3, 4))
+            critic = Critic.create(sess, 3, 2, hidden_dims=(3, 4), name='1')
             sess.run(tf.global_variables_initializer())
 
             self.assertEqual(critic.state_input.shape[1], 3)
-            self.assertEqual(critic.state_input.name, 'ddpg_critic/state_input:0')
+            self.assertEqual(critic.state_input.name, 'ddpg_critic_1/state_input:0')
             self.assertEqual(critic.action_input.shape[1], 2)
-            self.assertEqual(critic.action_input.name, 'ddpg_critic/action_input:0')
+            self.assertEqual(critic.action_input.name, 'ddpg_critic_1/action_input:0')
 
             self.assertTrue(isinstance(critic.out, tf.Tensor))
             self.assertEqual(critic.out.shape[1], 1)
-            self.assertEqual(critic.out.name, 'ddpg_critic/network/dense_2/BiasAdd:0')
+            self.assertEqual(critic.out.name, 'ddpg_critic_1/network/dense_2/BiasAdd:0')
 
             # Test that the names and the shapes of the network's parameters are correct
-            param_name = ['ddpg_critic/network/dense/kernel:0', 'ddpg_critic/network/dense/bias:0',
-                    'ddpg_critic/network/batch_normalization/gamma:0',
-                    'ddpg_critic/network/batch_normalization/beta:0',
-                    'ddpg_critic/network/dense_1/kernel:0', 'ddpg_critic/network/dense_1/bias:0',
-                    'ddpg_critic/network/batch_normalization_1/gamma:0',
-                    'ddpg_critic/network/batch_normalization_1/beta:0',
-                    'ddpg_critic/network/dense_2/kernel:0', 'ddpg_critic/network/dense_2/bias:0']
+            param_name = ['ddpg_critic_1/network/dense/kernel:0', 'ddpg_critic_1/network/dense/bias:0',
+                    'ddpg_critic_1/network/batch_normalization/gamma:0',
+                    'ddpg_critic_1/network/batch_normalization/beta:0',
+                    'ddpg_critic_1/network/dense_1/kernel:0', 'ddpg_critic_1/network/dense_1/bias:0',
+                    'ddpg_critic_1/network/batch_normalization_1/gamma:0',
+                    'ddpg_critic_1/network/batch_normalization_1/beta:0',
+                    'ddpg_critic_1/network/dense_2/kernel:0', 'ddpg_critic_1/network/dense_2/bias:0']
             param_shape = [(3, 3), (3,), (3,), (3,), (5, 4), (4,), (4), (4,), (4, 1), (1,)]
             self.assertEqual(len(critic.net_params), len(param_name))
 
