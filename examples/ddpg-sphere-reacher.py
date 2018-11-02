@@ -1,4 +1,4 @@
-from rlrl_py.algo.ddpg import DDPG
+from robamine.algo.ddpg import DDPG
 
 import tensorflow as tf
 

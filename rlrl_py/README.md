@@ -1,4 +1,4 @@
-# rlrl_py
+# Robamine
 
 ## Available environments:
 
@@ -11,7 +11,7 @@
 Run unit tests with:
 
 ```bash
-python -m unittest discover rlrl_py
+python -m unittest discover robamine
 ```
 
 In case you have an error due to MuJoCo please run as follows:

@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from rlrl_py.algo.util import Logger, Stats
+from robamine.algo.util import Logger, Stats
 
 class Agent:
     """

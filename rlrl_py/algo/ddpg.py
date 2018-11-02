@@ -18,7 +18,7 @@ This is a minimal example that trains DDPG for the environment ``MyRobot``, for 
 
 .. code-block:: python
 
-    from rlrl_py.algo.ddpg import DDPG
+    from robamine.algo.ddpg import DDPG
     import tensorflow as tf
     with tf.Session as session:
         agent = DDPG(session, 'MyRobot').train(1000)
@@ -37,8 +37,8 @@ import numpy as np
 import tensorflow as tf
 import gym
 
-from rlrl_py.algo.core import Network, Agent
-from rlrl_py.algo.util import OrnsteinUhlenbeckActionNoise, Logger, Stats
+from robamine.algo.core import Network, Agent
+from robamine.algo.util import OrnsteinUhlenbeckActionNoise, Logger, Stats
 import math
 
 

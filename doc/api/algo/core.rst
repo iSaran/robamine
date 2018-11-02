@@ -2,6 +2,6 @@
 
 .. toctree::
 
-.. automodule:: rlrl_py.algo.core
+.. automodule:: robamine.algo.core
    :members:
 

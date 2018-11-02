@@ -1,4 +1,4 @@
-.. rlrl_py documentation master file, created by
+.. robamine documentation master file, created by
    sphinx-quickstart on Tue Sep 25 12:10:46 2018.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
@@ -14,7 +14,7 @@ Main
    besides the code is currently unstable, the documentation may not be
    complete or match the actual functionality.
 
-`rlrl_py` (Reinforcement Learning for Robotics Library) is a python package for testing Reinforcement Learning algorithms (RL) for robotic tasks focusing on robotic grasping and manipulation. It uses `OpenAI Gym <http://www.github.com/openai/gym>`_ for using environments and `Tensorflow <http://www.tensorflow.org>`_ for deep learning. Due to the focusing on robotic tasks all the environments are using the `MuJoCo <http://www.mujoco.org>`_ physics engine.
+`Robamine` (the dopamine of robots) is a python package for testing Reinforcement Learning algorithms (RL) for robotic tasks focusing on robotic grasping and manipulation. It uses `OpenAI Gym <http://www.github.com/openai/gym>`_ for using environments and `Tensorflow <http://www.tensorflow.org>`_ for deep learning. Due to the focusing on robotic tasks all the environments are using the `MuJoCo <http://www.mujoco.org>`_ physics engine.
 
 The development of this package aims for implementation of state of the art RL algorithms in order to perform research in robotics. In order to accomplish that the following requirements should be met:
 

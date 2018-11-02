@@ -1,4 +1,4 @@
-# Reinforcement Learning for Robotics Library (RLRL) ![version](https://img.shields.io/badge/version-v0.0.0-blue.svg) 
+# Robamine ![version](https://img.shields.io/badge/version-v0.0.0-blue.svg) 
 
 **Under heavy development**
 
@@ -7,13 +7,13 @@ the [Semantic Versioning Specifications](http://semver.org/) for release
 numbering.
 
 The documentation for the latest release can be found
-[here](https://auth-arl.github.io/docs/rlrl/latest/index.html). For the
+[here](https://auth-arl.github.io/docs/robamine/latest/index.html). For the
 latest master you need to produce it locally with `doxygen Doxyfile` inside the
 repository. Then see `docs/html/index.html`.
 
 ## Contents
 
-* [rlrl-py](rlrl-py): Python Gym Environments for our robots and testing RL in MuJoCo
+* [robabmine](robamine): Python Gym Environments for our robots and testing RL in MuJoCo
 
 Python code and OpenAI Gym environments for testing RL algorithms with models of ARL's robots.
 
@@ -109,11 +109,11 @@ Run your file with:
 LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so python your_file.py
 ```
 
-### Install rlrl
+### Install Robamine
 Clone the repository and install the package:
 
 ```bash
-cd rlrl/rlrl-py
+cd robamine/robamine
 pip install -e .
 ```
 
@@ -122,7 +122,7 @@ pip install -e .
 You can train the grasping of pillbox using DDPG with:
 
 ```bash
-cd rlrl-py/examples
+cd robamine/examples
 LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so python grasping-pillbox-ddpg-training.py --env-id='Floating-BHand-v0'
 ```
 

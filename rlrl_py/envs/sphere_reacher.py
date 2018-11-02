@@ -12,7 +12,7 @@ from gym import utils, spaces
 from gym.envs.robotics import robot_env
 import os
 
-import rlrl_py.utils as arl
+import robamine.utils as arl
 import random
 
 def goal_distance(goal_a, goal_b):

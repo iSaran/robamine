@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from rlrl_py.envs.sphere_reacher import SphereReacher
+from robamine.envs.sphere_reacher import SphereReacher
 import numpy as np
 
 class SphereReacherIncremental(SphereReacher):

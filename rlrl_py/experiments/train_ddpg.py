@@ -1,5 +1,5 @@
 import yaml
-from rlrl_py.algo.ddpg.agent import DDPG
+from robamine.algo.ddpg.agent import DDPG
 import tensorflow as tf
 
 if __name__ == '__main__':

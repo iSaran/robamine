@@ -1,5 +1,5 @@
 import unittest
-import rlrl_py.algo.util as util
+import robamine.algo.util as util
 import tensorflow as tf
 
 class TestUtil(unittest.TestCase):

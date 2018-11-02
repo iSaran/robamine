@@ -1,5 +1,5 @@
 import baselines.her.experiment.train as main
-import rlrl_py
+import robamine
 
 from mpi4py import MPI
 from baselines import logger

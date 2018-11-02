@@ -5,7 +5,7 @@ from gym.envs.registration import register
 # the current position and the current velocity of the sphere.
 register(
     id='SphereReacher-v1',
-    entry_point='rlrl_py.envs:SphereReacher',
+    entry_point='robamine.envs:SphereReacher',
     max_episode_steps=100
 )
 
@@ -14,47 +14,47 @@ register(
 # the current position and the current velocity of the sphere.
 register(
     id='SphereReacherShapedReward-v1',
-    entry_point='rlrl_py.envs:SphereReacher',
+    entry_point='robamine.envs:SphereReacher',
     max_episode_steps=100,
     kwargs={'shaped': True}
 )
 
 register(
     id='SphereReacherIncremental-v1',
-    entry_point='rlrl_py.envs:SphereReacherIncremental',
+    entry_point='robamine.envs:SphereReacherIncremental',
     max_episode_steps=100
 )
 
 register(
     id='Floating-BHand-v0',
-    entry_point='rlrl_py.envs:FloatingBHand'
+    entry_point='robamine.envs:FloatingBHand'
 )
 
 register(
     id='BHand-Slide-Pillbox-v0',
-    entry_point='rlrl_py.envs:BHandSlidePillbox'
+    entry_point='robamine.envs:BHandSlidePillbox'
 )
 
 register(
     id='BHandSlidePillbox-v2',
-    entry_point='rlrl_py.envs:BHandSlidePillbox2',
+    entry_point='robamine.envs:BHandSlidePillbox2',
     max_episode_steps=2000
 )
 
 register(
     id='BHandSlidePillbox-v3',
-    entry_point='rlrl_py.envs:BHandSlidePillbox3',
+    entry_point='robamine.envs:BHandSlidePillbox3',
     max_episode_steps=2000
 )
 
 register(
     id='FingerSlide-v1',
-    entry_point='rlrl_py.envs:FingerSlide',
+    entry_point='robamine.envs:FingerSlide',
     max_episode_steps=2000
 )
 
 register(
     id='SpherePosition-v1',
-    entry_point='rlrl_py.envs:SpherePosition',
+    entry_point='robamine.envs:SpherePosition',
     max_episode_steps=50
 )

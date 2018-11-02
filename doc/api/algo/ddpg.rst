@@ -2,7 +2,7 @@
 
 .. toctree::
 
-.. automodule:: rlrl_py.algo.ddpg
+.. automodule:: robamine.algo.ddpg
    :members:
    :inherited-members:
    :show-inheritance:

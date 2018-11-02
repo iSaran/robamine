@@ -1,5 +1,5 @@
 import baselines.her.experiment.train as main
-import rlrl_py
+import robamine
 
 if __name__ == '__main__':
     main.main()

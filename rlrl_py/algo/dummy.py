@@ -5,7 +5,7 @@ Dummy Agent
 A dummy agent which produces random actions. Used for testing.
 """
 
-from rlrl_py.algo.core import Agent
+from robamine.algo.core import Agent
 
 class Dummy(Agent):
     def __init__(self, sess, env, random_seed=999, log_dir='/tmp', console=True):

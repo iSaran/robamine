@@ -1,6 +1,6 @@
 import tensorflow as tf
-from rlrl_py.algo.ddpg import DDPG, Actor, Critic, Target
-from rlrl_py.algo.util import seed_everything, Logger
+from robamine.algo.ddpg import DDPG, Actor, Critic, Target
+from robamine.algo.util import seed_everything, Logger
 import numpy as np
 import logging
 
@@ -19,7 +19,7 @@ if __name__ == '__main__':
 
         seed_everything(999)
 
-        logger = Logger(sess, '/home/iason/rlrl_logs/example', 'none', 'lol', True)
+        logger = Logger(sess, '/home/iason/robamine_logs/example', 'none', 'lol', True)
         # actor = Actor.create(sess, 2, [100, 100], 3)
 
         inp = tf.placeholder(tf.float64, [None, 10])

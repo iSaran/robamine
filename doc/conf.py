@@ -19,7 +19,7 @@ import sys
 
 # -- Project information -----------------------------------------------------
 
-project = 'rlrl_py'
+project = 'robamine'
 copyright = '2018, Iason Sarantopoulos'
 author = 'Iason Sarantopoulos'
 
@@ -28,7 +28,7 @@ version = ''
 # The full version, including alpha/beta/rc tags
 release = ''
 
-sys.path.insert(0, os.path.abspath('../rlrl_py'))
+sys.path.insert(0, os.path.abspath('../robamine'))
 
 # -- General configuration ---------------------------------------------------
 
@@ -111,7 +111,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'rlrl_pydoc'
+htmlhelp_basename = 'robaminedoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -138,7 +138,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'rlrl_py.tex', 'rlrl\\_py Documentation',
+    (master_doc, 'robamine.tex', 'robamine Documentation',
      'Iason Sarantopoulos', 'manual'),
 ]
 
@@ -148,7 +148,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'rlrl_py', 'rlrl_py Documentation',
+    (master_doc, 'robamine', 'robamine Documentation',
      [author], 1)
 ]
 
@@ -159,8 +159,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'rlrl_py', 'rlrl_py Documentation',
-     author, 'rlrl_py', 'One line description of project.',
+    (master_doc, 'robamine', 'robamine Documentation',
+     author, 'robamine', 'One line description of project.',
      'Miscellaneous'),
 ]
 

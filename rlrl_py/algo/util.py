@@ -67,7 +67,7 @@ class Logger:
         # Create the log path
         if not os.path.exists(directory):
             os.makedirs(directory)
-        self.log_path = os.path.join(directory, 'rlrl_py_logger_' + self.agent_name.replace(" ", "_") + "_" + self.env_name.replace(" ", "_") + '_' + get_now_timestamp())
+        self.log_path = os.path.join(directory, 'robamine_logger_' + self.agent_name.replace(" ", "_") + "_" + self.env_name.replace(" ", "_") + '_' + get_now_timestamp())
         os.makedirs(self.log_path)
 
         self.console = Console(self.log_path, console)
@@ -481,7 +481,7 @@ class Console:
     def __init__(self, directory, console = True):
         self.verbosity_level = Verbosity.info
         self.console = console
-        self.prefix = '[rlrl_py]'
+        self.prefix = '[robamine]'
 
         self.file = open(os.path.join(directory, 'console.log'), "w+")
 

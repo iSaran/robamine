@@ -103,11 +103,11 @@ Run your file with:
 
    LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so python your_file.py
 
-Install rlrl
+Install Robamine
 ------------
 Clone the repository and install the package:
 
 .. code-block:: bash
 
-   cd rlrl/rlrl-py
+   cd robamine/robamine
    pip install -e .

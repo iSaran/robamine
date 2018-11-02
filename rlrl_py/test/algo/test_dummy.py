@@ -4,8 +4,8 @@ import tensorflow as tf
 import numpy as np
 import os
 
-from rlrl_py.algo.dummy import Dummy
-from rlrl_py.algo.util import Plotter
+from robamine.algo.dummy import Dummy
+from robamine.algo.util import Plotter
 
 class TestAgent(unittest.TestCase):
     def test_construct(self):
@@ -15,7 +15,7 @@ class TestAgent(unittest.TestCase):
 
             streams = ['train_episode', 'train_batch', 'eval_episode', 'eval_batch']
             pl = Plotter(agent.logger.log_path, streams)
-            pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rlrl_py_logger_Dummy_Pendulum-v0_2018.10.30.16.54.48.378300'), streams)
+            pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'robamine_logger_Dummy_Pendulum-v0_2018.10.30.16.54.48.378300'), streams)
 
             for stream in streams:
                 x, y = pl.extract_data(stream)
