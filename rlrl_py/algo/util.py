@@ -493,7 +493,7 @@ class Console:
         if self.verbosity_level == Verbosity.no:
             return
 
-        prefix = self.prefix + '[info]'
+        prefix = self.prefix + '[ info]'
 
         self.file.write(prefix + " " + string + '\n')
 
@@ -516,7 +516,7 @@ class Console:
         if self.verbosity_level == Verbosity.no:
             return
 
-        prefix = self.prefix + '[warn]'
+        prefix = self.prefix + '[ warn]'
 
         self.file.write(prefix + " " + string + '\n')
 

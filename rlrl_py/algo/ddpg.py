@@ -213,7 +213,7 @@ class Actor(Network):
     learning_rate : float
         The learning rate for the optimizer
     """
-    def __init__(self, sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name = None):
+    def __init__(self, sess, state_input_dim, hidden_dims, out_dim, final_layer_init=[-3e-3, 3e-3], batch_size=64, learning_rate=1e-4, name = None):
         n = 'ddpg_actor'
         if name is not None:
             n = n + '_' + name
@@ -222,7 +222,7 @@ class Actor(Network):
         self.state_input = None
 
     @classmethod
-    def create(cls, sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name = None):
+    def create(cls, sess, state_input_dim, hidden_dims, out_dim, final_layer_init=[-3e-3, 3e-3], batch_size=64, learning_rate=1e-4, name = None):
         self = cls(sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name)
 
         with tf.variable_scope(self.name):
@@ -663,6 +663,12 @@ class DDPG(Agent):
 
         self.logger.console.debug("Sampling a minibatch from the replay buffer")
         state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.batch_size)
+        self.logger.console.debug("Sampled batches by replay buffer:")
+        self.logger.console.debug('State batch: ' + state_batch.__str__())
+        self.logger.console.debug('Action batch: ' + action_batch.__str__())
+        self.logger.console.debug('Reward batch: ' + reward_batch.__str__())
+        self.logger.console.debug('next state batch: ' + next_state_batch.__str__())
+        self.logger.console.debug('terminal batch: ' + reward_batch.__str__())
 
         self.evaluate_policy(state_batch, action_batch, reward_batch, next_state_batch, terminal_batch)
         self.improve_policy(state_batch)
@@ -702,6 +708,9 @@ class DDPG(Agent):
         mu_target_next = self.target_actor.predict(next_state_batch)
         Q_target_next = self.target_critic.predict(next_state_batch, mu_target_next)
 
+        self.logger.console.debug('mu_target_next: ' + mu_target_next.__str__())
+        self.logger.console.debug('Q_target_next: ' + Q_target_next.__str__())
+
         y_i = []
         for k in range(self.batch_size):
             if terminal_batch[k]:
@@ -710,6 +719,8 @@ class DDPG(Agent):
                 y_i.append(reward_batch[k] + self.gamma * Q_target_next[k])
 
         y_i = np.reshape(y_i, (64, 1))
+
+        self.logger.console.debug('y_i: ' + y_i.__str__())
 
         self.critic.learn(state_batch, action_batch, y_i)
 
@@ -728,8 +739,11 @@ class DDPG(Agent):
 
         self.logger.console.debug("Improving policy")
         mu = self.actor.predict(state_batch)
+        self.logger.console.debug('mu: ' + mu.__str__())
         grads = self.critic.get_grad_q_wrt_actions(state_batch, mu)
+        self.logger.console.debug('grads: ' + grads.__str__())
         self.actor.learn(state_batch, grads[0])
+        self.logger.console.debug('Actor params after learning:' + self.actor.get_params().__str__())
 
     def q_value(self, state, action):
         return self.critic.predict(np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0]))).squeeze()
