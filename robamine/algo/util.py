@@ -18,6 +18,9 @@ import pandas as pd
 from enum import Enum
 import random
 
+import logging
+logger = logging.getLogger('robamine.algo.util')
+
 def seed_everything(random_seed):
     random.seed(random_seed)
     tf.set_random_seed(random_seed)
@@ -59,23 +62,15 @@ class Logger:
     """
     Class for logging data into logfiles, saving models during training using Tensorflow.
     """
-    def __init__(self, sess, directory, agent_name, env_name, console = True):
+    def __init__(self, sess, directory, agent_name, env_name):
         self.sess = sess
         self.agent_name = agent_name
         self.env_name = env_name
 
         # Create the log path
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        self.log_path = os.path.join(directory, 'robamine_logger_' + self.agent_name.replace(" ", "_") + "_" + self.env_name.replace(" ", "_") + '_' + get_now_timestamp())
-        os.makedirs(self.log_path)
-
-        self.console = Console(self.log_path, console)
-
-        self.console.info('Time and date: ' + str(datetime.now()))
-        self.console.info('Agent: ' + self.agent_name)
-        self.console.info('Environment: ' + self.env_name)
-        self.console.info('Logging directory: ' + self.log_path)
+        self.log_path = directory
+        if not os.path.exists(self.log_path):
+            os.makedirs(self.log_path)
 
         # Create the log file
         self.file = {}
@@ -96,8 +91,6 @@ class Logger:
     def flush(self):
         for i in self.file:
             self.file[i].flush()
-        self.console.file.flush()
-
 
     def setup_stream(self, stream, stats):
         """
@@ -165,7 +158,7 @@ class Logger:
         summary_str = self.sess.run(self.tf_summary_ops[stream], feed_dict=feed_dict)
 
         if self.tf_writer is None:
-            self.console.error('TF writer is not initialized. Please run Logger.init_tf_writer() before you start logging.')
+            logger.error('TF writer is not initialized. Please run Logger.init_tf_writer() before you start logging.')
 
         self.tf_writer.add_summary(summary_str, x)
         self.tf_writer.flush()
@@ -271,7 +264,7 @@ class Stats:
             self.logger.setup_stream(self.name + '_batch', self.batch_stats_names)
 
     def perform_operation(self, data, operation):
-        self.logger.console.debug('Stats: Performing ' + operation + ' in data of size: ' + str(np.array(data).shape))
+        logger.debug('Stats: Performing %s in data of size %s', operation, str(np.array(data).shape))
         if operation == 'total':
             return np.squeeze(np.sum(np.array(data)))
         elif operation == 'mean':
@@ -312,7 +305,7 @@ class Stats:
         print_stats : bool
             True if printing stats in the console is desired at the end of the episode
         """
-        self.logger.console.debug('Stats: Updating for episode.')
+        logger.debug('Stats: Updating for episode.')
 
         data_log = {}
         for stat in self.timestep_stats:
@@ -332,10 +325,10 @@ class Stats:
         Update the stats that need to be updated at the end of an
         epoch.
         """
-        self.logger.console.debug('Stats: Updating for batch.')
+        logger.debug('Stats: Updating for batch.')
 
         if self.batch_stats is None:
-            self.logger.console.warn('update_batch(): Batch stats are None, nothing to do.')
+            logger.warn('update_batch(): Batch stats are None, nothing to do.')
             return
 
         data_log = {}
@@ -355,16 +348,16 @@ class Stats:
                 self.episode_data[operation + '_' + episode_stat] = []
 
     def print_progress(self, agent_name, env_name, episode, n_episodes):
-        self.logger.console.info('')
-        self.logger.console.info('===================================================')
-        self.logger.console.info('| Algorithm: ' + agent_name + ', Environment:' + env_name)
-        self.logger.console.info('---------------------------------------------------')
-        self.logger.console.info('| Progress:')
-        self.logger.console.info('|   Episode: ' + str(episode) + ' from ' + str(n_episodes))
-        self.logger.console.info('|   Progress: ' + "{0:.2f}".format(episode / n_episodes * 100) + '%')
-        self.logger.console.info('|   Time Elapsed: ' + self.get_time_elapsed())
-        self.logger.console.info('|   Experience Time: ' + transform_sec_to_timestamp(self.step * self.dt))
-        self.logger.console.info('===================================================')
+        logger.info('')
+        logger.info('===================================================')
+        logger.info('| Algorithm: %s, Environment: %s', agent_name, env_name)
+        logger.info('---------------------------------------------------')
+        logger.info('| Progress:')
+        logger.info('|   Episode: %s from %s', str(episode), str(n_episodes))
+        logger.info('|   Progress: %f %%', episode / n_episodes * 100.0)
+        logger.info('|   Time Elapsed: %s', self.get_time_elapsed())
+        logger.info('|   Experience Time: %s', transform_sec_to_timestamp(self.step * self.dt))
+        logger.info('===================================================')
 
     def get_time_elapsed(self):
         end = time.time()
@@ -442,101 +435,3 @@ class Plotter:
                 plt.legend()
                 plt.savefig(os.path.join(os.path.join(self.directory, stream), i +'.' + self.format), format=self.format, dpi=self.dpi)
                 plt.clf()
-
-class OrderedEnum(Enum):
-    def __ge__(self, other):
-        if self.__class__ is other.__class__:
-            return self.value >= other.value
-        return NotImplemented
-    def __gt__(self, other):
-        if self.__class__ is other.__class__:
-            return self.value > other.value
-        return NotImplemented
-    def __le__(self, other):
-        if self.__class__ is other.__class__:
-            return self.value <= other.value
-        return NotImplemented
-    def __lt__(self, other):
-        if self.__class__ is other.__class__:
-            return self.value < other.value
-        return NotImplemented
-
-class Verbosity(OrderedEnum):
-    no = 0
-    warn = 1
-    info = 2
-    debug = 3
-
-class ConsoleColors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    DEBUG = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
-class Console:
-    def __init__(self, directory, console = True):
-        self.verbosity_level = Verbosity.info
-        self.console = console
-        self.prefix = '[robamine]'
-
-        self.file = open(os.path.join(directory, 'console.log'), "w+")
-
-    def __del__(self):
-        self.file.close()
-
-    def info(self, string):
-
-        if self.verbosity_level == Verbosity.no:
-            return
-
-        prefix = self.prefix + '[ info]'
-
-        self.file.write(prefix + " " + string + '\n')
-
-        if self.console and self.verbosity_level >= Verbosity.info:
-            print(prefix + " " + string)
-
-    def debug(self, string):
-
-        if self.verbosity_level == Verbosity.no:
-            return
-
-        prefix = self.prefix + '[debug]'
-
-        self.file.write(prefix + " " + string + '\n')
-
-        if self.console and self.verbosity_level >= Verbosity.debug:
-            print(ConsoleColors.DEBUG + prefix + " " + string + ConsoleColors.ENDC)
-
-    def warn(self, string):
-        if self.verbosity_level == Verbosity.no:
-            return
-
-        prefix = self.prefix + '[ warn]'
-
-        self.file.write(prefix + " " + string + '\n')
-
-        if self.console and self.verbosity_level >= Verbosity.warn:
-            print(ConsoleColors.WARNING + ConsoleColors.BOLD + prefix + " " + string + ConsoleColors.ENDC)
-
-    def error(self, string, raise_exception = True):
-        if self.verbosity_level == Verbosity.no:
-            return
-
-        prefix = self.prefix + '[error]'
-
-        self.file.write(prefix + " " + string + '\n')
-
-        if self.console and self.verbosity_level >= Verbosity.warn:
-            print(ConsoleColors.FAIL + ConsoleColors.BOLD + prefix + " " + string + ConsoleColors.ENDC)
-
-        if raise_exception:
-            raise RuntimeError(string)
-
-    def set_verbosity_level(self, verbosity_level):
-        self.verbosity_level = verbosity_level
-

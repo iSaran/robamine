@@ -9,7 +9,12 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import Logger, Stats
+from robamine.algo.util import Logger, Stats, get_now_timestamp
+from robamine import rb_logging
+import logging
+import os
+
+logger = logging.getLogger('robamine.algo.core')
 
 class Agent:
     """
@@ -46,9 +51,8 @@ class Agent:
         A name for the agent.
     """
 
-    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', name=None, console=True):
+    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', name=None):
         # Environment setup
-        self.log_dir = log_dir
         self.env = gym.make(env)
         self.env.seed(random_seed)
         # TODO(isaran): Maybe a wrapper needs for the goal environments
@@ -58,6 +62,9 @@ class Agent:
         self.sess = sess
         self.name = name
 
+        self.log_dir = os.path.join(rb_logging.get_logger_path(), self.name.replace(" ", "_") + '_' + self.env.spec.id.replace(" ", "_"))
+
+        logger.info('Initialized agent: %s in environment: %s', self.name, self.env.spec.id)
 
     def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0, render_eval = False):
         """
@@ -86,33 +93,33 @@ class Agent:
 
         assert n_episodes % episode_batch_size == 0
 
-        self.logger.console.debug('Agent: starting training')
+        logger.debug('Agent: starting training')
         for episode in range(n_episodes):
             state = self.env.reset()
-            self.logger.console.debug('Episode: ' + str(episode))
+            logger.debug('Episode: %d',  episode)
 
             for t in range(self.episode_horizon):
 
                 if (render):
                     self.env.render()
 
-                self.logger.console.debug('Timestep: ' + str(t))
-                self.logger.console.debug('Given state:' + state.__str__())
+                logger.debug('Timestep %d: ', t)
+                logger.debug('Given state: %s', state.__str__())
 
                 #self.logger.console.debug('Actor params:' + self.actor.get_params().__str__())
                 action = self.explore(state)
-                self.logger.console.debug('Action to explore:' + action.__str__())
+                logger.debug('Action to explore: %s', action.__str__())
 
                 # Execute the action on the environment and observe reward and next state
                 next_state, reward, done, info = self.env.step(action)
-                self.logger.console.debug('Next state by the environment:' + next_state.__str__())
-                self.logger.console.debug('Reward by the environment:' + str(reward))
+                logger.debug('Next state by the environment: %s', next_state.__str__())
+                logger.debug('Reward by the environment: %f', reward)
 
                 # Learn
-                self.logger.console.debug('Learn based on this transition')
+                logger.debug('Learn based on this transition')
                 self.learn(state, action, reward, next_state, done)
                 Q = self.q_value(state, action)
-                self.logger.console.debug('Q value by the agent:' + str(Q))
+                logger.debug('Q value by the agent: %f', Q)
 
                 state = next_state
 
@@ -196,16 +203,16 @@ class Agent:
         if (n_episodes == 0):
             return
 
-        self.logger.console.debug('Agent: Starting evalulation for .' + str(n_episodes) + ' episodes.')
+        logger.debug('Agent: Starting evalulation for %d episodes.', n_episodes)
 
         for episode in range(n_episodes):
             state = self.env.reset()
 
-            self.logger.console.debug('Episode: ' + str(episode))
+            logger.debug('Episode: %d', episode)
 
             for t in range(self.episode_horizon):
 
-                self.logger.console.debug('Timestep: ' + str(t))
+                logger.debug('Timestep: %d', t)
 
                 if (render):
                     self.env.render()

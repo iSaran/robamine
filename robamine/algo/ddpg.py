@@ -41,6 +41,9 @@ from robamine.algo.core import Network, Agent
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, Logger, Stats
 import math
 
+import logging
+
+logger = logging.getLogger('robamine.algo.ddpg')
 
 class ReplayBuffer:
     """
@@ -284,7 +287,7 @@ class Actor(Network):
             The gradient of the Q value with respect to the actions. This is provided by Critic.
         """
         if self.optimizer is None:
-            self.logger.console.error(self.name + ': The network is not created or initialized.')
+            logger.error('Actor network is not created or initialized.')
 
         self.sess.run(self.optimizer, feed_dict={self.state_input: state, self.grad_q_wrt_a: a_gradient})
 
@@ -551,12 +554,12 @@ class DDPG(Agent):
     exploration_noise_sigma : float
         The sigma for the OrnsteinUhlenbeck Noise for exploration.
     """
-    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', console = True,
+    def __init__(self, sess, env, random_seed=999, log_dir='/tmp',
             replay_buffer_size=1e6, actor_hidden_units=(400, 300), final_layer_init=(-3e-3, 3e-3),
             batch_size=64, actor_learning_rate=1e-4, tau=1e-3, critic_hidden_units=(400, 300),
             critic_learning_rate=1e-3, gamma=0.999, exploration_noise_sigma=0.1):
 
-        super().__init__(sess, env, random_seed, log_dir, "DDPG", console)
+        super().__init__(sess, env, random_seed, log_dir, "DDPG")
         self.gamma = gamma
 
         # Initialize the Actor network and its target net
@@ -580,7 +583,7 @@ class DDPG(Agent):
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = exploration_noise_sigma)
 
-        self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id, console)
+        self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id)
         self.train_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
         self.eval_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
         self.eval_episode_batch = 0
@@ -605,8 +608,8 @@ class DDPG(Agent):
         obs = np.array(state.reshape(1, state.shape[0]))
         prediction = self.actor.predict(obs).squeeze()
         noise = self.exploration_noise()
-        self.logger.console.debug('DDPG explore: prediction:' + prediction.__str__())
-        self.logger.console.debug('DDPG explore: noise:' + noise.__str__())
+        logger.debug('Explore: prediction:' + prediction.__str__())
+        logger.debug('DDPG explore: noise:' + noise.__str__())
         return prediction + noise
 
     def predict(self, state):
@@ -652,23 +655,23 @@ class DDPG(Agent):
         """
 
 
-        self.logger.console.debug("Storing transition into replay buffer")
+        logger.debug("Storing transition into replay buffer")
         self.replay_buffer.store(state, action, reward, next_state, done)
-        self.logger.console.debug('Size of replay buffer: ' + str(self.replay_buffer.size()))
+        logger.debug('Size of replay buffer: %d', self.replay_buffer.size())
 
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
         if self.replay_buffer.size() < self.batch_size:
             return
 
-        self.logger.console.debug("Sampling a minibatch from the replay buffer")
+        logger.debug("Sampling a minibatch from the replay buffer")
         state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.batch_size)
-        self.logger.console.debug("Sampled batches by replay buffer:")
-        self.logger.console.debug('State batch: ' + state_batch.__str__())
-        self.logger.console.debug('Action batch: ' + action_batch.__str__())
-        self.logger.console.debug('Reward batch: ' + reward_batch.__str__())
-        self.logger.console.debug('next state batch: ' + next_state_batch.__str__())
-        self.logger.console.debug('terminal batch: ' + reward_batch.__str__())
+        logger.debug("Sampled batches by replay buffer:")
+        logger.debug('State batch: %s', state_batch.__str__())
+        logger.debug('Action batch: %s', action_batch.__str__())
+        logger.debug('Reward batch: %s', reward_batch.__str__())
+        logger.debug('next state batch: %s', next_state_batch.__str__())
+        logger.debug('terminal batch: %s', reward_batch.__str__())
 
         self.evaluate_policy(state_batch, action_batch, reward_batch, next_state_batch, terminal_batch)
         self.improve_policy(state_batch)
@@ -704,12 +707,12 @@ class DDPG(Agent):
             The batch of the terminal states
         """
 
-        self.logger.console.debug("Evaluating policy")
+        logger.debug("Evaluating policy")
         mu_target_next = self.target_actor.predict(next_state_batch)
         Q_target_next = self.target_critic.predict(next_state_batch, mu_target_next)
 
-        self.logger.console.debug('mu_target_next: ' + mu_target_next.__str__())
-        self.logger.console.debug('Q_target_next: ' + Q_target_next.__str__())
+        logger.debug('mu_target_next: %s', mu_target_next.__str__())
+        logger.debug('Q_target_next: %s', Q_target_next.__str__())
 
         y_i = []
         for k in range(self.batch_size):
@@ -720,7 +723,7 @@ class DDPG(Agent):
 
         y_i = np.reshape(y_i, (64, 1))
 
-        self.logger.console.debug('y_i: ' + y_i.__str__())
+        logger.debug('y_i: %s', y_i.__str__())
 
         self.critic.learn(state_batch, action_batch, y_i)
 
@@ -737,13 +740,13 @@ class DDPG(Agent):
             The state batch
         """
 
-        self.logger.console.debug("Improving policy")
+        logger.debug("Improving policy")
         mu = self.actor.predict(state_batch)
-        self.logger.console.debug('mu: ' + mu.__str__())
+        logger.debug('mu: %s', mu.__str__())
         grads = self.critic.get_grad_q_wrt_actions(state_batch, mu)
-        self.logger.console.debug('grads: ' + grads.__str__())
+        logger.debug('grads: %s', grads.__str__())
         self.actor.learn(state_batch, grads[0])
-        self.logger.console.debug('Actor params after learning:' + self.actor.get_params().__str__())
+        logger.debug('Actor params after learning: %s', self.actor.get_params().__str__())
 
     def q_value(self, state, action):
         return self.critic.predict(np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0]))).squeeze()
