@@ -11,7 +11,7 @@ class TestAgent(unittest.TestCase):
     def test_reproducability_with_pendulum(self):
         with tf.Session() as sess:
             seed_everything(999)
-            agent = DDPG(sess, 'Pendulum-v0', random_seed=999, console = False)
+            agent = DDPG(sess, 'Pendulum-v0', random_seed=999, actor_gate_gradients = True)
             agent.train(n_episodes=20, episode_batch_size=5, episodes_to_evaluate=5)
 
             streams = ['train_episode', 'train_batch', 'eval_episode', 'eval_batch']

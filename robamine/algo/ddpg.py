@@ -216,17 +216,17 @@ class Actor(Network):
     learning_rate : float
         The learning rate for the optimizer
     """
-    def __init__(self, sess, state_input_dim, hidden_dims, out_dim, final_layer_init=[-3e-3, 3e-3], batch_size=64, learning_rate=1e-4, name = None):
+    def __init__(self, sess, state_input_dim, hidden_dims, out_dim, final_layer_init=[-3e-3, 3e-3], batch_size=64, learning_rate=1e-4, gate_gradients=False, name = None):
         n = 'ddpg_actor'
         if name is not None:
             n = n + '_' + name
         super().__init__(sess, state_input_dim, hidden_dims, out_dim, n)
-        self.final_layer_init, self.batch_size, self.learning_rate = final_layer_init, batch_size, learning_rate
+        self.final_layer_init, self.batch_size, self.learning_rate, self.gate_gradients = final_layer_init, batch_size, learning_rate, gate_gradients
         self.state_input = None
 
     @classmethod
-    def create(cls, sess, state_input_dim, hidden_dims, out_dim, final_layer_init=[-3e-3, 3e-3], batch_size=64, learning_rate=1e-4, name = None):
-        self = cls(sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, name)
+    def create(cls, sess, state_input_dim, hidden_dims, out_dim, final_layer_init=[-3e-3, 3e-3], batch_size=64, learning_rate=1e-4, gate_gradients=False, name = None):
+        self = cls(sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, gate_gradients, name)
 
         with tf.variable_scope(self.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
@@ -240,7 +240,7 @@ class Actor(Network):
 
             # Calculate the gradient of the policy's actions w.r.t. the policy's
             # parameters and multiply it by the gradient of Q w.r.t the actions
-            unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a, name='sum_gradQa_grad_mutheta')
+            unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a, gate_gradients=self.gate_gradients, name='sum_gradQa_grad_mutheta')
             gradients = list(map(lambda x: tf.div(x, self.batch_size, name='div_by_N'), unnormalized_gradients))
             self.optimizer = tf.train.AdamOptimizer(self.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.net_params))
 
@@ -556,7 +556,7 @@ class DDPG(Agent):
     """
     def __init__(self, sess, env, random_seed=999, log_dir='/tmp',
             replay_buffer_size=1e6, actor_hidden_units=(400, 300), final_layer_init=(-3e-3, 3e-3),
-            batch_size=64, actor_learning_rate=1e-4, tau=1e-3, critic_hidden_units=(400, 300),
+            batch_size=64, actor_learning_rate=1e-4, tau=1e-3, actor_gate_gradients=False, critic_hidden_units=(400, 300),
             critic_learning_rate=1e-3, gamma=0.999, exploration_noise_sigma=0.1):
 
         super().__init__(sess, env, random_seed, log_dir, "DDPG")
@@ -565,7 +565,7 @@ class DDPG(Agent):
         # Initialize the Actor network and its target net
         state_dim = int(self.env.observation_space.shape[0])
         self.action_dim = int(self.env.action_space.shape[0])
-        self.actor = Actor.create(self.sess, state_dim, actor_hidden_units, self.action_dim, final_layer_init, batch_size, actor_learning_rate)
+        self.actor = Actor.create(self.sess, state_dim, actor_hidden_units, self.action_dim, final_layer_init, batch_size, actor_learning_rate, actor_gate_gradients)
         self.target_actor = Target.create(self.actor, tau)
 
         # Initialize the Critic network and its target net
@@ -589,6 +589,7 @@ class DDPG(Agent):
         self.eval_episode_batch = 0
 
         self.logger.init_tf_writer()
+
     def explore(self, state):
         """
         Represents the exploration policy which is the predictions of the Actor
