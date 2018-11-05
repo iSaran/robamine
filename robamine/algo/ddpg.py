@@ -183,17 +183,17 @@ class ReplayBuffer:
 class ActorParams(NetworkParams):
     def __init__(self,
                  state_dim=None,
-                 out_dim=None,
-                 trainable=None,
+                 action_dim=None,
                  hidden_units = (400, 300),
+                 trainable=None,
+                 name = "Actor",
                  learning_rate = 1e-4,
                  gate_gradients = False,
-                 name = "Actor",
                  final_layer_init=(-3e-3, 3e-3),
                  batch_size = 64):
 
         super().__init__(input_dim=state_dim,
-                         out_dim=out_dim,
+                         out_dim=action_dim,
                          hidden_units=hidden_units,
                          trainable=trainable,
                          name=name)
@@ -246,13 +246,14 @@ class Actor(Network):
     """
     def __init__(self, sess, params):
         super().__init__(sess, params)
+        self.state_input = None
 
     @classmethod
     def create(cls, sess, params):
         self = cls(sess, params)
 
         state_input_dim = params.input_dim
-        with tf.variable_scope(self.name):
+        with tf.variable_scope(self.params.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
             with tf.variable_scope('network'):
                 self.out, self.params.trainable = self.architecture(self.state_input, self.params.hidden_dims, self.params.out_dim, self.params.final_layer_init)
@@ -419,6 +420,25 @@ class Target(Network):
         else:
             return self.sess.run(self.out, feed_dict={self.state_input: state, self.action_input: action})
 
+class CriticParams(NetworkParams):
+    def __init__(self,
+                 state_dim=None,
+                 action_dim=None,
+                 hidden_units = (400, 300),
+                 trainable=None,
+                 name = "Critic",
+                 learning_rate = 1e-4,
+                 final_layer_init=(-3e-3, 3e-3)):
+
+        super().__init__(input_dim=(state_dim, action_dim)
+                         out_dim=1,
+                         hidden_units=hidden_units,
+                         trainable=trainable,
+                         name=name)
+
+        self.learning_rate = learning_rate
+        self.final_layer_init = final_layer_init
+
 class Critic(Network):
     """
     Implements the Critic.
@@ -457,28 +477,26 @@ class Critic(Network):
     learning_rate : float
         The learning rate for the optimizer
     """
-    def __init__(self, sess, state_dim, action_dim, hidden_dims, final_layer_init=(-0.003, 0.003), learning_rate=0.001, name=None):
-        n = 'ddpg_critic'
-        if name is not None:
-            n = n + '_' + name
-        super().__init__(sess, (state_dim, action_dim), hidden_dims, 1, n)
-        self.final_layer_init, self.learning_rate = final_layer_init, learning_rate
+    def __init__(self, sess, params=CriticParams()):
+        super().__init__(sess, params)
+        self.state_dim = self.params.input_dim[0]
+        self.action_dim = self.params.input_dim[1]
         self.state_input = None
         self.action_input = None
 
     @classmethod
-    def create(cls, sess, state_dim, action_dim, hidden_dims, final_layer_init=[-0.003, 0.003], learning_rate=0.001, name=None):
-        self = cls(sess, state_dim, action_dim, hidden_dims, final_layer_init, learning_rate, name)
+    def create(cls, sess, params)
+        self = cls(sess, params)
 
-        with tf.variable_scope(self.name):
-            self.state_input = tf.placeholder(tf.float32, [None, state_dim], name='state_input')
-            self.action_input = tf.placeholder(tf.float32, [None, action_dim], name='action_input')
+        with tf.variable_scope(self.params.name):
+            self.state_input = tf.placeholder(tf.float32, [None, self.state_dim], name='state_input')
+            self.action_input = tf.placeholder(tf.float32, [None, self.action_dim], name='action_input')
             with tf.variable_scope('network'):
-                self.out, self.net_params = self.architecture(self.state_input, self.action_input, self.hidden_dims, final_layer_init)
+                self.out, self.params.trainable = self.architecture(self.state_input, self.action_input, self.params.hidden_units, self.params.final_layer_init)
 
             self.q_value = tf.placeholder(tf.float32, [None, 1], name='Q_value')
             self.loss = tf.losses.mean_squared_error(self.q_value, self.out)
-            self.optimizer = tf.train.AdamOptimizer(learning_rate, name='optimize_mse').minimize(self.loss)
+            self.optimizer = tf.train.AdamOptimizer(self.params.learning_rate, name='optimize_mse').minimize(self.loss)
 
             # # Get the gradient of the net w.r.t. the action.
             # # For each action in the minibatch (i.e., for each x in xs),
@@ -562,28 +580,31 @@ class Critic(Network):
         return self.sess.run(self.grad_q_wrt_actions, feed_dict={self.state_input: state, self.action_input: action})
 
 class DDPGParams(AgentParams):
-    def __init__(self):
+    def __init__(self,
+                 env_name=None,
+                 state_dim=None,
+                 action_dim=None,
+                 episode_horizon=None,
+                 random_seed=999
+                 log_dir='/tmp',
+                 replay_buffer_size = 1e6,
+                 batch_size = 64,
+                 gamma = 0.999,
+                 exploration_noise_sigma = 0.2,
+                 tau = 1e-3,
+                 actor = ActorParams(),
+                 critic = CriticParams()):
+        super().__init__(env_name, state_dim, action_dim, episode_horizon, random_seed, log_dir)
         self.name = "DDPG"
 
         # DDPG params
-        self.replay_buffer_size = 1e6
-        self.final_layer_init = (-3e-3, 3e-3)
-        self.batch_size = 64
-        self.gamma = 0.999
-        self.exploration_noise_sigma = 0.2
-
-        self.actor = ActorParams()
-        self.critic = CriticParams()
-
-        # Actor params
-
-
-        # Critic params
-        self.critic_hidden_units = (400, 300)
-        self.critic_learning_rate = 1e-3
-
-        # Target networks params
-        self.tau = 1e-3
+        self.replay_buffer_size = replay_buffer_size
+        self.batch_size = batch_size
+        self.gamma = gamma
+        self.exploration_noise_sigma = exploration_noise_sigma
+        self.tau = tau
+        self.actor = actor
+        self.critic = critic
 
 class DDPG(Agent):
     """
@@ -620,18 +641,25 @@ class DDPG(Agent):
     exploration_noise_sigma : float
         The sigma for the OrnsteinUhlenbeck Noise for exploration.
     """
-    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', params)
+    def __init__(self, sess, params)
 
-        super().__init__(sess, env, random_seed, log_dir, params)
+        super().__init__(sess, params)
 
         self.actor = None
         self.target_actor = None
         self.critic = None
         self.target_critic = None
+        self.replay_buffer = None
+        self.exploration_noise = None
+
+        self.logger = None
+        self.train_stats = None
+        self.eval_stats = None
+        self.eval_episode_batch = 0
 
     @classmethod
-    def create(cls, sess, env, random_seed, log_dir, params)
-        self = cls(sess, env, random_seed, log_dir, params)
+    def create(cls, sess, params)
+        self = cls(sess, params)
         # Initialize the Actor network and its target net
         actor_params = params.actor
         actor_params.input_dim = self.params.state_dim
@@ -640,6 +668,7 @@ class DDPG(Agent):
         self.target_actor = Target.create(self.actor, self.params.tau)
 
         # Initialize the Critic network and its target net
+        critic_params = params.critic
         self.critic = Critic.create(self.sess, self.state_dim, self.action_dim, critic_hidden_units, final_layer_init, critic_learning_rate)
         self.target_critic = Target.create(self.critic, tau)
 
@@ -650,14 +679,13 @@ class DDPG(Agent):
 
         # Initialize replay buffer
         self.batch_size = batch_size
-        self.replay_buffer = ReplayBuffer(replay_buffer_size, random_seed)
+        self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size, self.params.random_seed)
 
-        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = exploration_noise_sigma)
+        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.params.action_dim), sigma = self.params.exploration_noise_sigma)
 
         self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id)
         self.train_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
         self.eval_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
-        self.eval_episode_batch = 0
 
         self.logger.init_tf_writer()
 

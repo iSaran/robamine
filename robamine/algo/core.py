@@ -17,13 +17,22 @@ import pickle
 
 logger = logging.getLogger('robamine.algo.core')
 
-class AgentParams():
-    def __init__(self):
-        self.env_name = None
-        self.state_dim = None
-        self.action_dim = None
-        self.episode_horizon = None
-        self.name = None
+class AgentParams:
+    def __init__(self,
+                 env_name=None,
+                 state_dim=None,
+                 action_dim=None,
+                 episode_horizon=None,
+                 random_seed=999
+                 log_dir='/tmp'
+                 name=None):
+        self.env_name = env_name
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.episode_horizon = episode_horizon
+        self.random_seed = random_seed
+        self.log_dir = log_dir
+        self.name = name
 
 class Agent:
     """
@@ -60,16 +69,12 @@ class Agent:
         A name for the agent.
     """
 
-    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', params=None):
-        if params:
-            self.params = params
-        else:
-            self.params = AgentParams()
+    def __init__(self, sess, params=AgentParams()):
+        self.params = params
 
         # Environment setup
-        self.params.env_name = env
         self.env = gym.make(self.params.env_name)
-        self.env.seed(random_seed)
+        self.env.seed(self.params.random_seed)
         if isinstance(self.env.observation_space, gym.spaces.dict_space.Dict):
             logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
             self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
@@ -80,9 +85,9 @@ class Agent:
 
         self.sess = sess
 
-        self.log_dir = os.path.join(rb_logging.get_logger_path(), self.name.replace(" ", "_") + '_' + self.env.spec.id.replace(" ", "_"))
+        self.params.log_dir = os.path.join(rb_logging.get_logger_path(), self.params.name.replace(" ", "_") + '_' + self.env.spec.id.replace(" ", "_"))
 
-        logger.info('Initialized agent: %s in environment: %s', self.name, self.env.spec.id)
+        logger.info('Initialized agent: %s in environment: %s', self.params.name, self.env.spec.id)
 
     def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0, render_eval = False):
         """
@@ -282,12 +287,13 @@ class Agent:
     def restore(self):
         raise NotImplementedError
 
-class NetworkParams(input_dim=None,
-                    out_dim=None,
-                    hidden_units=None,
-                    trainable=None,
-                    name=None):
-    def __init__(self):
+class NetworkParams:
+    def __init__(self,
+                 input_dim=None,
+                 out_dim=None,
+                 hidden_units=None,
+                 trainable=None,
+                 name=None):
         self.input_dim = input_dim
         self.output_dim = out_dim
         self.hidden_units = hidden_units
@@ -330,15 +336,9 @@ class Network:
         The name of the Neural Network
     """
 
-    def __init__(self, sess, params):
+    def __init__(self, sess, params = NetworkParams()):
         self.sess = sess
-
-        if params:
-            self.params = params
-        else:
-            self.params = NetworkParams()
-
-        self.name = self.params.name
+        self.params = params
 
         self.input = None
         self.out = None
