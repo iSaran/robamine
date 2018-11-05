@@ -28,7 +28,9 @@ def getLogger():
 
 class Formatter(logging.Formatter):
     err_fmt = ('[%(name)s][%(levelname)s] %(message)s')
+    warn_fmt = ('[%(name)s][%(levelname)s] %(message)s')
     err_fmt_colored = ('\033[1m\033[91m[%(name)s][%(levelname)s] %(message)s\033[0m')
+    warn_fmt_colored = ('\033[1m\033[93m[%(name)s][%(levelname)s] %(message)s\033[0m')
     dbg_fmt  = "DBG: %(module)s: %(lineno)d: %(msg)s"
     info_fmt = ('[%(name)s][%(levelname)s] %(message)s')
 
@@ -48,6 +50,13 @@ class Formatter(logging.Formatter):
 
         elif record.levelno == logging.INFO:
             self._style._fmt = Formatter.info_fmt
+
+        elif record.levelno == logging.WARN:
+            if self.colors:
+                self._style._fmt = Formatter.warn_fmt_colored
+            else:
+                self._style._fmt = Formatter.warn_fmt
+
 
         elif record.levelno == logging.ERROR:
             if self.colors:

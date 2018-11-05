@@ -565,6 +565,10 @@ class DDPG(Agent):
         super().__init__(sess, env, random_seed, log_dir, "DDPG")
         self.gamma = gamma
 
+        if isinstance(self.env.observation_space, gym.spaces.dict_space.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
+            self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
+
         # Initialize the Actor network and its target net
         state_dim = int(self.env.observation_space.shape[0])
         self.action_dim = int(self.env.action_space.shape[0])
