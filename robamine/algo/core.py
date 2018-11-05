@@ -17,6 +17,14 @@ import pickle
 
 logger = logging.getLogger('robamine.algo.core')
 
+class AgentParams():
+    def __init__(self):
+        self.env_name = None
+        self.state_dim = None
+        self.action_dim = None
+        self.episode_horizon = None
+        self.name = None
+
 class Agent:
     """
     Base class for creating an RL agent.
@@ -52,16 +60,25 @@ class Agent:
         A name for the agent.
     """
 
-    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', name=None):
+    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', params=None):
+        if params:
+            self.params = params
+        else:
+            self.params = AgentParams()
+
         # Environment setup
-        self.env = gym.make(env)
+        self.params.env_name = env
+        self.env = gym.make(self.params.env_name)
         self.env.seed(random_seed)
-        # TODO(isaran): Maybe a wrapper needs for the goal environments
-        # self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
-        self.episode_horizon = int(self.env._max_episode_steps)
+        if isinstance(self.env.observation_space, gym.spaces.dict_space.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
+            self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
+
+        self.params.state_dim = int(self.env.observation_space.shape[0])
+        self.params.action_dim = int(self.env.action_space.shape[0])
+        self.params.episode_horizon = int(self.env._max_episode_steps)
 
         self.sess = sess
-        self.name = name
 
         self.log_dir = os.path.join(rb_logging.get_logger_path(), self.name.replace(" ", "_") + '_' + self.env.spec.id.replace(" ", "_"))
 
@@ -265,6 +282,18 @@ class Agent:
     def restore(self):
         raise NotImplementedError
 
+class NetworkParams(input_dim=None,
+                    out_dim=None,
+                    hidden_units=None,
+                    trainable=None,
+                    name=None):
+    def __init__(self):
+        self.input_dim = input_dim
+        self.output_dim = out_dim
+        self.hidden_units = hidden_units
+        self.trainable = trainable
+        self.name = name
+
 class Network:
     """
     Base class for creating a Neural Network. During the construction of an object the :meth:`.create_architecture` is called.
@@ -301,17 +330,18 @@ class Network:
         The name of the Neural Network
     """
 
-    def __init__(self, sess, input_dim, hidden_dims, out_dim, name):
+    def __init__(self, sess, params):
         self.sess = sess
 
-        self.input_dim = input_dim
-        self.hidden_dims = hidden_dims
-        self.out_dim = out_dim
-        self.name = name
+        if params:
+            self.params = params
+        else:
+            self.params = NetworkParams()
+
+        self.name = self.params.name
 
         self.input = None
         self.out = None
-        self.net_params = None
 
     @classmethod
     def create(cls):

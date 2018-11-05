@@ -180,6 +180,29 @@ class ReplayBuffer:
     def seed(self, random_seed):
         random.seed(random_seed)
 
+class ActorParams(NetworkParams):
+    def __init__(self,
+                 state_dim=None,
+                 out_dim=None,
+                 trainable=None,
+                 hidden_units = (400, 300),
+                 learning_rate = 1e-4,
+                 gate_gradients = False,
+                 name = "Actor",
+                 final_layer_init=(-3e-3, 3e-3),
+                 batch_size = 64):
+
+        super().__init__(input_dim=state_dim,
+                         out_dim=out_dim,
+                         hidden_units=hidden_units,
+                         trainable=trainable,
+                         name=name)
+
+        self.learning_rate = learning_rate
+        self.gate_gradients = gate_gradients
+        self.final_layer_init = final_layer_init
+        self.batch_size = batch_size
+
 class Actor(Network):
     """
     Implements the Actor.
@@ -221,33 +244,29 @@ class Actor(Network):
     learning_rate : float
         The learning rate for the optimizer
     """
-    def __init__(self, sess, state_input_dim, hidden_dims, out_dim, final_layer_init=[-3e-3, 3e-3], batch_size=64, learning_rate=1e-4, gate_gradients=False, name = None):
-        n = 'ddpg_actor'
-        if name is not None:
-            n = n + '_' + name
-        super().__init__(sess, state_input_dim, hidden_dims, out_dim, n)
-        self.final_layer_init, self.batch_size, self.learning_rate, self.gate_gradients = final_layer_init, batch_size, learning_rate, gate_gradients
-        self.state_input = None
+    def __init__(self, sess, params):
+        super().__init__(sess, params)
 
     @classmethod
-    def create(cls, sess, state_input_dim, hidden_dims, out_dim, final_layer_init=[-3e-3, 3e-3], batch_size=64, learning_rate=1e-4, gate_gradients=False, name = None):
-        self = cls(sess, state_input_dim, hidden_dims, out_dim, final_layer_init, batch_size, learning_rate, gate_gradients, name)
+    def create(cls, sess, params):
+        self = cls(sess, params)
 
+        state_input_dim = params.input_dim
         with tf.variable_scope(self.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
             with tf.variable_scope('network'):
-                self.out, self.net_params = self.architecture(self.state_input, self.hidden_dims, self.out_dim, final_layer_init)
+                self.out, self.params.trainable = self.architecture(self.state_input, self.params.hidden_dims, self.params.out_dim, self.params.final_layer_init)
 
             # Here we store the grad of Q w.r.t the actions. This gradient is
             # provided by the Critic and is used to implement the policy gradient
             # below.
-            self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.out_dim], name='gradQ_a')
+            self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.params.out_dim], name='gradQ_a')
 
             # Calculate the gradient of the policy's actions w.r.t. the policy's
             # parameters and multiply it by the gradient of Q w.r.t the actions
-            unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a, gate_gradients=self.gate_gradients, name='sum_gradQa_grad_mutheta')
-            gradients = list(map(lambda x: tf.div(x, self.batch_size, name='div_by_N'), unnormalized_gradients))
-            self.optimizer = tf.train.AdamOptimizer(self.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.net_params))
+            unnormalized_gradients = tf.gradients(self.out, self.params.trainable, -self.grad_q_wrt_a, gate_gradients=self.params.gate_gradients, name='sum_gradQa_grad_mutheta')
+            gradients = list(map(lambda x: tf.div(x, self.params.batch_size, name='div_by_N'), unnormalized_gradients))
+            self.optimizer = tf.train.AdamOptimizer(self.params.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.params.trainable))
 
         return self
 
@@ -542,6 +561,30 @@ class Critic(Network):
         """
         return self.sess.run(self.grad_q_wrt_actions, feed_dict={self.state_input: state, self.action_input: action})
 
+class DDPGParams(AgentParams):
+    def __init__(self):
+        self.name = "DDPG"
+
+        # DDPG params
+        self.replay_buffer_size = 1e6
+        self.final_layer_init = (-3e-3, 3e-3)
+        self.batch_size = 64
+        self.gamma = 0.999
+        self.exploration_noise_sigma = 0.2
+
+        self.actor = ActorParams()
+        self.critic = CriticParams()
+
+        # Actor params
+
+
+        # Critic params
+        self.critic_hidden_units = (400, 300)
+        self.critic_learning_rate = 1e-3
+
+        # Target networks params
+        self.tau = 1e-3
+
 class DDPG(Agent):
     """
     Implements the DDPG algorithm.
@@ -577,26 +620,27 @@ class DDPG(Agent):
     exploration_noise_sigma : float
         The sigma for the OrnsteinUhlenbeck Noise for exploration.
     """
-    def __init__(self, sess, env, random_seed=999, log_dir='/tmp',
-            replay_buffer_size=1e6, actor_hidden_units=(400, 300), final_layer_init=(-3e-3, 3e-3),
-            batch_size=64, actor_learning_rate=1e-4, tau=1e-3, actor_gate_gradients=False, critic_hidden_units=(400, 300),
-            critic_learning_rate=1e-3, gamma=0.999, exploration_noise_sigma=0.1):
+    def __init__(self, sess, env, random_seed=999, log_dir='/tmp', params)
 
-        super().__init__(sess, env, random_seed, log_dir, "DDPG")
-        self.gamma = gamma
+        super().__init__(sess, env, random_seed, log_dir, params)
 
-        if isinstance(self.env.observation_space, gym.spaces.dict_space.Dict):
-            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
-            self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
+        self.actor = None
+        self.target_actor = None
+        self.critic = None
+        self.target_critic = None
 
+    @classmethod
+    def create(cls, sess, env, random_seed, log_dir, params)
+        self = cls(sess, env, random_seed, log_dir, params)
         # Initialize the Actor network and its target net
-        state_dim = int(self.env.observation_space.shape[0])
-        self.action_dim = int(self.env.action_space.shape[0])
-        self.actor = Actor.create(self.sess, state_dim, actor_hidden_units, self.action_dim, final_layer_init, batch_size, actor_learning_rate, actor_gate_gradients)
-        self.target_actor = Target.create(self.actor, tau)
+        actor_params = params.actor
+        actor_params.input_dim = self.params.state_dim
+        actor_params.out_dim = self.params.action_dim
+        self.actor = Actor.create(self.sess, actor_params)
+        self.target_actor = Target.create(self.actor, self.params.tau)
 
         # Initialize the Critic network and its target net
-        self.critic = Critic.create(self.sess, state_dim, self.action_dim, critic_hidden_units, final_layer_init, critic_learning_rate)
+        self.critic = Critic.create(self.sess, self.state_dim, self.action_dim, critic_hidden_units, final_layer_init, critic_learning_rate)
         self.target_critic = Target.create(self.critic, tau)
 
         # Initialize target networks with weights equal to the learned networks
