@@ -175,19 +175,20 @@ class TestReplayBuffer(unittest.TestCase):
         transitions.append({'state': [4, 3, 1, 1], 'action': [4, 1], 'reward': -30.3, 'next_state': [4, 40, 3, 4], 'terminal': 0.0 })
 
         replay_buffer = ReplayBuffer(10, 1)
+        replay_buffer.seed(999)
 
         for t in transitions:
             replay_buffer.store(t['state'], t['action'], t['reward'], t['next_state'], t['terminal'])
 
         state_batch, action_batch, reward_batch, next_state_batch, terminal = replay_buffer.sample_batch(2)
 
-        self.assertTrue((state_batch[0] == np.array([2, 2, 0, 0])).all())
+        self.assertTrue((state_batch[0] == np.array([1, 0, 0, 0])).all())
         self.assertTrue((state_batch[1] == np.array([3, 8, 1, 0])).all())
-        self.assertTrue((action_batch[0] == np.array([2, 3])).all())
+        self.assertTrue((action_batch[0] == np.array([1, 4])).all())
         self.assertTrue((action_batch[1] == np.array([3, 2])).all())
-        self.assertEqual(reward_batch[0], -10.3)
+        self.assertEqual(reward_batch[0], -0.3)
         self.assertEqual(reward_batch[1], -20.3)
-        self.assertTrue((next_state_batch[0] == np.array([2, 40, 3, 4])).all())
+        self.assertTrue((next_state_batch[0] == np.array([1, 40, 3, 4])).all())
         self.assertTrue((next_state_batch[1] == np.array([3, 40, 3, 4])).all())
         self.assertEqual(terminal[0], 0.0)
         self.assertEqual(terminal[1], 1.0)

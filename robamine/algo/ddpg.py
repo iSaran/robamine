@@ -175,6 +175,9 @@ class ReplayBuffer:
         """
         return self.count
 
+    def seed(self, random_seed):
+        random.seed(random_seed)
+
 class Actor(Network):
     """
     Implements the Actor.
