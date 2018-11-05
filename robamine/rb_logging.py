@@ -63,7 +63,7 @@ class Formatter(logging.Formatter):
 
         return result
 
-def init(directory, console_level=logging.INFO):
+def init(directory='/tmp', console_level=logging.INFO):
     global _logger, _log_path
 
     # Create the log path
@@ -90,6 +90,11 @@ def init(directory, console_level=logging.INFO):
 
 def get_logger_path():
     global _log_path
+
+    if _log_path:
+        return _log_path
+
+    init()
     return _log_path
 
 def get_now_timestamp():
