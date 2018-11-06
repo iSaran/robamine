@@ -1,9 +1,9 @@
 import tensorflow as tf
 import logging
+
 from robamine.algo.core import World, WorldMode
 from robamine.algo.dummy import Dummy, DummyParams
 from robamine import rb_logging
-import logging
 
 if __name__ == '__main__':
 

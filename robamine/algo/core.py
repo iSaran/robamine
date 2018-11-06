@@ -67,84 +67,7 @@ class Agent:
 
     def __init__(self, sess, params=AgentParams()):
         self.params = params
-
         self.sess = sess
-
-
-    def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0, render_eval = False):
-        """
-        Performs the policy improvement loop. For a given number of episodes
-        this function runs the basic RL loop for each timestep of the episode,
-        i.e.:
-
-        * Selects an action based on the exploration policy (see :meth:`.explore`)
-        * Performs the action to the environment and reads the next state
-          and the reward.
-        * Learns from this experience (i.e. optimizes the learned policy
-          based on some algorithm, see :meth:`.learn`).
-
-        Parameters
-        ----------
-        n_episodes : int
-            The number of episodes to train the model.
-        episode_batch_size : int
-            The number of episodes per episode batch. Used to divide episode
-            for extracting valuable statistics
-        render : bool
-            True of rendering is required. False otherwise.
-        episodes_to_evaluate : int
-            The number of episodes to evaluate the agent during training (at the end of each epoch)
-        """
-
-        assert n_episodes % episode_batch_size == 0
-
-        logger.debug('Agent: starting training')
-        for episode in range(n_episodes):
-            state = self.env.reset()
-            logger.debug('Episode: %d',  episode)
-
-            for t in range(self.episode_horizon):
-
-                if (render):
-                    self.env.render()
-
-                logger.debug('Timestep %d: ', t)
-                logger.debug('Given state: %s', state.__str__())
-
-                #self.logger.console.debug('Actor params:' + self.actor.get_params().__str__())
-                action = self.explore(state)
-                logger.debug('Action to explore: %s', action.__str__())
-
-                # Execute the action on the environment and observe reward and next state
-                next_state, reward, done, info = self.env.step(action)
-                logger.debug('Next state by the environment: %s', next_state.__str__())
-                logger.debug('Reward by the environment: %f', reward)
-
-                # Learn
-                logger.debug('Learn based on this transition')
-                self.learn(state, action, reward, next_state, done)
-                Q = self.q_value(state, action)
-                logger.debug('Q value by the agent: %f', Q)
-
-                state = next_state
-
-                self.train_stats.update_timestep({'reward': reward, 'q_value': Q})
-
-                if done:
-                    break
-
-            self.train_stats.update_episode(episode)
-
-            if ((episode + 1) % episode_batch_size == 0):
-                self.train_stats.update_batch((episode + 1) / episode_batch_size - 1)
-                self.train_stats.print_progress(self.name, self.env.spec.id, episode, n_episodes)
-                self.evaluate(episodes_to_evaluate, render_eval)
-                self.logger.flush()
-                print_progress(episode, n_episodes, start_time)
-                # self.save()
-
-            # Evaluate the agent (run the learned policy for a number of episodes)
-            #eval_stats = self.evaluate(episodes_to_evaluate)
 
     def explore(self, state):
         """
@@ -189,61 +112,6 @@ class Agent:
         """
         raise NotImplementedError
 
-    def evaluate(self, n_episodes = 1, render=False):
-        """
-        Performs the policy evaluation loop. For a given number of episodes
-        this function runs the basic RL loop for each timestep of the episode
-        performing only optimal actions (no exploration as it happens in
-        :meth:`.train`):
-
-        * Selects an action based on the optimal policy (calls :meth:`.predict`)
-        * Performs the action to the environment and reads the next state
-          and the reward.
-
-        Parameters
-        ----------
-        n_episodes : int
-            The number of episodes to evaluate the model. Multiple episodes can be used for producing stats, average of successes etc.
-        render : bool
-            True of rendering is required. False otherwise.
-        """
-        if (n_episodes == 0):
-            return
-
-        logger.debug('Agent: Starting evalulation for %d episodes.', n_episodes)
-
-        for episode in range(n_episodes):
-            state = self.env.reset()
-
-            logger.debug('Episode: %d', episode)
-
-            for t in range(self.episode_horizon):
-
-                logger.debug('Timestep: %d', t)
-
-                if (render):
-                    self.env.render()
-
-                # Select an action based on the exploration policy
-                action = self.predict(state)
-
-                # Execute the action on the environment  and observe reward and next state
-                next_state, reward, done, info = self.env.step(action)
-
-                Q = self.q_value(state, action)
-
-                state = next_state
-
-                self.eval_stats.update_timestep({'reward': reward, 'q_value': Q})
-
-                if done:
-                    break
-
-            self.eval_stats.update_episode(n_episodes * self.eval_episode_batch + episode)
-
-        self.eval_stats.update_batch(self.eval_episode_batch)
-        self.eval_episode_batch += 1
-
     def predict(self, state):
         """
         Represents the learned policy which provides optimal actions. It is used from :meth:`.evaluate`
@@ -273,15 +141,14 @@ class Agent:
 class NetworkParams:
     def __init__(self,
                  input_dim=None,
-                 out_dim=None,
                  hidden_units=None,
-                 trainable=None,
+                 output_dim=None,
                  name=None):
-        self.input_dim = input_dim
-        self.output_dim = out_dim
         self.hidden_units = hidden_units
-        self.trainable = trainable
         self.name = name
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.trainable = None
 
 class Network:
     """
@@ -366,9 +233,9 @@ class Network:
 
     def get_params(self, name = None):
         if name is None:
-            return self.sess.run(self.net_params)
+            return self.sess.run(self.params.trainable)
         else:
-            k = [v for v in self.net_params if v.name == name][0]
+            k = [v for v in self.params.trainable if v.name == name][0]
             return self.sess.run(k)
 
     def to_dict(self):
@@ -446,14 +313,13 @@ class World:
         agent_params.action_dim = int(env.action_space.shape[0])
         agent_params.random_seed = random_seed
 
-        module = importlib.import_module('robamine.algo.dummy')
-        #module = importlib.import_module('robamine.algo'.join('.').join(agent_params.name.lower()))
+        module = importlib.import_module('robamine.algo.' + agent_params.name.lower())
         agent_handle = getattr(module, agent_params.name)
 
         if (agent_params.name == 'Dummy'):
             agent = agent_handle(sess, agent_params, env.action_space)
         else:
-            agent = agent_handle(sess, agent_params)
+            agent = agent_handle.create(sess, agent_params)
 
         return cls(sess, agent, env, name)
 

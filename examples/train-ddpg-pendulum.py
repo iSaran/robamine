@@ -1,11 +1,15 @@
 import tensorflow as tf
 import logging
-import robamine as rb
+
+from robamine.algo.core import World, WorldMode
+from robamine.algo.ddpg import DDPG, DDPGParams
+from robamine import rb_logging
 
 if __name__ == '__main__':
 
-    rb.rb_logging.init('/home/iason/robamine_logs/ddpg-pendulum')
+    rb_logging.init('/home/iason/robamine_logs/ddpg-pendulum')
 
     with tf.Session() as sess:
-        agent = rb.algo.ddpg.DDPG(sess, 'Pendulum-v0', exploration_noise_sigma=0.2)
-        agent.train(n_episodes=1000, episode_batch_size=25, render=False, episodes_to_evaluate=10, render_eval=False)
+        world = World.create(sess, DDPGParams(), 'Pendulum-v0')
+        # world.train(n_episodes=1000, episode_batch_size=25, render=False, episodes_to_evaluate=10, render_eval=False)
+        world.train(n_episodes=1000)

@@ -40,7 +40,7 @@ import pickle
 import os
 
 from robamine.algo.core import Network, NetworkParams, Agent, AgentParams
-from robamine.algo.util import OrnsteinUhlenbeckActionNoise, Logger, Stats
+from robamine.algo.util import OrnsteinUhlenbeckActionNoise
 import math
 
 import logging
@@ -182,22 +182,14 @@ class ReplayBuffer:
 
 class ActorParams(NetworkParams):
     def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
                  hidden_units = (400, 300),
-                 trainable=None,
                  name = "Actor",
                  learning_rate = 1e-4,
                  gate_gradients = False,
                  final_layer_init=(-3e-3, 3e-3),
                  batch_size = 64):
-
-        super().__init__(input_dim=state_dim,
-                         out_dim=action_dim,
-                         hidden_units=hidden_units,
-                         trainable=trainable,
+        super().__init__(hidden_units=hidden_units,
                          name=name)
-
         self.learning_rate = learning_rate
         self.gate_gradients = gate_gradients
         self.final_layer_init = final_layer_init
@@ -256,12 +248,12 @@ class Actor(Network):
         with tf.variable_scope(self.params.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
             with tf.variable_scope('network'):
-                self.out, self.params.trainable = self.architecture(self.state_input, self.params.hidden_dims, self.params.out_dim, self.params.final_layer_init)
+                self.out, self.params.trainable = self.architecture(self.state_input, self.params.hidden_units, self.params.output_dim, self.params.final_layer_init)
 
             # Here we store the grad of Q w.r.t the actions. This gradient is
             # provided by the Critic and is used to implement the policy gradient
             # below.
-            self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.params.out_dim], name='gradQ_a')
+            self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.params.output_dim], name='gradQ_a')
 
             # Calculate the gradient of the policy's actions w.r.t. the policy's
             # parameters and multiply it by the gradient of Q w.r.t the actions
@@ -352,18 +344,20 @@ class Target(Network):
     def __init__(self, base, tau, name=None):
         assert isinstance(base, Actor) or isinstance(base, Critic), 'The base network should either an Actor or a Critic'
 
-        n = base.name + '_target'
+        n = base.params.name + '_target'
         if name is not None:
             n = n + '_' + name
 
-        super().__init__(base.sess, base.input_dim, base.hidden_dims, base.out_dim, n)
+        params = NetworkParams(input_dim=base.params.input_dim, hidden_units=base.params.hidden_units, output_dim=base.params.output_dim, name=n)
+        super().__init__(base.sess, params)
 
         self.base_is_actor = False
         if isinstance(base, Actor):
             self.base_is_actor = True
 
         # Operation for updating target network with learned network weights.
-        self.base_net_params = base.net_params
+        self.params.trainable = self.params.trainable
+
         self.state_input = None
         self.action_input = None
 
@@ -374,29 +368,29 @@ class Target(Network):
     def create(cls, base, tau):
         self = cls(base, tau)
 
-        with tf.variable_scope(self.name):
+        with tf.variable_scope(self.params.name):
             if isinstance(base, Actor):
-                self.state_input = tf.placeholder(tf.float32, [None, base.input_dim], name='state_input')
+                self.state_input = tf.placeholder(tf.float32, [None, base.params.input_dim], name='state_input')
             elif isinstance(base, Critic):
-                self.state_input = tf.placeholder(tf.float32, [None, base.input_dim[0]], name='state_input')
-                self.action_input = tf.placeholder(tf.float32, [None, base.input_dim[1]], name='action_input')
+                self.state_input = tf.placeholder(tf.float32, [None, base.params.input_dim[0]], name='state_input')
+                self.action_input = tf.placeholder(tf.float32, [None, base.params.input_dim[1]], name='action_input')
 
             with tf.variable_scope('network'):
 
                 if isinstance(base, Actor):
-                    self.out, self.net_params = Actor.architecture(self.state_input, base.hidden_dims, base.out_dim, base.final_layer_init)
+                    self.out, self.params.trainable = Actor.architecture(self.state_input, base.params.hidden_units, base.params.output_dim, base.params.final_layer_init)
                 elif isinstance(base, Critic):
-                    self.out, self.net_params = Critic.architecture(self.state_input, self.action_input, base.hidden_dims, base.final_layer_init)
+                    self.out, self.params.trainable = Critic.architecture(self.state_input, self.action_input, base.params.hidden_units, base.params.final_layer_init)
 
             with tf.variable_scope('update_params_with_base'):
                 self.update_net_params = \
-                    [self.net_params[i].assign( \
-                        tf.multiply(self.base_net_params[i], tau) + tf.multiply(self.net_params[i], 1. - tau))
-                        for i in range(len(self.net_params))]
+                    [self.params.trainable[i].assign( \
+                        tf.multiply(base.params.trainable[i], tau) + tf.multiply(self.params.trainable[i], 1. - tau))
+                        for i in range(len(self.params.trainable))]
 
             # Define an operation to set my params the same as the actor's for initialization
             with tf.variable_scope('set_params_equal_to_base'):
-                self.equal_params = [self.net_params[i].assign(self.base_net_params[i]) for i in range(len(base.net_params))]
+                self.equal_params = [self.params.trainable[i].assign(base.params.trainable[i]) for i in range(len(base.params.trainable))]
 
         return self
 
@@ -422,22 +416,16 @@ class Target(Network):
 
 class CriticParams(NetworkParams):
     def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
                  hidden_units = (400, 300),
-                 trainable=None,
                  name = "Critic",
                  learning_rate = 1e-4,
                  final_layer_init=(-3e-3, 3e-3)):
 
-        super().__init__(input_dim=(state_dim, action_dim),
-                         out_dim=1,
-                         hidden_units=hidden_units,
-                         trainable=trainable,
+        super().__init__(hidden_units=hidden_units,
                          name=name)
-
         self.learning_rate = learning_rate
         self.final_layer_init = final_layer_init
+        self.output_dim = 1
 
 class Critic(Network):
     """
@@ -581,12 +569,7 @@ class Critic(Network):
 
 class DDPGParams(AgentParams):
     def __init__(self,
-                 env_name=None,
-                 state_dim=None,
-                 action_dim=None,
-                 episode_horizon=None,
                  random_seed=999,
-                 log_dir='/tmp',
                  replay_buffer_size = 1e6,
                  batch_size = 64,
                  gamma = 0.999,
@@ -594,8 +577,7 @@ class DDPGParams(AgentParams):
                  tau = 1e-3,
                  actor = ActorParams(),
                  critic = CriticParams()):
-        super().__init__(env_name, state_dim, action_dim, episode_horizon, random_seed, log_dir)
-        self.name = "DDPG"
+        super().__init__(random_seed, "DDPG")
 
         # DDPG params
         self.replay_buffer_size = replay_buffer_size
@@ -652,25 +634,21 @@ class DDPG(Agent):
         self.replay_buffer = None
         self.exploration_noise = None
 
-        self.logger = None
-        self.train_stats = None
-        self.eval_stats = None
-        self.eval_episode_batch = 0
-
     @classmethod
     def create(cls, sess, params):
         self = cls(sess, params)
         # Initialize the Actor network and its target net
         actor_params = params.actor
         actor_params.input_dim = self.params.state_dim
-        actor_params.out_dim = self.params.action_dim
+        actor_params.output_dim = self.params.action_dim
         self.actor = Actor.create(self.sess, actor_params)
         self.target_actor = Target.create(self.actor, self.params.tau)
 
         # Initialize the Critic network and its target net
         critic_params = params.critic
-        self.critic = Critic.create(self.sess, self.state_dim, self.action_dim, critic_hidden_units, final_layer_init, critic_learning_rate)
-        self.target_critic = Target.create(self.critic, tau)
+        critic_params.input_dim = (self.params.state_dim, self.params.action_dim)
+        self.critic = Critic.create(self.sess, critic_params)
+        self.target_critic = Target.create(self.critic, self.params.tau)
 
         # Initialize target networks with weights equal to the learned networks
         self.sess.run(tf.global_variables_initializer())
@@ -678,16 +656,11 @@ class DDPG(Agent):
         self.target_critic.equalize_params()
 
         # Initialize replay buffer
-        self.batch_size = batch_size
         self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size, self.params.random_seed)
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.params.action_dim), sigma = self.params.exploration_noise_sigma)
 
-        self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id)
-        self.train_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "train")
-        self.eval_stats = Stats(dt=0.02, logger=self.logger, timestep_stats = ['reward', 'q_value'], name = "eval")
-
-        self.logger.init_tf_writer()
+        return self
 
     def explore(self, state):
         """
@@ -730,7 +703,7 @@ class DDPG(Agent):
         obs = state.reshape(1, state.shape[0])
         return np.reshape(self.actor.predict(obs), (self.action_dim,))
 
-    def learn(self, state, action, reward, next_state, done):
+    def learn(self, transition):
         """
         Implements the DDPG for each timestep of the episode:
 
@@ -755,17 +728,23 @@ class DDPG(Agent):
         """
 
 
+        state = transition.state
+        action = transition.action
+        reward = transition.reward
+        next_state = transition.next_state
+        done = transition.terminal
+
         logger.debug("Storing transition into replay buffer")
         self.replay_buffer.store(state, action, reward, next_state, done)
         logger.debug('Size of replay buffer: %d', self.replay_buffer.size())
 
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
-        if self.replay_buffer.size() < self.batch_size:
+        if self.replay_buffer.size() < self.params.batch_size:
             return
 
         logger.debug("Sampling a minibatch from the replay buffer")
-        state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.batch_size)
+        state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.params.batch_size)
         logger.debug("Sampled batches by replay buffer:")
         logger.debug('State batch: %s', state_batch.__str__())
         logger.debug('Action batch: %s', action_batch.__str__())
@@ -815,11 +794,11 @@ class DDPG(Agent):
         logger.debug('Q_target_next: %s', Q_target_next.__str__())
 
         y_i = []
-        for k in range(self.batch_size):
+        for k in range(self.params.batch_size):
             if terminal_batch[k]:
                 y_i.append(reward_batch[k])
             else:
-                y_i.append(reward_batch[k] + self.gamma * Q_target_next[k])
+                y_i.append(reward_batch[k] + self.params.gamma * Q_target_next[k])
 
         y_i = np.reshape(y_i, (64, 1))
 
