@@ -14,25 +14,20 @@ from robamine import rb_logging
 import logging
 import os
 import pickle
+from enum import Enum
+import importlib
 
 logger = logging.getLogger('robamine.algo.core')
 
 class AgentParams:
     def __init__(self,
-                 env_name=None,
-                 state_dim=None,
-                 action_dim=None,
-                 episode_horizon=None,
-                 random_seed=999
-                 log_dir='/tmp'
+                 random_seed=999,
                  name=None):
-        self.env_name = env_name
-        self.state_dim = state_dim
-        self.action_dim = action_dim
-        self.episode_horizon = episode_horizon
         self.random_seed = random_seed
-        self.log_dir = log_dir
         self.name = name
+
+        self.state_dim=None,
+        self.action_dim=None,
 
 class Agent:
     """
@@ -72,22 +67,8 @@ class Agent:
     def __init__(self, sess, params=AgentParams()):
         self.params = params
 
-        # Environment setup
-        self.env = gym.make(self.params.env_name)
-        self.env.seed(self.params.random_seed)
-        if isinstance(self.env.observation_space, gym.spaces.dict_space.Dict):
-            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
-            self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
-
-        self.params.state_dim = int(self.env.observation_space.shape[0])
-        self.params.action_dim = int(self.env.action_space.shape[0])
-        self.params.episode_horizon = int(self.env._max_episode_steps)
-
         self.sess = sess
 
-        self.params.log_dir = os.path.join(rb_logging.get_logger_path(), self.params.name.replace(" ", "_") + '_' + self.env.spec.id.replace(" ", "_"))
-
-        logger.info('Initialized agent: %s in environment: %s', self.params.name, self.env.spec.id)
 
     def train(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0, render_eval = False):
         """
@@ -403,3 +384,154 @@ class Network:
         net = cls(sess, data['input_dim'], data['hidden_dims'], data['out_dim'], data['name'], \
                         data['inputs'], data['out'], data['net_params'])
         return cls
+
+class Transition:
+    def __init__(self,
+                 state=None,
+                 action=None,
+                 reward=None,
+                 next_state=None,
+                 terminal=None):
+        self.state = state
+        self.action = action
+        self.reward = reward
+        self.next_state = next_state
+        self.terminal = terminal
+
+class WorldMode(Enum):
+    TRAIN = 1
+    EVAL = 2
+    TRAIN_EVAL = 3
+
+class World:
+    def __init__(self, agent, env, mode=WorldMode.EVAL, name=None):
+        self.agent = agent
+        self.env = env
+        self.name = name
+
+
+        self.state_dim = int(self.env.observation_space.shape[0])
+        self.action_dim = int(self.env.action_space.shape[0])
+        self.episode_horizon = int(self.env._max_episode_steps)
+
+        assert self.agent.params.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
+        assert self.agent.params.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
+
+
+        self.log_dir = os.path.join(rb_logging.get_logger_path(), self.agent.params.name.replace(" ", "_") + '_' + self.env.spec.id.replace(" ", "_"))
+
+        self._mode = WorldMode.EVAL
+
+        logger.info('Initialized agent: %s in environment: %s', self.agent.params.name, self.env.spec.id)
+
+    @classmethod
+    def create(cls, sess, agent_params, env_name, random_seed=999, name=None):
+        # Environment setup
+        env = gym.make(env_name)
+        env.seed(random_seed)
+        if isinstance(env.observation_space, gym.spaces.dict_space.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
+            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+
+        # Setup agent
+        agent_params.state_dim = int(env.observation_space.shape[0])
+        agent_params.action_dim = int(env.action_space.shape[0])
+        agent_params.random_seed = random_seed
+
+        module = importlib.import_module('robamine.algo.dummy')
+        #module = importlib.import_module('robamine.algo'.join('.').join(agent_params.name.lower()))
+        agent_handle = getattr(module, agent_params.name)
+
+        if (agent_params.name == 'Dummy'):
+            agent = agent_handle(sess, agent_params, env.action_space)
+        else:
+            agent = agent_handle(sess, agent_params)
+
+        return cls(agent, env, name)
+
+    def train(self, n_episodes, render=False):
+        self._mode = WorldMode.TRAIN
+        self.run(n_episodes=n_episodes, episode_batch_size=10, render=render)
+
+    def evaluate(self, n_episodes, render=False):
+        self._mode = WorldMode.EVAL
+        self.run(n_episode=n_episodes, episode_batch_size=10, render=render)
+
+    def train_and_eval(self, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every, render_train=False, render_eval=False):
+        self._mode = WorldMode.WorldMode.TRAIN_EVAL
+        self.run(n_episode=n_episodes, episode_batch_size=10, render=render)
+
+    def run(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0, render_eval = False):
+        assert n_episodes % episode_batch_size == 0
+
+        if self._mode == WorldMode.TRAIN or self._mode == WorldMode.TRAIN_EVAL:
+            train = True
+        elif self._mode == WorldMode.EVAL:
+            train = False
+
+        logger.debug('Agent: starting training')
+        for episode in range(n_episodes):
+
+            # Run an episode
+            episode_stats = self._episode(self.episode_horizon, render, train)
+
+            # Store episode stats
+            if train:
+                self.train_stats.update_episode(episode, episode_stats)
+            else:
+                self.eval_stats.update_episode(episode, episode_stats)
+
+            if (episode + 1) % episode_batch_size == 0:
+                if self._mode == WorldMode.TRAIN_EVAL:
+                    for episode in range(episodes_to_evaluate):
+                        episode_stats = self._episode(self.episodes_to_evaluate, render_eval, train=False)
+                        self.eval_stats.update_episode()
+                self.train_stats.print_progress(self.name, self.env.spec.id, episode, n_episodes)
+                self.logger.flush()
+
+    def _episode(self, timesteps, render=False, train=False):
+        stats = {'reward': [], 'q_value': []}
+        state = self.env.reset()
+        for t in range(timesteps):
+            if (render):
+                self.env.render()
+
+            # logger.debug('Timestep %d: ', t)
+            # logger.debug('Given state: %s', state.__str__())
+
+            # Act: Explore or optimal policy?
+            if train:
+                action = self.agent.explore(state)
+            else:
+                action = self.agent.evaluate(state)
+
+            # logger.debug('Action to explore: %s', action.__str__())
+
+            # Execute the action on the environment and observe reward and next state
+            next_state, reward, done, info = self.env.step(action)
+            # logger.debug('Next state by the environment: %s', next_state.__str__())
+            # logger.debug('Reward by the environment: %f', reward)
+
+            transition = Transition(state, action, reward, next_state, done)
+
+            if train:
+                self.agent.learn(transition)
+
+            # Learn
+            # logger.debug('Learn based on this transition')
+            Q = self.agent.q_value(state, action)
+            # logger.debug('Q value by the agent: %f', Q)
+
+            state = next_state
+
+            # self.train_stats.update_timestep({'reward': reward, 'q_value': Q})
+
+            # Compile stats
+            stats['reward'].append(reward)
+            stats['q_value'].append(Q)
+
+            if done:
+                break
+
+        return stats
+

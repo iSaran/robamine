@@ -39,7 +39,7 @@ import gym
 import pickle
 import os
 
-from robamine.algo.core import Network, Agent
+from robamine.algo.core import Network, NetworkParams, Agent, AgentParams
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, Logger, Stats
 import math
 
@@ -430,7 +430,7 @@ class CriticParams(NetworkParams):
                  learning_rate = 1e-4,
                  final_layer_init=(-3e-3, 3e-3)):
 
-        super().__init__(input_dim=(state_dim, action_dim)
+        super().__init__(input_dim=(state_dim, action_dim),
                          out_dim=1,
                          hidden_units=hidden_units,
                          trainable=trainable,
@@ -485,7 +485,7 @@ class Critic(Network):
         self.action_input = None
 
     @classmethod
-    def create(cls, sess, params)
+    def create(cls, sess, params):
         self = cls(sess, params)
 
         with tf.variable_scope(self.params.name):
@@ -585,7 +585,7 @@ class DDPGParams(AgentParams):
                  state_dim=None,
                  action_dim=None,
                  episode_horizon=None,
-                 random_seed=999
+                 random_seed=999,
                  log_dir='/tmp',
                  replay_buffer_size = 1e6,
                  batch_size = 64,
@@ -641,7 +641,7 @@ class DDPG(Agent):
     exploration_noise_sigma : float
         The sigma for the OrnsteinUhlenbeck Noise for exploration.
     """
-    def __init__(self, sess, params)
+    def __init__(self, sess, params):
 
         super().__init__(sess, params)
 
@@ -658,7 +658,7 @@ class DDPG(Agent):
         self.eval_episode_batch = 0
 
     @classmethod
-    def create(cls, sess, params)
+    def create(cls, sess, params):
         self = cls(sess, params)
         # Initialize the Actor network and its target net
         actor_params = params.actor
