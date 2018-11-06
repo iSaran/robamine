@@ -72,7 +72,7 @@ class Formatter(logging.Formatter):
 
         return result
 
-def init(directory='/tmp', console_level=logging.INFO):
+def init(directory='/tmp', console_level=logging.INFO, file_level=logging.DEBUG):
     global _logger, _log_path
 
     # Create the log path
@@ -83,7 +83,7 @@ def init(directory='/tmp', console_level=logging.INFO):
     os.makedirs(log_path)
     _log_path = log_path
 
-    logging.basicConfig(level=logging.DEBUG,
+    logging.basicConfig(level=file_level,
                         format='[%(name)s][%(levelname)s] %(message)s',
                         filename=os.path.join(log_path, 'console.log'),
                         filemode='w')
