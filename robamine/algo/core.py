@@ -409,16 +409,16 @@ class World:
         self.env = env
         self.name = name
 
-
         self.state_dim = int(self.env.observation_space.shape[0])
         self.action_dim = int(self.env.action_space.shape[0])
-        self.episode_horizon = int(self.env._max_episode_steps)
 
         assert self.agent.params.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
         assert self.agent.params.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
 
+        self.agent_name = self.agent.params.name
+        self.env_name = self.env.spec.id
 
-        self.log_dir = os.path.join(rb_logging.get_logger_path(), self.agent.params.name.replace(" ", "_") + '_' + self.env.spec.id.replace(" ", "_"))
+        self.log_dir = os.path.join(rb_logging.get_logger_path(), self.agent_name.replace(" ", "_") + '_' + self.env_name.replace(" ", "_"))
 
         self._mode = WorldMode.EVAL
 
@@ -450,67 +450,71 @@ class World:
         return cls(agent, env, name)
 
     def train(self, n_episodes, render=False):
+        logger.info('%s training on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
         self._mode = WorldMode.TRAIN
         self.run(n_episodes=n_episodes, episode_batch_size=10, render=render)
 
     def evaluate(self, n_episodes, render=False):
+        logger.info('%s evaluating on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
         self._mode = WorldMode.EVAL
-        self.run(n_episode=n_episodes, episode_batch_size=10, render=render)
+        self.run(n_episodes=n_episodes, episode_batch_size=10, render=render)
 
     def train_and_eval(self, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every, render_train=False, render_eval=False):
-        self._mode = WorldMode.WorldMode.TRAIN_EVAL
-        self.run(n_episode=n_episodes, episode_batch_size=10, render=render)
+        logger.info('%s training on %s for %d episodes and evaluating for %d episodes every %d episodes of training', self.agent_name, self.env_name, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every)
+        self._mode = WorldMode.TRAIN_EVAL
+        self.run(n_episodes=n_episodes_to_train, episode_batch_size=evaluate_every, episodes_to_evaluate=n_episodes_to_evaluate, render=render_train, render_eval=render_eval)
 
-    def run(self, n_episodes, episode_batch_size = 1, render=False, episodes_to_evaluate=0, render_eval = False):
+    def run(self, n_episodes, episode_batch_size=1, episodes_to_evaluate=0, render=False, render_eval=False):
         assert n_episodes % episode_batch_size == 0
 
+        logger.debug('Start running world')
         if self._mode == WorldMode.TRAIN or self._mode == WorldMode.TRAIN_EVAL:
             train = True
         elif self._mode == WorldMode.EVAL:
             train = False
 
-        logger.debug('Agent: starting training')
         for episode in range(n_episodes):
 
+            logger.debug('Start episode: %d', episode)
             # Run an episode
-            episode_stats = self._episode(self.episode_horizon, render, train)
+            episode_stats = self._episode(render, train)
 
             # Store episode stats
-            if train:
-                self.train_stats.update_episode(episode, episode_stats)
-            else:
-                self.eval_stats.update_episode(episode, episode_stats)
+            # if train:
+            #     self.train_stats.update_episode(episode, episode_stats)
+            # else:
+            #     self.eval_stats.update_episode(episode, episode_stats)
 
             if (episode + 1) % episode_batch_size == 0:
                 if self._mode == WorldMode.TRAIN_EVAL:
                     for episode in range(episodes_to_evaluate):
-                        episode_stats = self._episode(self.episodes_to_evaluate, render_eval, train=False)
-                        self.eval_stats.update_episode()
-                self.train_stats.print_progress(self.name, self.env.spec.id, episode, n_episodes)
-                self.logger.flush()
+                        episode_stats = self._episode(render_eval, train=False)
+                        # self.eval_stats.update_episode()
+                # self.train_stats.print_progress(self.name, self.env.spec.id, episode, n_episodes)
+                # self.logger.flush()
 
-    def _episode(self, timesteps, render=False, train=False):
+    def _episode(self, render=False, train=False):
         stats = {'reward': [], 'q_value': []}
         state = self.env.reset()
-        for t in range(timesteps):
+        while True:
             if (render):
                 self.env.render()
 
-            # logger.debug('Timestep %d: ', t)
-            # logger.debug('Given state: %s', state.__str__())
+            logger.debug('Timestep %d: ', len(stats['reward']))
+            logger.debug('Given state: %s', state.__str__())
 
             # Act: Explore or optimal policy?
             if train:
                 action = self.agent.explore(state)
             else:
-                action = self.agent.evaluate(state)
+                action = self.agent.predict(state)
 
-            # logger.debug('Action to explore: %s', action.__str__())
+            logger.debug('Action to explore: %s', action.__str__())
 
             # Execute the action on the environment and observe reward and next state
             next_state, reward, done, info = self.env.step(action)
-            # logger.debug('Next state by the environment: %s', next_state.__str__())
-            # logger.debug('Reward by the environment: %f', reward)
+            logger.debug('Next state by the environment: %s', next_state.__str__())
+            logger.debug('Reward by the environment: %f', reward)
 
             transition = Transition(state, action, reward, next_state, done)
 
@@ -518,9 +522,9 @@ class World:
                 self.agent.learn(transition)
 
             # Learn
-            # logger.debug('Learn based on this transition')
+            logger.debug('Learn based on this transition')
             Q = self.agent.q_value(state, action)
-            # logger.debug('Q value by the agent: %f', Q)
+            logger.debug('Q value by the agent: %f', Q)
 
             state = next_state
 
