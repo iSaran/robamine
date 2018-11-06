@@ -21,6 +21,8 @@ import random
 import logging
 logger = logging.getLogger('robamine.algo.util')
 
+import importlib
+
 def seed_everything(random_seed):
     random.seed(random_seed)
     tf.set_random_seed(random_seed)
@@ -40,6 +42,7 @@ def get_now_timestamp():
            '{:02d}'.format(now_raw.second) + '.' \
            '{:02d}'.format(now_raw.microsecond)
 
+
 def transform_sec_to_timestamp(seconds):
     """
     Transforms seconds to a timestamp string in format: hours:minutes:seconds
@@ -56,86 +59,49 @@ def transform_sec_to_timestamp(seconds):
     """
     hours, rem = divmod(seconds, 3600)
     minutes, seconds = divmod(rem, 60)
-    return "{:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds)
+    return "{:0>2}h:{:0>2}m:{:05.2f}s".format(int(hours),int(minutes),seconds)
 
-class Logger:
+def print_progress(episode, n_episodes, start_time):
+    percent = (episode + 1) / n_episodes * 100.0
+    time_elapsed = transform_sec_to_timestamp(time.time() - start_time)
+    estimated_time = transform_sec_to_timestamp((n_episodes - episode + 1) * (time.time() - start_time) / episode)
+    logger.info('Progress: Episode: %s from %s (%.2f%%). Time elapsed: %s. Estimated time: %s', str(episode + 1), str(n_episodes), percent, time_elapsed, estimated_time)
+    # logger.info('  Experience Time: %s', transform_sec_to_timestamp(step * dt))
+
+class DataStream:
     """
     Class for logging data into logfiles, saving models during training using Tensorflow.
     """
-    def __init__(self, sess, directory, agent_name, env_name):
+    def __init__(self, sess, directory, tf_writer, stats_name, name):
         self.sess = sess
-        self.agent_name = agent_name
-        self.env_name = env_name
-
-        # Create the log path
         self.log_path = directory
-        if not os.path.exists(self.log_path):
-            os.makedirs(self.log_path)
+        self.tf_writer = tf_writer
+        self.name = name
 
-        # Create the log file
-        self.file = {}
-
-        # Initialize variable for storing stats names for logging
-        self.stats = {}
-        self.tf_stats = {}
-        self.tf_summary_ops = {}
-
-        self.tf_writer = None
-
-        with tf.variable_scope('rl_logger') as self.tf_scope:
-            pass
-
-    def init_tf_writer(self):
-        self.tf_writer = tf.summary.FileWriter(self.log_path, self.sess.graph)
-
-    def flush(self):
-        for i in self.file:
-            self.file[i].flush()
-
-    def setup_stream(self, stream, stats):
-        """
-        Set up a stream. Basically writes the names of the variables to be
-        logged in the first row of the log file, defined by a stream. It should
-        be called before the log function.
-
-        Parameters
-        ---------
-        stream : str
-            The name of the stream
-        stats : list
-            A list of name variables to be logged.
-        """
-        if not os.path.exists(os.path.join(self.log_path, stream)):
-            os.makedirs(os.path.join(self.log_path, stream))
-        self.file[stream] = open(os.path.join(os.path.join(self.log_path, stream), stream + '.log'), "w+")
-
-        self.tf_stats[stream] = {}
-
-        self.stats[stream] = stats
-
+        # Setup file logging.
+        if not os.path.exists(os.path.join(self.log_path, name)):
+            os.makedirs(os.path.join(self.log_path, name))
+        self.file = open(os.path.join(os.path.join(self.log_path, name), name + '.log'), "w+")
         # Setup the first row (the name of the logged variables)
-        self.file[stream].write(stream)
-        for i in self.stats[stream]:
-            self.file[stream].write(',' + i)
-        self.file[stream].write('\n')
+        self.file.write(stats_name[0])
+        for i in range(1, len(stats_name)):
+            self.file.write(',' + stats_name[i])
+        self.file.write('\n')
 
-        # Log for Tensorboard
-        with tf.variable_scope(self.tf_scope, auxiliary_name_scope=False) as scope:
-            with tf.name_scope(scope.original_name_scope):
-                with tf.variable_scope(stream):
-                    for variable_name in self.stats[stream]:
-                        self.tf_stats[stream][stream + '/' + variable_name] = tf.Variable(0., name=variable_name)
-
+        # Setup Tensorboard logging.
+        self.tf_stats_name = [name + '/' + var for var in stats_name[1:]]  # the list of names for tf variables and summaries
+        self.tf_stats = {}
         summaries = []
-        for tf_variable_name in self.tf_stats[stream]:
-            summaries.append(tf.summary.scalar(tf_variable_name, self.tf_stats[stream][tf_variable_name]))
-        self.tf_summary_ops[stream] = tf.summary.merge(summaries)
+        with tf.variable_scope('robamine_data_stream_' + name):
+            for var in self.tf_stats_name:
+                self.tf_stats[var] = tf.Variable(0., name=var)
+                summaries.append(tf.summary.scalar(var, self.tf_stats[var]))
+        self.tf_summary_ops = tf.summary.merge(summaries)
 
     def __del__(self):
-        for key in self.file:
-            self.file[key].close()
+        self.file.close()
 
-    def log(self, x, y, stream):
+    def log(self, x, y):
         """
         Logs a new row of data into the file.
 
@@ -146,25 +112,20 @@ class Logger:
         y : dict
             The y values of the data, with keys the name of the variables defined by setup_stream.
         """
-        # Log a row.
-        self.file[stream].write('%d' % x)
-        for i in self.stats[stream]:
-            self.file[stream].write(',%f' % y[i])
-        self.file[stream].write('\n')
+        # Log a row in file.
+        self.file.write('%d' % x)
+        for i in y:
+            self.file.write(',%f' % i)
+        self.file.write('\n')
+        self.file.flush()
 
+        # Parse variables to TF summaries
         feed_dict = {}
-        for var_name in y:
-            feed_dict[self.tf_stats[stream][stream + '/' + var_name]] = y[var_name]
-        summary_str = self.sess.run(self.tf_summary_ops[stream], feed_dict=feed_dict)
-
-        if self.tf_writer is None:
-            logger.error('TF writer is not initialized. Please run Logger.init_tf_writer() before you start logging.')
-
+        for i in range(0, len(y)):
+            feed_dict[self.tf_stats[self.tf_stats_name[i]]] = y[i]
+        summary_str = self.sess.run(self.tf_summary_ops, feed_dict=feed_dict)
         self.tf_writer.add_summary(summary_str, x)
         self.tf_writer.flush()
-
-    def get_dir(self):
-        return self.log_path
 
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
 # based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
@@ -231,74 +192,52 @@ class Stats:
     name : str
         A name for these stats
     """
-    def __init__(self, dt, logger = None, timestep_stats = ['reward', 'q_value'], episode_stats = {'reward': ['mean', 'min', 'max', 'std'], 'q_value': ['mean', 'min', 'max', 'std']}, batch_stats = {'mean_reward': ['mean', 'min', 'max', 'std'], 'mean_q_value': ['mean', 'min', 'max', 'std']}, name = ""):
-        # Util staff
-        self.dt = dt
-        self.start_time = time.time()
-        self.logger = logger
-        self.name = name
+    def __init__(self, sess, log_dir, tf_writer, name, data_name = ['reward', 'q_value'], stats_name = ['mean', 'min', 'max', 'std']):
 
-        self.step = 0
+        self.data_name = data_name
+        self.stats_name = stats_name
+        log_var_names = ['episode']
+        for i in data_name:
+            for j in stats_name:
+                log_var_names.append(j + '_' + i)
 
-        self.timestep_stats = timestep_stats
-        self.episode_stats = episode_stats
-        self.batch_stats = batch_stats
+        self.data_stream = DataStream(sess, log_dir, tf_writer, log_var_names, name)
 
-        self.episode_stats_names = []
-        self.batch_stats_names = []
-        self.timestep_data = {}
-        self.episode_data = {}
-        for i in self.timestep_stats:
-            self.timestep_data[i] = []
+        # # Util staff
+        # self.dt = dt
+        # self.start_time = time.time()
+        # self.logger = logger
+        # self.name = name
 
-        for episode_stat in self.episode_stats:
-            for operation in self.episode_stats[episode_stat]:
-                self.episode_stats_names.append(operation + '_' + episode_stat)
-                self.episode_data[operation + '_' + episode_stat] = []
+        # self.step = 0
 
-        if self.batch_stats is not None:
-            for batch_stat in self.batch_stats:
-                for operation in self.batch_stats[batch_stat]:
-                    self.batch_stats_names.append(operation + '_' + batch_stat)
+        # self.timestep_stats = timestep_stats
+        # self.episode_stats = episode_stats
+        # self.batch_stats = batch_stats
 
-        self.logger.setup_stream(self.name + '_episode', self.episode_stats_names)
+        # self.episode_stats_names = []
+        # self.batch_stats_names = []
+        # self.timestep_data = {}
+        # self.episode_data = {}
+        # for i in self.timestep_stats:
+        #     self.timestep_data[i] = []
 
-        if self.batch_stats is not None:
-            self.logger.setup_stream(self.name + '_batch', self.batch_stats_names)
+        # for episode_stat in self.episode_stats:
+        #     for operation in self.episode_stats[episode_stat]:
+        #         self.episode_stats_names.append(operation + '_' + episode_stat)
+        #         self.episode_data[operation + '_' + episode_stat] = []
 
-    def perform_operation(self, data, operation):
-        logger.debug('Stats: Performing %s in data of size %s', operation, str(np.array(data).shape))
-        if operation == 'total':
-            return np.squeeze(np.sum(np.array(data)))
-        elif operation == 'mean':
-            return np.squeeze(np.mean(np.array(data)))
-        elif operation == 'min':
-            return np.squeeze(np.min(np.array(data)))
-        elif operation == 'max':
-            return np.squeeze(np.max(np.array(data)))
-        elif operation == 'std':
-            return np.squeeze(np.std(np.array(data)))
-        else:
-            raise ValueError('The operation is not valid. Valid operations are total, mean, min, max, std')
+        # if self.batch_stats is not None:
+        #     for batch_stat in self.batch_stats:
+        #         for operation in self.batch_stats[batch_stat]:
+        #             self.batch_stats_names.append(operation + '_' + batch_stat)
 
-    def update_timestep(self, data):
-        """
-        Update the stats that need to be updated at the end of a
-        time step.
+        # self.logger.setup_stream(self.name + '_episode', self.episode_stats_names)
 
-        Parameters
-        ---------
-        reward : float
-            The reward of this timestep
-        current_timestep : int
-            The current timestep
-        """
-        for i in self.timestep_stats:
-            self.timestep_data[i].append(data[i])
+        # if self.batch_stats is not None:
+        #     self.logger.setup_stream(self.name + '_batch', self.batch_stats_names)
 
-        self.step += 1
-
-    def update_episode(self, episode):
+    def update(self, episode, episode_data):
         """
         Update the stats that need to be updated at the end of an
         episode.
@@ -310,61 +249,13 @@ class Stats:
         """
         logger.debug('Stats: Updating for episode.')
 
-        data_log = {}
-        for stat in self.timestep_stats:
-            for operation in self.episode_stats[stat]:
-                data_log[operation + '_' + stat] = self.perform_operation(self.timestep_data[stat], operation)
-                self.episode_data[operation + '_' + stat].append(data_log[operation + '_' + stat])
+        row = []
+        for i in self.data_name:
+            for operation in self.stats_name:
+                operation = getattr(importlib.import_module('numpy'), operation)
+                row.append(np.squeeze(operation(np.array(episode_data[i]))))
+        self.data_stream.log(episode, row)
 
-        if self.logger is not None:
-            self.logger.log(episode, data_log, stream=self.name + '_episode')
-
-        # Initilize staff for the next loop
-        for i in self.timestep_stats:
-            self.timestep_data[i] = []
-
-    def update_batch(self, batch):
-        """
-        Update the stats that need to be updated at the end of an
-        epoch.
-        """
-        logger.debug('Stats: Updating for batch.')
-
-        if self.batch_stats is None:
-            logger.warn('update_batch(): Batch stats are None, nothing to do.')
-            return
-
-        data_log = {}
-        for stat in self.batch_stats:
-            for operation in self.batch_stats[stat]:
-                data_log[operation + '_' + stat] = self.perform_operation(self.episode_data[stat], operation)
-
-        if self.logger is not None:
-            self.logger.log(batch, data_log, stream=self.name + '_batch')
-
-        # Initilize staff for the next loop
-        for i in self.timestep_stats:
-            self.timestep_data[i] = []
-
-        for episode_stat in self.episode_stats:
-            for operation in self.episode_stats[episode_stat]:
-                self.episode_data[operation + '_' + episode_stat] = []
-
-    def print_progress(self, agent_name, env_name, episode, n_episodes):
-        logger.info('')
-        logger.info('===================================================')
-        logger.info('| Algorithm: %s, Environment: %s', agent_name, env_name)
-        logger.info('---------------------------------------------------')
-        logger.info('| Progress:')
-        logger.info('|   Episode: %s from %s', str(episode), str(n_episodes))
-        logger.info('|   Progress: %f %%', episode / n_episodes * 100.0)
-        logger.info('|   Time Elapsed: %s', self.get_time_elapsed())
-        logger.info('|   Experience Time: %s', transform_sec_to_timestamp(self.step * self.dt))
-        logger.info('===================================================')
-
-    def get_time_elapsed(self):
-        end = time.time()
-        return transform_sec_to_timestamp(end - self.start_time)
 
 class Plotter:
     def __init__(self, directory, streams, linewidth=1, _format='eps', dpi=1000):

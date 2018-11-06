@@ -6,7 +6,6 @@ A dummy agent which produces random actions. Used for testing.
 """
 
 from robamine.algo.core import Agent, AgentParams
-from robamine.algo.util import Logger, Stats
 
 class DummyParams(AgentParams):
     def __init__(self):

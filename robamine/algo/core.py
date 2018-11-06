@@ -9,13 +9,14 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import Logger, Stats, get_now_timestamp
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress
 from robamine import rb_logging
 import logging
 import os
 import pickle
 from enum import Enum
 import importlib
+import time
 
 logger = logging.getLogger('robamine.algo.core')
 
@@ -139,6 +140,7 @@ class Agent:
                 self.train_stats.print_progress(self.name, self.env.spec.id, episode, n_episodes)
                 self.evaluate(episodes_to_evaluate, render_eval)
                 self.logger.flush()
+                print_progress(episode, n_episodes, start_time)
                 # self.save()
 
             # Evaluate the agent (run the learned policy for a number of episodes)
@@ -404,7 +406,7 @@ class WorldMode(Enum):
     TRAIN_EVAL = 3
 
 class World:
-    def __init__(self, agent, env, mode=WorldMode.EVAL, name=None):
+    def __init__(self, sess, agent, env, name=None):
         self.agent = agent
         self.env = env
         self.name = name
@@ -419,8 +421,14 @@ class World:
         self.env_name = self.env.spec.id
 
         self.log_dir = os.path.join(rb_logging.get_logger_path(), self.agent_name.replace(" ", "_") + '_' + self.env_name.replace(" ", "_"))
+        if not os.path.exists(self.log_dir):
+            os.makedirs(self.log_dir)
 
         self._mode = WorldMode.EVAL
+
+        tf_writer = tf.summary.FileWriter(self.log_dir, sess.graph)
+        self.train_stats = Stats(sess, self.log_dir, tf_writer, 'train')
+        self.eval_stats = Stats(sess, self.log_dir, tf_writer, 'eval')
 
         logger.info('Initialized agent: %s in environment: %s', self.agent.params.name, self.env.spec.id)
 
@@ -447,7 +455,7 @@ class World:
         else:
             agent = agent_handle(sess, agent_params)
 
-        return cls(agent, env, name)
+        return cls(sess, agent, env, name)
 
     def train(self, n_episodes, render=False):
         logger.info('%s training on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
@@ -473,11 +481,18 @@ class World:
         elif self._mode == WorldMode.EVAL:
             train = False
 
+        counter = 0
+        start_time = time.time()
+
         for episode in range(n_episodes):
 
             logger.debug('Start episode: %d', episode)
             # Run an episode
             episode_stats = self._episode(render, train)
+            if train:
+                self.train_stats.update(episode, episode_stats)
+            else:
+                self.eval_stats.update(episode, episode_stats)
 
             # Store episode stats
             # if train:
@@ -487,10 +502,12 @@ class World:
 
             if (episode + 1) % episode_batch_size == 0:
                 if self._mode == WorldMode.TRAIN_EVAL:
-                    for episode in range(episodes_to_evaluate):
+                    for eval_episode in range(episodes_to_evaluate):
                         episode_stats = self._episode(render_eval, train=False)
+                        self.eval_stats.update(episodes_to_evaluate * counter + eval_episode, episode_stats)
+                counter += 1
                         # self.eval_stats.update_episode()
-                # self.train_stats.print_progress(self.name, self.env.spec.id, episode, n_episodes)
+                print_progress(episode, n_episodes, start_time)
                 # self.logger.flush()
 
     def _episode(self, render=False, train=False):
