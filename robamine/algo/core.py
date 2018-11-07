@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats
 from robamine import rb_logging
 import logging
 import os
@@ -354,10 +354,10 @@ class World:
 
             logger.debug('Start episode: %d', episode)
             # Run an episode
-            episode_stats, n_timesteps = self._episode(render, train)
+            episode_stats = self._episode(render, train)
             if train:
                 self.train_stats.update(episode, episode_stats)
-                total_n_timesteps += n_timesteps
+                total_n_timesteps += episode_stats.n_timesteps
             else:
                 self.eval_stats.update(episode, episode_stats)
 
@@ -371,7 +371,7 @@ class World:
             if (episode + 1) % episode_batch_size == 0:
                 if self._mode == WorldMode.TRAIN_EVAL:
                     for eval_episode in range(episodes_to_evaluate):
-                        episode_stats, _ = self._episode(render_eval, train=False)
+                        episode_stats = self._episode(render_eval, train=False)
                         self.eval_stats.update(episodes_to_evaluate * counter + eval_episode, episode_stats)
                     counter += 1
 
@@ -380,13 +380,13 @@ class World:
                 print_progress(episode, n_episodes, start_time, total_n_timesteps, 0.02)
 
     def _episode(self, render=False, train=False):
-        stats = {'reward': [], 'q_value': []}
+        stats = EpisodeStats()
         state = self.env.reset()
         while True:
             if (render):
                 self.env.render()
 
-            logger.debug('Timestep %d: ', len(stats['reward']))
+            logger.debug('Timestep %d: ', len(stats.reward))
             logger.debug('Given state: %s', state.__str__())
 
             # Act: Explore or optimal policy?
@@ -417,11 +417,12 @@ class World:
             # self.train_stats.update_timestep({'reward': reward, 'q_value': Q})
 
             # Compile stats
-            stats['reward'].append(reward)
-            stats['q_value'].append(Q)
+            stats.reward.append(reward)
+            stats.q_value.append(Q)
 
             if done:
                 break
 
-        return stats, len(stats['reward'])
+        stats.n_timesteps = len(stats.reward)
+        return stats
 

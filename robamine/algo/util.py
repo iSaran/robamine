@@ -83,13 +83,10 @@ class DataStream:
             os.makedirs(os.path.join(self.log_path, name))
         self.file = open(os.path.join(os.path.join(self.log_path, name), name + '.log'), "w+")
         # Setup the first row (the name of the logged variables)
-        self.file.write(stats_name[0])
-        for i in range(1, len(stats_name)):
-            self.file.write(',' + stats_name[i])
-        self.file.write('\n')
+        self.file.write(','.join(stats_name) + '\n')
 
         # Setup Tensorboard logging.
-        self.tf_stats_name = [name + '/' + var for var in stats_name[1:]]  # the list of names for tf variables and summaries
+        self.tf_stats_name = [name + '/' + var for var in stats_name]  # the list of names for tf variables and summaries
         self.tf_stats = {}
         summaries = []
         with tf.variable_scope('robamine_data_stream_' + name):
@@ -113,10 +110,7 @@ class DataStream:
             The y values of the data, with keys the name of the variables defined by setup_stream.
         """
         # Log a row in file.
-        self.file.write('%d' % x)
-        for i in y:
-            self.file.write(',%f' % i)
-        self.file.write('\n')
+        self.file.write(",".join(map(str, y)) + '\n')
         self.file.flush()
 
         # Parse variables to TF summaries
@@ -148,6 +142,12 @@ class OrnsteinUhlenbeckActionNoise:
 
     def __repr__(self):
         return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
+
+class EpisodeStats:
+    def __init__(self):
+        self.n_episodes = 0
+        self.reward = []
+        self.q_value = []
 
 class Stats:
     """
@@ -192,14 +192,12 @@ class Stats:
     name : str
         A name for these stats
     """
-    def __init__(self, sess, log_dir, tf_writer, name, data_name = ['reward', 'q_value'], stats_name = ['mean', 'min', 'max', 'std']):
-
-        self.data_name = data_name
+    def __init__(self, sess, log_dir, tf_writer, name, stats_name = ['mean', 'min', 'max', 'std']):
         self.stats_name = stats_name
-        log_var_names = ['episode']
-        for i in data_name:
-            for j in stats_name:
-                log_var_names.append(j + '_' + i)
+        log_var_names = ['n_timesteps']
+        for j in stats_name:
+            log_var_names.append(j + '_reward')
+            log_var_names.append(j + '_q_value')
 
         self.data_stream = DataStream(sess, log_dir, tf_writer, log_var_names, name)
 
@@ -215,11 +213,11 @@ class Stats:
         """
         logger.debug('Stats: Updating for episode.')
 
-        row = []
-        for i in self.data_name:
-            for operation in self.stats_name:
-                operation = getattr(importlib.import_module('numpy'), operation)
-                row.append(np.squeeze(operation(np.array(episode_data[i]))))
+        row = [episode_data.n_timesteps]
+        for operation in self.stats_name:
+            operation = getattr(importlib.import_module('numpy'), operation)
+            row.append(np.squeeze(operation(np.array(episode_data.reward))))
+            row.append(np.squeeze(operation(np.array(episode_data.q_value))))
         self.data_stream.log(episode, row)
 
 class Plotter:
