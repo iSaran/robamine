@@ -294,3 +294,25 @@ class Plotter:
                 plt.legend()
                 plt.savefig(os.path.join(os.path.join(self.directory, stream), i +'.' + self.format), format=self.format, dpi=self.dpi)
                 plt.clf()
+
+    @staticmethod
+    def create_batch_file(file_path, file_name, batch_size, cols=['mean_reward', 'mean_q_value'], write_to_file=False):
+        # Load file
+        df = pd.read_csv(os.path.join(file_path, file_name))
+
+        # Keep only the columns of interest from the log file
+        for col in list(df.columns.values):
+            if col not in cols:
+                del df[col]
+
+        frames = [df.groupby(df.index // 5).mean().add_prefix('mean_'),
+                  df.groupby(df.index // 5).min().add_prefix('min_'),
+                  df.groupby(df.index // 5).max().add_prefix('max_'),
+                  df.groupby(df.index // 5).std().add_prefix('std_')]
+        result =  pd.concat(frames, axis=1)
+        result.index.name = 'episode_batch'
+        if write_to_file:
+            result.to_csv(os.path.join(file_path, 'batch_' + file_name))
+            logger.info('Writing batch file to: %s', os.path.join(file_path, 'batch_' + file_name))
+        return result
+
