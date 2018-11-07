@@ -701,7 +701,7 @@ class DDPG(Agent):
             The optimal action to be performed.
         """
         obs = state.reshape(1, state.shape[0])
-        return np.reshape(self.actor.predict(obs), (self.action_dim,))
+        return np.reshape(self.actor.predict(obs), (self.params.action_dim,))
 
     def learn(self, transition):
         """
