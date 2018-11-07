@@ -63,7 +63,7 @@ def transform_sec_to_timestamp(seconds):
 def print_progress(episode, n_episodes, start_time, steps, dt):
     percent = (episode + 1) / n_episodes * 100.0
     time_elapsed = transform_sec_to_timestamp(time.time() - start_time)
-    estimated_time = transform_sec_to_timestamp((n_episodes - episode + 1) * (time.time() - start_time) / episode)
+    estimated_time = transform_sec_to_timestamp((n_episodes - episode + 1) * (time.time() - start_time) / (episode + 1))
     experience_time = transform_sec_to_timestamp(steps * dt)
     logger.info('Progress: Episode: %s from %s (%.2f%%). Time elapsed: %s. Estimated time: %s. Experience time: %s', str(episode + 1), str(n_episodes), percent, time_elapsed, estimated_time, experience_time)
     # logger.info('  Experience Time: %s', transform_sec_to_timestamp(step * dt))
@@ -221,7 +221,6 @@ class Stats:
                 operation = getattr(importlib.import_module('numpy'), operation)
                 row.append(np.squeeze(operation(np.array(episode_data[i]))))
         self.data_stream.log(episode, row)
-
 
 class Plotter:
     def __init__(self, directory, streams, linewidth=1, _format='eps', dpi=1000):
