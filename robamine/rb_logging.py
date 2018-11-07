@@ -96,6 +96,7 @@ def init(directory='/tmp', console_level=logging.INFO, file_level=logging.DEBUG)
     _logger = logging.getLogger('robamine')
 
     _logger.info('Logging in path: %s', log_path)
+    _logger.info('Logging Console Level: %s, File Level: %s', logging.getLevelName(console_level), logging.getLevelName(file_level))
 
 def get_logger_path():
     global _log_path
