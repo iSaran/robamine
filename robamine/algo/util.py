@@ -296,7 +296,17 @@ class Plotter:
                 plt.clf()
 
     @staticmethod
-    def create_batch_file(file_path, file_name, batch_size, cols=['mean_reward', 'mean_q_value'], write_to_file=False):
+    def create_batch_from_stream(file_path, stream, batch_size):
+        initial_csv_path = os.path.join(os.path.join(file_path, stream), stream + '.log')
+        batch_path = os.path.join(os.path.join(file_path, 'batch_' + stream))
+        if not os.path.exists(batch_path):
+            os.makedirs(batch_path)
+
+        batch = Plotter.create_batch(os.path.join(file_path, stream), stream + '.log', batch_size)
+        batch.to_csv(os.path.join(batch_path, 'batch_' + stream + '.log'))
+
+    @staticmethod
+    def create_batch(file_path, file_name, batch_size, cols=['mean_reward', 'mean_q_value'], write_to_file=False):
         # Load file
         df = pd.read_csv(os.path.join(file_path, file_name))
 
