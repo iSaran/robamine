@@ -349,14 +349,15 @@ class World:
 
         counter = 0
         start_time = time.time()
-
+        total_n_timesteps = 0
         for episode in range(n_episodes):
 
             logger.debug('Start episode: %d', episode)
             # Run an episode
-            episode_stats = self._episode(render, train)
+            episode_stats, n_timesteps = self._episode(render, train)
             if train:
                 self.train_stats.update(episode, episode_stats)
+                total_n_timesteps += n_timesteps
             else:
                 self.eval_stats.update(episode, episode_stats)
 
@@ -369,11 +370,11 @@ class World:
             if (episode + 1) % episode_batch_size == 0:
                 if self._mode == WorldMode.TRAIN_EVAL:
                     for eval_episode in range(episodes_to_evaluate):
-                        episode_stats = self._episode(render_eval, train=False)
+                        episode_stats, _ = self._episode(render_eval, train=False)
                         self.eval_stats.update(episodes_to_evaluate * counter + eval_episode, episode_stats)
                 counter += 1
                         # self.eval_stats.update_episode()
-                print_progress(episode, n_episodes, start_time)
+                print_progress(episode, n_episodes, start_time, total_n_timesteps, 0.02)
                 # self.logger.flush()
 
     def _episode(self, render=False, train=False):
@@ -420,5 +421,5 @@ class World:
             if done:
                 break
 
-        return stats
+        return stats, len(stats['reward'])
 

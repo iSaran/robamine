@@ -42,7 +42,6 @@ def get_now_timestamp():
            '{:02d}'.format(now_raw.second) + '.' \
            '{:02d}'.format(now_raw.microsecond)
 
-
 def transform_sec_to_timestamp(seconds):
     """
     Transforms seconds to a timestamp string in format: hours:minutes:seconds
@@ -61,11 +60,12 @@ def transform_sec_to_timestamp(seconds):
     minutes, seconds = divmod(rem, 60)
     return "{:0>2}h:{:0>2}m:{:05.2f}s".format(int(hours),int(minutes),seconds)
 
-def print_progress(episode, n_episodes, start_time):
+def print_progress(episode, n_episodes, start_time, steps, dt):
     percent = (episode + 1) / n_episodes * 100.0
     time_elapsed = transform_sec_to_timestamp(time.time() - start_time)
     estimated_time = transform_sec_to_timestamp((n_episodes - episode + 1) * (time.time() - start_time) / episode)
-    logger.info('Progress: Episode: %s from %s (%.2f%%). Time elapsed: %s. Estimated time: %s', str(episode + 1), str(n_episodes), percent, time_elapsed, estimated_time)
+    experience_time = transform_sec_to_timestamp(steps * dt)
+    logger.info('Progress: Episode: %s from %s (%.2f%%). Time elapsed: %s. Estimated time: %s. Experience time: %s', str(episode + 1), str(n_episodes), percent, time_elapsed, estimated_time, experience_time)
     # logger.info('  Experience Time: %s', transform_sec_to_timestamp(step * dt))
 
 class DataStream:
@@ -202,40 +202,6 @@ class Stats:
                 log_var_names.append(j + '_' + i)
 
         self.data_stream = DataStream(sess, log_dir, tf_writer, log_var_names, name)
-
-        # # Util staff
-        # self.dt = dt
-        # self.start_time = time.time()
-        # self.logger = logger
-        # self.name = name
-
-        # self.step = 0
-
-        # self.timestep_stats = timestep_stats
-        # self.episode_stats = episode_stats
-        # self.batch_stats = batch_stats
-
-        # self.episode_stats_names = []
-        # self.batch_stats_names = []
-        # self.timestep_data = {}
-        # self.episode_data = {}
-        # for i in self.timestep_stats:
-        #     self.timestep_data[i] = []
-
-        # for episode_stat in self.episode_stats:
-        #     for operation in self.episode_stats[episode_stat]:
-        #         self.episode_stats_names.append(operation + '_' + episode_stat)
-        #         self.episode_data[operation + '_' + episode_stat] = []
-
-        # if self.batch_stats is not None:
-        #     for batch_stat in self.batch_stats:
-        #         for operation in self.batch_stats[batch_stat]:
-        #             self.batch_stats_names.append(operation + '_' + batch_stat)
-
-        # self.logger.setup_stream(self.name + '_episode', self.episode_stats_names)
-
-        # if self.batch_stats is not None:
-        #     self.logger.setup_stream(self.name + '_batch', self.batch_stats_names)
 
     def update(self, episode, episode_data):
         """
