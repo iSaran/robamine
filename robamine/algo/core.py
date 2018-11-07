@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter
 from robamine import rb_logging
 import logging
 import os
@@ -277,6 +277,7 @@ class World:
         self.agent = agent
         self.env = env
         self.name = name
+        self.sess = sess
 
         self.state_dim = int(self.env.observation_space.shape[0])
         self.action_dim = int(self.env.action_space.shape[0])
@@ -293,9 +294,9 @@ class World:
 
         self._mode = WorldMode.EVAL
 
-        tf_writer = tf.summary.FileWriter(self.log_dir, sess.graph)
-        self.train_stats = Stats(sess, self.log_dir, tf_writer, 'train')
-        self.eval_stats = Stats(sess, self.log_dir, tf_writer, 'eval')
+        self.tf_writer = tf.summary.FileWriter(self.log_dir, sess.graph)
+        self.train_stats = None
+        self.eval_stats = None
 
         logger.info('Initialized agent: %s in environment: %s', self.agent.params.name, self.env.spec.id)
 
@@ -342,10 +343,16 @@ class World:
         assert n_episodes % episode_batch_size == 0
 
         logger.debug('Start running world')
-        if self._mode == WorldMode.TRAIN or self._mode == WorldMode.TRAIN_EVAL:
+        if self._mode == WorldMode.TRAIN:
             train = True
+            self.train_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train')
         elif self._mode == WorldMode.EVAL:
             train = False
+            self.eval_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'eval')
+        elif self._mode == WorldMode.TRAIN_EVAL:
+            train = True
+            self.train_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train')
+            self.eval_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'eval')
 
         counter = 0
         start_time = time.time()
@@ -426,3 +433,12 @@ class World:
         stats.n_timesteps = len(stats.reward)
         return stats
 
+    def plot(self, batch_size=5):
+        if self.train_stats:
+            Plotter.create_batch_from_stream(self.log_dir, 'train', batch_size)
+            plotter = Plotter(self.log_dir, ['train', 'batch_train'])
+            plotter.plot()
+        if self.eval_stats:
+            Plotter.create_batch_from_stream(self.log_dir, 'eval', batch_size)
+            plotter = Plotter(self.log_dir, ['eval', 'batch_train'])
+            plotter.plot()

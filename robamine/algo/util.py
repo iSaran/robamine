@@ -227,6 +227,7 @@ class Plotter:
         self.linewidth = linewidth
         self.format = _format
         self.dpi = dpi
+        self.logger = logging.getLogger('robamine.algo.util.Plotter')
 
     def extract_var_names(self, prefixes=['mean', 'min', 'max', 'std']):
         var_names = {}
@@ -235,8 +236,6 @@ class Plotter:
 
             data = pd.read_csv(os.path.join(os.path.join(self.directory, stream), stream + '.log'))
             y_label = list(data.columns.values)
-            x_label = y_label[0]
-            del y_label[0]
 
             for label in y_label:
                 found_at_least_one_prefix = False
@@ -246,37 +245,25 @@ class Plotter:
                         var_names[stream].add(label_without_prefix)
                         found_at_least_one_prefix = True
                 if not found_at_least_one_prefix:
-                    var_names[stream].add(label)
+                    self.logger.warn('Label %s in %s does not have stats prefixes. I will ignore it.', label, stream)
         return var_names
 
     def extract_data(self, stream):
         data = pd.read_csv(os.path.join(os.path.join(self.directory, stream), stream + '.log'))
+        x = list(data.index.values)
         y_label = list(data.columns.values)
-        x_label = y_label[0]
-        del y_label[0]
-
-        x = data[x_label]
 
         y = {}
         for i in y_label:
             y[i] = data[i]
 
-        return x, y
+        x_label = 'episode'
+        return x, y, x_label, y_label
 
     def plot(self):
         y_var_label = self.extract_var_names()
         for stream in self.streams:
-            # TODO: use extract data instead of duplicating code
-            data = pd.read_csv(os.path.join(os.path.join(self.directory, stream), stream + '.log'))
-            y_label = list(data.columns.values)
-            x_label = y_label[0]
-            del y_label[0]
-
-            x = data[x_label]
-
-            y = {}
-            for i in y_label:
-                y[i] = data[i]
+            x, y, x_label, y_label = self.extract_data(stream)
 
             # Plot reward
             for i in y_var_label[stream]:
