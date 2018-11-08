@@ -47,6 +47,64 @@ import logging
 
 logger = logging.getLogger('robamine.algo.ddpg')
 
+class ActorParams(NetworkParams):
+    def __init__(self,
+                 state_dim=None,
+                 action_dim=None,
+                 hidden_units = (400, 300),
+                 name = "Actor",
+                 learning_rate = 1e-4,
+                 gate_gradients = False,
+                 final_layer_init=(-3e-3, 3e-3),
+                 batch_size = 64):
+        super().__init__(input_dim=state_dim,
+                         output_dim=action_dim,
+                         hidden_units=hidden_units,
+                         name=name)
+        self.learning_rate = learning_rate
+        self.gate_gradients = gate_gradients
+        self.final_layer_init = final_layer_init
+        self.batch_size = batch_size
+
+class CriticParams(NetworkParams):
+    def __init__(self,
+                 state_dim=None,
+                 action_dim=None,
+                 hidden_units = (400, 300),
+                 name = "Critic",
+                 learning_rate = 1e-3,
+                 final_layer_init=(-3e-3, 3e-3)):
+
+        super().__init__(hidden_units=hidden_units,
+                         name=name)
+        self.input_dim = (state_dim, action_dim)
+        self.learning_rate = learning_rate
+        self.final_layer_init = final_layer_init
+        self.output_dim = 1
+
+class DDPGParams(AgentParams):
+    def __init__(self,
+                 random_seed=999,
+                 suffix="",
+                 replay_buffer_size = 1e6,
+                 batch_size = 64,
+                 gamma = 0.99,
+                 exploration_noise_sigma = 0.2,
+                 tau = 1e-3,
+                 actor = ActorParams(),
+                 critic = CriticParams()):
+        super().__init__(random_seed, "DDPG", suffix)
+
+        # DDPG params
+        self.replay_buffer_size = replay_buffer_size
+        self.batch_size = batch_size
+        self.gamma = gamma
+        self.exploration_noise_sigma = exploration_noise_sigma
+        self.tau = tau
+        self.actor = actor
+        self.critic = critic
+
+
 class ReplayBuffer:
     """
     Implementation of the replay experience buffer. Creates a buffer which uses
@@ -180,25 +238,6 @@ class ReplayBuffer:
     def seed(self, random_seed):
         random.seed(random_seed)
 
-class ActorParams(NetworkParams):
-    def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
-                 hidden_units = (400, 300),
-                 name = "Actor",
-                 learning_rate = 1e-4,
-                 gate_gradients = False,
-                 final_layer_init=(-3e-3, 3e-3),
-                 batch_size = 64):
-        super().__init__(input_dim=state_dim,
-                         output_dim=action_dim,
-                         hidden_units=hidden_units,
-                         name=name)
-        self.learning_rate = learning_rate
-        self.gate_gradients = gate_gradients
-        self.final_layer_init = final_layer_init
-        self.batch_size = batch_size
-
 class Actor(Network):
     """
     Implements the Actor.
@@ -276,18 +315,18 @@ class Actor(Network):
         net = state_input
         state_input_dim = state_input.get_shape().as_list()[1]
         fan_in = state_input_dim  # TODO: this seems wrong, use every layers input, but is not critical
-        print(fan_in)
         for dim in hidden_dims:
             weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fan_in))
             net = tf.layers.dense(inputs=net, units=dim, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
             net = tf.layers.batch_normalization(inputs=net)
             net = tf.nn.relu(net)
+            fan_in = dim
 
         # Final layer
         weight_initializer = tf.initializers.random_uniform(minval=final_layer_init[0], maxval=final_layer_init[1])
         net = tf.layers.dense(inputs=net, units=out_dim, kernel_initializer= weight_initializer, bias_initializer= weight_initializer)
-
         out = tf.nn.tanh(net)
+
         net_params = tf.trainable_variables()[existing_num_trainable_params:]
         return out, net_params
 
@@ -417,22 +456,6 @@ class Target(Network):
             return self.sess.run(self.out, feed_dict={self.state_input: state})
         else:
             return self.sess.run(self.out, feed_dict={self.state_input: state, self.action_input: action})
-
-class CriticParams(NetworkParams):
-    def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
-                 hidden_units = (400, 300),
-                 name = "Critic",
-                 learning_rate = 1e-4,
-                 final_layer_init=(-3e-3, 3e-3)):
-
-        super().__init__(hidden_units=hidden_units,
-                         name=name)
-        self.input_dim = (state_dim, action_dim)
-        self.learning_rate = learning_rate
-        self.final_layer_init = final_layer_init
-        self.output_dim = 1
 
 class Critic(Network):
     """
@@ -573,28 +596,6 @@ class Critic(Network):
             A tuple of two minibatches of states and actions.
         """
         return self.sess.run(self.grad_q_wrt_actions, feed_dict={self.state_input: state, self.action_input: action})
-
-class DDPGParams(AgentParams):
-    def __init__(self,
-                 random_seed=999,
-                 suffix="",
-                 replay_buffer_size = 1e6,
-                 batch_size = 64,
-                 gamma = 0.999,
-                 exploration_noise_sigma = 0.2,
-                 tau = 1e-3,
-                 actor = ActorParams(),
-                 critic = CriticParams()):
-        super().__init__(random_seed, "DDPG", suffix)
-
-        # DDPG params
-        self.replay_buffer_size = replay_buffer_size
-        self.batch_size = batch_size
-        self.gamma = gamma
-        self.exploration_noise_sigma = exploration_noise_sigma
-        self.tau = tau
-        self.actor = actor
-        self.critic = critic
 
 class DDPG(Agent):
     """
