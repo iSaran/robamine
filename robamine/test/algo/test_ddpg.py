@@ -6,27 +6,28 @@ import os
 
 from robamine.algo.ddpg import DDPG, DDPGParams, Actor, ActorParams, Target, Critic, CriticParams, ReplayBuffer
 from robamine.algo.util import Plotter, seed_everything
+from robamine.algo.core import World
 from robamine import rb_logging
 import logging
 
 class TestAgent(unittest.TestCase):
     def test_reproducability_with_pendulum(self):
-        with tf.Session() as sess:
-            rb_logging.init(console_level=logging.WARN)  # Do not show info messages in unittests
-            seed_everything(999)
-            agent = DDPG(sess, 'Pendulum-v0', random_seed=999, actor_gate_gradients = True)
-            agent.train(n_episodes=20, episode_batch_size=5, episodes_to_evaluate=5)
+        rb_logging.init(console_level=logging.ERROR, file_level=logging.ERROR)  # Do not show info messages in unittests
+        seed_everything(999)
 
-            streams = ['train_episode', 'train_batch', 'eval_episode', 'eval_batch']
-            pl = Plotter(agent.logger.log_path, streams)
-            pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'robamine_logs_2018.11.05.12.29.32.260511/DDPG_Pendulum-v0'), streams)
+        world = World.create(DDPGParams(actor=ActorParams(gate_gradients=True)), 'Pendulum-v0')
+        world.train(n_episodes=20)
 
-            for stream in streams:
-                x, y = pl.extract_data(stream)
-                x_d, y_d = pl_2.extract_data(stream)
-                for y_var in y_d:
-                    error = np.array(y_d[y_var]) - np.array(y[y_var])
-                    self.assertEqual(np.max(error), 0.0, 'max error not zero during processing {0} in stream {1}'.format(y_var, stream))
+        streams = ['train']
+        pl = Plotter(world.log_dir, streams)
+        pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'robamine_logs_2018.11.05.12.29.32.260511/DDPG_Pendulum-v0'), streams)
+
+        for stream in streams:
+            x, y, _, _ = pl.extract_data(stream)
+            x_d, y_d, _, _ = pl_2.extract_data(stream)
+            for y_var in y_d:
+                error = np.array(y_d[y_var]) - np.array(y[y_var])
+                self.assertEqual(np.max(error), 0.0, 'max error not zero during processing {0} in stream {1}'.format(y_var, stream))
 
 class TestActorCritic(unittest.TestCase):
     def test_actor(self):
