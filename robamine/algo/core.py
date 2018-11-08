@@ -335,7 +335,7 @@ class World:
     def train(self, n_episodes, render=False, print_progress_every=1):
         logger.info('%s training on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
         self._mode = WorldMode.TRAIN
-        self.run(n_episodes=n_episodes, episode_batch_size=10, render=render, print_progress_every=print_progress_every)
+        self.run(n_episodes=n_episodes, episode_batch_size=1, render=render, print_progress_every=print_progress_every)
 
     def evaluate(self, n_episodes, render=False, print_progress_every=1):
         logger.info('%s evaluating on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
