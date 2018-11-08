@@ -23,9 +23,11 @@ logger = logging.getLogger('robamine.algo.core')
 class AgentParams:
     def __init__(self,
                  random_seed=999,
-                 name=None):
+                 name=None,
+                 suffix=""):
         self.random_seed = random_seed
         self.name = name
+        self.suffix=suffix
 
         self.state_dim=None,
         self.action_dim=None,
@@ -286,7 +288,7 @@ class World:
         assert self.agent.params.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
         assert self.agent.params.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
 
-        self.agent_name = self.agent.params.name
+        self.agent_name = self.agent.params.name + self.agent.params.suffix
         self.env_name = self.env.spec.id
 
         self.log_dir = os.path.join(rb_logging.get_logger_path(), self.agent_name.replace(" ", "_") + '_' + self.env_name.replace(" ", "_"))

@@ -570,6 +570,7 @@ class Critic(Network):
 class DDPGParams(AgentParams):
     def __init__(self,
                  random_seed=999,
+                 suffix="",
                  replay_buffer_size = 1e6,
                  batch_size = 64,
                  gamma = 0.999,
@@ -577,7 +578,7 @@ class DDPGParams(AgentParams):
                  tau = 1e-3,
                  actor = ActorParams(),
                  critic = CriticParams()):
-        super().__init__(random_seed, "DDPG")
+        super().__init__(random_seed, "DDPG", suffix)
 
         # DDPG params
         self.replay_buffer_size = replay_buffer_size
