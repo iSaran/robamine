@@ -295,6 +295,13 @@ class WorldMode(Enum):
 
 class World:
     def __init__(self, agent, env, name=None):
+        try:
+            assert isinstance(agent, Agent), 'World: The given agent is not an Agent object. Use World.create() instead.'
+            assert isinstance(env, gym.Env), 'World: The given environment is not a Gym Env object. Use World.create() instead.'
+        except AssertionError as err:
+            logger.exception(err)
+            raise err
+
         self.agent = agent
         self.env = env
         self.name = name
