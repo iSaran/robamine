@@ -12,8 +12,8 @@ class DummyParams(AgentParams):
         super().__init__(name="Dummy")
 
 class Dummy(Agent):
-    def __init__(self, sess, params, action_space):
-        super(Dummy, self).__init__(sess, params)
+    def __init__(self, params, action_space):
+        super(Dummy, self).__init__(params)
         self.action_space = action_space
 
         # self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id)
