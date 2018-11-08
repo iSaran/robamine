@@ -206,7 +206,7 @@ class Network:
 
         self.input = None
         self.out = None
-        self.trainable_params = None
+        self.net_params = None
 
     @classmethod
     def create(cls):
@@ -248,15 +248,15 @@ class Network:
 
     def get_params(self, name = None):
         if name is None:
-            return self.sess.run(self.trainable_params)
+            return self.sess.run(self.net_params)
         else:
-            k = [v for v in self.trainable_params if v.name == name][0]
+            k = [v for v in self.net_params if v.name == name][0]
             return self.sess.run(k)
 
     @classmethod
     def load(cls, sess, params):
         self = cls.create(sess, params)
-        sess.run([self.trainable_params[i].assign(self.params.trainable[i]) for i in range(len(self.trainable_params))])
+        sess.run([self.net_params[i].assign(self.params.trainable[i]) for i in range(len(self.net_params))])
         return self
 
     def to_dict(self):

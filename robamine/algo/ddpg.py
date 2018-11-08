@@ -182,13 +182,17 @@ class ReplayBuffer:
 
 class ActorParams(NetworkParams):
     def __init__(self,
+                 state_dim=None,
+                 action_dim=None,
                  hidden_units = (400, 300),
                  name = "Actor",
                  learning_rate = 1e-4,
                  gate_gradients = False,
                  final_layer_init=(-3e-3, 3e-3),
                  batch_size = 64):
-        super().__init__(hidden_units=hidden_units,
+        super().__init__(input_dim=state_dim,
+                         output_dim=action_dim,
+                         hidden_units=hidden_units,
                          name=name)
         self.learning_rate = learning_rate
         self.gate_gradients = gate_gradients
@@ -248,7 +252,7 @@ class Actor(Network):
         with tf.variable_scope(self.params.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
             with tf.variable_scope('network'):
-                self.out, self.trainable_params = self.architecture(self.state_input, self.params.hidden_units, self.params.output_dim, self.params.final_layer_init)
+                self.out, self.net_params = self.architecture(self.state_input, self.params.hidden_units, self.params.output_dim, self.params.final_layer_init)
 
             # Here we store the grad of Q w.r.t the actions. This gradient is
             # provided by the Critic and is used to implement the policy gradient
@@ -257,9 +261,9 @@ class Actor(Network):
 
             # Calculate the gradient of the policy's actions w.r.t. the policy's
             # parameters and multiply it by the gradient of Q w.r.t the actions
-            unnormalized_gradients = tf.gradients(self.out, self.trainable_params, -self.grad_q_wrt_a, gate_gradients=self.params.gate_gradients, name='sum_gradQa_grad_mutheta')
+            unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a, gate_gradients=self.params.gate_gradients, name='sum_gradQa_grad_mutheta')
             gradients = list(map(lambda x: tf.div(x, self.params.batch_size, name='div_by_N'), unnormalized_gradients))
-            self.optimizer = tf.train.AdamOptimizer(self.params.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.trainable_params))
+            self.optimizer = tf.train.AdamOptimizer(self.params.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.net_params))
 
         return self
 
@@ -272,6 +276,7 @@ class Actor(Network):
         net = state_input
         state_input_dim = state_input.get_shape().as_list()[1]
         fan_in = state_input_dim  # TODO: this seems wrong, use every layers input, but is not critical
+        print(fan_in)
         for dim in hidden_dims:
             weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fan_in))
             net = tf.layers.dense(inputs=net, units=dim, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
@@ -356,7 +361,7 @@ class Target(Network):
             self.base_is_actor = True
 
         # Operation for updating target network with learned network weights.
-        self.trainable_params = self.trainable_params
+        self.net_params = self.base.net_params
 
         self.state_input = None
         self.action_input = None
@@ -378,19 +383,19 @@ class Target(Network):
             with tf.variable_scope('network'):
 
                 if isinstance(base, Actor):
-                    self.out, self.trainable_params = Actor.architecture(self.state_input, base.params.hidden_units, base.params.output_dim, base.params.final_layer_init)
+                    self.out, self.net_params = Actor.architecture(self.state_input, base.params.hidden_units, base.params.output_dim, base.params.final_layer_init)
                 elif isinstance(base, Critic):
-                    self.out, self.trainable_params = Critic.architecture(self.state_input, self.action_input, base.params.hidden_units, base.params.final_layer_init)
+                    self.out, self.net_params = Critic.architecture(self.state_input, self.action_input, base.params.hidden_units, base.params.final_layer_init)
 
             with tf.variable_scope('update_params_with_base'):
                 self.update_net_params = \
-                    [self.trainable_params[i].assign( \
-                        tf.multiply(base.trainable_params[i], tau) + tf.multiply(self.trainable_params[i], 1. - tau))
-                        for i in range(len(self.trainable_params))]
+                    [self.net_params[i].assign( \
+                        tf.multiply(base.net_params[i], tau) + tf.multiply(self.net_params[i], 1. - tau))
+                        for i in range(len(self.net_params))]
 
             # Define an operation to set my params the same as the actor's for initialization
             with tf.variable_scope('set_params_equal_to_base'):
-                self.equal_params = [self.trainable_params[i].assign(base.trainable_params[i]) for i in range(len(base.trainable_params))]
+                self.equal_params = [self.net_params[i].assign(base.net_params[i]) for i in range(len(base.net_params))]
 
         return self
 
@@ -480,7 +485,7 @@ class Critic(Network):
             self.state_input = tf.placeholder(tf.float32, [None, self.state_dim], name='state_input')
             self.action_input = tf.placeholder(tf.float32, [None, self.action_dim], name='action_input')
             with tf.variable_scope('network'):
-                self.out, self.trainable_params = self.architecture(self.state_input, self.action_input, self.params.hidden_units, self.params.final_layer_init)
+                self.out, self.net_params = self.architecture(self.state_input, self.action_input, self.params.hidden_units, self.params.final_layer_init)
 
             self.q_value = tf.placeholder(tf.float32, [None, 1], name='Q_value')
             self.loss = tf.losses.mean_squared_error(self.q_value, self.out)
@@ -666,8 +671,8 @@ class DDPG(Agent):
 
     def save(self, file_path):
         logger.info('Saving agent to %s', file_path)
-        self.params.actor.trainable = self.sess.run(self.actor.trainable_params)
-        self.params.critic.trainable = self.sess.run(self.critic.trainable_params)
+        self.params.actor.trainable = self.sess.run(self.actor.net_params)
+        self.params.critic.trainable = self.sess.run(self.critic.net_params)
         pickle.dump(self.params, open(file_path, 'wb'))
 
     @classmethod

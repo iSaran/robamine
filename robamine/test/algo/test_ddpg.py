@@ -4,7 +4,7 @@ import tensorflow as tf
 import numpy as np
 import os
 
-from robamine.algo.ddpg import DDPG, Actor, Target, Critic, ReplayBuffer
+from robamine.algo.ddpg import DDPG, DDPGParams, Actor, ActorParams, Target, Critic, CriticParams, ReplayBuffer
 from robamine.algo.util import Plotter, seed_everything
 from robamine import rb_logging
 import logging
@@ -33,17 +33,17 @@ class TestActorCritic(unittest.TestCase):
         with tf.Session() as sess:
             tf.set_random_seed(1)
             # Create an actor
-            actor = Actor.create(sess, 3, hidden_dims=[3, 4], out_dim=2, final_layer_init=[-0.003, 0.003], batch_size=10, learning_rate=1e-3, name='1')
+            actor = Actor.create(sess, ActorParams(state_dim=3, hidden_units=(3, 4), action_dim=2, batch_size=10, learning_rate=1e-4))
             sess.run(tf.global_variables_initializer())
 
             # Test that the names and the shapes of the network's parameters are correct
-            param_name = ['ddpg_actor_1/network/dense/kernel:0', 'ddpg_actor_1/network/dense/bias:0',
-                    'ddpg_actor_1/network/batch_normalization/gamma:0',
-                    'ddpg_actor_1/network/batch_normalization/beta:0',
-                    'ddpg_actor_1/network/dense_1/kernel:0', 'ddpg_actor_1/network/dense_1/bias:0',
-                    'ddpg_actor_1/network/batch_normalization_1/gamma:0',
-                    'ddpg_actor_1/network/batch_normalization_1/beta:0',
-                    'ddpg_actor_1/network/dense_2/kernel:0', 'ddpg_actor_1/network/dense_2/bias:0']
+            param_name = ['Actor/network/dense/kernel:0', 'Actor/network/dense/bias:0',
+                    'Actor/network/batch_normalization/gamma:0',
+                    'Actor/network/batch_normalization/beta:0',
+                    'Actor/network/dense_1/kernel:0', 'Actor/network/dense_1/bias:0',
+                    'Actor/network/batch_normalization_1/gamma:0',
+                    'Actor/network/batch_normalization_1/beta:0',
+                    'Actor/network/dense_2/kernel:0', 'Actor/network/dense_2/bias:0']
             param_shape = [(3, 3), (3,), (3,), (3,), (3, 4),
                     (4,), (4,), (4,), (4, 2), (2,)]
             self.assertEqual(len(actor.net_params), len(param_name))
