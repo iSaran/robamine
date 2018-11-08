@@ -91,7 +91,9 @@ class Agent:
         numpy array
             An action to be performed for exploration.
         """
-        raise NotImplementedError
+        error = 'Agent ' + self.params.name + ' does not implement an exploration policy.'
+        logger.error(error)
+        raise NotImplementedError(error)
 
     def learn(self, state, action, reward, next_state, done):
         """
@@ -112,7 +114,9 @@ class Agent:
         terminal : float
             1 if the next state is a terminal state, 0 otherwise.
         """
-        raise NotImplementedError
+        error = 'Agent ' + self.params.name + ' does not implemement a learning algorithm.'
+        logger.error(error)
+        raise NotImplementedError(error)
 
     def predict(self, state):
         """
@@ -129,16 +133,24 @@ class Agent:
         numpy array:
             The optimal action to be performed.
         """
-        raise NotImplementedError
+        error = 'Agent ' + self.params.name + ' does not implement a policy.'
+        logger.error(error)
+        raise NotImplementedError(error)
 
     def q_value(self, state, action):
-        raise NotImplementedError
+        error = 'Agent ' + self.params.name + ' does not provide a Q value.'
+        logger.error(error)
+        raise NotImplementedError(error)
 
     def save(self, file_path):
-        raise NotImplementedError
+        error = 'Agent ' + self.params.name + ' does not provide saving capabilities.'
+        logger.error(error)
+        raise NotImplementedError(error)
 
-    def restore(self):
-        raise NotImplementedError
+    def load(self):
+        error = 'Agent ' + self.params.name + ' does not provide loading capabilities.'
+        logger.error(error)
+        raise NotImplementedError(error)
 
 class NetworkParams:
     def __init__(self,
