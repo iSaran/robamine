@@ -360,8 +360,7 @@ class Target(Network):
         if isinstance(base, Actor):
             self.base_is_actor = True
 
-        # Operation for updating target network with learned network weights.
-        self.net_params = self.base.net_params
+        self.base_net_params = base.net_params
 
         self.state_input = None
         self.action_input = None
@@ -421,6 +420,8 @@ class Target(Network):
 
 class CriticParams(NetworkParams):
     def __init__(self,
+                 state_dim=None,
+                 action_dim=None,
                  hidden_units = (400, 300),
                  name = "Critic",
                  learning_rate = 1e-4,
@@ -428,6 +429,7 @@ class CriticParams(NetworkParams):
 
         super().__init__(hidden_units=hidden_units,
                          name=name)
+        self.input_dim = (state_dim, action_dim)
         self.learning_rate = learning_rate
         self.final_layer_init = final_layer_init
         self.output_dim = 1

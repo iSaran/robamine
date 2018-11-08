@@ -30,20 +30,20 @@ class TestAgent(unittest.TestCase):
 
 class TestActorCritic(unittest.TestCase):
     def test_actor(self):
-        with tf.Session() as sess:
+        with tf.Session() as sess, tf.variable_scope('test_actor'):
             tf.set_random_seed(1)
             # Create an actor
             actor = Actor.create(sess, ActorParams(state_dim=3, hidden_units=(3, 4), action_dim=2, batch_size=10, learning_rate=1e-4))
             sess.run(tf.global_variables_initializer())
 
             # Test that the names and the shapes of the network's parameters are correct
-            param_name = ['Actor/network/dense/kernel:0', 'Actor/network/dense/bias:0',
-                    'Actor/network/batch_normalization/gamma:0',
-                    'Actor/network/batch_normalization/beta:0',
-                    'Actor/network/dense_1/kernel:0', 'Actor/network/dense_1/bias:0',
-                    'Actor/network/batch_normalization_1/gamma:0',
-                    'Actor/network/batch_normalization_1/beta:0',
-                    'Actor/network/dense_2/kernel:0', 'Actor/network/dense_2/bias:0']
+            param_name = ['test_actor/Actor/network/dense/kernel:0', 'test_actor/Actor/network/dense/bias:0',
+                    'test_actor/Actor/network/batch_normalization/gamma:0',
+                    'test_actor/Actor/network/batch_normalization/beta:0',
+                    'test_actor/Actor/network/dense_1/kernel:0', 'test_actor/Actor/network/dense_1/bias:0',
+                    'test_actor/Actor/network/batch_normalization_1/gamma:0',
+                    'test_actor/Actor/network/batch_normalization_1/beta:0',
+                    'test_actor/Actor/network/dense_2/kernel:0', 'test_actor/Actor/network/dense_2/bias:0']
             param_shape = [(3, 3), (3,), (3,), (3,), (3, 4),
                     (4,), (4,), (4,), (4, 2), (2,)]
             self.assertEqual(len(actor.net_params), len(param_name))
@@ -59,12 +59,12 @@ class TestActorCritic(unittest.TestCase):
             self.assertTrue(np.allclose(network_output, true))
 
     def test_target_actor(self):
-        with tf.Session() as sess:
+        with tf.Session() as sess, tf.variable_scope('test_target_actor'):
             # Se a random seed to have a reproducable test every time
             tf.set_random_seed(1)
 
             # Create an actor and its target network
-            actor = Actor.create(sess, 3, hidden_dims=[3, 4], out_dim=2, final_layer_init=[-0.003, 0.003], batch_size=10, learning_rate=1e-3, name='2')
+            actor = Actor.create(sess, ActorParams(state_dim=3, hidden_units=(3, 4), action_dim=2, batch_size=10, learning_rate=1e-3))
             tau = 0.01
             target_actor = Target.create(actor, tau)
             sess.run(tf.global_variables_initializer())
@@ -83,29 +83,29 @@ class TestActorCritic(unittest.TestCase):
             self.assertAlmostEqual(expected_value, true_value, places=6)
 
     def test_critic(self):
-        with tf.Session() as sess:
+        with tf.Session() as sess, tf.variable_scope('test_critic'):
             tf.set_random_seed(1)
             # Create an actor
-            critic = Critic.create(sess, 3, 2, hidden_dims=(3, 4), name='1')
+            critic = Critic.create(sess, CriticParams(state_dim=3, hidden_units=(3, 4), action_dim=2))
             sess.run(tf.global_variables_initializer())
 
             self.assertEqual(critic.state_input.shape[1], 3)
-            self.assertEqual(critic.state_input.name, 'ddpg_critic_1/state_input:0')
+            self.assertEqual(critic.state_input.name, 'test_critic/Critic/state_input:0')
             self.assertEqual(critic.action_input.shape[1], 2)
-            self.assertEqual(critic.action_input.name, 'ddpg_critic_1/action_input:0')
+            self.assertEqual(critic.action_input.name, 'test_critic/Critic/action_input:0')
 
             self.assertTrue(isinstance(critic.out, tf.Tensor))
             self.assertEqual(critic.out.shape[1], 1)
-            self.assertEqual(critic.out.name, 'ddpg_critic_1/network/dense_2/BiasAdd:0')
+            self.assertEqual(critic.out.name, 'test_critic/Critic/network/dense_2/BiasAdd:0')
 
             # Test that the names and the shapes of the network's parameters are correct
-            param_name = ['ddpg_critic_1/network/dense/kernel:0', 'ddpg_critic_1/network/dense/bias:0',
-                    'ddpg_critic_1/network/batch_normalization/gamma:0',
-                    'ddpg_critic_1/network/batch_normalization/beta:0',
-                    'ddpg_critic_1/network/dense_1/kernel:0', 'ddpg_critic_1/network/dense_1/bias:0',
-                    'ddpg_critic_1/network/batch_normalization_1/gamma:0',
-                    'ddpg_critic_1/network/batch_normalization_1/beta:0',
-                    'ddpg_critic_1/network/dense_2/kernel:0', 'ddpg_critic_1/network/dense_2/bias:0']
+            param_name = ['test_critic/Critic/network/dense/kernel:0', 'test_critic/Critic/network/dense/bias:0',
+                    'test_critic/Critic/network/batch_normalization/gamma:0',
+                    'test_critic/Critic/network/batch_normalization/beta:0',
+                    'test_critic/Critic/network/dense_1/kernel:0', 'test_critic/Critic/network/dense_1/bias:0',
+                    'test_critic/Critic/network/batch_normalization_1/gamma:0',
+                    'test_critic/Critic/network/batch_normalization_1/beta:0',
+                    'test_critic/Critic/network/dense_2/kernel:0', 'test_critic/Critic/network/dense_2/bias:0']
             param_shape = [(3, 3), (3,), (3,), (3,), (5, 4), (4,), (4), (4,), (4, 1), (1,)]
             self.assertEqual(len(critic.net_params), len(param_name))
 
@@ -125,12 +125,12 @@ class TestActorCritic(unittest.TestCase):
             self.assertTrue(np.allclose(grad, true))
 
     def test_target_critic(self):
-        with tf.Session() as sess:
+        with tf.Session() as sess, tf.variable_scope('test_target_critic'):
             # Se a random seed to have a reproducable test every time
             tf.set_random_seed(1)
 
             # Create an critic and its target network
-            critic = Critic.create(sess, 3, 2, hidden_dims=(3, 4), name='2')
+            critic = Critic.create(sess, CriticParams(state_dim=3, hidden_units=(3, 4), action_dim=2))
             tau = 0.01
             target_critic = Target.create(critic, tau)
             sess.run(tf.global_variables_initializer())

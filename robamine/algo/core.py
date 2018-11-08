@@ -352,7 +352,7 @@ class World:
     def evaluate(self, n_episodes, render=False, print_progress_every=1):
         logger.info('%s evaluating on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
         self._mode = WorldMode.EVAL
-        self._run(n_episodes, None, None, print_progress_every, render, False)
+        self._run(n_episodes, None, None, print_progress_every, render, False, None)
 
     def train_and_eval(self, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every, render_train=False, render_eval=False, print_progress_every=1, save_every=None):
         logger.info('%s training on %s for %d episodes and evaluating for %d episodes every %d episodes of training', self.agent_name, self.env_name, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every)
