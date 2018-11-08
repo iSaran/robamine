@@ -192,6 +192,7 @@ class Network:
 
         self.input = None
         self.out = None
+        self.trainable_params = None
 
     @classmethod
     def create(cls):
@@ -233,9 +234,9 @@ class Network:
 
     def get_params(self, name = None):
         if name is None:
-            return self.sess.run(self.params.trainable)
+            return self.sess.run(self.trainable_params)
         else:
-            k = [v for v in self.params.trainable if v.name == name][0]
+            k = [v for v in self.trainable_params if v.name == name][0]
             return self.sess.run(k)
 
     def to_dict(self):
@@ -298,7 +299,7 @@ class World:
         self.train_stats = None
         self.eval_stats = None
 
-        logger.info('Initialized agent: %s in environment: %s', self.agent.params.name, self.env.spec.id)
+        logger.info('Initialized agent: %s in environment: %s', self.agent_name, self.env.spec.id)
 
     @classmethod
     def create(cls, sess, agent_params, env_name, random_seed=999, name=None):

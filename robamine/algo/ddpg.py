@@ -248,7 +248,7 @@ class Actor(Network):
         with tf.variable_scope(self.params.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
             with tf.variable_scope('network'):
-                self.out, self.params.trainable = self.architecture(self.state_input, self.params.hidden_units, self.params.output_dim, self.params.final_layer_init)
+                self.out, self.trainable_params = self.architecture(self.state_input, self.params.hidden_units, self.params.output_dim, self.params.final_layer_init)
 
             # Here we store the grad of Q w.r.t the actions. This gradient is
             # provided by the Critic and is used to implement the policy gradient
@@ -257,9 +257,9 @@ class Actor(Network):
 
             # Calculate the gradient of the policy's actions w.r.t. the policy's
             # parameters and multiply it by the gradient of Q w.r.t the actions
-            unnormalized_gradients = tf.gradients(self.out, self.params.trainable, -self.grad_q_wrt_a, gate_gradients=self.params.gate_gradients, name='sum_gradQa_grad_mutheta')
+            unnormalized_gradients = tf.gradients(self.out, self.trainable_params, -self.grad_q_wrt_a, gate_gradients=self.params.gate_gradients, name='sum_gradQa_grad_mutheta')
             gradients = list(map(lambda x: tf.div(x, self.params.batch_size, name='div_by_N'), unnormalized_gradients))
-            self.optimizer = tf.train.AdamOptimizer(self.params.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.params.trainable))
+            self.optimizer = tf.train.AdamOptimizer(self.params.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.trainable_params))
 
         return self
 
@@ -356,7 +356,7 @@ class Target(Network):
             self.base_is_actor = True
 
         # Operation for updating target network with learned network weights.
-        self.params.trainable = self.params.trainable
+        self.trainable_params = self.trainable_params
 
         self.state_input = None
         self.action_input = None
@@ -378,19 +378,19 @@ class Target(Network):
             with tf.variable_scope('network'):
 
                 if isinstance(base, Actor):
-                    self.out, self.params.trainable = Actor.architecture(self.state_input, base.params.hidden_units, base.params.output_dim, base.params.final_layer_init)
+                    self.out, self.trainable_params = Actor.architecture(self.state_input, base.params.hidden_units, base.params.output_dim, base.params.final_layer_init)
                 elif isinstance(base, Critic):
-                    self.out, self.params.trainable = Critic.architecture(self.state_input, self.action_input, base.params.hidden_units, base.params.final_layer_init)
+                    self.out, self.trainable_params = Critic.architecture(self.state_input, self.action_input, base.params.hidden_units, base.params.final_layer_init)
 
             with tf.variable_scope('update_params_with_base'):
                 self.update_net_params = \
-                    [self.params.trainable[i].assign( \
-                        tf.multiply(base.params.trainable[i], tau) + tf.multiply(self.params.trainable[i], 1. - tau))
-                        for i in range(len(self.params.trainable))]
+                    [self.trainable_params[i].assign( \
+                        tf.multiply(base.trainable_params[i], tau) + tf.multiply(self.trainable_params[i], 1. - tau))
+                        for i in range(len(self.trainable_params))]
 
             # Define an operation to set my params the same as the actor's for initialization
             with tf.variable_scope('set_params_equal_to_base'):
-                self.equal_params = [self.params.trainable[i].assign(base.params.trainable[i]) for i in range(len(base.params.trainable))]
+                self.equal_params = [self.trainable_params[i].assign(base.trainable_params[i]) for i in range(len(base.trainable_params))]
 
         return self
 
@@ -480,7 +480,7 @@ class Critic(Network):
             self.state_input = tf.placeholder(tf.float32, [None, self.state_dim], name='state_input')
             self.action_input = tf.placeholder(tf.float32, [None, self.action_dim], name='action_input')
             with tf.variable_scope('network'):
-                self.out, self.params.trainable = self.architecture(self.state_input, self.action_input, self.params.hidden_units, self.params.final_layer_init)
+                self.out, self.trainable_params = self.architecture(self.state_input, self.action_input, self.params.hidden_units, self.params.final_layer_init)
 
             self.q_value = tf.placeholder(tf.float32, [None, 1], name='Q_value')
             self.loss = tf.losses.mean_squared_error(self.q_value, self.out)
