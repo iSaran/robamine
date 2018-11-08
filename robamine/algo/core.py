@@ -332,23 +332,24 @@ class World:
 
         return cls(agent, env, name)
 
-    def train(self, n_episodes, render=False, print_progress_every=1):
+    def train(self, n_episodes, render=False, print_progress_every=1, save_every=None):
         logger.info('%s training on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
         self._mode = WorldMode.TRAIN
-        self.run(n_episodes=n_episodes, episode_batch_size=1, render=render, print_progress_every=print_progress_every)
+        self._run(n_episodes, None, None, print_progress_every, render, False, save_every)
 
     def evaluate(self, n_episodes, render=False, print_progress_every=1):
         logger.info('%s evaluating on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
         self._mode = WorldMode.EVAL
-        self.run(n_episodes=n_episodes, episode_batch_size=10, render=render, print_progress_every=print_progress_every)
+        self._run(n_episodes, None, None, print_progress_every, render, False)
 
-    def train_and_eval(self, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every, render_train=False, render_eval=False, print_progress_every=1):
+    def train_and_eval(self, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every, render_train=False, render_eval=False, print_progress_every=1, save_every=None):
         logger.info('%s training on %s for %d episodes and evaluating for %d episodes every %d episodes of training', self.agent_name, self.env_name, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every)
         self._mode = WorldMode.TRAIN_EVAL
-        self.run(n_episodes=n_episodes_to_train, episode_batch_size=evaluate_every, episodes_to_evaluate=n_episodes_to_evaluate, print_progress_every=print_progress_every, render=render_train, render_eval=render_eval)
+        self._run(n_episodes_to_train, evaluate_every, n_episodes_to_evaluate, print_progress_every, render_train, render_eval, save_every)
 
-    def run(self, n_episodes, episode_batch_size=1, episodes_to_evaluate=0, print_progress_every = 1, render=False, render_eval=False):
-        assert n_episodes % episode_batch_size == 0
+    def _run(self, n_episodes, evaluate_every, episodes_to_evaluate, print_progress_every, render, render_eval, save_every):
+        if evaluate_every:
+            assert n_episodes % evaluate_every == 0
 
         logger.debug('Start running world')
         if self._mode == WorldMode.TRAIN:
@@ -382,17 +383,20 @@ class World:
             # else:
             #     self.eval_stats.update_episode(episode, episode_stats)
 
-            # Evaluate every episode_batch_size of training episodes
-            if (episode + 1) % episode_batch_size == 0:
-                if self._mode == WorldMode.TRAIN_EVAL:
-                    for eval_episode in range(episodes_to_evaluate):
-                        episode_stats = self._episode(render_eval, train=False)
-                        self.eval_stats.update(episodes_to_evaluate * counter + eval_episode, episode_stats)
-                    counter += 1
+            # Evaluate every some number of training episodes
+            if evaluate_every and (episode + 1) % evaluate_every == 0 and episodes_to_evaluate:
+                for eval_episode in range(episodes_to_evaluate):
+                    episode_stats = self._episode(render_eval, train=False)
+                    self.eval_stats.update(episodes_to_evaluate * counter + eval_episode, episode_stats)
+                counter += 1
 
             # Print progress every print_progress_every episodes
-            if (episode + 1) % print_progress_every == 0:
+            if print_progress_every and (episode + 1) % print_progress_every == 0:
                 print_progress(episode, n_episodes, start_time, total_n_timesteps, 0.02)
+
+            if save_every and (episode + 1) % save_every == 0:
+                self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
+
 
     def _episode(self, render=False, train=False):
         stats = EpisodeStats()
