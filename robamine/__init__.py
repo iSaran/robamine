@@ -1,3 +1,9 @@
+from robamine import rb_logging
+
+from robamine.algo.core import World
+from robamine.algo.dummy import Dummy, DummyParams
+from robamine.algo.util import Plotter
+
 from gym.envs.registration import register
 
 # A sphere is placed on a table and tries to reach random position goals on the

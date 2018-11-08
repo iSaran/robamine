@@ -7,6 +7,13 @@ _logger = None
 _log_path = None
 _console_level = None
 
+NOTSET = logging.NOTSET
+DEBUG = logging.DEBUG
+INFO = logging.INFO
+WARNING = logging.WARNING
+ERROR = logging.ERROR
+CRITICAL = logging.CRITICAL
+
 def getLogger():
     global _logger, _console_level
 
