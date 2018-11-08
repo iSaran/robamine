@@ -624,9 +624,9 @@ class DDPG(Agent):
     exploration_noise_sigma : float
         The sigma for the OrnsteinUhlenbeck Noise for exploration.
     """
-    def __init__(self, sess, params):
+    def __init__(self, params):
 
-        super().__init__(sess, params)
+        super().__init__(params)
 
         self.actor = None
         self.target_actor = None
@@ -636,8 +636,8 @@ class DDPG(Agent):
         self.exploration_noise = None
 
     @classmethod
-    def create(cls, sess, params):
-        self = cls(sess, params)
+    def create(cls, params):
+        self = cls(params)
         # Initialize the Actor network and its target net
         actor_params = params.actor
         actor_params.input_dim = self.params.state_dim

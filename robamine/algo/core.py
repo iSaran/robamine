@@ -67,9 +67,9 @@ class Agent:
         A name for the agent.
     """
 
-    def __init__(self, sess, params=AgentParams()):
+    def __init__(self, params=AgentParams()):
         self.params = params
-        self.sess = sess
+        self.sess = tf.Session()
 
     def explore(self, state):
         """
@@ -276,11 +276,10 @@ class WorldMode(Enum):
     TRAIN_EVAL = 3
 
 class World:
-    def __init__(self, sess, agent, env, name=None):
+    def __init__(self, agent, env, name=None):
         self.agent = agent
         self.env = env
         self.name = name
-        self.sess = sess
 
         self.state_dim = int(self.env.observation_space.shape[0])
         self.action_dim = int(self.env.action_space.shape[0])
@@ -297,14 +296,14 @@ class World:
 
         self._mode = WorldMode.EVAL
 
-        self.tf_writer = tf.summary.FileWriter(self.log_dir, sess.graph)
+        self.tf_writer = tf.summary.FileWriter(self.log_dir, agent.sess.graph)
         self.train_stats = None
         self.eval_stats = None
 
         logger.info('Initialized agent: %s in environment: %s', self.agent_name, self.env.spec.id)
 
     @classmethod
-    def create(cls, sess, agent_params, env_name, random_seed=999, name=None):
+    def create(cls, agent_params, env_name, random_seed=999, name=None):
         # Environment setup
         env = gym.make(env_name)
         env.seed(random_seed)
@@ -321,11 +320,11 @@ class World:
         agent_handle = getattr(module, agent_params.name)
 
         if (agent_params.name == 'Dummy'):
-            agent = agent_handle(sess, agent_params, env.action_space)
+            agent = agent_handle(agent_params, env.action_space)
         else:
-            agent = agent_handle.create(sess, agent_params)
+            agent = agent_handle.create(agent_params)
 
-        return cls(sess, agent, env, name)
+        return cls(agent, env, name)
 
     def train(self, n_episodes, render=False, print_progress_every=1):
         logger.info('%s training on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
@@ -348,14 +347,14 @@ class World:
         logger.debug('Start running world')
         if self._mode == WorldMode.TRAIN:
             train = True
-            self.train_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train')
+            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train')
         elif self._mode == WorldMode.EVAL:
             train = False
-            self.eval_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'eval')
+            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval')
         elif self._mode == WorldMode.TRAIN_EVAL:
             train = True
-            self.train_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train')
-            self.eval_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'eval')
+            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train')
+            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval')
 
         counter = 0
         start_time = time.time()
