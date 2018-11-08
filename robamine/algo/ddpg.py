@@ -638,23 +638,24 @@ class DDPG(Agent):
     @classmethod
     def create(cls, params):
         self = cls(params)
-        # Initialize the Actor network and its target net
-        actor_params = params.actor
-        actor_params.input_dim = self.params.state_dim
-        actor_params.output_dim = self.params.action_dim
-        self.actor = Actor.create(self.sess, actor_params)
-        self.target_actor = Target.create(self.actor, self.params.tau)
+        with tf.variable_scope(self.params.name + self.params.suffix):
+            # Initialize the Actor network and its target net
+            actor_params = params.actor
+            actor_params.input_dim = self.params.state_dim
+            actor_params.output_dim = self.params.action_dim
+            self.actor = Actor.create(self.sess, actor_params)
+            self.target_actor = Target.create(self.actor, self.params.tau)
 
-        # Initialize the Critic network and its target net
-        critic_params = params.critic
-        critic_params.input_dim = (self.params.state_dim, self.params.action_dim)
-        self.critic = Critic.create(self.sess, critic_params)
-        self.target_critic = Target.create(self.critic, self.params.tau)
+            # Initialize the Critic network and its target net
+            critic_params = params.critic
+            critic_params.input_dim = (self.params.state_dim, self.params.action_dim)
+            self.critic = Critic.create(self.sess, critic_params)
+            self.target_critic = Target.create(self.critic, self.params.tau)
 
-        # Initialize target networks with weights equal to the learned networks
-        self.sess.run(tf.global_variables_initializer())
-        self.target_actor.equalize_params()
-        self.target_critic.equalize_params()
+            # Initialize target networks with weights equal to the learned networks
+            self.sess.run(tf.global_variables_initializer())
+            self.target_actor.equalize_params()
+            self.target_critic.equalize_params()
 
         # Initialize replay buffer
         self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size, self.params.random_seed)
