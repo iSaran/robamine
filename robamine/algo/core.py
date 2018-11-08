@@ -134,7 +134,7 @@ class Agent:
     def q_value(self, state, action):
         raise NotImplementedError
 
-    def save(self):
+    def save(self, file_path):
         raise NotImplementedError
 
     def restore(self):
@@ -240,6 +240,12 @@ class Network:
         else:
             k = [v for v in self.trainable_params if v.name == name][0]
             return self.sess.run(k)
+
+    @classmethod
+    def load(cls, sess, params):
+        self = cls.create(sess, params)
+        sess.run([self.trainable_params[i].assign(self.params.trainable[i]) for i in range(len(self.trainable_params))])
+        return self
 
     def to_dict(self):
         return {'input_dim': self.input_dim,

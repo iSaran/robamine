@@ -664,6 +664,36 @@ class DDPG(Agent):
 
         return self
 
+    def save(self, file_path):
+        logger.info('Saving agent to %s', file_path)
+        self.params.actor.trainable = self.sess.run(self.actor.trainable_params)
+        self.params.critic.trainable = self.sess.run(self.critic.trainable_params)
+        pickle.dump(self.params, open(file_path, 'wb'))
+
+    @classmethod
+    def load(cls, file_path):
+        params = pickle.load(open(file_path, 'rb'))
+        self = cls(params)
+        with tf.variable_scope(self.params.name + self.params.suffix):
+            # Initialize the Actor network and its target net
+            self.actor = Actor.load(self.sess, params.actor)
+            self.target_actor = Target.create(self.actor, self.params.tau)
+
+            # Initialize the Critic network and its target net
+            self.critic = Critic.load(self.sess, params.critic)
+            self.target_critic = Target.create(self.critic, self.params.tau)
+
+            # Initialize target networks with weights equal to the learned networks
+            self.sess.run(tf.global_variables_initializer())
+            self.target_actor.equalize_params()
+            self.target_critic.equalize_params()
+
+        # Initialize replay buffer
+        self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size, self.params.random_seed)
+        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.params.action_dim), sigma = self.params.exploration_noise_sigma)
+        logger.info('Agent %s loaded from %s', self.params.name + self.params.suffix, file_path)
+        return self
+
     def explore(self, state):
         """
         Represents the exploration policy which is the predictions of the Actor
@@ -835,22 +865,3 @@ class DDPG(Agent):
     def seed(self, seed):
         super().seed(seed)
         self.exploration_noise.seed(seed)
-
-    def save(self):
-        store_file = os.path.join(self.logger.get_dir(), 'agent.pkl')
-        self.logger.console.info('Saving agent to ' + store_file)
-        data = {}
-        data['replay_buffer'] = self.replay_buffer
-        data['noise'] = self.exploration_noise
-        data['random_seed'] = self.random_seed
-        data['actor'] = self.actor
-        with open(store_file, 'wb') as pickle_file:
-            pickle.dump(data, pickle_file)
-
-    def load(self, path_to_file):
-        with open(path_to_file, 'rb') as pickle_file:
-            data = pickle.load(pickle_file)
-        self.replay_buffer = data['replay_buffer']
-        self.exploration_noise = data['exploration_noise']
-        self.random_seed = data['random_seed']
-        self.seed(self.random_seed)
