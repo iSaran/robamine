@@ -306,14 +306,14 @@ class World:
             agent_handle, agent_params_handle = get_agent_handle(agent_name)
             agent_params = agent_params_handle(random_seed=random_seed)
             if (agent_params.name == 'Dummy'):
-                self.agent = agent_handle(agent_params, self.env.action_space)
+                self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim, agent_params)
             else:
                 self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
         elif isinstance(agent, AgentParams):
             agent_params = agent
             agent_handle, _ = get_agent_handle(agent_params.name)
             if (agent_params.name == 'Dummy'):
-                self.agent = agent_handle(state_dim, action_dim, agent_params, self.env.action_space)
+                self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim, agent_params)
             else:
                 self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
         elif isinstance(agent, Agent):

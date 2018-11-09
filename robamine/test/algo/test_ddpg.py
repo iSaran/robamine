@@ -15,12 +15,13 @@ class TestAgent(unittest.TestCase):
         rb_logging.init(console_level=logging.ERROR, file_level=logging.ERROR)  # Do not show info messages in unittests
         seed_everything(999)
 
-        world = World.create(DDPGParams(actor=ActorParams(gate_gradients=True)), 'Pendulum-v0')
-        world.train(n_episodes=20)
+        world = World(DDPGParams(actor=ActorParams(gate_gradients=True)), 'Pendulum-v0')
+        world.train_and_eval(n_episodes_to_train=20, n_episodes_to_evaluate=5, evaluate_every=2)
+        world.plot(5)
 
-        streams = ['train']
+        streams = ['train', 'eval']
         pl = Plotter(world.log_dir, streams)
-        pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'robamine_logs_2018.11.05.12.29.32.260511/DDPG_Pendulum-v0'), streams)
+        pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'robamine_logs_2018.11.09.16.33.30.391770/DDPG_Pendulum-v0'), streams)
 
         for stream in streams:
             x, y, _, _ = pl.extract_data(stream)
@@ -56,7 +57,7 @@ class TestActorCritic(unittest.TestCase):
             # Test that the op works
             inputs = [[3, 3, 3], [2, 2, 2]]
             network_output = actor.predict(inputs)
-            true = np.reshape([5.0694158e-04, -2.0009999e-03, 2.1590035e-05, -9.6079556e-04], (2,2))
+            true = np.reshape([-0.00113715, -0.00011934, -0.00117957, -0.00015528], (2,2))
             self.assertTrue(np.allclose(network_output, true))
 
     def test_target_actor(self):
@@ -118,11 +119,11 @@ class TestActorCritic(unittest.TestCase):
             state_input = np.reshape([[3, 3, 3], [2, 2, 2]], (2, 3))
             action_input = np.reshape([[3, 3], [2, 2]], (2, 2))
             network_output = critic.predict(state_input, action_input)
-            true = np.reshape([-0.00185596, -0.00069298], (2,1))
+            true = np.reshape([0.00120847, 0.0013597], (2,1))
             self.assertTrue(np.allclose(network_output, true))
 
             grad = critic.get_grad_q_wrt_actions(state_input, action_input)
-            true = np.reshape([-0.0005927,  -0.00057028, -0.0005927,  -0.00057028], (2,2))
+            true = np.reshape([0.00012602,  -0.00031828, 0.00012602,  -0.00031828], (2,2))
             self.assertTrue(np.allclose(grad, true))
 
     def test_target_critic(self):
@@ -145,9 +146,9 @@ class TestActorCritic(unittest.TestCase):
             prev_value_target = sess.run(target_critic.net_params[0][0][0])
             next_value_target = sess.run(target_critic.base_net_params[0][0][0])
             target_critic.update_params()
-            expected_value = tau * next_value_target + (1 - tau) * prev_value_target
+            expected_value = tau * next_value_target + (1.0 - tau) * prev_value_target
             true_value = sess.run(target_critic.net_params[0][0][0])
-            self.assertAlmostEqual(expected_value, true_value)
+            self.assertAlmostEqual(expected_value, true_value, 5)
 
 class TestReplayBuffer(unittest.TestCase):
     def test_creating_object(self):

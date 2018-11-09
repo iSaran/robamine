@@ -12,8 +12,8 @@ class DummyParams(AgentParams):
         super().__init__(state_dim, action_dim, random_seed, name="Dummy")
 
 class Dummy(Agent):
-    def __init__(self, params, action_space):
-        super(Dummy, self).__init__(params)
+    def __init__(self, action_space, state_dim=None, action_dim=None, params=DummyParams()):
+        super(Dummy, self).__init__(state_dim, action_dim, params)
         self.action_space = action_space
 
         # self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id)

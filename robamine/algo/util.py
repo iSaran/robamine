@@ -251,7 +251,7 @@ class Plotter:
                         var_names[stream].add(label_without_prefix)
                         found_at_least_one_prefix = True
                 if not found_at_least_one_prefix:
-                    self.logger.warn('Label %s in %s does not have stats prefixes. I will ignore it.', label, stream)
+                    self.logger.warning('Label %s in %s does not have stats prefixes. I will ignore it.', label, stream)
         return var_names
 
     def extract_data(self, stream):

@@ -9,7 +9,7 @@ import robamine as rm
 class TestAgent(unittest.TestCase):
     def test_construct(self):
         rm.rb_logging.init(console_level=rm.rb_logging.ERROR, file_level=rm.rb_logging.ERROR)
-        world = rm.World.create(rm.DummyParams(), 'Pendulum-v0')
+        world = rm.World('Dummy', 'Pendulum-v0')
         world.train_and_eval(n_episodes_to_train=50, n_episodes_to_evaluate=10, evaluate_every=5)
         world.plot(10)
         streams = ['train', 'batch_train', 'eval', 'batch_eval']
