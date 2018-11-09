@@ -263,22 +263,6 @@ class Network:
         sess.run([self.net_params[i].assign(self.params.trainable[i]) for i in range(len(self.net_params))])
         return self
 
-    def to_dict(self):
-        return {'input_dim': self.input_dim,
-                'hidden_dims': self.hidden_dims,
-                'out_dim': self.out_dim,
-                'name': self.name,
-                'inputs': self.inputs,
-                'out': self.out,
-                'net_params': self.net_params
-               }
-
-    @classmethod
-    def from_dict(cls, sess, data):
-        net = cls(sess, data['input_dim'], data['hidden_dims'], data['out_dim'], data['name'], \
-                        data['inputs'], data['out'], data['net_params'])
-        return cls
-
 class Transition:
     def __init__(self,
                  state=None,

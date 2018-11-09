@@ -358,25 +358,6 @@ class Actor(Network):
     def predict(self, state):
         return self.sess.run(self.out, feed_dict={self.state_input: state})
 
-    def to_dict(self):
-        data = super(DDPG, self).to_dict()
-        data['final_layer_init'] = self.final_layer_init
-        data['batch_size'] = self.batch_size
-        data['learning_rate'] = self.learning_rate
-        return data
-
-    @classmethod
-    def from_dict(cls, data):
-        net = cls(data['input_dim'], data['hidden_dims'], data['out_dim'], data['final_layer_init'], data['batch_size'], data['learning_rate'])
-        net.inputs, net.out, net.net_params = data['inputs'], data['out'], data['net_params']
-
-        # Calculate the gradient of the policy's actions w.r.t. the policy's
-        # parameters and multiply it by the gradient of Q w.r.t the actions
-        net.unnormalized_gradients = tf.gradients(net.out, net.net_params, -net.grad_q_wrt_a)
-        net.gradients = list(map(lambda x: tf.div(x, net.batch_size), net.unnormalized_gradients))
-        net.optimize = tf.train.AdamOptimizer(net.learning_rate).apply_gradients(zip(net.gradients, net.net_params))
-        return net
-
 class Target(Network):
     """
     The target network of the actor.
