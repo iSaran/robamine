@@ -1,19 +1,20 @@
 import tensorflow as tf
 import logging
 
-from robamine.algo.core import World, WorldMode
-from robamine.algo.ddpg import DDPG, DDPGParams
-from robamine import rb_logging
-from robamine.algo.util import seed_everything
+import robamine as rm
 
 if __name__ == '__main__':
 
-    rb_logging.init('/home/iason/robamine_logs/ddpg-pendulum', file_level=logging.INFO)
-    logger= logging.getLogger('robamine')
-    seed_everything(999)
+    rm.rb_logging.init('/home/iason/robamine_logs/ddpg-pendulum', file_level=logging.DEBUG)
+    logger = logging.getLogger('robamine')
+    rm.seed_everything(999)
 
-    world = World.create(DDPGParams(suffix='x'), 'Pendulum-v0')
-    world.evaluate(n_episodes=1000, render=True)
+    # world = rm.World(rm.DDPG.load('/home/iason/robamine_logs/ddpg-pendulum/robamine_logs_2018.11.09.15.24.03.602470/DDPG_SphereReacherShapedReward-v1/model.pkl'), 'SphereReacherShapedReward-v1')
+    # world.evaluate(n_episodes=1000, render=True)
+
+    world = rm.World(rm.DDPGParams(actor=rm.ActorParams(gate_gradients=True)), 'Pendulum-v0')
+    world.train_and_eval(n_episodes_to_train=1000, n_episodes_to_evaluate=10, evaluate_every=25, save_every=10, print_progress_every=10)
+
     # world.agent.save('/home/iason/hahaha.pkl')
 #
     ###########################world2 = World.create(DDPGParams(suffix="_2"), 'Pendulum-v0')
@@ -26,4 +27,3 @@ if __name__ == '__main__':
 #
     # with tf.Session() as sess:
     #     logger.info('Parameters of second world before training')
-
