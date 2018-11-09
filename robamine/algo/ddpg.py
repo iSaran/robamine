@@ -668,7 +668,7 @@ class DDPG(Agent):
     @classmethod
     def load(cls, file_path):
         params = pickle.load(open(file_path, 'rb'))
-        self = cls(params)
+        self = cls(params.state_dim, params.action_dim, params)
 
         # Set the actor and critic trainable params equal to the in the pickle file
         for i in range(len(self.actor.net_params)):
