@@ -700,6 +700,11 @@ class DDPG(Agent):
 
             # Initialize target networks with weights equal to the learned networks
             self.sess.run(tf.global_variables_initializer())
+
+            for i in range(len(self.actor.net_params)):
+                self.sess.run(self.actor.net_params[i].assign(self.params.actor.trainable[i]))
+
+
             self.target_actor.equalize_params()
             self.target_critic.equalize_params()
 
