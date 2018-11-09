@@ -12,16 +12,15 @@ import logging
 
 class TestAgent(unittest.TestCase):
     def test_reproducability_with_pendulum(self):
-        rb_logging.init(console_level=logging.ERROR, file_level=logging.ERROR)  # Do not show info messages in unittests
+        rb_logging.init(console_level=logging.INFO, file_level=logging.ERROR)  # Do not show info messages in unittests
         seed_everything(999)
 
         world = World(DDPGParams(actor=ActorParams(gate_gradients=True)), 'Pendulum-v0')
-        world.train_and_eval(n_episodes_to_train=20, n_episodes_to_evaluate=5, evaluate_every=2)
-        world.plot(5)
+        world.train_and_eval(n_episodes_to_train=5, n_episodes_to_evaluate=1, evaluate_every=1)
 
         streams = ['train', 'eval']
         pl = Plotter(world.log_dir, streams)
-        pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'robamine_logs_2018.11.09.16.33.30.391770/DDPG_Pendulum-v0'), streams)
+        pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'robamine_logs_2018.11.09.17.49.50.633876/DDPG_Pendulum-v0'), streams)
 
         for stream in streams:
             x, y, _, _ = pl.extract_data(stream)
