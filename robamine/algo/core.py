@@ -295,20 +295,48 @@ class WorldMode(Enum):
     TRAIN_EVAL = 3
 
 class World:
-    def __init__(self, agent, env, name=None):
-        try:
-            assert isinstance(agent, Agent), 'World: The given agent is not an Agent object. Use World.create() instead.'
-            assert isinstance(env, gym.Env), 'World: The given environment is not a Gym Env object. Use World.create() instead.'
-        except AssertionError as err:
+    def __init__(self, agent, env, random_seed=999, sec_per_step=0.02, name=None):
+        # Environment setup
+        if isinstance(env, gym.Env):
+            self.env = env
+        elif isinstance(env, str):
+            self.env = gym.make(env)
+            self.env.seed(random_seed)
+            if isinstance(self.env.observation_space, gym.spaces.dict_space.Dict):
+                logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
+                self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
+        else:
+            err = ValueError('Provide a gym.Env or a string in order to create a new world')
             logger.exception(err)
             raise err
 
-        self.agent = agent
-        self.env = env
-        self.name = name
-
         self.state_dim = int(self.env.observation_space.shape[0])
         self.action_dim = int(self.env.action_space.shape[0])
+
+        # Agent setup
+        if isinstance(agent, Agent):
+            self.agent = agent
+
+            if self.agent.params.state_dim is None:
+                self.agent.params.state_dim = self.state_dim
+            if self.agent.params.action_dim is None:
+               self.agent.params.action_dim = self.action_dim
+
+        elif isinstance(agent, str):
+            module = importlib.import_module('robamine.algo.' + agent.lower())
+            agent_handle = getattr(module, agent)
+            agent_params_handle = getattr(module, agent + 'Params')
+
+            agent_params = agent_params_handle(state_dim = self.state_dim, action_dim = self.action_dim, random_seed=random_seed)
+
+            # Special Agent cases
+            if (agent_params.name == 'Dummy'):
+                self.agent = agent_handle(agent_params, self.env.action_space)
+            else:
+                self.agent = agent_handle(agent_params)
+
+        self.name = name
+        self.sec_per_step = sec_per_step
 
         try:
             assert self.agent.params.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
@@ -326,41 +354,11 @@ class World:
 
         self._mode = WorldMode.EVAL
 
-        self.tf_writer = tf.summary.FileWriter(self.log_dir, agent.sess.graph)
+        self.tf_writer = tf.summary.FileWriter(self.log_dir, self.agent.sess.graph)
         self.train_stats = None
         self.eval_stats = None
 
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
-
-    @classmethod
-    def create(cls, agent_params, env_name, random_seed=999, name=None):
-        try:
-            assert isinstance(agent_params, AgentParams), 'World: You need to provide AgentParams in order to create a new world.'
-        except AssertionError as err:
-            logger.exception(err)
-            raise err
-
-        # Environment setup
-        env = gym.make(env_name)
-        env.seed(random_seed)
-        if isinstance(env.observation_space, gym.spaces.dict_space.Dict):
-            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
-            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
-
-        # Setup agent
-        agent_params.state_dim = int(env.observation_space.shape[0])
-        agent_params.action_dim = int(env.action_space.shape[0])
-        agent_params.random_seed = random_seed
-
-        module = importlib.import_module('robamine.algo.' + agent_params.name.lower())
-        agent_handle = getattr(module, agent_params.name)
-
-        if (agent_params.name == 'Dummy'):
-            agent = agent_handle(agent_params, env.action_space)
-        else:
-            agent = agent_handle.create(agent_params)
-
-        return cls(agent, env, name)
 
     def train(self, n_episodes, render=False, print_progress_every=1, save_every=None):
         logger.info('%s training on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
@@ -422,7 +420,7 @@ class World:
 
             # Print progress every print_progress_every episodes
             if print_progress_every and (episode + 1) % print_progress_every == 0:
-                print_progress(episode, n_episodes, start_time, total_n_timesteps, 0.02)
+                print_progress(episode, n_episodes, start_time, total_n_timesteps, self.sec_per_step)
 
             if save_every and (episode + 1) % save_every == 0:
                 self.agent.save(os.path.join(self.log_dir, 'model.pkl'))

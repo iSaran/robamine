@@ -8,8 +8,8 @@ A dummy agent which produces random actions. Used for testing.
 from robamine.algo.core import Agent, AgentParams
 
 class DummyParams(AgentParams):
-    def __init__(self):
-        super().__init__(name="Dummy")
+    def __init__(self, state_dim=None, action_dim=None, random_seed=999):
+        super().__init__(state_dim, action_dim, random_seed, name="Dummy")
 
 class Dummy(Agent):
     def __init__(self, params, action_space):

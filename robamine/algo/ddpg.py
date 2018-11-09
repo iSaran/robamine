@@ -643,28 +643,16 @@ class DDPG(Agent):
 
         super().__init__(params)
 
-        self.actor = None
-        self.target_actor = None
-        self.critic = None
-        self.target_critic = None
-        self.replay_buffer = None
-        self.exploration_noise = None
-
-    @classmethod
-    def create(cls, params):
-        self = cls(params)
         with tf.variable_scope(self.params.name + self.params.suffix):
             # Initialize the Actor network and its target net
-            actor_params = params.actor
-            actor_params.input_dim = self.params.state_dim
-            actor_params.output_dim = self.params.action_dim
-            self.actor = Actor.create(self.sess, actor_params)
+            self.params.actor.input_dim = self.params.state_dim
+            self.params.actor.output_dim = self.params.action_dim
+            self.actor = Actor.create(self.sess, self.params.actor)
             self.target_actor = Target.create(self.actor, self.params.tau)
 
             # Initialize the Critic network and its target net
-            critic_params = params.critic
-            critic_params.input_dim = (self.params.state_dim, self.params.action_dim)
-            self.critic = Critic.create(self.sess, critic_params)
+            self.params.critic.input_dim = (self.params.state_dim, self.params.action_dim)
+            self.critic = Critic.create(self.sess, self.params.critic)
             self.target_critic = Target.create(self.critic, self.params.tau)
 
             # Initialize target networks with weights equal to the learned networks
@@ -677,6 +665,23 @@ class DDPG(Agent):
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.params.action_dim), sigma = self.params.exploration_noise_sigma)
 
+    @classmethod
+    def load(cls, file_path):
+        params = pickle.load(open(file_path, 'rb'))
+        self = cls(params)
+
+        # Set the actor and critic trainable params equal to the in the pickle file
+        for i in range(len(self.actor.net_params)):
+            self.sess.run(self.actor.net_params[i].assign(self.params.actor.trainable[i]))
+
+        for i in range(len(self.critic.net_params)):
+            self.sess.run(self.critic.net_params[i].assign(self.params.critic.trainable[i]))
+
+        # Equalize again the target network's parameters
+        self.target_actor.equalize_params()
+        self.target_critic.equalize_params()
+
+        logger.info('Agent %s loaded from %s', self.params.name + self.params.suffix, file_path)
         return self
 
     def save(self, file_path):
@@ -685,34 +690,6 @@ class DDPG(Agent):
         self.params.critic.trainable = self.sess.run(self.critic.net_params)
         pickle.dump(self.params, open(file_path, 'wb'))
 
-    @classmethod
-    def load(cls, file_path):
-        params = pickle.load(open(file_path, 'rb'))
-        self = cls(params)
-        with tf.variable_scope(self.params.name + self.params.suffix):
-            # Initialize the Actor network and its target net
-            self.actor = Actor.load(self.sess, params.actor)
-            self.target_actor = Target.create(self.actor, self.params.tau)
-
-            # Initialize the Critic network and its target net
-            self.critic = Critic.load(self.sess, params.critic)
-            self.target_critic = Target.create(self.critic, self.params.tau)
-
-            # Initialize target networks with weights equal to the learned networks
-            self.sess.run(tf.global_variables_initializer())
-
-            for i in range(len(self.actor.net_params)):
-                self.sess.run(self.actor.net_params[i].assign(self.params.actor.trainable[i]))
-
-
-            self.target_actor.equalize_params()
-            self.target_critic.equalize_params()
-
-        # Initialize replay buffer
-        self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size, self.params.random_seed)
-        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.params.action_dim), sigma = self.params.exploration_noise_sigma)
-        logger.info('Agent %s loaded from %s', self.params.name + self.params.suffix, file_path)
-        return self
 
     def explore(self, state):
         """

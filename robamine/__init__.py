@@ -2,7 +2,7 @@ from robamine import rb_logging
 
 from robamine.algo.core import World
 from robamine.algo.dummy import Dummy, DummyParams
-from robamine.algo.util import Plotter
+from robamine.algo.util import Plotter, seed_everything
 
 from gym.envs.registration import register
 
