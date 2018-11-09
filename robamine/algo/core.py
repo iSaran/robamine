@@ -22,15 +22,16 @@ logger = logging.getLogger('robamine.algo.core')
 
 class AgentParams:
     def __init__(self,
+                 state_dim=None,
+                 action_dim=None,
                  random_seed=999,
                  name=None,
                  suffix=""):
+        self.state_dim = state_dim
+        self.action_dim = action_dim
         self.random_seed = random_seed
         self.name = name
-        self.suffix=suffix
-
-        self.state_dim=None,
-        self.action_dim=None,
+        self.suffix = suffix
 
 class Agent:
     """
@@ -309,8 +310,12 @@ class World:
         self.state_dim = int(self.env.observation_space.shape[0])
         self.action_dim = int(self.env.action_space.shape[0])
 
-        assert self.agent.params.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
-        assert self.agent.params.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
+        try:
+            assert self.agent.params.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
+            assert self.agent.params.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
+        except AssertionError as err:
+            logger.exception(err)
+            raise err
 
         self.agent_name = self.agent.params.name + self.agent.params.suffix
         self.env_name = self.env.spec.id
@@ -325,10 +330,16 @@ class World:
         self.train_stats = None
         self.eval_stats = None
 
-        logger.info('Initialized agent: %s in environment: %s', self.agent_name, self.env.spec.id)
+        logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
     @classmethod
     def create(cls, agent_params, env_name, random_seed=999, name=None):
+        try:
+            assert isinstance(agent_params, AgentParams), 'World: You need to provide AgentParams in order to create a new world.'
+        except AssertionError as err:
+            logger.exception(err)
+            raise err
+
         # Environment setup
         env = gym.make(env_name)
         env.seed(random_seed)

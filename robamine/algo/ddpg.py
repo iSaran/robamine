@@ -84,6 +84,8 @@ class CriticParams(NetworkParams):
 
 class DDPGParams(AgentParams):
     def __init__(self,
+                 state_dim = None,
+                 action_dim = None,
                  random_seed=999,
                  suffix="",
                  replay_buffer_size = 1e6,
@@ -93,7 +95,7 @@ class DDPGParams(AgentParams):
                  tau = 1e-3,
                  actor = ActorParams(),
                  critic = CriticParams()):
-        super().__init__(random_seed, "DDPG", suffix)
+        super().__init__(state_dim, action_dim, random_seed, "DDPG", suffix)
 
         # DDPG params
         self.replay_buffer_size = replay_buffer_size
@@ -103,7 +105,6 @@ class DDPGParams(AgentParams):
         self.tau = tau
         self.actor = actor
         self.critic = critic
-
 
 class ReplayBuffer:
     """
@@ -287,7 +288,7 @@ class Actor(Network):
     def create(cls, sess, params):
         self = cls(sess, params)
 
-        state_input_dim = params.input_dim
+        state_input_dim = self.params.input_dim
         with tf.variable_scope(self.params.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
             with tf.variable_scope('network'):
@@ -316,6 +317,8 @@ class Actor(Network):
         state_input_dim = state_input.get_shape().as_list()[1]
         fan_in = state_input_dim  # TODO: this seems wrong, use every layers input, but is not critical
         for dim in hidden_dims:
+            fan_in *= dim
+            logger.debug('Actor Creating hidden layer with fan in: %d', fan_in)
             weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fan_in))
             net = tf.layers.dense(inputs=net, units=dim, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
             net = tf.layers.batch_normalization(inputs=net)
@@ -386,9 +389,13 @@ class Target(Network):
         A number less than 1, used to update the target's parameters
     """
     def __init__(self, base, tau, name=None):
-        assert isinstance(base, Actor) or isinstance(base, Critic), 'The base network should either an Actor or a Critic'
+        try:
+            assert isinstance(base, Actor) or isinstance(base, Critic), 'The base network should either an Actor or a Critic'
+        except AssertionError as err:
+            logger.exception(err)
+            raise err
 
-        n = base.params.name + '_target'
+        n = base.params.name + 'Target'
         if name is not None:
             n = n + '_' + name
 
