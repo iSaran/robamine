@@ -9,13 +9,12 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter, get_agent_handle
 from robamine import rb_logging
 import logging
 import os
 import pickle
 from enum import Enum
-import importlib
 import time
 
 logger = logging.getLogger('robamine.algo.core')
@@ -27,11 +26,13 @@ class AgentParams:
                  random_seed=999,
                  name=None,
                  suffix=""):
-        self.state_dim = state_dim
-        self.action_dim = action_dim
         self.random_seed = random_seed
         self.name = name
         self.suffix = suffix
+
+        # Store internally the state_dim
+        self.state_dim = state_dim
+        self.action_dim = action_dim
 
 class Agent:
     """
@@ -68,8 +69,10 @@ class Agent:
         A name for the agent.
     """
 
-    def __init__(self, params=AgentParams()):
+    def __init__(self, state_dim, action_dim, params=AgentParams()):
+        self.state_dim, self.action_dim  = state_dim, action_dim
         self.params = params
+        self.params.state_dim, self.params.action_dim  = state_dim, action_dim
         self.sess = tf.Session()
 
     def explore(self, state):
@@ -314,26 +317,27 @@ class World:
         self.action_dim = int(self.env.action_space.shape[0])
 
         # Agent setup
-        if isinstance(agent, Agent):
-            self.agent = agent
-
-            if self.agent.params.state_dim is None:
-                self.agent.params.state_dim = self.state_dim
-            if self.agent.params.action_dim is None:
-               self.agent.params.action_dim = self.action_dim
-
-        elif isinstance(agent, str):
-            module = importlib.import_module('robamine.algo.' + agent.lower())
-            agent_handle = getattr(module, agent)
-            agent_params_handle = getattr(module, agent + 'Params')
-
-            agent_params = agent_params_handle(state_dim = self.state_dim, action_dim = self.action_dim, random_seed=random_seed)
-
-            # Special Agent cases
+        if isinstance(agent, str):
+            agent_name = agent
+            agent_handle, agent_params_handle = get_agent_handle(agent_name)
+            agent_params = agent_params_handle(random_seed=random_seed)
             if (agent_params.name == 'Dummy'):
                 self.agent = agent_handle(agent_params, self.env.action_space)
             else:
-                self.agent = agent_handle(agent_params)
+                self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
+        elif isinstance(agent, AgentParams):
+            agent_params = agent
+            agent_handle, _ = get_agent_handle(agent_params.name)
+            if (agent_params.name == 'Dummy'):
+                self.agent = agent_handle(state_dim, action_dim, agent_params, self.env.action_space)
+            else:
+                self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
+        elif isinstance(agent, Agent):
+            self.agent = agent
+        else:
+            err = ValueError('Provide a Agent, AgentParams, or a string in order to create an agent for the new world')
+            logger.exception(err)
+            raise err
 
         self.name = name
         self.sec_per_step = sec_per_step
@@ -359,6 +363,7 @@ class World:
         self.eval_stats = None
 
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
+
 
     def train(self, n_episodes, render=False, print_progress_every=1, save_every=None):
         logger.info('%s training on %s for %d episodes', self.agent_name, self.env_name, n_episodes)

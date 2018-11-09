@@ -639,19 +639,19 @@ class DDPG(Agent):
     exploration_noise_sigma : float
         The sigma for the OrnsteinUhlenbeck Noise for exploration.
     """
-    def __init__(self, params):
+    def __init__(self, state_dim, action_dim, params = DDPGParams()):
 
-        super().__init__(params)
+        super().__init__(state_dim, action_dim, params)
 
         with tf.variable_scope(self.params.name + self.params.suffix):
             # Initialize the Actor network and its target net
-            self.params.actor.input_dim = self.params.state_dim
-            self.params.actor.output_dim = self.params.action_dim
+            self.params.actor.input_dim = self.state_dim
+            self.params.actor.output_dim = self.action_dim
             self.actor = Actor.create(self.sess, self.params.actor)
             self.target_actor = Target.create(self.actor, self.params.tau)
 
             # Initialize the Critic network and its target net
-            self.params.critic.input_dim = (self.params.state_dim, self.params.action_dim)
+            self.params.critic.input_dim = (self.state_dim, self.action_dim)
             self.critic = Critic.create(self.sess, self.params.critic)
             self.target_critic = Target.create(self.critic, self.params.tau)
 
@@ -663,7 +663,7 @@ class DDPG(Agent):
         # Initialize replay buffer
         self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size, self.params.random_seed)
 
-        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.params.action_dim), sigma = self.params.exploration_noise_sigma)
+        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = self.params.exploration_noise_sigma)
 
     @classmethod
     def load(cls, file_path):

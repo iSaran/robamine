@@ -23,6 +23,12 @@ logger = logging.getLogger('robamine.algo.util')
 
 import importlib
 
+def get_agent_handle(agent_name):
+    module = importlib.import_module('robamine.algo.' + agent_name.lower())
+    handle = getattr(module, agent_name)
+    params_handle = getattr(module, agent_name + 'Params')
+    return handle, params_handle
+
 def seed_everything(random_seed):
     random.seed(random_seed)
     tf.set_random_seed(random_seed)
