@@ -289,7 +289,7 @@ class World:
         elif isinstance(env, str):
             self.env = gym.make(env)
             self.env.seed(random_seed)
-            if isinstance(self.env.observation_space, gym.spaces.dict_space.Dict):
+            if isinstance(self.env.observation_space, gym.spaces.dict.Dict):
                 logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
                 self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
         else:
