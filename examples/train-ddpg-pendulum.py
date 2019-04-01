@@ -13,7 +13,7 @@ if __name__ == '__main__':
     # world.evaluate(n_episodes=1000, render=True)
 
     world = rm.World(rm.DDPGParams(actor=rm.ActorParams(gate_gradients=True)), 'Pendulum-v0')
-    world.train_and_eval(n_episodes_to_train=1000, n_episodes_to_evaluate=10, evaluate_every=25, save_every=10, print_progress_every=10)
+    world.train_and_eval(n_episodes_to_train=1000, n_episodes_to_evaluate=10, evaluate_every=25, save_every=10, print_progress_every=10, render_train=False)
 
     # world.agent.save('/home/iason/hahaha.pkl')
 #
