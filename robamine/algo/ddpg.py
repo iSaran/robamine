@@ -320,17 +320,15 @@ class Actor(Network):
             fan_in *= dim
             logger.debug('Actor Creating hidden layer with fan in: %d', fan_in)
             weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fan_in))
-            net = tf.keras.layers.Dense(units=dim, activation=tf.nn.relu, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)(net)
-            net = tf.keras.layers.BatchNormalization()(net)
+            net = tf.layers.dense(inputs=net, units=dim, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
+            net = tf.layers.batch_normalization(inputs=net)
             net = tf.nn.relu(net)
             fan_in = dim
 
         # Final layer
         weight_initializer = tf.initializers.random_uniform(minval=final_layer_init[0], maxval=final_layer_init[1])
-        net = tf.keras.layers.Dense(units=out_dim, kernel_initializer= weight_initializer, bias_initializer= weight_initializer)(net)
+        net = tf.layers.dense(inputs=net, units=out_dim, kernel_initializer= weight_initializer, bias_initializer= weight_initializer)
         out = tf.nn.tanh(net)
-
-        # model = tf.keras.Model(inputs=tf.keras.Input(state_input), outputs = out)
 
         net_params = tf.trainable_variables()[existing_num_trainable_params:]
         return out, net_params
@@ -539,19 +537,19 @@ class Critic(Network):
         weight_initializer = tf.initializers.random_uniform(minval= - 1 / math.sqrt(fan_in), maxval = 1 / math.sqrt(fan_in))
 
         # First hidden layer with only the states
-        net = tf.keras.layers.Dense(units=hidden_units_1, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)(state)
-        net = tf.keras.layers.BatchNormalization()(net)
+        net = tf.layers.dense(inputs=state, units=hidden_units_1, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
+        net = tf.layers.batch_normalization(inputs=net)
         net = tf.nn.relu(net)
 
         # Second layer with actions
         action_and_first_layer = tf.concat([net, action], axis=1)
-        net = tf.keras.layers.Dense(units=hidden_units_2, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)(action_and_first_layer)
-        net = tf.keras.layers.BatchNormalization()(inputs=net)
+        net = tf.layers.dense(inputs=action_and_first_layer, units=hidden_units_2, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
+        net = tf.layers.batch_normalization(inputs=net)
         net = tf.nn.relu(net)
 
         # Output layer
         weight_initializer = tf.initializers.random_uniform(minval=final_layer_init[0], maxval=final_layer_init[1])
-        net = tf.keras.layers.Dense(units=1, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)(net)
+        net = tf.layers.dense(inputs=net, units=1, kernel_initializer=weight_initializer, bias_initializer=weight_initializer)
 
         out = net
         net_params = tf.trainable_variables()[existing_num_trainable_params:]
