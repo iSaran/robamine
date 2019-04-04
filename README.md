@@ -14,7 +14,28 @@ at the end of this README on how to generate the docs locally.
 
 ## Installation
 
+### Mujoco
+
+In order to work with `mujoco_py` you should have Mujoco version 1.50 with its license in `~/.mujoco` such that the structure of `~/.mujoco` would be:
+
+```
+.mujoco
+ |-- mjkey.txt
+ |-- mjpro150
+     |--bin
+     |-- doc
+     |-- include
+     |-- model
+     |-- sample
+```
+
 ### Install a Python Virtual Env
+
+Install `python3-tk`:
+
+```bash
+sudo apt-get install python3-tk
+```
 
 ```bash
 sudo pip install virtualenv
@@ -29,7 +50,10 @@ export PYTHONPATH="$VIRTUAL_ENV/lib"
 
 # For using Mujoco:
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia-384
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mjpro150/bin
 ```
+
+Notice that the number of nvidia directory maybe different depending on the Nvidia driver that you run.
 
 Then, activate the environment (you have to activate it each time you want to use it):
 
@@ -44,19 +68,6 @@ Activate your virtual environment and then clone the repository and install the 
 git clone https://github.com/iSaran/robamine.git
 cd robamine
 pip install -e .
-```
-
-In order to work with `mujoco_py` you should have Mujoco version 1.50 with its license in `~/.mujoco` such that the structure of `~/.mujoco` would be:
-
-```
-.mujoco
- |-- mjkey.txt
- |-- mjpro150
-     |--bin
-     |-- doc
-     |-- include
-     |-- model
-     |-- sample
 ```
 
 ## Run examples
