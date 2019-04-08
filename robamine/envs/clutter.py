@@ -54,6 +54,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.get_obs()
 
     def get_obs(self):
+        # TODO: Read depth and extract height map as observation. Now return
+        # random observation. Also change in the constructor the observation
+        # space shape.
         return self.observation_space.sample()
 
     def step(self, action):
@@ -68,6 +71,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def do_simulation(self, action):
         time = self.sim.data.time
 
+        # TODO: Use the actions to move robotic hand.
+
         # Move forward the simulation
         self.sim.step()
         return time
@@ -79,6 +84,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation):
+        # TODO: Define reward based on observation
         reward = 0
         return reward
 
