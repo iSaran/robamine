@@ -6,6 +6,7 @@ from gym.envs.mujoco import mujoco_env
 import os
 
 import robamine.utils as arl
+import math
 
 class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self):
@@ -14,7 +15,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         """
 
         path = os.path.join(os.path.dirname(__file__),
-                            "assets/xml/robots/small_table_floating_bhand.xml")
+                            "assets/xml/robots/clutter.xml")
 
         self.model = load_model_from_path(path)
         self.sim = MjSim(self.model)
@@ -32,12 +33,24 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                             high=np.array([1, 1, 1]),
                                             dtype=np.float32)
 
+        self.object_names = ['object1', 'object2', 'object3']
+
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
         self.seed()
 
     def reset_model(self):
-        self.set_state(self.init_qpos, self.init_qvel)
+
+        # Randomize the position of the obstracting objects
+        random_qpos = self.init_qpos
+        for object_name in self.object_names:
+            index = self.sim.model.get_joint_qpos_addr(object_name)
+            r = abs(np.random.normal(0, 0.01)) + 0.05
+            theta = np.random.uniform(0, 2*math.pi)
+            random_qpos[index[0]] = r * math.cos(theta)
+            random_qpos[index[0]+1] = r * math.sin(theta)
+
+        self.set_state(random_qpos, self.init_qvel)
         return self.get_obs()
 
     def get_obs(self):
@@ -61,9 +74,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
-        self.viewer.cam.distance = 1.685
-        self.viewer.cam.elevation = 1.9354
-        self.viewer.cam.azimuth = 36.5322
+        self.viewer.cam.distance = 0.75
+        self.viewer.cam.elevation = -90
+        self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation):
         reward = 0
