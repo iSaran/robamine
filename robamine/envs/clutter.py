@@ -8,6 +8,28 @@ import os
 import robamine.utils as arl
 import math
 
+class PDController:
+    """
+    Implements a PDController
+
+    Parameters
+    ----------
+    mass : float
+        The mass of the object to control
+    damping_ratio : float
+        The damping ratio. Defaults to 1 (critically damped system)
+    step_response : float
+        The response time. Defaults to 0.01 seconds.
+    """
+    def __init__(self, mass, damping_ratio = 1, step_response = 0.01):
+        natural_frequency = 4.0 / step_response
+        self.stiffness = mass * natural_frequency * natural_frequency
+        self.damping = mass * 2.0 * damping_ratio * natural_frequency
+
+    def get_control(self, pos_error, vel_error):
+        return self.stiffness * pos_error + self.damping * vel_error
+
+
 class Push:
     """
     Defines a push primitive action as defined in kiatos19, with the difference
@@ -51,6 +73,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
+        self.pd = PDController(mass = arl.mujoco.get_body_mass(self.sim.model, 'finger'))
 
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
@@ -124,6 +147,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         that 0-6 is the actuator of the given joint
         """
         current_pos = self.sim.data.get_joint_qpos(joint_name)
+        current_vel = self.sim.data.get_joint_qvel(joint_name)
         current_time = self.sim.data.time
         init_time = self.sim.data.time
 
@@ -143,9 +167,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         while current_time <= init_time + duration:
             # TODO: The indexes of the actuators are hardcoded right now
             # assuming that 0-6 is the actuator of the given joint
-            self.sim.data.ctrl[0] = trajectory_x.pos(current_time) - current_pos[0]
-            self.sim.data.ctrl[1] = trajectory_y.pos(current_time) - current_pos[1]
-            self.sim.data.ctrl[2] = trajectory_z.pos(current_time) - current_pos[2]
+            self.sim.data.ctrl[0] = self.pd.get_control(trajectory_x.pos(current_time) - current_pos[0], trajectory_x.vel(current_time) - current_vel[0])
+            self.sim.data.ctrl[1] = self.pd.get_control(trajectory_y.pos(current_time) - current_pos[1], trajectory_y.vel(current_time) - current_vel[1])
+            self.sim.data.ctrl[2] = self.pd.get_control(trajectory_z.pos(current_time) - current_pos[2], trajectory_z.vel(current_time) - current_vel[2])
             self.sim.data.ctrl[3] = 0.0
             self.sim.data.ctrl[4] = 0.0
             self.sim.data.ctrl[5] = 0.0
@@ -154,4 +178,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
+            current_vel = self.sim.data.get_joint_qvel(joint_name)
             current_time = self.sim.data.time
+
