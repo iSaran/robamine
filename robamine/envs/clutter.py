@@ -8,6 +8,22 @@ import os
 import robamine.utils as arl
 import math
 
+class Push:
+    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, z_offset=0.02):
+        self.initial_pos, self.distance, self.direction_theta, self.target, self.object_height, self.z_offset = initial_pos, distance, direction_theta, target, object_height, z_offset
+        if target:
+            self.z = object_height - z_offset
+        else:
+            self.z = object_height + z_offset
+        self.direction = np.array([math.cos(self.direction_theta), math.sin(self.direction_theta)])
+
+    def __str__(self):
+        return "Initial Position: " + str(self.initial_pos) + "\n" + \
+               "Distance: " + str(self.distance) + "\n" + \
+               "Direction: " + str(self.direction) + "\n" + \
+               "z: " + str(self.z) + "\n"
+
+
 class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self):
         """
@@ -25,8 +41,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([-1, -1]),
-                                       high=np.array([1, 1]),
+        self.action_space = spaces.Box(low=np.array([0]),
+                                       high=np.array([2 * math.pi]),
                                        dtype=np.float32)
 
         self.observation_space = spaces.Box(low=np.array([-1, -1, -1]),
@@ -71,10 +87,15 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def do_simulation(self, action):
         time = self.sim.data.time
 
-        # TODO: Use the actions to move robotic hand.
+        push = Push(direction_theta=action[0])
 
-        # Move forward the simulation
-        self.sim.step()
+        self.move_joint_to_target('finger', [push.initial_pos[0], push.initial_pos[1], None])
+        self.move_joint_to_target('finger', [None, None, push.z])
+        end = push.initial_pos + push.distance * push.direction
+        self.move_joint_to_target('finger', [end[0], end[1], None])
+        self.move_joint_to_target('finger', [None, None, 0.2])
+        self.move_joint_to_target('finger', [0, 0, 0.2])
+
         return time
 
     def viewer_setup(self):
@@ -90,3 +111,39 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def terminal_state(self, observation):
         return False
+
+    def move_joint_to_target(self, joint_name, target_position, duration = 2):
+        """
+        Generates a trajectory in Cartesian space (x, y, z) from the current
+        position of a joint to a target position.
+        """
+        current_pos = self.sim.data.get_joint_qpos(joint_name)
+        current_time = self.sim.data.time
+        init_time = self.sim.data.time
+
+        if target_position[0] is not None:
+            trajectory_x = arl.Trajectory([current_time, current_time + duration], [current_pos[0], target_position[0]])
+        else:
+            trajectory_x = arl.Trajectory([current_time, current_time + duration], [current_pos[0], current_pos[0]])
+        if target_position[1] is not None:
+            trajectory_y = arl.Trajectory([current_time, current_time + duration], [current_pos[1], target_position[1]])
+        else:
+            trajectory_y = arl.Trajectory([current_time, current_time + duration], [current_pos[1], current_pos[1]])
+        if target_position[2] is not None:
+            trajectory_z = arl.Trajectory([current_time, current_time + duration], [current_pos[2], target_position[2]])
+        else:
+            trajectory_z = arl.Trajectory([current_time, current_time + duration], [current_pos[2], current_pos[2]])
+
+        while current_time <= init_time + duration:
+            self.sim.data.ctrl[0] = trajectory_x.pos(current_time) - current_pos[0]
+            self.sim.data.ctrl[1] = trajectory_y.pos(current_time) - current_pos[1]
+            self.sim.data.ctrl[2] = trajectory_z.pos(current_time) - current_pos[2]
+            self.sim.data.ctrl[3] = 0.0
+            self.sim.data.ctrl[4] = 0.0
+            self.sim.data.ctrl[5] = 0.0
+
+            self.sim.step()
+            self.render()
+
+            current_pos = self.sim.data.get_joint_qpos(joint_name)
+            current_time = self.sim.data.time

@@ -5,7 +5,7 @@
     inertiafromgeom="true" />
   <option
     iterations="200"
-    timestep="0.005"
+    timestep="0.001"
     solver="CG"/>
   <size njmax="500" nconmax="100" />
   <visual>
@@ -15,6 +15,12 @@
       force="0.3"/>
     <quality
       shadowsize="8192"/>
+    <scale
+      forcewidth="0.03"
+      contactwidth="0.05"
+      contactheight="0.03"
+      framelength="1.5"
+      framewidth="0.1"/>
   </visual>
   <asset>
     <mesh name="small_table" file="utils/small_table.stl"/>
@@ -46,7 +52,7 @@
       <joint
         name="target"
         type="free"/>
-      <geom name="target"  rgba="0.8 0.0 0.0 1" size=".02 .02 .01" type="box" mass ="0.2" />
+      <geom name="target"  rgba="0.8 0.0 0.0 1" size=".02 .02 .01" type="box"/>
     </body>
     <body
       name="object1"
@@ -55,7 +61,11 @@
       <joint
         name="object1"
         type="free"/>
-      <geom name="object1"  rgba="0.0 0.4 0.6 1" size=".01 .02 .02" type="box" mass ="0.2" />
+      <geom name="object1"
+        rgba="0.0 0.4 0.6 1"
+        size=".01 .02 .02"
+        type="box"
+        friction="0.5 0.005 0.0001" />
     </body>
     <body
       name="object2"
@@ -64,7 +74,11 @@
       <joint
         name="object2"
         type="free"/>
-      <geom name="object2"  rgba="0.0 0.4 0.6 1" size=".01 .02 .02" type="box" mass ="0.2" />
+      <geom name="object2"
+        rgba="0.0 0.4 0.6 1"
+        size=".01 .02 .02"
+        type="box"
+        friction="0.5 0.005 0.0001" />
     </body>
     <body
       name="object3"
@@ -73,7 +87,28 @@
       <joint
         name="object3"
         type="free"/>
-      <geom name="object3"  rgba="0.0 0.4 0.6 1" size=".01 .02 .02" type="box" mass ="0.2" />
+      <geom name="object3"
+        rgba="0.0 0.4 0.6 1"
+        size=".01 .02 .02"
+        type="box"
+        friction="0.5 0.005 0.0001" />
+    </body>
+    <body
+      name="finger"
+      pos="-0.1 -0.2 0.2"
+      quat="1 0 0 0">
+      <joint
+        name="finger"
+        type="free"/>
+      <geom name="finger"  rgba="0.3 0.3 0.3 1" size=".005 .005 .005" type="sphere" mass = "1"/>
     </body>
   </worldbody>
+  <actuator>
+    <position gear="1 0 0 0 0 0" joint="finger" name="finger_0_wrench_actuator" kp=100000/>
+    <position gear="0 1 0 0 0 0" joint="finger" name="finger_1_wrench_actuator" kp=100000/>
+    <position gear="0 0 1 0 0 0" joint="finger" name="finger_2_wrench_actuator" kp=100000/>
+    <position gear="0 0 0 1 0 0" joint="finger" name="finger_3_wrench_actuator" kp=100000/>
+    <position gear="0 0 0 0 1 0" joint="finger" name="finger_4_wrench_actuator" kp=100000/>
+    <position gear="0 0 0 0 0 1" joint="finger" name="finger_5_wrench_actuator" kp=100000/>
+  </actuator>
 </mujoco>
