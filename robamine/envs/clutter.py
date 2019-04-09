@@ -9,6 +9,11 @@ import robamine.utils as arl
 import math
 
 class Push:
+    """
+    Defines a push primitive action as defined in kiatos19, with the difference
+    of instead of using 4 discrete directions, now we have a continuous angle
+    (direction_theta) from which we calculate the direction.
+    """
     def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, z_offset=0.02):
         self.initial_pos, self.distance, self.direction_theta, self.target, self.object_height, self.z_offset = initial_pos, distance, direction_theta, target, object_height, z_offset
         if target:
@@ -26,10 +31,6 @@ class Push:
 
 class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self):
-        """
-        The constructor of the environment.
-        """
-
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/clutter.xml")
 
@@ -56,7 +57,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.seed()
 
     def reset_model(self):
-
         # Randomize the position of the obstracting objects
         random_qpos = self.init_qpos
         for object_name in self.object_names:
@@ -115,7 +115,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def move_joint_to_target(self, joint_name, target_position, duration = 2):
         """
         Generates a trajectory in Cartesian space (x, y, z) from the current
-        position of a joint to a target position.
+        position of a joint to a target position. If one of the x, y, z is None
+        then the joint will not move in this direction. For example:
+        target_position = [None, 1, 1] will move along a trajectory in y,z and
+        x will remain the same.
+
+        TODO: The indexes of the actuators are hardcoded right now assuming
+        that 0-6 is the actuator of the given joint
         """
         current_pos = self.sim.data.get_joint_qpos(joint_name)
         current_time = self.sim.data.time
@@ -135,6 +141,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             trajectory_z = arl.Trajectory([current_time, current_time + duration], [current_pos[2], current_pos[2]])
 
         while current_time <= init_time + duration:
+            # TODO: The indexes of the actuators are hardcoded right now
+            # assuming that 0-6 is the actuator of the given joint
             self.sim.data.ctrl[0] = trajectory_x.pos(current_time) - current_pos[0]
             self.sim.data.ctrl[1] = trajectory_y.pos(current_time) - current_pos[1]
             self.sim.data.ctrl[2] = trajectory_z.pos(current_time) - current_pos[2]
