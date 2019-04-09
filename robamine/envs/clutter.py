@@ -5,8 +5,10 @@ from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
 
-import robamine.utils as arl
+from robamine.utils.robotics import PDController, Trajectory
+from robamine.utils.mujoco import get_body_mass
 import math
+
 
 class Push:
     """
@@ -51,6 +53,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
+        self.pd = PDController(mass = get_body_mass(self.sim.model, 'finger'))
 
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
@@ -124,28 +127,29 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         that 0-6 is the actuator of the given joint
         """
         current_pos = self.sim.data.get_joint_qpos(joint_name)
+        current_vel = self.sim.data.get_joint_qvel(joint_name)
         current_time = self.sim.data.time
         init_time = self.sim.data.time
 
         if target_position[0] is not None:
-            trajectory_x = arl.Trajectory([current_time, current_time + duration], [current_pos[0], target_position[0]])
+            trajectory_x = Trajectory([current_time, current_time + duration], [current_pos[0], target_position[0]])
         else:
-            trajectory_x = arl.Trajectory([current_time, current_time + duration], [current_pos[0], current_pos[0]])
+            trajectory_x = Trajectory([current_time, current_time + duration], [current_pos[0], current_pos[0]])
         if target_position[1] is not None:
-            trajectory_y = arl.Trajectory([current_time, current_time + duration], [current_pos[1], target_position[1]])
+            trajectory_y = Trajectory([current_time, current_time + duration], [current_pos[1], target_position[1]])
         else:
-            trajectory_y = arl.Trajectory([current_time, current_time + duration], [current_pos[1], current_pos[1]])
+            trajectory_y = Trajectory([current_time, current_time + duration], [current_pos[1], current_pos[1]])
         if target_position[2] is not None:
-            trajectory_z = arl.Trajectory([current_time, current_time + duration], [current_pos[2], target_position[2]])
+            trajectory_z = Trajectory([current_time, current_time + duration], [current_pos[2], target_position[2]])
         else:
-            trajectory_z = arl.Trajectory([current_time, current_time + duration], [current_pos[2], current_pos[2]])
+            trajectory_z = Trajectory([current_time, current_time + duration], [current_pos[2], current_pos[2]])
 
         while current_time <= init_time + duration:
             # TODO: The indexes of the actuators are hardcoded right now
             # assuming that 0-6 is the actuator of the given joint
-            self.sim.data.ctrl[0] = trajectory_x.pos(current_time) - current_pos[0]
-            self.sim.data.ctrl[1] = trajectory_y.pos(current_time) - current_pos[1]
-            self.sim.data.ctrl[2] = trajectory_z.pos(current_time) - current_pos[2]
+            self.sim.data.ctrl[0] = self.pd.get_control(trajectory_x.pos(current_time) - current_pos[0], trajectory_x.vel(current_time) - current_vel[0])
+            self.sim.data.ctrl[1] = self.pd.get_control(trajectory_y.pos(current_time) - current_pos[1], trajectory_y.vel(current_time) - current_vel[1])
+            self.sim.data.ctrl[2] = self.pd.get_control(trajectory_z.pos(current_time) - current_pos[2], trajectory_z.vel(current_time) - current_vel[2])
             self.sim.data.ctrl[3] = 0.0
             self.sim.data.ctrl[4] = 0.0
             self.sim.data.ctrl[5] = 0.0
@@ -154,4 +158,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
+            current_vel = self.sim.data.get_joint_qvel(joint_name)
             current_time = self.sim.data.time
+

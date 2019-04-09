@@ -10,6 +10,25 @@ Utilities wrapper functions for MuJoCo-Py
 
 '''
 
+def extract_name(mj_model, addr):
+    new_character = mj_model.names[addr]
+    name = new_character
+    counter = 1
+    while new_character != b'':
+        new_character = mj_model.names[addr + counter]
+        name += new_character
+        counter += 1
+    return name.decode("utf8")
+
+def get_body_names(mj_model):
+    names = []
+    for i in mj_model.name_bodyadr:
+        names.append(extract_name(mj_model, i))
+    return names
+
+def get_body_mass(mj_model, body_name):
+    return mj_model.body_mass[get_body_names(mj_model).index(body_name)]
+
 def set_mocap_pose(sim, pos, quat):
     ''' Sets the pose (position and orientation) of a mocap body as a relative
     pose w.r.t. the current.
