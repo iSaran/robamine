@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import numpy as np
-from mujoco_py import load_model_from_path, MjSim, MjViewer
+from mujoco_py import load_model_from_path, MjSim, MjViewer, MjRenderContextOffscreen
 from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
@@ -11,6 +11,8 @@ import math
 
 import cv2
 from mujoco_py.cymj import MjRenderContext
+
+DEFAULT_SIZE = 500
 
 class Push:
     """
@@ -40,8 +42,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.model = load_model_from_path(path)
         self.sim = MjSim(self.model)
-        self.viewer = MjViewer(self.sim)
         self._viewers = {}
+        self._viewers['human'] = MjViewer(self.sim)
+        self._viewers['depth_array'] = MjRenderContextOffscreen(self.sim, -1)
+        self._viewers['rgb_array'] = MjRenderContextOffscreen(self.sim, -1)
+        self.viewer = self._viewers['human']
 
         self.ctx = MjRenderContext(self.sim)
 
@@ -76,6 +81,21 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.set_state(random_qpos, self.init_qvel)
         return self.get_obs()
 
+    def render(self, mode='human', width=DEFAULT_SIZE, height=DEFAULT_SIZE):
+        if mode == 'rgb_array':
+            camera_name = 'xtion'
+            camera_id = self.model.camera_name2id(camera_name)
+            self._viewers[mode].render(width, height, camera_id=camera_id)
+            data = self._viewers[mode].read_pixels(width, height, depth=False)
+            return data[::-1, :, :]
+        elif mode == 'depth_array':
+            camera_name = 'xtion'
+            camera_id = self.model.camera_name2id(camera_name)
+            data = self._viewers[mode].read_pixels(width, height, depth=True)[1]
+            return data[::-1, :]
+        elif mode == 'human':
+            self._get_viewer(mode).render()
+
     def get_obs(self):
         # TODO: Read depth and extract height map as observation. Now return
         # random observation. Also change in the constructor the observation
@@ -86,14 +106,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # target_pose = arl.get_body_pose(self.sim, 'target')
         # t = self.sim.data.get_camera_xpos('xtion')
 
-        rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion', mode='offscreen')
+        # rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion')
+        rgb = self.render(mode='rgb_array')
         cv2.imwrite("/home/iason/Desktop/fds/obs2.png", rgb)
         return rgb
         # return self.observation_space.sample()
-
-    def render(self, width=None, height=None, *, camera_name=None):
-        #self.sim.render(1920, 1080, camera_name='viewer', mode='window')
-        self.viewer.render()
 
     def step(self, action):
         done = False
@@ -120,9 +137,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
-        self.viewer.cam.distance = 0.75
-        self.viewer.cam.elevation = -90  # default -90
-        self.viewer.cam.azimuth = 90
+        self._viewers['human'].cam.distance = 0.75
+        self._viewers['human'].cam.elevation = -90  # default -90
+        self._viewers['human'].cam.azimuth = 90
 
     def get_reward(self, observation):
         # TODO: Define reward based on observation
