@@ -7,17 +7,17 @@ This module contains the implementation of a cluttered environment, based on
 :cite:`kiatos19`.
 """
 import numpy as np
-from mujoco_py import load_model_from_path, MjSim, MjViewer
+from mujoco_py import load_model_from_path, MjSim, MjViewer, MjRenderContextOffscreen
 from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass
+from robamine.utils.cv_tools import *
 import math
 import cv2
 from mujoco_py.cymj import MjRenderContext
-
 
 class Push:
     """
@@ -47,10 +47,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.model = load_model_from_path(path)
         self.sim = MjSim(self.model)
-        self.viewer = MjViewer(self.sim)
         self._viewers = {}
-
-        self.ctx = MjRenderContext(self.sim)
+        self.offscreen = MjRenderContextOffscreen(self.sim, 0)
+        self.viewer = MjViewer(self.sim)
 
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
@@ -92,9 +91,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # point_cloud = arl.depth_to_point_cloud(depth, camera_intrinsics)
         # target_pose = arl.get_body_pose(self.sim, 'target')
         # t = self.sim.data.get_camera_xpos('xtion')
-
-        rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion', mode='offscreen')
-        cv2.imwrite("/home/mkiatos/Desktop/obs.png", rgb)
+        self.offscreen.render(1920, 1080, 0)
+        rgb, depth = self.offscreen.read_pixels(1920, 1080)
+        rgb, depth = mj2opencv(rgb, depth)
+        # rgb = self.render(mode='depth_array')
+        cv2.imwrite("/home/iason/Desktop/obs2.png", rgb)
         return rgb
         # return self.observation_space.sample()
 
