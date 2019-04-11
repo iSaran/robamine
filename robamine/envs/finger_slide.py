@@ -9,7 +9,7 @@ from gym import utils, spaces
 from gym.envs.robotics import robot_env
 import os
 
-import robamine.utils as arl
+from robamine.utils.robotics import Trajectory
 import random
 
 class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
@@ -68,8 +68,8 @@ class FingerSlide(robot_env.RobotEnv, utils.EzPickle):
 
         t = self.sim.data.time
         if t > 1:
-            T = arl.trajectory.Trajectory([1, 2.6], [0, 1])
-            T2 = arl.trajectory.Trajectory([2.6, 1], [1, 0])
+            T = Trajectory([1, 2.6], [0, 1])
+            T2 = Trajectory([2.6, 1], [1, 0])
             if t < 1.5:
                 dist = T.pos(t)
             else:

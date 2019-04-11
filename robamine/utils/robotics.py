@@ -29,3 +29,28 @@ class Trajectory():
         else:
             t = time - self.ti;
         return self.a1 + 2.0 * self.a2 * t + 3.0 * self.a3 * pow(t, 2) + 4.0 * self.a4 * pow(t, 3) + 5.0 * self.a5 * pow(t, 4)
+
+class PDController:
+    """
+    Implements a PDController
+
+    Parameters
+    ----------
+    mass : float
+        The mass of the object to control
+    damping_ratio : float
+        The damping ratio. Defaults to 1 (critically damped system)
+    step_response : float
+        The response time. Defaults to 0.01 seconds.
+    """
+    def __init__(self, mass, damping_ratio = 1, step_response = 0.01):
+        natural_frequency = (4.0 / step_response) * damping_ratio
+        print(natural_frequency)
+        self.stiffness = mass * natural_frequency * natural_frequency
+        print(mass)
+        self.damping = mass * 2.0 * damping_ratio * natural_frequency
+        print(self.stiffness)
+        print(self.damping)
+
+    def get_control(self, pos_error, vel_error):
+        return self.stiffness * pos_error + self.damping * vel_error

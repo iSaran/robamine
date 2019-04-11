@@ -5,29 +5,9 @@ from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
 
-import robamine.utils as arl
+from robamine.utils.robotics import PDController, Trajectory
+from robamine.utils.mujoco import get_body_mass
 import math
-
-class PDController:
-    """
-    Implements a PDController
-
-    Parameters
-    ----------
-    mass : float
-        The mass of the object to control
-    damping_ratio : float
-        The damping ratio. Defaults to 1 (critically damped system)
-    step_response : float
-        The response time. Defaults to 0.01 seconds.
-    """
-    def __init__(self, mass, damping_ratio = 1, step_response = 0.01):
-        natural_frequency = 4.0 / step_response
-        self.stiffness = mass * natural_frequency * natural_frequency
-        self.damping = mass * 2.0 * damping_ratio * natural_frequency
-
-    def get_control(self, pos_error, vel_error):
-        return self.stiffness * pos_error + self.damping * vel_error
 
 
 class Push:
@@ -73,7 +53,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
-        self.pd = PDController(mass = arl.mujoco.get_body_mass(self.sim.model, 'finger'))
+        self.pd = PDController(mass = get_body_mass(self.sim.model, 'finger'))
 
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
@@ -152,17 +132,17 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         init_time = self.sim.data.time
 
         if target_position[0] is not None:
-            trajectory_x = arl.Trajectory([current_time, current_time + duration], [current_pos[0], target_position[0]])
+            trajectory_x = Trajectory([current_time, current_time + duration], [current_pos[0], target_position[0]])
         else:
-            trajectory_x = arl.Trajectory([current_time, current_time + duration], [current_pos[0], current_pos[0]])
+            trajectory_x = Trajectory([current_time, current_time + duration], [current_pos[0], current_pos[0]])
         if target_position[1] is not None:
-            trajectory_y = arl.Trajectory([current_time, current_time + duration], [current_pos[1], target_position[1]])
+            trajectory_y = Trajectory([current_time, current_time + duration], [current_pos[1], target_position[1]])
         else:
-            trajectory_y = arl.Trajectory([current_time, current_time + duration], [current_pos[1], current_pos[1]])
+            trajectory_y = Trajectory([current_time, current_time + duration], [current_pos[1], current_pos[1]])
         if target_position[2] is not None:
-            trajectory_z = arl.Trajectory([current_time, current_time + duration], [current_pos[2], target_position[2]])
+            trajectory_z = Trajectory([current_time, current_time + duration], [current_pos[2], target_position[2]])
         else:
-            trajectory_z = arl.Trajectory([current_time, current_time + duration], [current_pos[2], current_pos[2]])
+            trajectory_z = Trajectory([current_time, current_time + duration], [current_pos[2], current_pos[2]])
 
         while current_time <= init_time + duration:
             # TODO: The indexes of the actuators are hardcoded right now
