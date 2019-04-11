@@ -2,6 +2,8 @@ import argparse
 import gym
 import robamine as roba
 import numpy as np
+
+import cv2
 #
 def run(env_id):
     env = gym.make(env_id)

@@ -26,6 +26,9 @@
     <mesh name="small_table" file="utils/small_table.stl"/>
   </asset>
   <worldbody>
+    <camera name="xtion"
+      pos="0 0 0.75"
+      zaxis="0 0 1" />
     <light
       directional="false"
       cutoff="90"
