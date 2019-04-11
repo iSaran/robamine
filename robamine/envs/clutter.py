@@ -8,6 +8,11 @@ import os
 import robamine.utils as arl
 import math
 
+import cv2
+from mujoco_py.cymj import MjRenderContext
+
+
+
 class PDController:
     """
     Implements a PDController
@@ -61,6 +66,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer = MjViewer(self.sim)
         self._viewers = {}
 
+        self.ctx = MjRenderContext(self.sim)
+
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
@@ -96,7 +103,16 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # TODO: Read depth and extract height map as observation. Now return
         # random observation. Also change in the constructor the observation
         # space shape.
-        return self.observation_space.sample()
+
+        # camera_intrinsics = [525, 525, 1920 / 2, 1080 / 2]
+        # point_cloud = arl.depth_to_point_cloud(depth, camera_intrinsics)
+        # target_pose = arl.get_body_pose(self.sim, 'target')
+        # t = self.sim.data.get_camera_xpos('xtion')
+
+        rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion', mode='offscreen')
+        cv2.imwrite("/home/mkiatos/Desktop/obs.png", rgb)
+        return rgb
+        # return self.observation_space.sample()
 
     def step(self, action):
         done = False
@@ -124,7 +140,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
         self.viewer.cam.distance = 0.75
-        self.viewer.cam.elevation = -90
+        self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation):

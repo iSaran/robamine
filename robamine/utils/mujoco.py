@@ -2,6 +2,9 @@
 
 from mujoco_py.generated import const
 
+import numpy as np
+from robamine.utils.orientation import quat2rot
+
 '''
 Mujoco Utils
 ============
@@ -71,3 +74,13 @@ def reset_mocap2body_xpos(sim):
         assert (mocap_id != -1)
         sim.data.mocap_pos[mocap_id][:] = sim.data.body_xpos[body_idx]
         sim.data.mocap_quat[mocap_id][:] = sim.data.body_xquat[body_idx]
+
+
+def get_body_pose(sim, name):
+    t = sim.data.get_body_xpos(name)
+    q = sim.data.get_body_xquat(name)
+
+    pose = np.identity(4, dtype=np.float32)
+    pose[0:3, 0:3] = quat2rot(q)
+    pose[0:3, 3] = t
+    return pose
