@@ -87,9 +87,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # t = self.sim.data.get_camera_xpos('xtion')
 
         rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion', mode='offscreen')
-        cv2.imwrite("/home/mkiatos/Desktop/obs.png", rgb)
+        cv2.imwrite("/home/iason/Desktop/fds/obs2.png", rgb)
         return rgb
         # return self.observation_space.sample()
+
+    def render(self, width=None, height=None, *, camera_name=None):
+        #self.sim.render(1920, 1080, camera_name='viewer', mode='window')
+        self.viewer.render()
 
     def step(self, action):
         done = False
