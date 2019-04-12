@@ -2,11 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="6e13db0c-30be-4fc3-8cda-bada45e9805a" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/envs/assets/xml/robots/clutter.xml" beforeDir="false" afterPath="$PROJECT_DIR$/envs/assets/xml/robots/clutter.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/envs/clutter.py" beforeDir="false" afterPath="$PROJECT_DIR$/envs/clutter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/mujoco.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/mujoco.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../setup.py" beforeDir="false" afterPath="$PROJECT_DIR$/../setup.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/cv_tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/cv_tools.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -19,8 +17,20 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/envs/clutter.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="414">
-              <caret line="107" column="74" selection-start-line="107" selection-start-column="74" selection-end-line="107" selection-end-column="74" />
+            <state relative-caret-position="612">
+              <caret line="112" column="59" selection-start-line="112" selection-start-column="59" selection-end-line="112" selection-end-column="59" />
+              <folding>
+                <element signature="e#23#41#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/utils/cv_tools.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="809">
+              <caret line="56" column="27" selection-start-line="56" selection-start-column="27" selection-end-line="56" selection-end-column="27" />
               <folding>
                 <element signature="e#23#41#0" expanded="true" />
               </folding>
@@ -31,8 +41,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$USER_HOME$/.local/lib/python2.7/site-packages/gym/core.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1329">
-              <caret line="105" column="8" selection-start-line="105" selection-start-column="8" selection-end-line="105" selection-end-column="8" />
+            <state relative-caret-position="-357">
+              <caret line="6" column="23" lean-forward="true" selection-start-line="6" selection-start-column="23" selection-end-line="6" selection-end-column="23" />
             </state>
           </provider>
         </entry>
@@ -40,8 +50,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$USER_HOME$/.local/lib/python2.7/site-packages/mujoco_py/mjviewer.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-952">
-              <caret line="40" column="28" lean-forward="true" selection-start-line="40" selection-start-column="28" selection-end-line="40" selection-end-column="28" />
+            <state relative-caret-position="408">
+              <caret line="93" column="46" lean-forward="true" selection-start-line="93" selection-start-column="8" selection-end-line="93" selection-end-column="46" />
               <folding>
                 <element signature="e#0#13#0" expanded="true" />
               </folding>
@@ -103,9 +113,9 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/utils/cv_tools.py" />
         <option value="$PROJECT_DIR$/utils/__init__.py" />
         <option value="$PROJECT_DIR$/utils/mujoco.py" />
+        <option value="$PROJECT_DIR$/utils/cv_tools.py" />
         <option value="$PROJECT_DIR$/envs/clutter.py" />
       </list>
     </option>
@@ -145,11 +155,6 @@
             <path>
               <item name="robamine" type="b2602c69:ProjectViewProjectNode" />
               <item name="robamine" type="462c0819:PsiDirectoryNode" />
-              <item name="envs" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="robamine" type="b2602c69:ProjectViewProjectNode" />
-              <item name="robamine" type="462c0819:PsiDirectoryNode" />
               <item name="utils" type="462c0819:PsiDirectoryNode" />
             </path>
           </expand>
@@ -159,6 +164,7 @@
     </panes>
   </component>
   <component name="PropertiesComponent">
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
   </component>
   <component name="RunDashboard">
@@ -260,16 +266,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/utils/cv_tools.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="702">
-          <caret line="39" column="24" selection-start-line="39" selection-start-column="24" selection-end-line="39" selection-end-column="24" />
-          <folding>
-            <element signature="e#23#41#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/utils/test_trajectory.py">
       <provider selected="true" editor-type-id="text-editor">
         <state>
@@ -279,9 +275,7 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/utils/trajectory.py">
-      <provider selected="true" editor-type-id="text-editor" />
-    </entry>
+    <entry file="file://$PROJECT_DIR$/utils/trajectory.py" />
     <entry file="file://$PROJECT_DIR$/utils/plot-data.py">
       <provider selected="true" editor-type-id="text-editor" />
     </entry>
@@ -331,8 +325,8 @@
     </entry>
     <entry file="file://$USER_HOME$/.local/lib/python2.7/site-packages/mujoco_py/mjviewer.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-952">
-          <caret line="40" column="28" lean-forward="true" selection-start-line="40" selection-start-column="28" selection-end-line="40" selection-end-column="28" />
+        <state relative-caret-position="408">
+          <caret line="93" column="46" lean-forward="true" selection-start-line="93" selection-start-column="8" selection-end-line="93" selection-end-column="46" />
           <folding>
             <element signature="e#0#13#0" expanded="true" />
           </folding>
@@ -341,15 +335,25 @@
     </entry>
     <entry file="file://$USER_HOME$/.local/lib/python2.7/site-packages/gym/core.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1329">
-          <caret line="105" column="8" selection-start-line="105" selection-start-column="8" selection-end-line="105" selection-end-column="8" />
+        <state relative-caret-position="-357">
+          <caret line="6" column="23" lean-forward="true" selection-start-line="6" selection-start-column="23" selection-end-line="6" selection-end-column="23" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/utils/cv_tools.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="809">
+          <caret line="56" column="27" selection-start-line="56" selection-start-column="27" selection-end-line="56" selection-end-column="27" />
+          <folding>
+            <element signature="e#23#41#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/envs/clutter.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="414">
-          <caret line="107" column="74" selection-start-line="107" selection-start-column="74" selection-end-line="107" selection-end-column="74" />
+        <state relative-caret-position="612">
+          <caret line="112" column="59" selection-start-line="112" selection-start-column="59" selection-end-line="112" selection-end-column="59" />
           <folding>
             <element signature="e#23#41#0" expanded="true" />
           </folding>

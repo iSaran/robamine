@@ -7,6 +7,7 @@ import os
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass
+from robamine.utils.cv_tools import *
 import math
 
 import cv2
@@ -107,8 +108,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # t = self.sim.data.get_camera_xpos('xtion')
 
         rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion')
+        rgb, depth = mj2opencv(rgb, depth)
         # rgb = self.render(mode='depth_array')
-        cv2.imwrite("/home/iason/Desktop/fds/obs2.png", rgb)
+        cv2.imwrite("/home/mkiatos/Desktop/obs2.png", depth)
         return rgb
         # return self.observation_space.sample()
 
