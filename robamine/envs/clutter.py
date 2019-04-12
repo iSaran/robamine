@@ -106,8 +106,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # target_pose = arl.get_body_pose(self.sim, 'target')
         # t = self.sim.data.get_camera_xpos('xtion')
 
-        # rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion')
-        rgb = self.render(mode='rgb_array')
+        rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion')
+        # rgb = self.render(mode='depth_array')
         cv2.imwrite("/home/iason/Desktop/fds/obs2.png", rgb)
         return rgb
         # return self.observation_space.sample()
@@ -189,7 +189,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.data.ctrl[5] = 0.0
 
             self.sim.step()
-            self.render()
+            #self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
             current_vel = self.sim.data.get_joint_qvel(joint_name)
