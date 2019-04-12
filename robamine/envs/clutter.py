@@ -110,7 +110,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion')
         rgb, depth = mj2opencv(rgb, depth)
         # rgb = self.render(mode='depth_array')
-        cv2.imwrite("/home/mkiatos/Desktop/obs2.png", depth)
+        cv2.imwrite("/home/mkiatos/Desktop/obs2.png", rgb)
         return rgb
         # return self.observation_space.sample()
 
@@ -192,6 +192,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
             self.sim.step()
             #self.render()
+            self.sim.render(1920, 1080, mode='window')
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
             current_vel = self.sim.data.get_joint_qvel(joint_name)
