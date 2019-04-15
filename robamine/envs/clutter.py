@@ -44,12 +44,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.model = load_model_from_path(path)
         self.sim = MjSim(self.model)
         self._viewers = {}
-        self._viewers['human'] = MjViewer(self.sim)
-        self._viewers['depth_array'] = MjRenderContextOffscreen(self.sim, -1)
-        self._viewers['rgb_array'] = MjRenderContextOffscreen(self.sim, -1)
-        self.viewer = self._viewers['human']
-
-        self.ctx = MjRenderContext(self.sim)
+        self.offscreen = MjRenderContextOffscreen(self.sim, 0)
+        self.viewer = MjViewer(self.sim)
 
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
@@ -106,11 +102,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # point_cloud = arl.depth_to_point_cloud(depth, camera_intrinsics)
         # target_pose = arl.get_body_pose(self.sim, 'target')
         # t = self.sim.data.get_camera_xpos('xtion')
-
-        rgb, depth = self.sim.render(1920, 1080, depth=True, camera_name='xtion')
+        self.offscreen.render(1920, 1080, 0)
+        rgb, depth = self.offscreen.read_pixels(1920, 1080)
         rgb, depth = mj2opencv(rgb, depth)
         # rgb = self.render(mode='depth_array')
-        cv2.imwrite("/home/mkiatos/Desktop/obs2.png", rgb)
+        cv2.imwrite("/home/iason/Desktop/obs2.png", rgb)
         return rgb
         # return self.observation_space.sample()
 
@@ -139,9 +135,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
-        self._viewers['human'].cam.distance = 0.75
-        self._viewers['human'].cam.elevation = -90  # default -90
-        self._viewers['human'].cam.azimuth = 90
+        self.viewer.cam.distance = 0.75
+        self.viewer.cam.elevation = -90  # default -90
+        self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation):
         # TODO: Define reward based on observation
@@ -191,8 +187,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.data.ctrl[5] = 0.0
 
             self.sim.step()
-            #self.render()
-            self.sim.render(1920, 1080, mode='window')
+            self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
             current_vel = self.sim.data.get_joint_qvel(joint_name)
