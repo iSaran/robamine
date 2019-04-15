@@ -1,4 +1,11 @@
-#!/usr/bin/env python3
+"""
+Clutter
+=======
+
+
+This module contains the implementation of a cluttered environment, based on
+:cite:`kiatos19`.
+"""
 import numpy as np
 from mujoco_py import load_model_from_path, MjSim, MjViewer
 from gym import utils, spaces

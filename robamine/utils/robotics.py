@@ -1,6 +1,24 @@
-#!/usr/bin/env python3
+"""
+Robotics Utilities
+==================
+
+"""
 
 class Trajectory():
+    """
+    Implements a 5-order trajectory
+
+    Parameters
+    ----------
+    t : tuple
+        A tuple with the initial and final time of the trajectory
+    pos : tuple
+        A tuple with the initial and final position of the trajectory
+    vel : tuple
+        A tuple with the initial and final velocity of the trajectory. Defaults to [0, 0]
+    acc : tuple
+        A tuple with the initial and final accelaration of the trajectory. Defaults to [0, 0]
+    """
     def __init__(self, t, pos, vel = [0, 0], acc = [0, 0]):
         self.T = t[1] - t[0];
         self.ti = t[0];
@@ -13,6 +31,10 @@ class Trajectory():
         self.a5 = (1/(2 * pow(self.T, 5))) * (12 * (pos[1] - pos[0]) - 6 * (vel[1] + vel[0]) * self.T - (acc[0] - acc[1]) * pow(self.T, 2))
 
     def pos(self, time):
+        """
+        Return the position of the trajectory for the given time. If the time
+        is thresholded in initial and final.
+        """
         if (time < self.ti):
             t = 0
         elif (time > self.tf):
@@ -22,6 +44,10 @@ class Trajectory():
         return self.a0 + self.a1 * t + self.a2 * pow(t, 2) + self.a3 * pow(t, 3) + self.a4 * pow(t, 4) + self.a5 * pow(t, 5)
 
     def vel(self, time):
+        """
+        Return the velocity of the trajectory for the given time. If the time
+        is thresholded in initial and final.
+        """
         if (time < self.ti):
             t = 0
         elif (time > self.tf):
@@ -49,6 +75,11 @@ class PDController:
         self.damping = mass * 2.0 * damping_ratio * natural_frequency
 
     def get_control(self, pos_error, vel_error):
+        """
+        Return a force control given a position and a velocity error. If you
+        want to use it for orientation control, use 2 log of the quaternion
+        error for position error.
+        """
         return self.stiffness * pos_error + self.damping * vel_error
 
     def __str__(self):
