@@ -41,4 +41,6 @@ Indices and tables
    install
    examples
    api/algo/main
+   api/env/main
+   api/utils/main
    zreferences
