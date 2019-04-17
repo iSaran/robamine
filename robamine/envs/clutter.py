@@ -63,7 +63,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
-        self.pd = PDController(mass = get_body_mass(self.sim.model, 'finger'))
+        self.pd = PDController(mass = get_body_mass(self.sim.model, 'finger'), step_response=0.005)
 
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
@@ -124,7 +124,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
-        self.viewer.cam.distance = 0.75
+        self.viewer.cam.distance = 1.2
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 

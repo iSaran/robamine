@@ -1,13 +1,17 @@
 <mujoco model="CLUTTER">
   <compiler
     angle="radian"
-    meshdir="../../meshes"
     inertiafromgeom="true" />
   <option
     iterations="200"
     timestep="0.001"
     solver="CG"/>
   <size njmax="500" nconmax="100" />
+  <default>
+    <geom
+      friction="0.3 0.005 0.0001"
+      rgba="0.0 0.4 0.6 1" />
+  </default>
   <visual>
     <map
       fogstart="1.5"
@@ -22,12 +26,9 @@
       framelength="1.5"
       framewidth="0.1"/>
   </visual>
-  <asset>
-    <mesh name="small_table" file="utils/small_table.stl"/>
-  </asset>
   <worldbody>
     <camera name="xtion"
-      pos="0 0 0.75"
+      pos="0 0 1.2"
       zaxis="0 0 1" />
     <light
       directional="false"
@@ -38,14 +39,13 @@
       pos="1 0 1.5"
       dir="-1 0 -2.5"/>
     <body
-      name="smalltable"
+      name="table"
       pos="0 0 0"
       quat="1 0 0 0">
       <geom
-        name="smalltable"
-        friction="0.5 0.005 0.0001"
+        name="table"
         type="box"
-        size="0.25 0.25 0.0125"
+        size="0.5 0.5 0.0125"
         rgba="0.5 0.18 0.03 1"/>
     </body>
     <body
@@ -55,20 +55,23 @@
       <joint
         name="target"
         type="free"/>
-      <geom name="target"  rgba="0.8 0.0 0.0 1" size=".02 .02 .01" type="box"/>
+      <geom
+        name="target"
+        size=".05 .05 .02"
+        type="box"
+        rgba="0.8 0.0 0.0 1" />
     </body>
     <body
       name="object1"
-      pos="0 -0.1 0.1"
+      pos="0 -0.2 0.1"
       quat="1 0 0 0">
       <joint
         name="object1"
         type="free"/>
-      <geom name="object1"
-        rgba="0.0 0.4 0.6 1"
-        size=".01 .02 .02"
-        type="box"
-        friction="0.5 0.005 0.0001" />
+      <geom
+        name="object1"
+        size=".02 .05 .05"
+        type="box" />
     </body>
     <body
       name="object2"
@@ -77,24 +80,22 @@
       <joint
         name="object2"
         type="free"/>
-      <geom name="object2"
-        rgba="0.0 0.4 0.6 1"
-        size=".01 .02 .02"
-        type="box"
-        friction="0.5 0.005 0.0001" />
+      <geom
+        name="object2"
+        size=".02 .05 .05"
+        type="box" />
     </body>
     <body
       name="object3"
-      pos="-0.1 -0.2 0.1"
+      pos="-0.2 -0.2 0.1"
       quat="1 0 0 0">
       <joint
         name="object3"
         type="free"/>
-      <geom name="object3"
-        rgba="0.0 0.4 0.6 1"
-        size=".01 .02 .02"
-        type="box"
-        friction="0.5 0.005 0.0001" />
+      <geom
+        name="object3"
+        size=".02 .05 .05"
+        type="box" />
     </body>
     <body
       name="finger"
@@ -103,7 +104,11 @@
       <joint
         name="finger"
         type="free"/>
-      <geom name="finger"  rgba="0.3 0.3 0.3 1" size=".005 .005 .005" type="sphere" mass = "1"/>
+      <geom
+        name="finger"
+        rgba="0.3 0.3 0.3 1"
+        size=".01 .01 .01"
+        type="sphere"/>
     </body>
   </worldbody>
   <actuator>
