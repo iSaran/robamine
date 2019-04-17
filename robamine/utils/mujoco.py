@@ -32,6 +32,16 @@ def get_body_names(mj_model):
 def get_body_mass(mj_model, body_name):
     return mj_model.body_mass[get_body_names(mj_model).index(body_name)]
 
+def get_geom_names(mj_model):
+    names = []
+    for i in mj_model.name_geomadr:
+        names.append(extract_name(mj_model, i))
+    return names
+
+def get_geom_size(mj_model, geom_name):
+    return mj_model.geom_size[3 * get_geom_names(mj_model).index(geom_name)]
+
+
 def set_mocap_pose(sim, pos, quat):
     ''' Sets the pose (position and orientation) of a mocap body as a relative
     pose w.r.t. the current.
