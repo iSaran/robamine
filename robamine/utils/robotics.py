@@ -71,12 +71,8 @@ class PDController:
     """
     def __init__(self, mass, damping_ratio = 1, step_response = 0.01):
         natural_frequency = (4.0 / step_response) * damping_ratio
-        print(natural_frequency)
         self.stiffness = mass * natural_frequency * natural_frequency
-        print(mass)
         self.damping = mass * 2.0 * damping_ratio * natural_frequency
-        print(self.stiffness)
-        print(self.damping)
 
     def get_control(self, pos_error, vel_error):
         """
@@ -85,3 +81,7 @@ class PDController:
         error for position error.
         """
         return self.stiffness * pos_error + self.damping * vel_error
+
+    def __str__(self):
+        return "Stiffness: " + str(self.stiffness) + "\n" + \
+               "Damping: " + str(self.damping) + "\n"
