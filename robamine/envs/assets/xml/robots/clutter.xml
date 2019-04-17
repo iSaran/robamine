@@ -27,8 +27,8 @@
   </asset>
   <worldbody>
     <camera name="xtion"
-      pos="0 0 0.75"
-      zaxis="0 0 1" />
+      pos="0 0 1"
+      zaxis="0 0 1"/>
     <light
       directional="false"
       cutoff="90"
@@ -55,7 +55,7 @@
       <joint
         name="target"
         type="free"/>
-      <geom name="target"  rgba="0.8 0.0 0.0 1" size=".02 .02 .01" type="box"/>
+      <geom name="target"  rgba="0.8 0.0 0.0 1" size=".02 .02 .03" type="box"/>
     </body>
     <body
       name="object1"
