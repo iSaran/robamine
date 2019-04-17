@@ -13,7 +13,7 @@ from gym.envs.mujoco import mujoco_env
 import os
 
 from robamine.utils.robotics import PDController, Trajectory
-from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose
+from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size
 import robamine.utils.cv_tools as cv_tools
 import math
 
@@ -104,8 +104,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         # Get the depth image
         self.offscreen.render(640, 480, 0)
-        rgb, depth = self.sim.render(640, 480, depth=True, camera_name='xtion')
-        rgb, depth = self.offscreen.read_pixels(1920, 1080, depth=True)
+        rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
         bgr = cv_tools.rgb2bgr(rgb)
         cv2.imwrite("/home/mkiatos/Desktop/fds/obs.png", bgr)
 
