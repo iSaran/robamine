@@ -70,16 +70,28 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.seed()
 
     def reset_model(self):
+        target_size = get_geom_size(self.sim.model, 'target')
         # Randomize the position of the obstracting objects
         random_qpos = self.init_qpos
         for object_name in self.object_names:
             index = self.sim.model.get_joint_qpos_addr(object_name)
-            r = abs(np.random.normal(0, 0.01)) + 0.05
+            r = abs(np.random.normal(0, 0.01)) + 3 * max([target_size[0], target_size[1]])
             theta = np.random.uniform(0, 2*math.pi)
             random_qpos[index[0]] = r * math.cos(theta)
             random_qpos[index[0]+1] = r * math.sin(theta)
 
+        # Set the initial position of the finger outside of the table, in order
+        # to not occlude the objects during reading observation from the camera
+        index = self.sim.model.get_joint_qpos_addr('finger')
+        table_size = get_geom_size(self.sim.model, 'table')
+        table_pos = self.sim.data.get_body_xpos('table')
+        init_finger_pos = table_pos + 1.1 * table_size
+        random_qpos[index[0]]   = init_finger_pos[0]
+        random_qpos[index[0]+1] = init_finger_pos[1]
+        random_qpos[index[0]+2] = init_finger_pos[2]
+
         self.set_state(random_qpos, self.init_qvel)
+
         return self.get_obs()
 
     def get_obs(self):
