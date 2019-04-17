@@ -94,3 +94,14 @@ def get_body_pose(sim, name):
     pose[0:3, 0:3] = quat2rot(q)
     pose[0:3, 3] = t
     return pose
+
+
+def get_camera_pose(sim, name):
+    camera_pose = np.identity(4, dtype=np.float32)
+    camera_pose[0:3, 0:3] = sim.data.get_camera_xmat(name)
+    camera_pose[0:3, 3] = sim.data.get_camera_xpos(name)
+    return camera_pose
+
+
+def get_geom_size(sim, name):
+    return 0
