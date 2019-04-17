@@ -95,6 +95,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.set_state(random_qpos, self.init_qvel)
 
+        # Move forward the simulation to be sure that the objects have landed
+        for _ in range(200):
+            self.sim.step()
+
         return self.get_obs()
 
     def get_obs(self):
