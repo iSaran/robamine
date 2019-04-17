@@ -13,7 +13,7 @@ from gym.envs.mujoco import mujoco_env
 import os
 
 from robamine.utils.robotics import PDController, Trajectory
-from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose
+from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size
 import robamine.utils.cv_tools as cv_tools
 import math
 import cv2

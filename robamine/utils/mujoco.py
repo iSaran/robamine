@@ -101,7 +101,3 @@ def get_camera_pose(sim, name):
     camera_pose[0:3, 0:3] = sim.data.get_camera_xmat(name)
     camera_pose[0:3, 3] = sim.data.get_camera_xpos(name)
     return camera_pose
-
-
-def get_geom_size(sim, name):
-    return 0
