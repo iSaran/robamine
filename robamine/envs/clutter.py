@@ -99,6 +99,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         Read depth and extract height map as observation
         :return:
         """
+        self._move_finger_outside_the_table()
         # Get the depth image
         self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
         rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
@@ -147,16 +148,26 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def do_simulation(self, action):
         time = self.sim.data.time
 
-        push = Push(direction_theta=action[0])
+        object_height = get_geom_size(self.sim.model, 'target')[2]
+        push = Push(direction_theta=action[0], object_height = object_height, target=False)
 
-        self.move_joint_to_target('finger', [push.initial_pos[0], push.initial_pos[1], None])
+        self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], 0.15, 1, 0, 0, 0])
+        self.sim.step()
+
         self.move_joint_to_target('finger', [None, None, push.z])
         end = push.initial_pos + push.distance * push.direction
         self.move_joint_to_target('finger', [end[0], end[1], None])
-        self.move_joint_to_target('finger', [None, None, 0.2])
-        self.move_joint_to_target('finger', [0, 0, 0.2])
+        self.move_joint_to_target('finger', [None, None, 0.4])
 
         return time
+
+    def _move_finger_outside_the_table(self):
+        # Move finger outside the table again
+        table_size = get_geom_size(self.sim.model, 'table')
+        table_pos = self.sim.data.get_body_xpos('table')
+        f_pos = table_pos + 1.1 * table_size
+        self.sim.data.set_joint_qpos('finger', [f_pos[0], f_pos[1], f_pos[2], 1, 0, 0, 0])
+        self.sim.step()
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
