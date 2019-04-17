@@ -142,7 +142,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
-        self.viewer.cam.distance = 0.75
+        self.viewer.cam.distance = 1.2
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
