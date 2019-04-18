@@ -65,3 +65,8 @@ register(
     entry_point='robamine.envs:SpherePosition',
     max_episode_steps=50
 )
+
+register(
+    id='LWRROS-v1',
+    entry_point='robamine.envs:LWRROS'
+)

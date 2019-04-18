@@ -6,3 +6,4 @@ from robamine.envs.finger_slide import FingerSlide
 from robamine.envs.sphere_position import SpherePosition
 from robamine.envs.sphere_reacher import SphereReacher
 from robamine.envs.sphere_reacher_incremental import SphereReacherIncremental
+from robamine.envs.lwr_ros import LWRROS
