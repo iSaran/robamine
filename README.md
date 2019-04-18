@@ -83,6 +83,15 @@ cd robamine
 pip install -e .
 ```
 
+### Using ROS environments
+
+In case you want to use the ROS environments (e.g. `LWRROS-v1`) with ROS kinetic you should install the following packages in order for ROS to work with Python 3:
+
+```bash
+sudo apt-get install python3-pip python3-yaml
+sudo pip3 install rospkg catkin_pkg
+```
+
 ## Run examples
 
 ### Train Pendulum with DDPG:
