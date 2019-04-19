@@ -13,7 +13,8 @@ from gym.envs.mujoco import mujoco_env
 import os
 
 from robamine.utils.robotics import PDController, Trajectory
-from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size
+from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia
+from robamine.utils.orientation import Quaternion
 import robamine.utils.cv_tools as cv_tools
 import math
 
@@ -66,8 +67,15 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
-        self.pd = PDController.from_mass(mass = get_body_mass(self.sim.model, 'finger'), step_response=0.005)
 
+        finger_mass = get_body_mass(self.sim.model, 'finger')
+        self.pd = PDController.from_mass(mass = finger_mass, step_response=0.005)
+
+        moment_of_inertia = get_body_inertia(self.sim.model, 'finger')
+        self.pd_rot = []
+        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[0], step_response=0.005))
+        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[1], step_response=0.005))
+        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[2], step_response=0.005))
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
         self.seed()
@@ -211,6 +219,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         current_vel = self.sim.data.get_joint_qvel(joint_name)
         current_time = self.sim.data.time
         init_time = self.sim.data.time
+        desired_quat = Quaternion()
+        current_quat = Quaternion(w=current_pos[3], x=current_pos[4], y=current_pos[5], z=current_pos[6])
 
         if target_position[0] is not None:
             trajectory_x = Trajectory([current_time, current_time + duration], [current_pos[0], target_position[0]])
@@ -226,18 +236,21 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             trajectory_z = Trajectory([current_time, current_time + duration], [current_pos[2], current_pos[2]])
 
         while current_time <= init_time + duration:
+            quat_error = current_quat.error(desired_quat)
+
             # TODO: The indexes of the actuators are hardcoded right now
             # assuming that 0-6 is the actuator of the given joint
             self.sim.data.ctrl[0] = self.pd.get_control(trajectory_x.pos(current_time) - current_pos[0], trajectory_x.vel(current_time) - current_vel[0])
             self.sim.data.ctrl[1] = self.pd.get_control(trajectory_y.pos(current_time) - current_pos[1], trajectory_y.vel(current_time) - current_vel[1])
             self.sim.data.ctrl[2] = self.pd.get_control(trajectory_z.pos(current_time) - current_pos[2], trajectory_z.vel(current_time) - current_vel[2])
-            self.sim.data.ctrl[3] = 0.0
-            self.sim.data.ctrl[4] = 0.0
-            self.sim.data.ctrl[5] = 0.0
+            self.sim.data.ctrl[3] = self.pd_rot[0].get_control(quat_error[0], -current_vel[3])
+            self.sim.data.ctrl[4] = self.pd_rot[1].get_control(quat_error[1], -current_vel[4])
+            self.sim.data.ctrl[5] = self.pd_rot[2].get_control(quat_error[2], -current_vel[5])
 
             self.sim.step()
             self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
+            current_quat = Quaternion(w=current_pos[3], x=current_pos[4], y=current_pos[5], z=current_pos[6])
             current_vel = self.sim.data.get_joint_qvel(joint_name)
             current_time = self.sim.data.time

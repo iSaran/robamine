@@ -10,7 +10,7 @@ setup(name='robamine',
                         'mujoco-py==1.50.1.68', \
                         'sphinx', \
                         'sphinxcontrib-bibtex', \
-                        'pandas', \
+                        'pandas==0.24.2', \
                         'sphinx_rtd_theme', \
                         'numpydoc', \
                         'matplotlib',\
