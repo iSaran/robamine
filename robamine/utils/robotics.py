@@ -69,10 +69,14 @@ class PDController:
     step_response : float
         The response time. Defaults to 0.01 seconds.
     """
-    def __init__(self, mass, damping_ratio = 1, step_response = 0.01):
+    def __init__(self, stiffness, damping):
+        self.stiffness = stiffness
+        self.damping = damping
+
+    @classmethod
+    def from_mass(cls, mass, damping_ratio = 1, step_response = 0.01):
         natural_frequency = (4.0 / step_response) * damping_ratio
-        self.stiffness = mass * natural_frequency * natural_frequency
-        self.damping = mass * 2.0 * damping_ratio * natural_frequency
+        return cls(mass * natural_frequency * natural_frequency, mass * 2.0 * damping_ratio * natural_frequency)
 
     def get_control(self, pos_error, vel_error):
         """
