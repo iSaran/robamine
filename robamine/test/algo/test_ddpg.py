@@ -13,9 +13,10 @@ import logging
 class TestAgent(unittest.TestCase):
     def test_reproducability_with_pendulum(self):
         rb_logging.init(console_level=logging.INFO, file_level=logging.ERROR)  # Do not show info messages in unittests
-        seed_everything(999)
 
         world = World(DDPGParams(actor=ActorParams(gate_gradients=True)), 'Pendulum-v0')
+        world.seed(999)
+
         world.train_and_eval(n_episodes_to_train=5, n_episodes_to_evaluate=1, evaluate_every=1)
 
         streams = ['train', 'eval']
@@ -175,7 +176,7 @@ class TestReplayBuffer(unittest.TestCase):
         transitions.append({'state': [3, 8, 1, 0], 'action': [3, 2], 'reward': -20.3, 'next_state': [3, 40, 3, 4], 'terminal': 1.0 })
         transitions.append({'state': [4, 3, 1, 1], 'action': [4, 1], 'reward': -30.3, 'next_state': [4, 40, 3, 4], 'terminal': 0.0 })
 
-        replay_buffer = ReplayBuffer(10, 1)
+        replay_buffer = ReplayBuffer(10)
         replay_buffer.seed(999)
 
         for t in transitions:

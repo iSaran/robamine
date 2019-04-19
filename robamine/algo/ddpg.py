@@ -32,7 +32,7 @@ Or you can use parameters different from the defaults:
 """
 
 from collections import deque
-import random
+from random import Random
 import numpy as np
 import tensorflow as tf
 import gym
@@ -86,7 +86,6 @@ class DDPGParams(AgentParams):
     def __init__(self,
                  state_dim = None,
                  action_dim = None,
-                 random_seed=999,
                  suffix="",
                  replay_buffer_size = 1e6,
                  batch_size = 64,
@@ -95,7 +94,7 @@ class DDPGParams(AgentParams):
                  tau = 1e-3,
                  actor = ActorParams(),
                  critic = CriticParams()):
-        super().__init__(state_dim, action_dim, random_seed, "DDPG", suffix)
+        super().__init__(state_dim, action_dim, "DDPG", suffix)
 
         # DDPG params
         self.replay_buffer_size = replay_buffer_size
@@ -129,14 +128,12 @@ class ReplayBuffer:
     ----------
     buffer_size : int
         The buffer size
-    seed : int, optional
-        A seed for initializing the random batch sampling and have reproducable
-        results.
     """
-    def __init__(self, buffer_size, seed=999):
+    def __init__(self, buffer_size):
         self.buffer_size = buffer_size
         self.buffer = deque()
         self.count = 0
+        self.random = Random()
 
     def __call__(self, index):
         """
@@ -208,7 +205,7 @@ class ReplayBuffer:
         else:
             batch_size = given_batch_size
 
-        batch = random.sample(self.buffer, batch_size)
+        batch = self.random.sample(self.buffer, batch_size)
 
         state_batch = np.array([_[0] for _ in batch])
         action_batch = np.array([_[1] for _ in batch])
@@ -237,7 +234,7 @@ class ReplayBuffer:
         return self.count
 
     def seed(self, random_seed):
-        random.seed(random_seed)
+        self.random.seed(random_seed)
 
 class Actor(Network):
     """
@@ -642,7 +639,7 @@ class DDPG(Agent):
             self.target_critic.equalize_params()
 
         # Initialize replay buffer
-        self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size, self.params.random_seed)
+        self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size)
 
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = self.params.exploration_noise_sigma)
 
@@ -841,5 +838,5 @@ class DDPG(Agent):
         return self.critic.predict(np.reshape(state, (1, state.shape[0])), np.reshape(action, (1, action.shape[0]))).squeeze()
 
     def seed(self, seed):
-        super().seed(seed)
+        self.replay_buffer.seed(seed)
         self.exploration_noise.seed(seed)
