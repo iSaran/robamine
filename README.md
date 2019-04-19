@@ -92,6 +92,14 @@ sudo apt-get install python3-pip python3-yaml
 sudo pip3 install rospkg catkin_pkg
 ```
 
+Remove from your `activate` script of your environment this line:
+
+```bash
+export PYTHONPATH="$VIRTUAL_ENV/lib"
+```
+
+And finally, uncomment the commented imports of the ROS environments from `robamine/envs/__init__.py`.
+
 ## Run examples
 
 ### Train Pendulum with DDPG:
