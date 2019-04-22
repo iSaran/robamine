@@ -12,8 +12,11 @@ import logging
 
 class TestAgent(unittest.TestCase):
     def test_reproducability_with_pendulum(self):
+        tf.reset_default_graph()
+
         rb_logging.init(console_level=logging.INFO, file_level=logging.ERROR)  # Do not show info messages in unittests
 
+        tf.random.set_random_seed(999)  # DDPG initializes variables in the constructor so you need to set tf seed before creating the world. TODO: fix it.
         world = World(DDPGParams(actor=ActorParams(gate_gradients=True)), 'Pendulum-v0')
         world.seed(999)
 
@@ -21,7 +24,7 @@ class TestAgent(unittest.TestCase):
 
         streams = ['train', 'eval']
         pl = Plotter(world.log_dir, streams)
-        pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'robamine_logs_2018.11.09.17.49.50.633876/DDPG_Pendulum-v0'), streams)
+        pl_2 = Plotter(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'robamine_logs_2019.04.22.13.03.07.254911/DDPG_Pendulum-v0'), streams)
 
         for stream in streams:
             x, y, _, _ = pl.extract_data(stream)
@@ -32,8 +35,10 @@ class TestAgent(unittest.TestCase):
 
 class TestActorCritic(unittest.TestCase):
     def test_actor(self):
+        tf.reset_default_graph()
+        tf.set_random_seed(1)
+
         with tf.Session() as sess, tf.variable_scope('test_actor'):
-            tf.set_random_seed(1)
             # Create an actor
             actor = Actor.create(sess, ActorParams(state_dim=3, hidden_units=(3, 4), action_dim=2, batch_size=10, learning_rate=1e-4))
             sess.run(tf.global_variables_initializer())
@@ -57,14 +62,14 @@ class TestActorCritic(unittest.TestCase):
             # Test that the op works
             inputs = [[3, 3, 3], [2, 2, 2]]
             network_output = actor.predict(inputs)
-            true = np.reshape([-0.00113715, -0.00011934, -0.00117957, -0.00015528], (2,2))
+            true = np.reshape([-0.00015255, -0.00066837, -0.00029249, -0.00046975], (2,2))
             self.assertTrue(np.allclose(network_output, true))
 
     def test_target_actor(self):
-        with tf.Session() as sess, tf.variable_scope('test_target_actor'):
-            # Se a random seed to have a reproducable test every time
-            tf.set_random_seed(1)
+        tf.reset_default_graph()
+        tf.set_random_seed(1)
 
+        with tf.Session() as sess, tf.variable_scope('test_target_actor'):
             # Create an actor and its target network
             actor = Actor.create(sess, ActorParams(state_dim=3, hidden_units=(3, 4), action_dim=2, batch_size=10, learning_rate=1e-3))
             tau = 0.01
@@ -85,8 +90,10 @@ class TestActorCritic(unittest.TestCase):
             self.assertAlmostEqual(expected_value, true_value, places=6)
 
     def test_critic(self):
+        tf.reset_default_graph()
+        tf.set_random_seed(1)
+
         with tf.Session() as sess, tf.variable_scope('test_critic'):
-            tf.set_random_seed(1)
             # Create an actor
             critic = Critic.create(sess, CriticParams(state_dim=3, hidden_units=(3, 4), action_dim=2))
             sess.run(tf.global_variables_initializer())
@@ -119,14 +126,18 @@ class TestActorCritic(unittest.TestCase):
             state_input = np.reshape([[3, 3, 3], [2, 2, 2]], (2, 3))
             action_input = np.reshape([[3, 3], [2, 2]], (2, 2))
             network_output = critic.predict(state_input, action_input)
-            true = np.reshape([0.00120847, 0.0013597], (2,1))
+            true = np.reshape([-0.00081261, -0.00066039], (2,1))
             self.assertTrue(np.allclose(network_output, true))
 
             grad = critic.get_grad_q_wrt_actions(state_input, action_input)
-            true = np.reshape([0.00012602,  -0.00031828, 0.00012602,  -0.00031828], (2,2))
+            true = np.reshape([3.5032659e-5, -3.4565775e-4, 3.5032659e-5, -3.4565775e-4], (2,2))
+
             self.assertTrue(np.allclose(grad, true))
 
     def test_target_critic(self):
+        tf.reset_default_graph()
+        tf.set_random_seed(1)
+
         with tf.Session() as sess, tf.variable_scope('test_target_critic'):
             # Se a random seed to have a reproducable test every time
             tf.set_random_seed(1)

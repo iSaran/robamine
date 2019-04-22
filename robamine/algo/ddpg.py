@@ -840,3 +840,4 @@ class DDPG(Agent):
     def seed(self, seed):
         self.replay_buffer.seed(seed)
         self.exploration_noise.seed(seed)
+        tf.random.set_random_seed(seed)
