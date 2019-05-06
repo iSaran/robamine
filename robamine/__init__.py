@@ -67,7 +67,13 @@ register(
 )
 
 register(
+    id='LWRROS-v1',
+    entry_point='robamine.envs:LWRROS'
+)
+
+register(
     id='Clutter-v1',
     entry_point='robamine.envs:Clutter',
     max_episode_steps=3
 )
+

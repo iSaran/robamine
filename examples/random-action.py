@@ -7,12 +7,9 @@ import cv2
 #
 def run(env_id):
     env = gym.make(env_id)
-    env.reset()
-    # env.render()
 
     for i_episode in range(20):
         observation = env.reset()
-        print(env.seed())
         for t in range(3000):
             # env.render()
             # print(observation)

@@ -44,6 +44,9 @@ virtualenv ~/robamine-env --python=python3 --prompt='[robamine env] '
 
 At the end of the `~/robamine-env/bin/activate` script, add the following lines:
 
+**If you have Nvidia:**
+
+Check with `nvidia-smi` which nvidia driver is installed (e.g. 384) and replace 384 with your nvidia driver in the lines below:
 ```bash
 # If the virtualenv inherits the `$PYTHONPATH` from your system:
 export PYTHONPATH="$VIRTUAL_ENV/lib"
@@ -51,9 +54,19 @@ export PYTHONPATH="$VIRTUAL_ENV/lib"
 # For using Mujoco:
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia-384
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mjpro150/bin
+export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so
 ```
 
-Notice that the number of nvidia directory maybe different depending on the Nvidia driver that you run.
+**If you do not have Nvidia:**
+
+```bash
+# If the virtualenv inherits the `$PYTHONPATH` from your system:
+export PYTHONPATH="$VIRTUAL_ENV/lib"
+
+# For using Mujoco:
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mjpro150/bin
+export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/x86_64-linux-gnu/libGL.so
+```
 
 Then, activate the environment (you have to activate it each time you want to use it):
 
@@ -69,6 +82,23 @@ git clone https://github.com/iSaran/robamine.git
 cd robamine
 pip install -e .
 ```
+
+### Using ROS environments
+
+In case you want to use the ROS environments (e.g. `LWRROS-v1`) with ROS kinetic you should install the following packages in order for ROS to work with Python 3:
+
+```bash
+sudo apt-get install python3-pip python3-yaml
+sudo pip3 install rospkg catkin_pkg
+```
+
+Remove from your `activate` script of your environment this line:
+
+```bash
+export PYTHONPATH="$VIRTUAL_ENV/lib"
+```
+
+And finally, uncomment the commented imports of the ROS environments from `robamine/envs/__init__.py`.
 
 ## Run examples
 
@@ -92,19 +122,6 @@ where `PATH_TO_LOGS` the path showed in console in the beginning of the training
 cd robamine/examples
 python train-ddpg-sphere-reacher.py
 ```
-
-If you get
-
-```
-ERROR: GLEW initalization error: Missing GL version
-```
-
-Run your file with:
-
-```bash
-LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so python train-ddpg-sphere-reacher.py
-```
-
 
 ## Run unit tests
 

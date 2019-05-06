@@ -1,4 +1,11 @@
-#!/usr/bin/env python3
+"""
+Clutter
+=======
+
+
+This module contains the implementation of a cluttered environment, based on
+:cite:`kiatos19`.
+"""
 import numpy as np
 from mujoco_py import load_model_from_path, MjSim, MjViewer, MjRenderContextOffscreen
 from gym import utils, spaces
@@ -6,7 +13,7 @@ from gym.envs.mujoco import mujoco_env
 import os
 
 from robamine.utils.robotics import PDController, Trajectory
-from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose
+from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size
 import robamine.utils.cv_tools as cv_tools
 import math
 
@@ -44,12 +51,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.model = load_model_from_path(path)
         self.sim = MjSim(self.model)
         self._viewers = {}
-        self._viewers['human'] = MjViewer(self.sim)
-        self._viewers['depth_array'] = MjRenderContextOffscreen(self.sim, -1)
-        self._viewers['rgb_array'] = MjRenderContextOffscreen(self.sim, -1)
-        self.viewer = self._viewers['human']
-
-        self.ctx = MjRenderContext(self.sim)
+        self.offscreen = MjRenderContextOffscreen(self.sim, 0)
+        self.viewer = MjViewer(self.sim)
 
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
@@ -63,47 +66,50 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
-        self.pd = PDController(mass = get_body_mass(self.sim.model, 'finger'))
+        self.pd = PDController(mass = get_body_mass(self.sim.model, 'finger'), step_response=0.005)
 
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
         self.seed()
 
     def reset_model(self):
+        target_size = get_geom_size(self.sim.model, 'target')
         # Randomize the position of the obstracting objects
         random_qpos = self.init_qpos
         for object_name in self.object_names:
             index = self.sim.model.get_joint_qpos_addr(object_name)
-            r = abs(np.random.normal(0, 0.01)) + 0.05
+            r = abs(np.random.normal(0, 0.01)) + 3 * max([target_size[0], target_size[1]])
             theta = np.random.uniform(0, 2*math.pi)
             random_qpos[index[0]] = r * math.cos(theta)
             random_qpos[index[0]+1] = r * math.sin(theta)
 
-        self.set_state(random_qpos, self.init_qvel)
-        return self.get_obs()
+        # Set the initial position of the finger outside of the table, in order
+        # to not occlude the objects during reading observation from the camera
+        index = self.sim.model.get_joint_qpos_addr('finger')
+        table_size = get_geom_size(self.sim.model, 'table')
+        table_pos = self.sim.data.get_body_xpos('table')
+        init_finger_pos = table_pos + 1.1 * table_size
+        random_qpos[index[0]]   = init_finger_pos[0]
+        random_qpos[index[0]+1] = init_finger_pos[1]
+        random_qpos[index[0]+2] = init_finger_pos[2]
 
-    def render(self, mode='human', width=DEFAULT_SIZE, height=DEFAULT_SIZE):
-        if mode == 'rgb_array':
-            camera_name = 'xtion'
-            camera_id = self.model.camera_name2id(camera_name)
-            self._viewers[mode].render(width, height, camera_id=camera_id)
-            data = self._viewers[mode].read_pixels(width, height, depth=False)
-            return data[::-1, :, :]
-        elif mode == 'depth_array':
-            camera_name = 'xtion'
-            camera_id = self.model.camera_name2id(camera_name)
-            data = self._viewers[mode].read_pixels(width, height, depth=True)[1]
-            return data[::-1, :]
-        elif mode == 'human':
-            self._get_viewer(mode).render()
+        self.set_state(random_qpos, self.init_qvel)
+
+        # Move forward the simulation to be sure that the objects have landed
+        for _ in range(200):
+            self.sim.step()
+
+        return self.get_obs()
 
     def get_obs(self):
         """
         Read depth and extract height map as observation
         :return:
         """
+        self._move_finger_outside_the_table()
         # Get the depth image
-        rgb, depth = self.sim.render(640, 480, depth=True, camera_name='xtion')
+        self.offscreen.render(640, 480, 0)
+        rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
         bgr = cv_tools.rgb2bgr(rgb)
         cv2.imwrite("/home/mkiatos/Desktop/fds/obs.png", bgr)
 
@@ -149,22 +155,32 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def do_simulation(self, action):
         time = self.sim.data.time
 
-        push = Push(direction_theta=action[0])
+        object_height = get_geom_size(self.sim.model, 'target')[2]
+        push = Push(direction_theta=action[0], object_height = object_height, target=False)
 
-        self.move_joint_to_target('finger', [push.initial_pos[0], push.initial_pos[1], None])
+        self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], 0.15, 1, 0, 0, 0])
+        self.sim.step()
+
         self.move_joint_to_target('finger', [None, None, push.z])
         end = push.initial_pos + push.distance * push.direction
         self.move_joint_to_target('finger', [end[0], end[1], None])
-        self.move_joint_to_target('finger', [None, None, 0.2])
-        self.move_joint_to_target('finger', [0, 0, 0.2])
+        self.move_joint_to_target('finger', [None, None, 0.4])
 
         return time
 
+    def _move_finger_outside_the_table(self):
+        # Move finger outside the table again
+        table_size = get_geom_size(self.sim.model, 'table')
+        table_pos = self.sim.data.get_body_xpos('table')
+        f_pos = table_pos + 1.1 * table_size
+        self.sim.data.set_joint_qpos('finger', [f_pos[0], f_pos[1], f_pos[2], 1, 0, 0, 0])
+        self.sim.step()
+
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
-        self._viewers['human'].cam.distance = 0.75
-        self._viewers['human'].cam.elevation = -90  # default -90
-        self._viewers['human'].cam.azimuth = 90
+        self.viewer.cam.distance = 1.2
+        self.viewer.cam.elevation = -90  # default -90
+        self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation):
         # TODO: Define reward based on observation
@@ -214,8 +230,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.data.ctrl[5] = 0.0
 
             self.sim.step()
-            # self.render()
-            # self.sim.render(1920, 1080, mode='window')
+            self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
             current_vel = self.sim.data.get_joint_qvel(joint_name)
