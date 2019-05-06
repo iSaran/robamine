@@ -131,7 +131,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         if len(points_around) > 0:
             points_around = np.asarray(points_around)
-            height_map = cv_tools.generate_height_map(points_around)
+            height_map = cv_tools.generate_height_map(points_around, plot=True)
             bbox = np.array([0.2, 0.2])
             features = cv_tools.extract_features(height_map, bbox)
 
@@ -220,4 +220,3 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             current_pos = self.sim.data.get_joint_qpos(joint_name)
             current_vel = self.sim.data.get_joint_qvel(joint_name)
             current_time = self.sim.data.time
-

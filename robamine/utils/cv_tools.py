@@ -60,11 +60,11 @@ def transform_point_cloud(point_cloud, affine_transformation):
 
 def gl2cv(depth, z_near, z_far):
     """
-
-    :param depth:
-    :param z_near:
-    :param z_far:
-    :return:
+    Convert the depth from OpenGl to OpenCv
+    :param depth: the depth in OpenGl format
+    :param z_near: near clipping plane
+    :param z_far: far clipping plane
+    :return: a depth image
     """
     h, w = depth.shape
     linear_depth = np.zeros((h, w), dtype=np.float32)
@@ -130,86 +130,87 @@ def generate_height_map(point_cloud, plot=False):
 
         cv_height = np.flip(cv_height, axis=0)
         cv_height = np.flip(cv_height, axis=1)
-        cv2.imshow("height_grid", cv_height)
+        cv2.imshow("height_map", cv_height)
         cv2.waitKey()
 
     return height_grid
 
 
-def extract_features(height_map, bbox):
+def extract_features(height_map, bbox, plot=False):
     """
     Extract features from height map
     :param height_map: height map aligned with the target
     :param bbox: target's dimensions
-    :return: N-d vector
+    :return: N-d feature vector
     """
-    boxes = []
-
     h, w = height_map.shape
 
-    side = 1/2 * 50 * bbox
+    if plot:
+        cv_height = np.zeros((h, w), dtype=np.float32)
+        min_height = np.min(height_map)
+        max_height = np.max(height_map)
+        for i in range(0, w):
+            for j in range(0, h):
+                cv_height[i][j] = 255 * ((height_map[i][j] - min_height) / (max_height - min_height))
+
+        cv_height = np.flip(cv_height, axis=0)
+        cv_height = np.flip(cv_height, axis=1)
+        rgb = cv2.cvtColor(cv_height, cv2.COLOR_GRAY2RGB)
+
+    cells = []
+
     cx = int(w/2)
     cy = int(h/2)
 
-    # Targets features
+    # Target features
+    side = 1/2 * 50 * bbox
     cx1 = cx - int(side[0])
     cx2 = cx + int(side[0])
     cy1 = cy - int(side[1])
     cy2 = cy + int(side[1])
+    cells.append([(cx1, cy1), (cx, cy)])
+    cells.append([(cx, cy1), (cx2, cy)])
+    cells.append([(cx1, cy), (cx, cy2)])
+    cells.append([(cx, cy), (cx2, cy2)])
 
-    cv_height = np.zeros((h, w), dtype=np.float32)
-    min_height = np.min(height_map)
-    max_height = np.max(height_map)
-    for i in range(0, w):
-        for j in range(0, h):
-            cv_height[i][j] = 255 * ((height_map[i][j] - min_height) / (max_height - min_height))
-
-    cv_height = np.flip(cv_height, axis=0)
-    cv_height = np.flip(cv_height, axis=1)
-    rgb = cv2.cvtColor(cv_height, cv2.COLOR_GRAY2RGB)
-
-    boxes.append([(cx, cy), (cx1, cy), (cx1, cy1), (cx, cy1)])
-    boxes.append([(cx, cy), (cx2, cy), (cx2, cy1), (cx, cy1)])
-    boxes.append([(cx, cy), (cx2, cy), (cx2, cy2), (cx, cy2)])
-    boxes.append([(cx, cy), (cx1, cy), (cx1, cy2), (cx, cy2)])
-    # for i in range(len(boxes)):
-    #     rgb = draw_box(boxes[i], rgb)
-    #     cv2.imshow("height_grid", rgb)
-    #     cv2.waitKey()
 
     # Features around target
-    sum = 0
-    # int(cx - 16), int(cy - side[1] - 32) # f_up
-    # int(cx + side[0]), int(cy - 16) # f_right
-    # up_left = int(cx - 16), int(cy + side[1]) # f_down
-    up_left = (int(cx - side[0] - 32), int(cy - 16)) #f_left
-    c = up_left
+    # 1. Define the up left corners for each 32x32 region around the target
+    up_left_corners = []
+    up_left_corners.append( (int(cx - 16), int(cy - side[1] - 32)) )# f_up
+    up_left_corners.append( (int(cx + side[0]), int(cy - 16)) ) # f_right
+    up_left_corners.append( (int(cx - 16), int(cy + side[1])) ) # f_down
+    up_left_corners.append( (int(cx - side[0] - 32), int(cy - 16)) ) #f_left
 
-    # for x in range(8):
-    #     for y in range(8):
-    #         c = (up_left[0] + x * 4, up_left[1] + y * 4)
-    #         boxes.append([c, (c[0]+4, c[1]), (c[0]+4, c[1]+4), (c[0], c[1]+4)])
+    for corner in up_left_corners:
+        for x in range(8):
+            for y in range(8):
+                c = (corner[0] + x * 4, corner[1] + y * 4)
+                cells.append([c, (c[0]+4, c[1]+4)])
 
-    for box in boxes:
-        x1 = box[0][0]
-        x2 = box[1][0]
-        y1 = box[0][1]
-        y2 = box[2][1]
-        print(x1, x2, y1, y2)
+    for cell in cells:
+        x1 = cell[0][0]
+        x2 = cell[1][0]
+        y1 = cell[0][1]
+        y2 = cell[1][1]
         sum = np.sum(height_map[y1:y2, x1:x2])
-        print(height_map[y1:y2, x1:x2])
         sum /= 16.0
-        print(sum)
-        rgb = draw_box(box, rgb)
-        cv2.imshow('rgb', rgb)
-        cv2.waitKey()
+
+        if plot:
+            rgb = draw_cell(cell, rgb)
+            cv2.imshow('rgb', rgb)
+            cv2.waitKey()
 
 
-def draw_box(box, rgb):
-    cv2.line(rgb, box[0], box[1], (0, 255, 0), thickness=1)
-    cv2.line(rgb, box[1], box[2], (0, 255, 0), thickness=1)
-    cv2.line(rgb, box[2], box[3], (0, 255, 0), thickness=1)
-    cv2.line(rgb, box[3], box[0], (0, 255, 0), thickness=1)
+def draw_cell(cell, rgb):
+    p1 = cell[0]
+    p2 = (cell[1][0], cell[0][1])
+    p3 = cell[1]
+    p4 = (cell[0][0], cell[1][1])
+    cv2.line(rgb, p1, p2, (0, 255, 0), thickness=1)
+    cv2.line(rgb, p2, p3, (0, 255, 0), thickness=1)
+    cv2.line(rgb, p3, p4, (0, 255, 0), thickness=1)
+    cv2.line(rgb, p4, p1, (0, 255, 0), thickness=1)
     return rgb
 
 
