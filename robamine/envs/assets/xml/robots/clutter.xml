@@ -29,7 +29,7 @@
   <worldbody>
     <camera name="xtion"
       pos="0 0 1.2"
-      zaxis="0 0 1" />
+      quat="1 0 0 0" />
     <light
       directional="false"
       cutoff="90"

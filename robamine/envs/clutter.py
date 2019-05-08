@@ -113,10 +113,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.offscreen.render(640, 480, 0)
         rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
         bgr = cv_tools.rgb2bgr(rgb)
-        print(bgr.shape)
+        # print(bgr.shape)
         cv2.imwrite("/home/mkiatos/Desktop/fds/obs.png", bgr)
 
-        print(self.sim.model.stat.extent)
+        # print(self.sim.model.stat.extent)
 
         z_near = 0.2 * self.sim.model.stat.extent
         z_far = 50 * self.sim.model.stat.extent
@@ -129,11 +129,26 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Get target pose and camera pose
         target_pose = get_body_pose(self.sim, 'target')
         camera_pose = get_camera_pose(self.sim, 'xtion')
-        # body_to_camera = np.matmul(np.linalg.inv(target_pose), camera_pose)
-        body_to_camera = np.matmul(target_pose, camera_pose)
+        body_to_camera = np.matmul(np.linalg.inv(target_pose), camera_pose)  # g_oc = inv(g_wo) * g_wc
+        body_to_camera2 = np.matmul(target_pose, camera_pose)  # g_oc = inv(g_wo) * g_wc
+        print('=======')
+        print('Target w.r.t. world: ')
+        print(target_pose)
+        print('Camera w.r.t. world:')
+        print(camera_pose)
+        print("Camera w.r.t. object using inv(target_pose)")
+        print(body_to_camera)
+        print("Camera w.r.t. object using target_pose")
+        print(body_to_camera2)
+        print("Point cloud:")
+        print(point_cloud)
+        print('=======')
+        cv_tools.plot_point_cloud(point_cloud)
 
         # Transform point cloud w.r.t. to object pose
         point_cloud = cv_tools.transform_point_cloud(point_cloud, body_to_camera)
+
+        cv_tools.plot_point_cloud(point_cloud)
 
         min_h = 100
         max_h = -100
@@ -149,19 +164,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             if p[2] < min_h:
                 min_h = p[2]
 
-        print(min_h, max_h)
+        # print(min_h, max_h)
 
 
         dim = get_geom_size(self.sim.model, 'target')
         bbox = np.asarray([dim[2], dim[1]])
         if len(points_around) > 0:
             points_around = np.asarray(points_around)
-            height_map = cv_tools.generate_height_map(points_around, plot=True)
-            features = cv_tools.extract_features(height_map, bbox, plot=True)
+            height_map = cv_tools.generate_height_map(points_around, plot=False)
+            features = cv_tools.extract_features(height_map, bbox, plot=False)
 
         features.append(dim[2])
         features.append(dim[1])
-        print("number of features:", len(features))
+        #print("number of features:", len(features))
 
 
         return self.observation_space.sample()
