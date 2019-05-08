@@ -49,7 +49,6 @@ def transform_point_cloud(point_cloud, affine_transformation):
     # Transform cloud
     for i in range(point_cloud.shape[0]):
         point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
-    # point_cloud = np.matmul(affine_transformation, np.transpose(point_cloud))
 
     # Convert homogeneous to cartesian
     w = point_cloud[:, 3]
@@ -60,7 +59,7 @@ def transform_point_cloud(point_cloud, affine_transformation):
 
 def gl2cv(depth, z_near, z_far):
     """
-    Convert the depth from OpenGl to OpenCv
+    Converts the depth from OpenGl to OpenCv
     :param depth: the depth in OpenGl format
     :param z_near: near clipping plane
     :param z_far: far clipping plane
@@ -79,7 +78,7 @@ def gl2cv(depth, z_near, z_far):
 
 def rgb2bgr(rgb):
     """
-    Convert a rgb image to bgr
+    Converts a rgb image to bgr
     (Vertical flipping of the image)
     :param rgb: the image in bgr format
     """
@@ -95,16 +94,17 @@ def rgb2bgr(rgb):
     return np.flip(bgr, axis=0)
 
 
-def generate_height_map(point_cloud, plot=False):
+def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.005, plot=False):
     """
-
-    :param point_cloud:
-    :param plot:
-    :return:
+    see kiatos19
+    :param point_cloud: point cloud aligned with the target object
+    :param plot: if True, plot the generated height map
+    :param shape: the shape of the height map
+    :param grid_step: the side of each cell in the generated height map
+    :return: the height map
     """
-    width = 100
-    height = 100
-    grid_step = 0.005
+    width = shape[0]
+    height = shape[1]
 
     height_grid = np.zeros((height, width), dtype=np.float32)
 
@@ -120,16 +120,20 @@ def generate_height_map(point_cloud, plot=False):
             if height_grid[idx_y][idx_x] < z:
                 height_grid[idx_y][idx_x] = z
 
+    height_grid = np.flip(height_grid, axis=0)
+    height_grid = np.flip(height_grid, axis=1)
+
     if plot:
         cv_height = np.zeros((height, width), dtype=np.float32)
         min_height = np.min(height_grid)
         max_height = np.max(height_grid)
+        print(min_height, max_height)
         for i in range(0, width):
             for j in range(0, height):
-                cv_height[i][j] = 255 * ((height_grid[i][j] - min_height) / (max_height - min_height))
+                cv_height[i][j] = (height_grid[i][j] - min_height) / (max_height - min_height)
 
-        cv_height = np.flip(cv_height, axis=0)
-        cv_height = np.flip(cv_height, axis=1)
+        # cv_height = np.flip(cv_height, axis=0)
+        # cv_height = np.flip(cv_height, axis=1)
         cv2.imshow("height_map", cv_height)
         cv2.waitKey()
 
@@ -138,7 +142,7 @@ def generate_height_map(point_cloud, plot=False):
 
 def extract_features(height_map, bbox, plot=False):
     """
-    Extract features from height map
+    Extract features from height map(see kiatos19)
     :param height_map: height map aligned with the target
     :param bbox: target's dimensions
     :return: N-d feature vector
@@ -151,10 +155,10 @@ def extract_features(height_map, bbox, plot=False):
         max_height = np.max(height_map)
         for i in range(0, w):
             for j in range(0, h):
-                cv_height[i][j] = 255 * ((height_map[i][j] - min_height) / (max_height - min_height))
+                cv_height[i][j] = ((height_map[i][j] - min_height) / (max_height - min_height))
 
-        cv_height = np.flip(cv_height, axis=0)
-        cv_height = np.flip(cv_height, axis=1)
+        # cv_height = np.flip(cv_height, axis=0)
+        # cv_height = np.flip(cv_height, axis=1)
         rgb = cv2.cvtColor(cv_height, cv2.COLOR_GRAY2RGB)
 
     cells = []
@@ -163,7 +167,9 @@ def extract_features(height_map, bbox, plot=False):
     cy = int(h/2)
 
     # Target features
-    side = 1/2 * 50 * bbox
+    m_per_pixel = 240 #ToDo:
+    side = m_per_pixel * bbox
+
     cx1 = cx - int(side[0])
     cx2 = cx + int(side[0])
     cy1 = cy - int(side[1])
@@ -188,18 +194,31 @@ def extract_features(height_map, bbox, plot=False):
                 c = (corner[0] + x * 4, corner[1] + y * 4)
                 cells.append([c, (c[0]+4, c[1]+4)])
 
+    feature = []
+    i = 0
     for cell in cells:
         x1 = cell[0][0]
         x2 = cell[1][0]
         y1 = cell[0][1]
         y2 = cell[1][1]
-        sum = np.sum(height_map[y1:y2, x1:x2])
-        sum /= 16.0
+
+        if i < 4:
+            avg_height = np.sum(height_map[y1:y2, x1:x2]) / (side[0] * side[1])
+        else:
+            avg_height = np.sum(height_map[y1:y2, x1:x2]) / 16
+
+        feature.append(avg_height)
+        i += 1
+        print(avg_height)
 
         if plot:
             rgb = draw_cell(cell, rgb)
+
+        if plot:
             cv2.imshow('rgb', rgb)
             cv2.waitKey()
+
+    return feature
 
 
 def draw_cell(cell, rgb):
