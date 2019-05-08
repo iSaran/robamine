@@ -237,4 +237,5 @@ def draw_cell(cell, rgb):
 def plot_point_cloud(point_cloud):
     pcd = open3d.PointCloud()
     pcd.points = open3d.Vector3dVector(point_cloud)
-    open3d.draw_geometries([pcd])
+    frame = open3d.create_mesh_coordinate_frame()
+    open3d.draw_geometries([pcd, frame])
