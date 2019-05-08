@@ -127,22 +127,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         point_cloud = cv_tools.depth_to_point_cloud(depth, camera_intrinsics)
 
         # Get target pose and camera pose
-        target_pose = get_body_pose(self.sim, 'target')
-        camera_pose = get_camera_pose(self.sim, 'xtion')
+        target_pose = get_body_pose(self.sim, 'target')  # g_wo: object w.r.t. world
+        camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
         body_to_camera = np.matmul(np.linalg.inv(target_pose), camera_pose)  # g_oc = inv(g_wo) * g_wc
-        body_to_camera2 = np.matmul(target_pose, camera_pose)  # g_oc = inv(g_wo) * g_wc
-        print('=======')
-        print('Target w.r.t. world: ')
-        print(target_pose)
-        print('Camera w.r.t. world:')
-        print(camera_pose)
-        print("Camera w.r.t. object using inv(target_pose)")
-        print(body_to_camera)
-        print("Camera w.r.t. object using target_pose")
-        print(body_to_camera2)
-        print("Point cloud:")
-        print(point_cloud)
-        print('=======')
+
         cv_tools.plot_point_cloud(point_cloud)
 
         # Transform point cloud w.r.t. to object pose

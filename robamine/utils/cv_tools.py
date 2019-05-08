@@ -73,6 +73,7 @@ def gl2cv(depth, z_near, z_far):
             if depth[y][x] != 1:
                 linear_depth[y][x] = 2 * z_far * z_near / (z_far + z_near - (z_far - z_near) * (2 * depth[y][x] - 1))
 
+    linear_depth = np.flip(linear_depth, axis=1)
     return np.flip(linear_depth, axis=0)
 
 
@@ -232,10 +233,8 @@ def draw_cell(cell, rgb):
     cv2.line(rgb, p4, p1, (0, 255, 0), thickness=1)
     return rgb
 
-
-
 def plot_point_cloud(point_cloud):
     pcd = open3d.PointCloud()
     pcd.points = open3d.Vector3dVector(point_cloud)
-    frame = open3d.create_mesh_coordinate_frame()
+    frame = open3d.create_mesh_coordinate_frame(size=0.1)
     open3d.draw_geometries([pcd, frame])
