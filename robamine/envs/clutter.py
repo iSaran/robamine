@@ -17,6 +17,8 @@ from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose,
 import robamine.utils.cv_tools as cv_tools
 import math
 
+from robamine.utils.orientation import rot2quat
+
 import cv2
 from mujoco_py.cymj import MjRenderContext
 
@@ -111,7 +113,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.offscreen.render(640, 480, 0)
         rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
         bgr = cv_tools.rgb2bgr(rgb)
+        print(bgr.shape)
         cv2.imwrite("/home/mkiatos/Desktop/fds/obs.png", bgr)
+
+        print(self.sim.model.stat.extent)
 
         z_near = 0.2 * self.sim.model.stat.extent
         z_far = 50 * self.sim.model.stat.extent
@@ -124,22 +129,40 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Get target pose and camera pose
         target_pose = get_body_pose(self.sim, 'target')
         camera_pose = get_camera_pose(self.sim, 'xtion')
-        body_to_camera = np.matmul(np.linalg.inv(target_pose), camera_pose)
+        # body_to_camera = np.matmul(np.linalg.inv(target_pose), camera_pose)
+        body_to_camera = np.matmul(target_pose, camera_pose)
 
         # Transform point cloud w.r.t. to object pose
         point_cloud = cv_tools.transform_point_cloud(point_cloud, body_to_camera)
 
+        min_h = 100
+        max_h = -100
         points_around = []
         for i in range(point_cloud.shape[0]):
             p = point_cloud[i]
             if p[2] > 0:
                 points_around.append(p)
 
+            if p[2] > max_h:
+                max_h = p[2]
+
+            if p[2] < min_h:
+                min_h = p[2]
+
+        print(min_h, max_h)
+
+
+        dim = get_geom_size(self.sim.model, 'target')
+        bbox = np.asarray([dim[2], dim[1]])
         if len(points_around) > 0:
             points_around = np.asarray(points_around)
             height_map = cv_tools.generate_height_map(points_around, plot=True)
-            bbox = np.array([0.2, 0.2])
-            features = cv_tools.extract_features(height_map, bbox)
+            features = cv_tools.extract_features(height_map, bbox, plot=True)
+
+        features.append(dim[2])
+        features.append(dim[1])
+        print("number of features:", len(features))
+
 
         return self.observation_space.sample()
 
