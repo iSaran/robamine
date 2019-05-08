@@ -73,6 +73,7 @@ def gl2cv(depth, z_near, z_far):
             if depth[y][x] != 1:
                 linear_depth[y][x] = 2 * z_far * z_near / (z_far + z_near - (z_far - z_near) * (2 * depth[y][x] - 1))
 
+    linear_depth = np.flip(linear_depth, axis=1)
     return np.flip(linear_depth, axis=0)
 
 
@@ -127,7 +128,7 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.005, plot=Fal
         cv_height = np.zeros((height, width), dtype=np.float32)
         min_height = np.min(height_grid)
         max_height = np.max(height_grid)
-        print(min_height, max_height)
+        #print(min_height, max_height)
         for i in range(0, width):
             for j in range(0, height):
                 cv_height[i][j] = (height_grid[i][j] - min_height) / (max_height - min_height)
@@ -209,7 +210,7 @@ def extract_features(height_map, bbox, plot=False):
 
         feature.append(avg_height)
         i += 1
-        print(avg_height)
+        #print(avg_height)
 
         if plot:
             rgb = draw_cell(cell, rgb)
@@ -232,10 +233,8 @@ def draw_cell(cell, rgb):
     cv2.line(rgb, p4, p1, (0, 255, 0), thickness=1)
     return rgb
 
-
-
 def plot_point_cloud(point_cloud):
     pcd = open3d.PointCloud()
     pcd.points = open3d.Vector3dVector(point_cloud)
-    frame = open3d.create_mesh_coordinate_frame()
+    frame = open3d.create_mesh_coordinate_frame(size=0.1)
     open3d.draw_geometries([pcd, frame])
