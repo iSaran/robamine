@@ -39,7 +39,7 @@ def get_geom_names(mj_model):
     return names
 
 def get_geom_size(mj_model, geom_name):
-    return mj_model.geom_size[3 * get_geom_names(mj_model).index(geom_name)]
+    return mj_model.geom_size[get_geom_names(mj_model).index(geom_name)]
 
 
 def set_mocap_pose(sim, pos, quat):
