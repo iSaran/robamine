@@ -121,27 +121,20 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.005, plot=Fal
             if height_grid[idx_y][idx_x] < z:
                 height_grid[idx_y][idx_x] = z
 
-    height_grid = np.flip(height_grid, axis=0)
-    height_grid = np.flip(height_grid, axis=1)
-
     if plot:
         cv_height = np.zeros((height, width), dtype=np.float32)
         min_height = np.min(height_grid)
         max_height = np.max(height_grid)
-        #print(min_height, max_height)
         for i in range(0, width):
             for j in range(0, height):
                 cv_height[i][j] = (height_grid[i][j] - min_height) / (max_height - min_height)
-
-        # cv_height = np.flip(cv_height, axis=0)
-        # cv_height = np.flip(cv_height, axis=1)
         cv2.imshow("height_map", cv_height)
         cv2.waitKey()
 
     return height_grid
 
 
-def extract_features(height_map, bbox, plot=False):
+def extract_features(height_map, dim, plot=False):
     """
     Extract features from height map(see kiatos19)
     :param height_map: height map aligned with the target
@@ -149,6 +142,8 @@ def extract_features(height_map, bbox, plot=False):
     :return: N-d feature vector
     """
     h, w = height_map.shape
+
+    bbox = np.asarray([dim[0], dim[1]])
 
     if plot:
         cv_height = np.zeros((h, w), dtype=np.float32)
@@ -158,8 +153,6 @@ def extract_features(height_map, bbox, plot=False):
             for j in range(0, h):
                 cv_height[i][j] = ((height_map[i][j] - min_height) / (max_height - min_height))
 
-        # cv_height = np.flip(cv_height, axis=0)
-        # cv_height = np.flip(cv_height, axis=1)
         rgb = cv2.cvtColor(cv_height, cv2.COLOR_GRAY2RGB)
 
     cells = []
@@ -180,14 +173,13 @@ def extract_features(height_map, bbox, plot=False):
     cells.append([(cx1, cy), (cx, cy2)])
     cells.append([(cx, cy), (cx2, cy2)])
 
-
     # Features around target
     # 1. Define the up left corners for each 32x32 region around the target
     up_left_corners = []
-    up_left_corners.append( (int(cx - 16), int(cy - side[1] - 32)) )# f_up
-    up_left_corners.append( (int(cx + side[0]), int(cy - 16)) ) # f_right
-    up_left_corners.append( (int(cx - 16), int(cy + side[1])) ) # f_down
-    up_left_corners.append( (int(cx - side[0] - 32), int(cy - 16)) ) #f_left
+    up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
+    up_left_corners.append((int(cx + side[0]), int(cy - 16)))  # f_right
+    up_left_corners.append((int(cx - 16), int(cy + side[1])))  # f_down
+    up_left_corners.append((int(cx - side[0] - 32), int(cy - 16)))  # f_left
 
     for corner in up_left_corners:
         for x in range(8):
@@ -195,9 +187,9 @@ def extract_features(height_map, bbox, plot=False):
                 c = (corner[0] + x * 4, corner[1] + y * 4)
                 cells.append([c, (c[0]+4, c[1]+4)])
 
-    feature = []
-    i = 0
-    for cell in cells:
+    features = []
+    for i in range(len(cells)):
+        cell = cells[i]
         x1 = cell[0][0]
         x2 = cell[1][0]
         y1 = cell[0][1]
@@ -208,18 +200,16 @@ def extract_features(height_map, bbox, plot=False):
         else:
             avg_height = np.sum(height_map[y1:y2, x1:x2]) / 16
 
-        feature.append(avg_height)
-        i += 1
-        #print(avg_height)
+        features.append(avg_height)
 
         if plot:
             rgb = draw_cell(cell, rgb)
 
-        if plot:
-            cv2.imshow('rgb', rgb)
-            cv2.waitKey()
+    if plot:
+        cv2.imshow('rgb', rgb)
+        cv2.waitKey()
 
-    return feature
+    return features
 
 
 def draw_cell(cell, rgb):
@@ -232,6 +222,7 @@ def draw_cell(cell, rgb):
     cv2.line(rgb, p3, p4, (0, 255, 0), thickness=1)
     cv2.line(rgb, p4, p1, (0, 255, 0), thickness=1)
     return rgb
+
 
 def plot_point_cloud(point_cloud):
     pcd = open3d.PointCloud()
