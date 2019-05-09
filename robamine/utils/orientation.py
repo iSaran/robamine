@@ -133,6 +133,17 @@ class Quaternion:
         self.y = y
         self.z = z
 
+    def as_vector(self):
+        return np.array([self.w, self.x, self.y, self.z])
+
+    def normalize(self):
+        q = self.as_vector()
+        q = q / np.linalg.norm(q)
+        self.w = q[0]
+        self.x = q[1]
+        self.y = q[2]
+        self.z = q[3]
+
     def vec(self):
         return np.array([self.x, self.y, self.z])
 
@@ -204,4 +215,4 @@ class Quaternion:
         return cls(w=result[0], x=result[1], y=result[2], z=result[3])
 
     def __str__(self):
-        return "Quaternion: w=" + str(self.w) + ", x=" + str(self.x) + ", y=" + str(self.y) + ", z=" + str(self.z)
+        return str(self.w) + " + " + str(self.x) + "i +" + str(self.y) + "j + " + str(self.z)  + "k"
