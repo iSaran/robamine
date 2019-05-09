@@ -162,8 +162,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         finger_size = get_geom_size(self.sim.model, 'finger')
 
         z_off = target_pos[2] + finger_size[0]
-        print(target_pos[2])
-        print(z_off)
         push = Push(direction_theta=action[0], object_height = target_size[0], target=False, z_offset=z_off)
 
         self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], z_off + 0.1, 1, 0, 0, 0])

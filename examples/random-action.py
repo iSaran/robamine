@@ -3,19 +3,13 @@ import gym
 import robamine as roba
 import numpy as np
 
-import cv2
-#
 def run(env_id):
     env = gym.make(env_id)
 
     for i_episode in range(20):
         observation = env.reset()
         for t in range(3000):
-            # env.render()
-            # print(observation)
             action = env.action_space.sample()
-            # action = np.array([0, -1])
-            # print (action)
             observation, reward, done, info = env.step(action)
             if done:
                 print("Episode finished after {} timesteps".format(t+1))
