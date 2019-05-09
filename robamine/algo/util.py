@@ -137,9 +137,10 @@ class OrnsteinUhlenbeckActionNoise:
         self.dt = dt
         self.x0 = x0
         self.reset()
+        self.random = np.random.RandomState()
 
     def __call__(self):
-        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.mu.shape)
+        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * self.random.normal(size=self.mu.shape)
         self.x_prev = x
         return x
 
@@ -148,6 +149,9 @@ class OrnsteinUhlenbeckActionNoise:
 
     def __repr__(self):
         return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
+
+    def seed(self, seed):
+        self.random.seed(seed)
 
 class EpisodeStats:
     def __init__(self):
