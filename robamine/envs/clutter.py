@@ -268,19 +268,17 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # cv_tools.plot_point_cloud(point_cloud)
         # cv_tools.plot_point_cloud(points_around)
         if points_around == 0:
-            reward = 10
-            return reward
+            return 10
 
         # for each push that leads the target to table limits
         pos_x = observation[-2]
         pos_y = observation[-1]
         out_of_bounds = 0.3
         if pos_x > out_of_bounds or pos_x < -out_of_bounds or pos_y > out_of_bounds or pos_y < out_of_bounds:
-            reward = -5
+            return -5
 
         # for each object push
-        reward = -1
-        return reward
+        return -1
 
     def terminal_state(self, observation):
         return False
