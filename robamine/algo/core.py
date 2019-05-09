@@ -23,10 +23,8 @@ class AgentParams:
     def __init__(self,
                  state_dim=None,
                  action_dim=None,
-                 random_seed=999,
                  name=None,
                  suffix=""):
-        self.random_seed = random_seed
         self.name = name
         self.suffix = suffix
 
@@ -156,6 +154,11 @@ class Agent:
         logger.error(error)
         raise NotImplementedError(error)
 
+    def seed(self, seed):
+        error = 'Agent ' + self.params.name + ' does cannot be seeded.'
+        logger.error(error)
+        raise NotImplementedError(error)
+
 class NetworkParams:
     def __init__(self,
                  input_dim=None,
@@ -282,13 +285,12 @@ class WorldMode(Enum):
     TRAIN_EVAL = 3
 
 class World:
-    def __init__(self, agent, env, random_seed=999, sec_per_step=0.02, name=None):
+    def __init__(self, agent, env, sec_per_step=0.02, name=None):
         # Environment setup
         if isinstance(env, gym.Env):
             self.env = env
         elif isinstance(env, str):
             self.env = gym.make(env)
-            self.env.seed(random_seed)
             if isinstance(self.env.observation_space, gym.spaces.dict.Dict):
                 logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
                 self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
@@ -304,7 +306,7 @@ class World:
         if isinstance(agent, str):
             agent_name = agent
             agent_handle, agent_params_handle = get_agent_handle(agent_name)
-            agent_params = agent_params_handle(random_seed=random_seed)
+            agent_params = agent_params_handle()
             if (agent_params.name == 'Dummy'):
                 self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim, agent_params)
             else:
@@ -348,6 +350,9 @@ class World:
 
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
+    def seed(self, seed):
+        self.env.seed(seed)
+        self.agent.seed(seed)
 
     def train(self, n_episodes, render=False, print_progress_every=1, save_every=None):
         logger.info('%s training on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
