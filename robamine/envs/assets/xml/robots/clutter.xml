@@ -23,8 +23,8 @@
       forcewidth="0.03"
       contactwidth="0.05"
       contactheight="0.03"
-      framelength="1.5"
-      framewidth="0.1"/>
+      framelength="0.4"
+      framewidth="0.025"/>
   </visual>
   <worldbody>
     <camera name="xtion"

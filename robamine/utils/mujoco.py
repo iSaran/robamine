@@ -32,6 +32,9 @@ def get_body_names(mj_model):
 def get_body_mass(mj_model, body_name):
     return mj_model.body_mass[get_body_names(mj_model).index(body_name)]
 
+def get_body_inertia(mj_model, body_name):
+    return mj_model.body_inertia[get_body_names(mj_model).index(body_name)]
+
 def get_geom_names(mj_model):
     names = []
     for i in mj_model.name_geomadr:
