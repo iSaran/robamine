@@ -2,6 +2,9 @@
 
 from mujoco_py.generated import const
 
+import numpy as np
+from robamine.utils.orientation import quat2rot
+
 '''
 Mujoco Utils
 ============
@@ -9,6 +12,35 @@ Mujoco Utils
 Utilities wrapper functions for MuJoCo-Py
 
 '''
+
+def extract_name(mj_model, addr):
+    new_character = mj_model.names[addr]
+    name = new_character
+    counter = 1
+    while new_character != b'':
+        new_character = mj_model.names[addr + counter]
+        name += new_character
+        counter += 1
+    return name.decode("utf8")
+
+def get_body_names(mj_model):
+    names = []
+    for i in mj_model.name_bodyadr:
+        names.append(extract_name(mj_model, i))
+    return names
+
+def get_body_mass(mj_model, body_name):
+    return mj_model.body_mass[get_body_names(mj_model).index(body_name)]
+
+def get_geom_names(mj_model):
+    names = []
+    for i in mj_model.name_geomadr:
+        names.append(extract_name(mj_model, i))
+    return names
+
+def get_geom_size(mj_model, geom_name):
+    return mj_model.geom_size[get_geom_names(mj_model).index(geom_name)]
+
 
 def set_mocap_pose(sim, pos, quat):
     ''' Sets the pose (position and orientation) of a mocap body as a relative
@@ -52,3 +84,28 @@ def reset_mocap2body_xpos(sim):
         assert (mocap_id != -1)
         sim.data.mocap_pos[mocap_id][:] = sim.data.body_xpos[body_idx]
         sim.data.mocap_quat[mocap_id][:] = sim.data.body_xquat[body_idx]
+
+
+def get_body_pose(sim, name):
+    """
+    Returns the pose of the world w.r.t. object
+    """
+    t = sim.data.get_body_xpos(name)
+    q = sim.data.get_body_xquat(name)
+
+    pose = np.identity(4, dtype=np.float32)
+    pose[0:3, 0:3] = quat2rot(q)
+    pose[0:3, 3] = t
+
+    return pose
+
+
+def get_camera_pose(sim, name):
+    """
+    Returns the pose of the camera w.r.t. the world
+    """
+    camera_pose = np.identity(4, dtype=np.float32)
+    camera_pose[0:3, 0:3] = sim.data.get_camera_xmat(name)
+    camera_pose[0:3, 3] = sim.data.get_camera_xpos(name)
+
+    return camera_pose

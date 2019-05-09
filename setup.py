@@ -13,5 +13,6 @@ setup(name='robamine',
                         'pandas', \
                         'sphinx_rtd_theme', \
                         'numpydoc', \
-                        'matplotlib']
+                        'matplotlib',\
+                        'opencv-python==4.0.1.24']
 )

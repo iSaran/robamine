@@ -2,16 +2,13 @@ import argparse
 import gym
 import robamine as roba
 import numpy as np
-#
+
 def run(env_id):
     env = gym.make(env_id)
-    env.reset()
-    env.render()
 
     for i_episode in range(20):
         observation = env.reset()
         for t in range(3000):
-            env.render()
             action = env.action_space.sample()
             observation, reward, done, info = env.step(action)
             if done:

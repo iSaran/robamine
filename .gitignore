@@ -44,3 +44,6 @@ __pycache__
 
 # Ignore Sphinx built documentation
 *doc/_build/
+
+# IDEs
+*.idea*
