@@ -253,7 +253,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.push_stopped_ext_forces = False
             return -10
 
-        # Check if the space around the target is free
+        # for each push that frees the space around the target
         points_around = []
         gap = 0.05
         bbox_limit = 0.02
@@ -270,6 +270,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if points_around == 0:
             reward = 10
             return reward
+
+        # for each push that leads the target to table limits
+        pos_x = observation[-2]
+        pos_y = observation[-1]
+        out_of_bounds = 0.3
+        if pos_x > out_of_bounds or pos_x < -out_of_bounds or pos_y > out_of_bounds or pos_y < out_of_bounds:
+            reward = -5
 
         # for each object push
         reward = -1
