@@ -145,12 +145,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         features.append(target_pose[0, 3])
         features.append(target_pose[1, 3])
 
-        return features
+        return features, points_above_table, dim
 
     def step(self, action):
         done = False
-        obs = self.get_obs()
-        reward = self.get_reward(obs)
+        obs, pcd, dim = self.get_obs()
+        reward = self.get_reward(obs, pcd, dim)
         time = self.do_simulation(action)
         if self.terminal_state(obs):
             done = True
@@ -186,9 +186,28 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
-    def get_reward(self, observation):
-        # TODO: Define reward based on observation
-        reward = 0
+    def get_reward(self, observation, point_cloud, dim):
+
+        # Check if the space around the target is free
+        points_around = []
+        gap = 0.05
+        bbox_limit = 0.02
+        for p in point_cloud:
+            if -dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
+                    dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit:
+                points_around.append(p)
+            if -dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
+                    dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit:
+                points_around.append(p)
+
+        # cv_tools.plot_point_cloud(point_cloud)
+        # cv_tools.plot_point_cloud(points_around)
+        if points_around == 0:
+            reward = 10
+            return reward
+
+        # for each object push
+        reward = -1
         return reward
 
     def terminal_state(self, observation):

@@ -3,7 +3,6 @@
   <component name="ChangeListManager">
     <list default="true" id="6e13db0c-30be-4fc3-8cda-bada45e9805a" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/envs/clutter.py" beforeDir="false" afterPath="$PROJECT_DIR$/envs/clutter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils/cv_tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/cv_tools.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -28,8 +27,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/envs/clutter.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="618">
-              <caret line="137" selection-start-line="137" selection-end-line="137" />
+            <state relative-caret-position="1068">
+              <caret line="200" column="39" lean-forward="true" selection-start-line="200" selection-start-column="39" selection-end-line="200" selection-end-column="39" />
             </state>
           </provider>
         </entry>
@@ -53,8 +52,8 @@
         <option value="$PROJECT_DIR$/utils/__init__.py" />
         <option value="$PROJECT_DIR$/utils/mujoco.py" />
         <option value="$PROJECT_DIR$/envs/assets/xml/robots/clutter.xml" />
-        <option value="$PROJECT_DIR$/envs/clutter.py" />
         <option value="$PROJECT_DIR$/utils/cv_tools.py" />
+        <option value="$PROJECT_DIR$/envs/clutter.py" />
       </list>
     </option>
   </component>
@@ -316,8 +315,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/envs/clutter.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="618">
-          <caret line="137" selection-start-line="137" selection-end-line="137" />
+        <state relative-caret-position="1068">
+          <caret line="200" column="39" lean-forward="true" selection-start-line="200" selection-start-column="39" selection-end-line="200" selection-end-column="39" />
         </state>
       </provider>
     </entry>
