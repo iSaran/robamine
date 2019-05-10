@@ -29,13 +29,24 @@ class Push:
     of instead of using 4 discrete directions, now we have a continuous angle
     (direction_theta) from which we calculate the direction.
     """
-    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, z_offset=0.02):
-        self.initial_pos, self.distance, self.direction_theta, self.target, self.object_height, self.z_offset = initial_pos, distance, direction_theta, target, object_height, z_offset
+    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, z_offset=0.01, object_length=0.05, finger_size = 0.02):
+        self.initial_pos = initial_pos
+        self.distance = distance
+
+        self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
+
         if target:
-            self.z = object_height - z_offset
+            # Move the target
+
+            # Z at the center of the target object
+            self.z = object_height / 2
+
+            # Position outside of the object along the pushing directions.
+            # sqrt(2) * length  because we take into account the the maximum
+            # size of the object (the hypotinuse)
+            self.initial_pos = self.initial_pos - ((math.sqrt(2) * object_length) / 2 + finger_size) * self.direction
         else:
-            self.z = object_height + z_offset
-        self.direction = np.array([math.cos(self.direction_theta), math.sin(self.direction_theta)])
+            self.z = (object_height + finger_size)  + z_offset
 
     def __str__(self):
         return "Initial Position: " + str(self.initial_pos) + "\n" + \
@@ -44,6 +55,9 @@ class Push:
                "z: " + str(self.z) + "\n"
 
 class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
+    """
+    The class for the Gym environment.
+    """
     def __init__(self):
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/clutter.xml")
@@ -57,8 +71,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([0]),
-                                       high=np.array([2 * math.pi]),
+        self.action_space = spaces.Box(low=np.array([0, 0]),
+                                       high=np.array([2 * math.pi, 1]),
                                        dtype=np.float32)
 
         self.observation_space = spaces.Box(low=np.array([-1, -1, -1]),
@@ -77,15 +91,21 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[2], step_response=0.005))
 
         # Parameters, updated once during reset of the model
+        self.surface_normal = np.array([0, 0, 1])
+        self.finger_length = 0.0
+        self.target_size = np.zeros(3)
+
         # State variables. Updated after each call in self.sim_step()
         self.time = 0.0
-        self.finger_position = np.zeros(3)
+        self.finger_pos = np.zeros(3)
         self.finger_quat = Quaternion()
         self.finger_quat_prev = Quaternion()
         self.finger_vel = np.zeros(6)
         self.target_height = 0.0
         self.target_length = 0.0
         self.target_width = 0.0
+        self.target_pos = np.zeros(3)
+
 
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
@@ -117,6 +137,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Move forward the simulation to be sure that the objects have landed
         for _ in range(200):
             self.sim_step()
+
+        # Update state variables that need to be updated only once
+        self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
+        self.target_size = 2 * get_geom_size(self.sim.model, 'target')
 
         return self.get_obs()
 
@@ -176,20 +200,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def do_simulation(self, action):
         time = self.sim.data.time
 
-        target_size = get_geom_size(self.sim.model, 'target')
-        target_pos = self.sim.data.get_joint_qpos('target')
-        finger_size = get_geom_size(self.sim.model, 'finger')
+        if action[1] > 0.5:
+            push_target = True
+        else:
+            push_target = False
+        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, finger_size = self.finger_length)
 
-        z_off = target_pos[2] + finger_size[0]
-        push = Push(direction_theta=action[0], object_height = target_size[0], target=False, z_offset=z_off)
-
-        self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], z_off + 0.1, 1, 0, 0, 0])
+        init_z = self.target_height + 0.05
+        self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
         self.sim_step()
-
         self.move_joint_to_target('finger', [None, None, push.z])
         end = push.initial_pos + push.distance * push.direction
         self.move_joint_to_target('finger', [end[0], end[1], None])
-        self.move_joint_to_target('finger', [None, None, 0.4])
+        self.move_joint_to_target('finger', [None, None, init_z])
 
         return time
 
@@ -299,6 +322,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.target_length = max(self.target_size[0], self.target_size[1])
             self.target_width = min(self.target_size[0], self.target_size[1])
 
-
+        temp = self.sim.data.get_joint_qpos('target')
+        self.target_pos = np.array([temp[0], temp[1], temp[2]])
 
 
