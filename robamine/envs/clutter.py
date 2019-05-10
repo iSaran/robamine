@@ -43,14 +43,6 @@ class Push:
                "Direction: " + str(self.direction) + "\n" + \
                "z: " + str(self.z) + "\n"
 
-class State:
-    def __init__(self):
-        self.time = 0.0
-        self.finger_position = np.zeros(3)
-        self.finger_quat = Quaternion()
-        self.finger_quat_prev = Quaternion()
-        self.finger_vel = np.zeros(6)
-
 class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self):
         path = os.path.join(os.path.dirname(__file__),
@@ -84,7 +76,17 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[1], step_response=0.005))
         self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[2], step_response=0.005))
 
-        self.state = State()
+        # Parameters, updated once during reset of the model
+        # State variables. Updated after each call in self.sim_step()
+        self.time = 0.0
+        self.finger_position = np.zeros(3)
+        self.finger_quat = Quaternion()
+        self.finger_quat_prev = Quaternion()
+        self.finger_vel = np.zeros(6)
+        self.target_height = 0.0
+        self.target_length = 0.0
+        self.target_width = 0.0
+
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
         self.seed()
@@ -224,33 +226,33 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         TODO: The indexes of the actuators are hardcoded right now assuming
         that 0-6 is the actuator of the given joint
         """
-        init_time = self.state.time
+        init_time = self.time
         desired_quat = Quaternion()
 
         if target_position[0] is not None:
-            trajectory_x = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[0], target_position[0]])
+            trajectory_x = Trajectory([self.time, self.time + duration], [self.finger_pos[0], target_position[0]])
         else:
-            trajectory_x = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[0], self.state.finger_pos[0]])
+            trajectory_x = Trajectory([self.time, self.time + duration], [self.finger_pos[0], self.finger_pos[0]])
         if target_position[1] is not None:
-            trajectory_y = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[1], target_position[1]])
+            trajectory_y = Trajectory([self.time, self.time + duration], [self.finger_pos[1], target_position[1]])
         else:
-            trajectory_y = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[1], self.state.finger_pos[1]])
+            trajectory_y = Trajectory([self.time, self.time + duration], [self.finger_pos[1], self.finger_pos[1]])
         if target_position[2] is not None:
-            trajectory_z = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[2], target_position[2]])
+            trajectory_z = Trajectory([self.time, self.time + duration], [self.finger_pos[2], target_position[2]])
         else:
-            trajectory_z = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[2], self.state.finger_pos[2]])
+            trajectory_z = Trajectory([self.time, self.time + duration], [self.finger_pos[2], self.finger_pos[2]])
 
-        while self.state.time <= init_time + duration:
-            quat_error = self.state.finger_quat.error(desired_quat)
+        while self.time <= init_time + duration:
+            quat_error = self.finger_quat.error(desired_quat)
 
             # TODO: The indexes of the actuators are hardcoded right now
             # assuming that 0-6 is the actuator of the given joint
-            self.sim.data.ctrl[0] = self.pd.get_control(trajectory_x.pos(self.state.time) - self.state.finger_pos[0], trajectory_x.vel(self.state.time) - self.state.finger_vel[0])
-            self.sim.data.ctrl[1] = self.pd.get_control(trajectory_y.pos(self.state.time) - self.state.finger_pos[1], trajectory_y.vel(self.state.time) - self.state.finger_vel[1])
-            self.sim.data.ctrl[2] = self.pd.get_control(trajectory_z.pos(self.state.time) - self.state.finger_pos[2], trajectory_z.vel(self.state.time) - self.state.finger_vel[2])
-            self.sim.data.ctrl[3] = self.pd_rot[0].get_control(quat_error[0], - self.state.finger_vel[3])
-            self.sim.data.ctrl[4] = self.pd_rot[1].get_control(quat_error[1], - self.state.finger_vel[4])
-            self.sim.data.ctrl[5] = self.pd_rot[2].get_control(quat_error[2], - self.state.finger_vel[5])
+            self.sim.data.ctrl[0] = self.pd.get_control(trajectory_x.pos(self.time) - self.finger_pos[0], trajectory_x.vel(self.time) - self.finger_vel[0])
+            self.sim.data.ctrl[1] = self.pd.get_control(trajectory_y.pos(self.time) - self.finger_pos[1], trajectory_y.vel(self.time) - self.finger_vel[1])
+            self.sim.data.ctrl[2] = self.pd.get_control(trajectory_z.pos(self.time) - self.finger_pos[2], trajectory_z.vel(self.time) - self.finger_vel[2])
+            self.sim.data.ctrl[3] = self.pd_rot[0].get_control(quat_error[0], - self.finger_vel[3])
+            self.sim.data.ctrl[4] = self.pd_rot[1].get_control(quat_error[1], - self.finger_vel[4])
+            self.sim.data.ctrl[5] = self.pd_rot[2].get_control(quat_error[2], - self.finger_vel[5])
 
             self.sim_step()
             self.render()
@@ -261,21 +263,42 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         A wrapper for sim.step() which updates every time a local state structure.
         """
-        self.state.finger_quat_prev = self.state.finger_quat
+        self.finger_quat_prev = self.finger_quat
 
         self.sim.step()
 
-        self.state.time = self.sim.data.time
+        self.time = self.sim.data.time
 
         current_pos = self.sim.data.get_joint_qpos("finger")
-        self.state.finger_pos = np.array([current_pos[0], current_pos[1], current_pos[2]])
-        self.state.finger_quat = Quaternion(w=current_pos[3], x=current_pos[4], y=current_pos[5], z=current_pos[6])
-        if (np.inner(self.state.finger_quat.as_vector(), self.state.finger_quat_prev.as_vector()) < 0):
-            self.state.finger_quat.w = - self.state.finger_quat.w
-            self.state.finger_quat.x = - self.state.finger_quat.x
-            self.state.finger_quat.y = - self.state.finger_quat.y
-            self.state.finger_quat.z = - self.state.finger_quat.z
-        self.state.finger_quat.normalize()
+        self.finger_pos = np.array([current_pos[0], current_pos[1], current_pos[2]])
+        self.finger_quat = Quaternion(w=current_pos[3], x=current_pos[4], y=current_pos[5], z=current_pos[6])
+        if (np.inner(self.finger_quat.as_vector(), self.finger_quat_prev.as_vector()) < 0):
+            self.finger_quat.w = - self.finger_quat.w
+            self.finger_quat.x = - self.finger_quat.x
+            self.finger_quat.y = - self.finger_quat.y
+            self.finger_quat.z = - self.finger_quat.z
+        self.finger_quat.normalize()
 
-        self.state.finger_vel = self.sim.data.get_joint_qvel('finger')
+        self.finger_vel = self.sim.data.get_joint_qvel('finger')
+
+        # Calculate the object's length, width and height w.r.t. the surface by
+        # using the orientation of the object. The height is the dimension
+        # along the the surface normal. The length is the maximum dimensions
+        # between the remaining two.
+        target_rot = self.sim.data.get_body_xmat('target')
+        if (np.abs(np.inner(target_rot[:, 0], self.surface_normal)) > 0.9):
+            self.target_height = self.target_size[0]
+            self.target_length = max(self.target_size[1], self.target_size[2])
+            self.target_width = min(self.target_size[1], self.target_size[2])
+        elif (np.abs(np.inner(target_rot[:, 1], self.surface_normal)) > 0.9):
+            self.target_height = self.target_size[1]
+            self.target_length = max(self.target_size[0], self.target_size[2])
+            self.target_width = min(self.target_size[0], self.target_size[2])
+        elif (np.abs(np.inner(target_rot[:, 2], self.surface_normal)) > 0.9):
+            self.target_height = self.target_size[2]
+            self.target_length = max(self.target_size[0], self.target_size[1])
+            self.target_width = min(self.target_size[0], self.target_size[1])
+
+
+
 
