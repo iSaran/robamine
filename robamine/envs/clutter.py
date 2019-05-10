@@ -82,7 +82,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.object_names = ['object1', 'object2', 'object3']
 
         finger_mass = get_body_mass(self.sim.model, 'finger')
-        self.pd = PDController.from_mass(mass = finger_mass, step_response=0.005)
+        self.pd = PDController.from_mass(mass = finger_mass)
 
         moment_of_inertia = get_body_inertia(self.sim.model, 'finger')
         self.pd_rot = []
@@ -226,7 +226,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
-        self.viewer.cam.distance = 1.2
+        self.viewer.cam.distance = 0.75
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
