@@ -6,10 +6,10 @@
     iterations="200"
     timestep="0.001"
     solver="CG"/>
-  <size njmax="500" nconmax="100" />
+  <size njmax="5000" nconmax="2000" />
   <default>
     <geom
-      friction="0.3 0.005 0.0001"
+      friction="0.2 0.005 0.0001"
       rgba="0.0 0.4 0.6 1" />
   </default>
   <visual>
@@ -40,17 +40,23 @@
       dir="-1 0 -2.5"/>
     <body
       name="table"
-      pos="0 0 -0.0005"
+      pos="0 0 -0.01"
       quat="1 0 0 0">
       <geom
         name="table"
         type="box"
-        size="0.25 0.25 0.0005"
+        size="0.25 0.25 0.01"
         rgba="0.5 0.18 0.03 1"/>
     </body>
+    <geom
+      name="floor"
+      type="plane"
+      pos ="0 0 -0.3"
+      size="3 3 0.25"
+      rgba="0.0 0.0 0.0 1"/>
     <body
       name="target"
-      pos="0.0 0.0 0.1"
+      pos="0.0 0.0 0.01"
       quat="0.5 0 0 -0.86">
       <joint
         name="target"
@@ -63,38 +69,302 @@
     </body>
     <body
       name="object1"
-      pos="0 -0.1 0.1"
+      pos="0.0 0.0 -0.28"
       quat="1 0 0 0">
       <joint
         name="object1"
         type="free"/>
       <geom
         name="object1"
-        size=".01 .02 .02"
+        size=".01 .01 .01"
         type="box" />
     </body>
     <body
       name="object2"
-      pos="-0.1 -0.1 0.1"
+      pos="0.0 0.05 -0.28"
       quat="1 0 0 0">
       <joint
         name="object2"
         type="free"/>
       <geom
         name="object2"
-        size=".01 .02 .02"
+        size=".01 .01 .01"
         type="box" />
     </body>
     <body
       name="object3"
-      pos="-0.1 -0.2 0.1"
+      pos="0.05 0.0 -0.28"
       quat="1 0 0 0">
       <joint
         name="object3"
         type="free"/>
       <geom
         name="object3"
-        size=".01 .02 .02"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object4"
+      pos="0.05 0.05 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object4"
+        type="free"/>
+      <geom
+        name="object4"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object5"
+      pos="-0.05 0.0 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object5"
+        type="free"/>
+      <geom
+        name="object5"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object6"
+      pos="0.0 -0.05 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object6"
+        type="free"/>
+      <geom
+        name="object6"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object7"
+      pos="-0.05 -0.05 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object7"
+        type="free"/>
+      <geom
+        name="object7"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object8"
+      pos="0.05 -0.05 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object8"
+        type="free"/>
+      <geom
+        name="object8"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object9"
+      pos="-0.05 0.05 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object9"
+        type="free"/>
+      <geom
+        name="object9"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object10"
+      pos="0.0 0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object10"
+        type="free"/>
+      <geom
+        name="object10"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object11"
+      pos="0.05 0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object11"
+        type="free"/>
+      <geom
+        name="object11"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object12"
+      pos="-0.05 0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object12"
+        type="free"/>
+      <geom
+        name="object12"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object13"
+      pos="0.0 -0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object13"
+        type="free"/>
+      <geom
+        name="object13"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object14"
+      pos="0.05 -0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object14"
+        type="free"/>
+      <geom
+        name="object14"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object15"
+      pos="-0.05 -0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object15"
+        type="free"/>
+      <geom
+        name="object15"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object16"
+      pos="-0.1 0.0 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object16"
+        type="free"/>
+      <geom
+        name="object16"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object17"
+      pos="-0.1 -0.05 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object17"
+        type="free"/>
+      <geom
+        name="object17"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object18"
+      pos="-0.1 0.05 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object18"
+        type="free"/>
+      <geom
+        name="object18"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object19"
+      pos="0.1 0.0 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object19"
+        type="free"/>
+      <geom
+        name="object19"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object20"
+      pos="0.1 -0.05 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object20"
+        type="free"/>
+      <geom
+        name="object20"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object21"
+      pos="0.1 0.05 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object21"
+        type="free"/>
+      <geom
+        name="object21"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object22"
+      pos="0.1 0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object22"
+        type="free"/>
+      <geom
+        name="object22"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object23"
+      pos="-0.1 0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object23"
+        type="free"/>
+      <geom
+        name="object23"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object24"
+      pos="-0.1 -0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object24"
+        type="free"/>
+      <geom
+        name="object24"
+        size=".01 .01 .01"
+        type="box" />
+    </body>
+    <body
+      name="object25"
+      pos="0.1 -0.1 -0.28"
+      quat="1 0 0 0">
+      <joint
+        name="object25"
+        type="free"/>
+      <geom
+        name="object25"
+        size=".01 .01 .01"
         type="box" />
     </body>
     <body
