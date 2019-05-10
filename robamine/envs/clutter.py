@@ -13,7 +13,7 @@ from gym.envs.mujoco import mujoco_env
 import os
 
 from robamine.utils.robotics import PDController, Trajectory
-from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia
+from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
 from robamine.utils.orientation import Quaternion
 import robamine.utils.cv_tools as cv_tools
 import math
@@ -93,6 +93,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Parameters, updated once during reset of the model
         self.surface_normal = np.array([0, 0, 1])
         self.finger_length = 0.0
+        self.finger_height = 0.0
         self.target_size = np.zeros(3)
         self.table_size = np.zeros(2)
         # State variables. Updated after each call in self.sim_step()
@@ -106,21 +107,16 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_width = 0.0
         self.target_pos = np.zeros(3)
 
+        self.rng = np.random.RandomState()  # rng for the scene
 
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
         self.seed()
 
     def reset_model(self):
+        self.sim_step()
+        random_qpos = self.generate_random_scene()
         target_size = get_geom_size(self.sim.model, 'target')
-        # Randomize the position of the obstracting objects
-        random_qpos = self.init_qpos
-        for object_name in self.object_names:
-            index = self.sim.model.get_joint_qpos_addr(object_name)
-            r = abs(np.random.normal(0, 0.01)) + 3 * max([target_size[0], target_size[1]])
-            theta = np.random.uniform(0, 2*math.pi)
-            random_qpos[index[0]] = r * math.cos(theta)
-            random_qpos[index[0]+1] = r * math.sin(theta)
 
         # Set the initial position of the finger outside of the table, in order
         # to not occlude the objects during reading observation from the camera
@@ -137,6 +133,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Update state variables that need to be updated only once
         self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
+        self.finger_height = get_geom_size(self.sim.model, 'finger')[0]  # same as length, its a sphere
         self.target_size = 2 * get_geom_size(self.sim.model, 'target')
         self.table_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
 
@@ -320,5 +317,95 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         temp = self.sim.data.get_joint_qpos('target')
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
+
+    def generate_random_scene(self, finger_height_range=[.005, .005],
+                                    target_probability_box=.5,
+                                    target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
+                                    obstacle_probability_box=.6,
+                                    obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
+                                    nr_of_obstacles = [5, 25]):
+        # Randomize finger size
+        geom_id = get_geom_id(self.sim.model, "finger")
+        finger_height = self.rng.uniform(finger_height_range[0], finger_height_range[1])
+        self.sim.model.geom_size[geom_id][0] = finger_height
+
+        random_qpos = self.init_qpos.copy()
+
+        # Randomize target object
+        geom_id = get_geom_id(self.sim.model, "target")
+
+        #   Randomize type (box or cylinder)
+        temp = self.rng.uniform(0, 1)
+        if (temp < target_probability_box):
+            self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
+        else:
+            self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
+            # Increase the friction of the cylinders to stabilize them
+            self.sim.model.geom_friction[geom_id][0] = 1.0
+            self.sim.model.geom_friction[geom_id][1] = .01
+            self.sim.model.geom_friction[geom_id][2] = .01
+            self.sim.model.geom_condim[geom_id] = 4
+            self.sim.model.geom_solref[geom_id][0] = .002
+
+        #   Randomize size
+        target_length = self.rng.uniform(target_length_range[0], target_length_range[1])
+        target_width  = self.rng.uniform(target_width_range[0], min(target_length, target_width_range[1]))
+        target_height = self.rng.uniform(max(target_height_range[0], finger_height), target_height_range[1])
+        if self.sim.model.geom_type[geom_id] == 6:
+            self.sim.model.geom_size[geom_id][0] = target_length
+            self.sim.model.geom_size[geom_id][1] = target_width
+            self.sim.model.geom_size[geom_id][2] = target_height
+        elif self.sim.model.geom_type[geom_id] == 5:
+            self.sim.model.geom_size[geom_id][0] = target_length
+            self.sim.model.geom_size[geom_id][1] = target_height
+
+        #   Randomize orientation
+        theta = self.rng.uniform(0, 2 * math.pi)
+        target_orientation = Quaternion()
+        target_orientation.rot_z(theta)
+        index = self.sim.model.get_joint_qpos_addr("target")
+        random_qpos[index[0] + 3] = target_orientation.w
+        random_qpos[index[0] + 4] = target_orientation.x
+        random_qpos[index[0] + 5] = target_orientation.y
+        random_qpos[index[0] + 6] = target_orientation.z
+
+        # Randomize obstacles
+        number_of_obstacles = nr_of_obstacles[0] + self.rng.randint(nr_of_obstacles[1] - nr_of_obstacles[0] + 1)  # 5 to 25 obstacles
+        for i in range(1, number_of_obstacles):
+            geom_id = get_geom_id(self.sim.model, "object"+str(i))
+
+            # Randomize type (box or cylinder)
+            temp = self.rng.uniform(0, 1)
+            if (temp < obstacle_probability_box):
+                self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
+            else:
+                self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
+                # Increase the friction of the cylinders to stabilize them
+                self.sim.model.geom_friction[geom_id][0] = 1.0
+                self.sim.model.geom_friction[geom_id][1] = .01
+                self.sim.model.geom_friction[geom_id][2] = .01
+                self.sim.model.geom_condim[geom_id] = 4
+
+            #   Randomize size
+            obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
+            obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
+            obstacle_height = self.rng.uniform(max(obstacle_height_range[0], target_height + 2 * finger_height + 0.001), obstacle_height_range[1])
+            if self.sim.model.geom_type[geom_id] == 6:
+                self.sim.model.geom_size[geom_id][0] = obstacle_length
+                self.sim.model.geom_size[geom_id][1] = obstacle_width
+                self.sim.model.geom_size[geom_id][2] = obstacle_height
+            elif self.sim.model.geom_type[geom_id] == 5:
+                self.sim.model.geom_size[geom_id][0] = obstacle_length
+                self.sim.model.geom_size[geom_id][1] = obstacle_height
+
+            # Randomize the positions
+            index = self.sim.model.get_joint_qpos_addr("object"+str(i))
+            r = self.rng.exponential(0.01) + target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1])
+            theta = np.random.uniform(0, 2*math.pi)
+            random_qpos[index[0]] = r * math.cos(theta)
+            random_qpos[index[0]+1] = r * math.sin(theta)
+            random_qpos[index[0]+2] = self.sim.model.geom_size[geom_id][2]
+
+        return random_qpos
 
 
