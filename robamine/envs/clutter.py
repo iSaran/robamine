@@ -29,13 +29,24 @@ class Push:
     of instead of using 4 discrete directions, now we have a continuous angle
     (direction_theta) from which we calculate the direction.
     """
-    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, z_offset=0.02):
-        self.initial_pos, self.distance, self.direction_theta, self.target, self.object_height, self.z_offset = initial_pos, distance, direction_theta, target, object_height, z_offset
+    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, z_offset=0.01, object_length=0.05, finger_size = 0.02):
+        self.initial_pos = initial_pos
+        self.distance = distance
+
+        self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
+
         if target:
-            self.z = object_height - z_offset
+            # Move the target
+
+            # Z at the center of the target object
+            self.z = object_height / 2
+
+            # Position outside of the object along the pushing directions.
+            # sqrt(2) * length  because we take into account the the maximum
+            # size of the object (the hypotinuse)
+            self.initial_pos = self.initial_pos - ((math.sqrt(2) * object_length) / 2 + finger_size) * self.direction
         else:
-            self.z = object_height + z_offset
-        self.direction = np.array([math.cos(self.direction_theta), math.sin(self.direction_theta)])
+            self.z = (object_height + finger_size)  + z_offset
 
     def __str__(self):
         return "Initial Position: " + str(self.initial_pos) + "\n" + \
@@ -43,15 +54,10 @@ class Push:
                "Direction: " + str(self.direction) + "\n" + \
                "z: " + str(self.z) + "\n"
 
-class State:
-    def __init__(self):
-        self.time = 0.0
-        self.finger_position = np.zeros(3)
-        self.finger_quat = Quaternion()
-        self.finger_quat_prev = Quaternion()
-        self.finger_vel = np.zeros(6)
-
 class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
+    """
+    The class for the Gym environment.
+    """
     def __init__(self):
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/clutter.xml")
@@ -65,8 +71,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([0]),
-                                       high=np.array([2 * math.pi]),
+        self.action_space = spaces.Box(low=np.array([0, 0]),
+                                       high=np.array([2 * math.pi, 1]),
                                        dtype=np.float32)
 
         self.observation_space = spaces.Box(low=np.array([-1, -1, -1]),
@@ -76,7 +82,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.object_names = ['object1', 'object2', 'object3']
 
         finger_mass = get_body_mass(self.sim.model, 'finger')
-        self.pd = PDController.from_mass(mass = finger_mass, step_response=0.005)
+        self.pd = PDController.from_mass(mass = finger_mass)
 
         moment_of_inertia = get_body_inertia(self.sim.model, 'finger')
         self.pd_rot = []
@@ -84,7 +90,23 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[1], step_response=0.005))
         self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[2], step_response=0.005))
 
-        self.state = State()
+        # Parameters, updated once during reset of the model
+        self.surface_normal = np.array([0, 0, 1])
+        self.finger_length = 0.0
+        self.target_size = np.zeros(3)
+        self.table_size = np.zeros(2)
+        # State variables. Updated after each call in self.sim_step()
+        self.time = 0.0
+        self.finger_pos = np.zeros(3)
+        self.finger_quat = Quaternion()
+        self.finger_quat_prev = Quaternion()
+        self.finger_vel = np.zeros(6)
+        self.target_height = 0.0
+        self.target_length = 0.0
+        self.target_width = 0.0
+        self.target_pos = np.zeros(3)
+
+
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
         self.seed()
@@ -103,18 +125,20 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Set the initial position of the finger outside of the table, in order
         # to not occlude the objects during reading observation from the camera
         index = self.sim.model.get_joint_qpos_addr('finger')
-        table_size = get_geom_size(self.sim.model, 'table')
-        table_pos = self.sim.data.get_body_xpos('table')
-        init_finger_pos = table_pos + 1.1 * table_size
-        random_qpos[index[0]]   = init_finger_pos[0]
-        random_qpos[index[0]+1] = init_finger_pos[1]
-        random_qpos[index[0]+2] = init_finger_pos[2]
+        self.table_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
+        random_qpos[index[0]]   = 1.1 * self.table_size[0]
+        random_qpos[index[0]+1] = 1.1 * self.table_size[1]
+        random_qpos[index[0]+2] = self.finger_length + 0.01
 
         self.set_state(random_qpos, self.init_qvel)
 
         # Move forward the simulation to be sure that the objects have landed
         for _ in range(200):
             self.sim_step()
+
+        # Update state variables that need to be updated only once
+        self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
+        self.target_size = 2 * get_geom_size(self.sim.model, 'target')
 
         return self.get_obs()
 
@@ -174,34 +198,31 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def do_simulation(self, action):
         time = self.sim.data.time
 
-        target_size = get_geom_size(self.sim.model, 'target')
-        target_pos = self.sim.data.get_joint_qpos('target')
-        finger_size = get_geom_size(self.sim.model, 'finger')
+        if action[1] > 0.5:
+            push_target = True
+        else:
+            push_target = False
+        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, finger_size = self.finger_length)
 
-        z_off = target_pos[2] + finger_size[0]
-        push = Push(direction_theta=action[0], object_height = target_size[0], target=False, z_offset=z_off)
-
-        self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], z_off + 0.1, 1, 0, 0, 0])
+        init_z = self.target_height + 0.05
+        self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
         self.sim_step()
-
         self.move_joint_to_target('finger', [None, None, push.z])
         end = push.initial_pos + push.distance * push.direction
         self.move_joint_to_target('finger', [end[0], end[1], None])
-        self.move_joint_to_target('finger', [None, None, 0.4])
+        self.move_joint_to_target('finger', [None, None, init_z])
 
         return time
 
     def _move_finger_outside_the_table(self):
         # Move finger outside the table again
         table_size = get_geom_size(self.sim.model, 'table')
-        table_pos = self.sim.data.get_body_xpos('table')
-        f_pos = table_pos + 1.1 * table_size
-        self.sim.data.set_joint_qpos('finger', [f_pos[0], f_pos[1], f_pos[2], 1, 0, 0, 0])
+        self.sim.data.set_joint_qpos('finger', [1.1 * self.table_size[0], 1.1 * self.table_size[1], self.finger_length + 0.01, 1, 0, 0, 0])
         self.sim_step()
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
-        self.viewer.cam.distance = 1.2
+        self.viewer.cam.distance = 0.75
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
@@ -224,33 +245,33 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         TODO: The indexes of the actuators are hardcoded right now assuming
         that 0-6 is the actuator of the given joint
         """
-        init_time = self.state.time
+        init_time = self.time
         desired_quat = Quaternion()
 
         if target_position[0] is not None:
-            trajectory_x = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[0], target_position[0]])
+            trajectory_x = Trajectory([self.time, self.time + duration], [self.finger_pos[0], target_position[0]])
         else:
-            trajectory_x = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[0], self.state.finger_pos[0]])
+            trajectory_x = Trajectory([self.time, self.time + duration], [self.finger_pos[0], self.finger_pos[0]])
         if target_position[1] is not None:
-            trajectory_y = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[1], target_position[1]])
+            trajectory_y = Trajectory([self.time, self.time + duration], [self.finger_pos[1], target_position[1]])
         else:
-            trajectory_y = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[1], self.state.finger_pos[1]])
+            trajectory_y = Trajectory([self.time, self.time + duration], [self.finger_pos[1], self.finger_pos[1]])
         if target_position[2] is not None:
-            trajectory_z = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[2], target_position[2]])
+            trajectory_z = Trajectory([self.time, self.time + duration], [self.finger_pos[2], target_position[2]])
         else:
-            trajectory_z = Trajectory([self.state.time, self.state.time + duration], [self.state.finger_pos[2], self.state.finger_pos[2]])
+            trajectory_z = Trajectory([self.time, self.time + duration], [self.finger_pos[2], self.finger_pos[2]])
 
-        while self.state.time <= init_time + duration:
-            quat_error = self.state.finger_quat.error(desired_quat)
+        while self.time <= init_time + duration:
+            quat_error = self.finger_quat.error(desired_quat)
 
             # TODO: The indexes of the actuators are hardcoded right now
             # assuming that 0-6 is the actuator of the given joint
-            self.sim.data.ctrl[0] = self.pd.get_control(trajectory_x.pos(self.state.time) - self.state.finger_pos[0], trajectory_x.vel(self.state.time) - self.state.finger_vel[0])
-            self.sim.data.ctrl[1] = self.pd.get_control(trajectory_y.pos(self.state.time) - self.state.finger_pos[1], trajectory_y.vel(self.state.time) - self.state.finger_vel[1])
-            self.sim.data.ctrl[2] = self.pd.get_control(trajectory_z.pos(self.state.time) - self.state.finger_pos[2], trajectory_z.vel(self.state.time) - self.state.finger_vel[2])
-            self.sim.data.ctrl[3] = self.pd_rot[0].get_control(quat_error[0], - self.state.finger_vel[3])
-            self.sim.data.ctrl[4] = self.pd_rot[1].get_control(quat_error[1], - self.state.finger_vel[4])
-            self.sim.data.ctrl[5] = self.pd_rot[2].get_control(quat_error[2], - self.state.finger_vel[5])
+            self.sim.data.ctrl[0] = self.pd.get_control(trajectory_x.pos(self.time) - self.finger_pos[0], trajectory_x.vel(self.time) - self.finger_vel[0])
+            self.sim.data.ctrl[1] = self.pd.get_control(trajectory_y.pos(self.time) - self.finger_pos[1], trajectory_y.vel(self.time) - self.finger_vel[1])
+            self.sim.data.ctrl[2] = self.pd.get_control(trajectory_z.pos(self.time) - self.finger_pos[2], trajectory_z.vel(self.time) - self.finger_vel[2])
+            self.sim.data.ctrl[3] = self.pd_rot[0].get_control(quat_error[0], - self.finger_vel[3])
+            self.sim.data.ctrl[4] = self.pd_rot[1].get_control(quat_error[1], - self.finger_vel[4])
+            self.sim.data.ctrl[5] = self.pd_rot[2].get_control(quat_error[2], - self.finger_vel[5])
 
             self.sim_step()
             self.render()
@@ -261,21 +282,43 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         A wrapper for sim.step() which updates every time a local state structure.
         """
-        self.state.finger_quat_prev = self.state.finger_quat
+        self.finger_quat_prev = self.finger_quat
 
         self.sim.step()
 
-        self.state.time = self.sim.data.time
+        self.time = self.sim.data.time
 
         current_pos = self.sim.data.get_joint_qpos("finger")
-        self.state.finger_pos = np.array([current_pos[0], current_pos[1], current_pos[2]])
-        self.state.finger_quat = Quaternion(w=current_pos[3], x=current_pos[4], y=current_pos[5], z=current_pos[6])
-        if (np.inner(self.state.finger_quat.as_vector(), self.state.finger_quat_prev.as_vector()) < 0):
-            self.state.finger_quat.w = - self.state.finger_quat.w
-            self.state.finger_quat.x = - self.state.finger_quat.x
-            self.state.finger_quat.y = - self.state.finger_quat.y
-            self.state.finger_quat.z = - self.state.finger_quat.z
-        self.state.finger_quat.normalize()
+        self.finger_pos = np.array([current_pos[0], current_pos[1], current_pos[2]])
+        self.finger_quat = Quaternion(w=current_pos[3], x=current_pos[4], y=current_pos[5], z=current_pos[6])
+        if (np.inner(self.finger_quat.as_vector(), self.finger_quat_prev.as_vector()) < 0):
+            self.finger_quat.w = - self.finger_quat.w
+            self.finger_quat.x = - self.finger_quat.x
+            self.finger_quat.y = - self.finger_quat.y
+            self.finger_quat.z = - self.finger_quat.z
+        self.finger_quat.normalize()
 
-        self.state.finger_vel = self.sim.data.get_joint_qvel('finger')
+        self.finger_vel = self.sim.data.get_joint_qvel('finger')
+
+        # Calculate the object's length, width and height w.r.t. the surface by
+        # using the orientation of the object. The height is the dimension
+        # along the the surface normal. The length is the maximum dimensions
+        # between the remaining two.
+        target_rot = self.sim.data.get_body_xmat('target')
+        if (np.abs(np.inner(target_rot[:, 0], self.surface_normal)) > 0.9):
+            self.target_height = self.target_size[0]
+            self.target_length = max(self.target_size[1], self.target_size[2])
+            self.target_width = min(self.target_size[1], self.target_size[2])
+        elif (np.abs(np.inner(target_rot[:, 1], self.surface_normal)) > 0.9):
+            self.target_height = self.target_size[1]
+            self.target_length = max(self.target_size[0], self.target_size[2])
+            self.target_width = min(self.target_size[0], self.target_size[2])
+        elif (np.abs(np.inner(target_rot[:, 2], self.surface_normal)) > 0.9):
+            self.target_height = self.target_size[2]
+            self.target_length = max(self.target_size[0], self.target_size[1])
+            self.target_width = min(self.target_size[0], self.target_size[1])
+
+        temp = self.sim.data.get_joint_qpos('target')
+        self.target_pos = np.array([temp[0], temp[1], temp[2]])
+
 

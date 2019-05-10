@@ -28,7 +28,7 @@
   </visual>
   <worldbody>
     <camera name="xtion"
-      pos="0 0 1.2"
+      pos="0 0 0.75"
       quat="1 0 0 0" />
     <light
       directional="false"
@@ -40,37 +40,37 @@
       dir="-1 0 -2.5"/>
     <body
       name="table"
-      pos="0 0 0"
+      pos="0 0 -0.0005"
       quat="1 0 0 0">
       <geom
         name="table"
         type="box"
-        size="0.5 0.5 0.0125"
+        size="0.25 0.25 0.0005"
         rgba="0.5 0.18 0.03 1"/>
     </body>
     <body
       name="target"
-      pos="0.0 0.0 0.2"
+      pos="0.0 0.0 0.1"
       quat="0.5 0 0 -0.86">
       <joint
         name="target"
         type="free"/>
       <geom
         name="target"
-        size=".05 .05 .02"
+        size=".02 .02 .01"
         type="box"
         rgba="0.8 0.0 0.0 1" />
     </body>
     <body
       name="object1"
-      pos="0 -0.2 0.1"
+      pos="0 -0.1 0.1"
       quat="1 0 0 0">
       <joint
         name="object1"
         type="free"/>
       <geom
         name="object1"
-        size=".02 .05 .05"
+        size=".01 .02 .02"
         type="box" />
     </body>
     <body
@@ -82,19 +82,19 @@
         type="free"/>
       <geom
         name="object2"
-        size=".02 .05 .05"
+        size=".01 .02 .02"
         type="box" />
     </body>
     <body
       name="object3"
-      pos="-0.2 -0.2 0.1"
+      pos="-0.1 -0.2 0.1"
       quat="1 0 0 0">
       <joint
         name="object3"
         type="free"/>
       <geom
         name="object3"
-        size=".02 .05 .05"
+        size=".01 .02 .02"
         type="box" />
     </body>
     <body
@@ -107,7 +107,7 @@
       <geom
         name="finger"
         rgba="0.3 0.3 0.3 1"
-        size=".01 .01 .01"
+        size=".005 .005 .005"
         type="sphere"/>
     </body>
   </worldbody>
