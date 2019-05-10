@@ -94,7 +94,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.surface_normal = np.array([0, 0, 1])
         self.finger_length = 0.0
         self.target_size = np.zeros(3)
-
+        self.table_size = np.zeros(2)
         # State variables. Updated after each call in self.sim_step()
         self.time = 0.0
         self.finger_pos = np.zeros(3)
@@ -125,12 +125,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Set the initial position of the finger outside of the table, in order
         # to not occlude the objects during reading observation from the camera
         index = self.sim.model.get_joint_qpos_addr('finger')
-        table_size = get_geom_size(self.sim.model, 'table')
-        table_pos = self.sim.data.get_body_xpos('table')
-        init_finger_pos = table_pos + 1.1 * table_size
-        random_qpos[index[0]]   = init_finger_pos[0]
-        random_qpos[index[0]+1] = init_finger_pos[1]
-        random_qpos[index[0]+2] = init_finger_pos[2]
+        self.table_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
+        random_qpos[index[0]]   = 1.1 * self.table_size[0]
+        random_qpos[index[0]+1] = 1.1 * self.table_size[1]
+        random_qpos[index[0]+2] = self.finger_length + 0.01
 
         self.set_state(random_qpos, self.init_qvel)
 
@@ -219,9 +217,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def _move_finger_outside_the_table(self):
         # Move finger outside the table again
         table_size = get_geom_size(self.sim.model, 'table')
-        table_pos = self.sim.data.get_body_xpos('table')
-        f_pos = table_pos + 1.1 * table_size
-        self.sim.data.set_joint_qpos('finger', [f_pos[0], f_pos[1], f_pos[2], 1, 0, 0, 0])
+        self.sim.data.set_joint_qpos('finger', [1.1 * self.table_size[0], 1.1 * self.table_size[1], self.finger_length + 0.01, 1, 0, 0, 0])
         self.sim_step()
 
     def viewer_setup(self):
