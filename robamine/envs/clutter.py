@@ -29,24 +29,28 @@ class Push:
     of instead of using 4 discrete directions, now we have a continuous angle
     (direction_theta) from which we calculate the direction.
     """
-    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, z_offset=0.01, object_length=0.05, finger_size = 0.02):
-        self.initial_pos = initial_pos
+    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, object_length=0.05, object_width = 0.05, finger_size = 0.02):
         self.distance = distance
-
         self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
 
         if target:
             # Move the target
 
             # Z at the center of the target object
-            self.z = object_height / 2
+            # If the object is too short just put the finger right above the
+            # table
+            if object_height - finger_size > 0:
+                offset = object_height - finger_size
+            else:
+                offset = 0
+            self.z = finger_size + offset + 0.001
 
             # Position outside of the object along the pushing directions.
-            # sqrt(2) * length  because we take into account the the maximum
-            # size of the object (the hypotinuse)
-            self.initial_pos = self.initial_pos - ((math.sqrt(2) * object_length) / 2 + finger_size) * self.direction
+            # Worst case scenario: the diagonal of the object
+            self.initial_pos = initial_pos - (math.sqrt(pow(object_length, 2) + pow(object_width, 2)) + finger_size + 0.001) * self.direction
         else:
-            self.z = (object_height + finger_size)  + z_offset
+            self.z = 2 * object_height + finger_size + 0.001
+            self.initial_pos = initial_pos
 
     def __str__(self):
         return "Initial Position: " + str(self.initial_pos) + "\n" + \
@@ -216,15 +220,15 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             push_target = True
         else:
             push_target = False
-        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, finger_size = self.finger_length)
+        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 
-        init_z = self.target_height + 0.05
+
+        init_z = 2 * self.target_height + 0.05
         self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
         self.sim_step()
         self.move_joint_to_target('finger', [None, None, push.z])
         end = push.initial_pos + push.distance * push.direction
         self.move_joint_to_target('finger', [end[0], end[1], None])
-        self.move_joint_to_target('finger', [None, None, init_z])
 
         return time
 
@@ -248,7 +252,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def terminal_state(self, observation):
         return False
 
-    def move_joint_to_target(self, joint_name, target_position, duration = 2):
+    def move_joint_to_target(self, joint_name, target_position, duration = 1):
         """
         Generates a trajectory in Cartesian space (x, y, z) from the current
         position of a joint to a target position. If one of the x, y, z is None
@@ -288,7 +292,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.data.ctrl[5] = self.pd_rot[2].get_control(quat_error[2], - self.finger_vel[5])
 
             self.sim_step()
-            self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 
@@ -318,9 +321,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # using the orientation of the object. The height is the dimension
         # along the the surface normal. The length is the maximum dimensions
         # between the remaining two.
-        self.target_height = self.get_object_dimensions('target', self.surface_normal)[0]
-        self.target_width = self.get_object_dimensions('target', self.surface_normal)[1]
-        self.target_height = self.get_object_dimensions('target', self.surface_normal)[2]
+        dims = self.get_object_dimensions('target', self.surface_normal)
+        self.target_length, self.target_width, self.target_height = dims[0], dims[1], dims[2]
 
         temp = self.sim.data.get_joint_qpos('target')
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
