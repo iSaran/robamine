@@ -134,8 +134,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         for _ in range(300):
             for i in range(1, number_of_obstacles):
                 body_id = get_body_names(self.sim.model).index("object"+str(i))
-                self.sim.data.xfrc_applied[body_id][0] = - self.sim.data.body_xpos[body_id][0]
-                self.sim.data.xfrc_applied[body_id][1] = - self.sim.data.body_xpos[body_id][1]
+                self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
+                self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
 
             self.sim_step()
 
