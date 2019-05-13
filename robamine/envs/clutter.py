@@ -115,7 +115,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def reset_model(self):
         self.sim_step()
-        random_qpos = self.generate_random_scene()
+        random_qpos, number_of_obstacles = self.generate_random_scene()
         target_size = get_geom_size(self.sim.model, 'target')
 
         # Set the initial position of the finger outside of the table, in order
@@ -128,7 +128,24 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.set_state(random_qpos, self.init_qvel)
 
         # Move forward the simulation to be sure that the objects have landed
-        for _ in range(200):
+        for _ in range(600):
+            self.sim_step()
+
+        for _ in range(300):
+            for i in range(1, number_of_obstacles):
+                body_id = get_body_names(self.sim.model).index("object"+str(i))
+                self.sim.data.xfrc_applied[body_id][0] = - self.sim.data.body_xpos[body_id][0]
+                self.sim.data.xfrc_applied[body_id][1] = - self.sim.data.body_xpos[body_id][1]
+
+            self.sim_step()
+
+        self.check_target_occlusion(number_of_obstacles)
+
+        for _ in range(100):
+            for i in range(1, number_of_obstacles):
+                 body_id = get_body_names(self.sim.model).index("object"+str(i))
+                 self.sim.data.xfrc_applied[body_id][0] = 0
+                 self.sim.data.xfrc_applied[body_id][1] = 0
             self.sim_step()
 
         # Update state variables that need to be updated only once
@@ -301,19 +318,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # using the orientation of the object. The height is the dimension
         # along the the surface normal. The length is the maximum dimensions
         # between the remaining two.
-        target_rot = self.sim.data.get_body_xmat('target')
-        if (np.abs(np.inner(target_rot[:, 0], self.surface_normal)) > 0.9):
-            self.target_height = self.target_size[0]
-            self.target_length = max(self.target_size[1], self.target_size[2])
-            self.target_width = min(self.target_size[1], self.target_size[2])
-        elif (np.abs(np.inner(target_rot[:, 1], self.surface_normal)) > 0.9):
-            self.target_height = self.target_size[1]
-            self.target_length = max(self.target_size[0], self.target_size[2])
-            self.target_width = min(self.target_size[0], self.target_size[2])
-        elif (np.abs(np.inner(target_rot[:, 2], self.surface_normal)) > 0.9):
-            self.target_height = self.target_size[2]
-            self.target_length = max(self.target_size[0], self.target_size[1])
-            self.target_width = min(self.target_size[0], self.target_size[1])
+        self.target_height = self.get_object_dimensions('target', self.surface_normal)[0]
+        self.target_width = self.get_object_dimensions('target', self.surface_normal)[1]
+        self.target_height = self.get_object_dimensions('target', self.surface_normal)[2]
 
         temp = self.sim.data.get_joint_qpos('target')
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
@@ -406,6 +413,71 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             random_qpos[index[0]+1] = r * math.sin(theta)
             random_qpos[index[0]+2] = self.sim.model.geom_size[geom_id][2]
 
-        return random_qpos
+        return random_qpos, number_of_obstacles
+
+    def check_target_occlusion(self, number_of_obstacles):
+        """
+        Checks if an obstacle is above the target object and occludes it. Then
+        it removes it from the arena.
+        """
+        for i in range(1, number_of_obstacles):
+            body_id = get_body_names(self.sim.model).index("target")
+            target_position = np.array([self.sim.data.body_xpos[body_id][0], self.sim.data.body_xpos[body_id][1]])
+            body_id = get_body_names(self.sim.model).index("object"+str(i))
+            obstacle_position = np.array([self.sim.data.body_xpos[body_id][0], self.sim.data.body_xpos[body_id][1]])
+
+            # Continue if object has fallen off the table
+            if self.sim.data.body_xpos[body_id][2] < 0:
+                continue
+
+            distance = np.linalg.norm(target_position - obstacle_position)
+
+            target_length = self.get_object_dimensions('target', self.surface_normal)[0]
+            obstacle_length = self.get_object_dimensions("object"+str(i), self.surface_normal)[0]
+            if distance < 0.6 * (target_length + obstacle_length):
+                index = self.sim.model.get_joint_qpos_addr("object"+str(i))
+                qpos = self.sim.data.qpos.ravel().copy()
+                qvel = self.sim.data.qvel.ravel().copy()
+                qpos[index[0] + 2] = - 0.2
+                self.set_state(qpos, qvel)
+
+    def get_object_dimensions(self, object_name, surface_normal):
+        """
+        Returns the object's length, width and height w.r.t. the surface by
+        using the orientation of the object. The height is the dimension
+        along the the surface normal. The length is the maximum dimensions
+        between the remaining two.
+        """
+        rot = self.sim.data.get_body_xmat(object_name)
+        size = get_geom_size(self.sim.model, object_name)
+        geom_id = get_geom_id(self.sim.model, object_name)
+        length, width, height = 0.0, 0.0, 0.0
+        if self.sim.model.geom_type[geom_id] == 6:  # if box
+            if (np.abs(np.inner(rot[:, 0], surface_normal)) > 0.9):
+                height = size[0]
+                length = max(size[1], size[2])
+                width = min(size[1], size[2])
+            elif (np.abs(np.inner(rot[:, 1], surface_normal)) > 0.9):
+                height = size[1]
+                length = max(size[0], size[2])
+                width = min(size[0], size[2])
+            elif (np.abs(np.inner(rot[:, 2], surface_normal)) > 0.9):
+                height = size[2]
+                length = max(size[0], size[1])
+                width = min(size[0], size[1])
+        elif self.sim.model.geom_type[geom_id] == 5:  # if cylinder
+            if (np.abs(np.inner(rot[:, 2], surface_normal)) > 0.9):
+                height = size[1]
+                length = size[0]
+                width = size[0]
+            else:
+                height = size[0]
+                length = size[1]
+                width = size[0]
+        else:
+            raise RuntimeError("Object is not neither a box or a cylinder")
+
+        return np.array([length, width, height])
+
 
 
