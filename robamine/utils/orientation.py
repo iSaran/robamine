@@ -3,6 +3,7 @@
 import numpy as np
 import numpy.matlib as mat
 import numpy.linalg as lin
+import math
 
 def quat2rot(q, shape="wxyz"):
     """
@@ -216,3 +217,60 @@ class Quaternion:
 
     def __str__(self):
         return str(self.w) + " + " + str(self.x) + "i +" + str(self.y) + "j + " + str(self.z)  + "k"
+
+    def rot_z(self, theta):
+        mat = self.rotation_matrix()
+        mat =  np.matmul(mat, rot_z(theta))
+        new = Quaternion.from_rotation_matrix(mat)
+        self.w = new.w
+        self.x = new.x
+        self.y = new.y
+        self.z = new.z
+
+def rot_x(theta):
+  rot = np.zeros((3, 3))
+  rot[0, 0] = 1
+  rot[0, 1] = 0
+  rot[0, 2] = 0
+
+  rot[1, 0] = 0
+  rot[1, 1] = math.cos(theta)
+  rot[1, 2] = - math.sin(theta)
+
+  rot[2, 0] = 0
+  rot[2, 1] = math.sin(theta)
+  rot[2, 2] = math.cos(theta)
+
+  return rot
+
+def rot_y(theta):
+  rot = np.zeros((3, 3))
+  rot[0, 0] = math.cos(theta)
+  rot[0, 1] = 0
+  rot[0, 2] = math.sin(theta)
+
+  rot[1, 0] = 0
+  rot[1, 1] = 1
+  rot[1, 2] = 0
+
+  rot[2, 0] = - math.sin(theta)
+  rot[2, 1] = 0
+  rot[2, 2] = math.cos(theta)
+
+  return rot
+
+def rot_z(theta):
+  rot = np.zeros((3, 3))
+  rot[0, 0] = math.cos(theta)
+  rot[0, 1] = - math.sin(theta)
+  rot[0, 2] = 0
+
+  rot[1, 0] = math.sin(theta)
+  rot[1, 1] = math.cos(theta)
+  rot[1, 2] = 0
+
+  rot[2, 0] = 0
+  rot[2, 1] = 0
+  rot[2, 2] = 1
+
+  return rot

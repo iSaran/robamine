@@ -16,5 +16,13 @@ class TestQuaternion(unittest.TestCase):
         self.assertEqual(q.y, 0)
         self.assertEqual(q.z, 0)
 
+    def test_rot_z(self):
+        q = Quaternion(w=1, x=0, y=0, z=0)
+        q.rot_z(3.1415)
+        self.assertAlmostEqual(q.w, 0, 3)
+        self.assertAlmostEqual(q.x, 0, 3)
+        self.assertAlmostEqual(q.y, 0, 3)
+        self.assertAlmostEqual(q.z, 1, 3)
+
 if __name__ == '__main__':
     unittest.main()
