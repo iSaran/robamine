@@ -20,18 +20,15 @@ if __name__ == '__main__':
     init_qvel = sim.data.qvel.ravel().copy()
 
     for i in range(10000):
-        for index in joint_ids:
-            sim.data.qfrc_applied[index] = sim.data.qfrc_bias[index]
-
         j = sim.model.get_joint_qpos_addr('bh_wrist_joint')
         init_qpos[j[0]] = 0.2
         init_qpos[j[0]+1] = 0.54
         init_qpos[j[0]+2] = 0.31
 
         j = sim.model.get_joint_qpos_addr('bh_j11_joint')
-        init_qpos[j] = 0.2
+        init_qpos[j] = 1
         j = sim.model.get_joint_qpos_addr('bh_j21_joint')
-        init_qpos[j] = 0.2
+        init_qpos[j] = 1
 
         j = sim.model.get_joint_qpos_addr('bh_j22_joint')
         init_qpos[j] = 1
