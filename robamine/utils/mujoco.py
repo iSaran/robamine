@@ -41,6 +41,9 @@ def get_geom_names(mj_model):
         names.append(extract_name(mj_model, i))
     return names
 
+def get_geom_id(mj_model, geom_name):
+    return get_geom_names(mj_model).index(geom_name)
+
 def get_geom_size(mj_model, geom_name):
     return mj_model.geom_size[get_geom_names(mj_model).index(geom_name)]
 
