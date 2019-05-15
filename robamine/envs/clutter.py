@@ -257,6 +257,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def get_reward(self, observation, point_cloud, dim):
         reward = 0.0
 
+        # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
             self.push_stopped_ext_forces = False
             return -10
@@ -287,6 +288,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         return reward
 
     def terminal_state(self, observation):
+
+        # If the object has fallen from the table
+        if observation[-1] < 0:
+            return True
+
+        # TODO: If the object is free from obstacles around
+
         return False
 
     def move_joint_to_target(self, joint_name, target_position, duration = 1, stop_external_forces=False):
