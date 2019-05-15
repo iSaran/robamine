@@ -112,6 +112,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_length = 0.0
         self.target_width = 0.0
         self.target_pos = np.zeros(3)
+        self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -209,8 +210,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def step(self, action):
         done = False
         obs = self.get_obs()
-        reward = self.get_reward(obs)
         time = self.do_simulation(action)
+        reward = self.get_reward(obs)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {}
@@ -248,9 +249,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation):
-        # TODO: Define reward based on observation
-        reward = 0
-        return reward
+        if self.push_stopped_ext_forces:
+            self.push_stopped_ext_forces = False
+            return -10
+
+        return 0.0
 
     def terminal_state(self, observation):
         return False
