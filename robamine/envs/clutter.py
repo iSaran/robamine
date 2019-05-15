@@ -106,6 +106,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_quat = Quaternion()
         self.finger_quat_prev = Quaternion()
         self.finger_vel = np.zeros(6)
+        self.finger_external_force_norm = 0.0
         self.target_height = 0.0
         self.target_length = 0.0
         self.target_width = 0.0
@@ -252,7 +253,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def terminal_state(self, observation):
         return False
 
-    def move_joint_to_target(self, joint_name, target_position, duration = 1):
+    def move_joint_to_target(self, joint_name, target_position, duration = 1, stop_external_forces=False):
         """
         Generates a trajectory in Cartesian space (x, y, z) from the current
         position of a joint to a target position. If one of the x, y, z is None
@@ -262,6 +263,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         TODO: The indexes of the actuators are hardcoded right now assuming
         that 0-6 is the actuator of the given joint
+
+        Returns whether it the motion completed or stopped due to external
+        forces
         """
         init_time = self.time
         desired_quat = Quaternion()
@@ -285,6 +289,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 
+            if stop_external_forces and (self.finger_external_force_norm > 0.1):
+                return False
+        return True
+
     def sim_step(self):
         """
         A wrapper for sim.step() which updates every time a local state structure.
@@ -306,6 +314,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_quat.normalize()
 
         self.finger_vel = self.sim.data.get_joint_qvel('finger')
+
+        finger_geom_id = get_geom_id(self.sim.model, "finger")
+        geom2body = self.sim.model.geom_bodyid[finger_geom_id]
+        self.finger_external_force_norm = np.linalg.norm(self.sim.data.cfrc_ext[geom2body])
 
         # Calculate the object's length, width and height w.r.t. the surface by
         # using the orientation of the object. The height is the dimension
