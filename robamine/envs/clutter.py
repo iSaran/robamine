@@ -15,6 +15,7 @@ import os
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
 from robamine.utils.orientation import Quaternion
+from robamine.utils.math import sigmoid
 import robamine.utils.cv_tools as cv_tools
 import math
 
@@ -96,6 +97,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Parameters, updated once during reset of the model
         self.surface_normal = np.array([0, 0, 1])
+        self.surface_size = np.zeros(2)  # half size of the table in x, y
         self.finger_length = 0.0
         self.finger_height = 0.0
         self.target_size = np.zeros(3)
@@ -201,16 +203,20 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         height_map = cv_tools.generate_height_map(points_above_table)
         features = cv_tools.extract_features(height_map, dim)
 
-        # add the position of the target to the feature
-        features.append(target_pose[0, 3])
-        features.append(target_pose[1, 3])
+        # Add the distance of the object from the edge
+        distances = [self.surface_size[0] - self.target_pos[0], \
+                     self.surface_size[0] + self.target_pos[0], \
+                     self.surface_size[1] - self.target_pos[1], \
+                     self.surface_size[1] + self.target_pos[1]]
+        min_distance_from_edge = min(distances)
+        features.append(min_distance_from_edge)
 
         return features, points_above_table, dim
 
     def step(self, action):
         done = False
-        obs, pcd, dim = self.get_obs()
         time = self.do_simulation(action)
+        obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
         if self.terminal_state(obs):
             done = True
@@ -249,6 +255,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation, point_cloud, dim):
+        reward = 0.0
+
         if self.push_stopped_ext_forces:
             self.push_stopped_ext_forces = False
             return -10
@@ -270,15 +278,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if points_around == 0:
             return 10
 
-        # for each push that leads the target to table limits
-        pos_x = observation[-2]
-        pos_y = observation[-1]
-        out_of_bounds = 0.3
-        if pos_x > out_of_bounds or pos_x < -out_of_bounds or pos_y > out_of_bounds or pos_y < out_of_bounds:
-            return -5
+        # Penalize the agent as it gets the target object closer to the edge
+        max_cost = -5
+        reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
 
-        # for each object push
-        return -1
+        # For each object push
+        reward += -1
+        return reward
 
     def terminal_state(self, observation):
         return False
@@ -331,7 +337,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             duration = 0.2
             for i in range(3):
                 direction = (target_position - self.finger_pos) / np.linalg.norm(target_position - self.finger_pos)
-                print('direction: ', direction)
                 new_target = self.finger_pos - 0.01 * direction  # move 1 cm backwards from your initial direction
                 new_trajectory[i] = Trajectory([self.time, self.time + duration], [self.finger_pos[i], new_target[i]], [self.finger_vel[i], 0], [self.finger_acc[i], 0])
 
@@ -395,13 +400,22 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
                                     obstacle_probability_box=.6,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [5, 25]):
+                                    nr_of_obstacles = [5, 25],
+                                    surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
         finger_height = self.rng.uniform(finger_height_range[0], finger_height_range[1])
         self.sim.model.geom_size[geom_id][0] = finger_height
 
         random_qpos = self.init_qpos.copy()
+
+        # Randomize surface size
+        self.surface_size[0] = self.rng.uniform(surface_length_range[0], surface_length_range[1])
+        self.surface_size[1] = self.rng.uniform(surface_width_range[0], surface_width_range[1])
+        geom_id = get_geom_id(self.sim.model, "table")
+        self.sim.model.geom_size[geom_id][0] = self.surface_size[0]
+        self.sim.model.geom_size[geom_id][0] = self.surface_size[1]
+
 
         # Randomize target object
         geom_id = get_geom_id(self.sim.model, "target")
