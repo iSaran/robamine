@@ -106,10 +106,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_quat = Quaternion()
         self.finger_quat_prev = Quaternion()
         self.finger_vel = np.zeros(6)
+        self.finger_acc = np.zeros(3)
+        self.finger_external_force_norm = 0.0
         self.target_height = 0.0
         self.target_length = 0.0
         self.target_width = 0.0
         self.target_pos = np.zeros(3)
+        self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -207,8 +210,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def step(self, action):
         done = False
         obs = self.get_obs()
-        reward = self.get_reward(obs)
         time = self.do_simulation(action)
+        reward = self.get_reward(obs)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {}
@@ -222,13 +225,14 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             push_target = False
         push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 
-
         init_z = 2 * self.target_height + 0.05
         self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
         self.sim_step()
-        self.move_joint_to_target('finger', [None, None, push.z])
-        end = push.initial_pos + push.distance * push.direction
-        self.move_joint_to_target('finger', [end[0], end[1], None])
+        if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
+            end = push.initial_pos + push.distance * push.direction
+            self.move_joint_to_target('finger', [end[0], end[1], None])
+        else:
+            self.push_stopped_ext_forces = True
 
         return time
 
@@ -245,14 +249,16 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation):
-        # TODO: Define reward based on observation
-        reward = 0
-        return reward
+        if self.push_stopped_ext_forces:
+            self.push_stopped_ext_forces = False
+            return -10
+
+        return 0.0
 
     def terminal_state(self, observation):
         return False
 
-    def move_joint_to_target(self, joint_name, target_position, duration = 1):
+    def move_joint_to_target(self, joint_name, target_position, duration = 1, stop_external_forces=False):
         """
         Generates a trajectory in Cartesian space (x, y, z) from the current
         position of a joint to a target position. If one of the x, y, z is None
@@ -262,38 +268,64 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         TODO: The indexes of the actuators are hardcoded right now assuming
         that 0-6 is the actuator of the given joint
+
+        Returns whether it the motion completed or stopped due to external
+        forces
         """
         init_time = self.time
         desired_quat = Quaternion()
 
-        if target_position[0] is not None:
-            trajectory_x = Trajectory([self.time, self.time + duration], [self.finger_pos[0], target_position[0]])
-        else:
-            trajectory_x = Trajectory([self.time, self.time + duration], [self.finger_pos[0], self.finger_pos[0]])
-        if target_position[1] is not None:
-            trajectory_y = Trajectory([self.time, self.time + duration], [self.finger_pos[1], target_position[1]])
-        else:
-            trajectory_y = Trajectory([self.time, self.time + duration], [self.finger_pos[1], self.finger_pos[1]])
-        if target_position[2] is not None:
-            trajectory_z = Trajectory([self.time, self.time + duration], [self.finger_pos[2], target_position[2]])
-        else:
-            trajectory_z = Trajectory([self.time, self.time + duration], [self.finger_pos[2], self.finger_pos[2]])
+        trajectory = [None, None, None]
+        for i in range(3):
+            if target_position[i] is None:
+                target_position[i] = self.finger_pos[i]
+            trajectory[i] = Trajectory([self.time, self.time + duration], [self.finger_pos[i], target_position[i]])
 
         while self.time <= init_time + duration:
             quat_error = self.finger_quat.error(desired_quat)
 
             # TODO: The indexes of the actuators are hardcoded right now
             # assuming that 0-6 is the actuator of the given joint
-            self.sim.data.ctrl[0] = self.pd.get_control(trajectory_x.pos(self.time) - self.finger_pos[0], trajectory_x.vel(self.time) - self.finger_vel[0])
-            self.sim.data.ctrl[1] = self.pd.get_control(trajectory_y.pos(self.time) - self.finger_pos[1], trajectory_y.vel(self.time) - self.finger_vel[1])
-            self.sim.data.ctrl[2] = self.pd.get_control(trajectory_z.pos(self.time) - self.finger_pos[2], trajectory_z.vel(self.time) - self.finger_vel[2])
-            self.sim.data.ctrl[3] = self.pd_rot[0].get_control(quat_error[0], - self.finger_vel[3])
-            self.sim.data.ctrl[4] = self.pd_rot[1].get_control(quat_error[1], - self.finger_vel[4])
-            self.sim.data.ctrl[5] = self.pd_rot[2].get_control(quat_error[2], - self.finger_vel[5])
+            for i in range(3):
+                self.sim.data.ctrl[i] = self.pd.get_control(trajectory[i].pos(self.time) - self.finger_pos[i], trajectory[i].vel(self.time) - self.finger_vel[i])
+                self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
+
+            if stop_external_forces and (self.finger_external_force_norm > 0.1):
+                break
+
+        # If external force is present move away
+        if stop_external_forces and (self.finger_external_force_norm > 0.1):
+            self.sim_step()
+            # Create a new trajectory for moving the finger slightly in the
+            # opposite direction to reduce the external forces
+            new_trajectory = [None, None, None]
+            duration = 0.2
+            for i in range(3):
+                direction = (target_position - self.finger_pos) / np.linalg.norm(target_position - self.finger_pos)
+                print('direction: ', direction)
+                new_target = self.finger_pos - 0.01 * direction  # move 1 cm backwards from your initial direction
+                new_trajectory[i] = Trajectory([self.time, self.time + duration], [self.finger_pos[i], new_target[i]], [self.finger_vel[i], 0], [self.finger_acc[i], 0])
+
+            # Perform the trajectory
+            init_time = self.time
+            while self.time <= init_time + duration:
+                quat_error = self.finger_quat.error(desired_quat)
+
+                # TODO: The indexes of the actuators are hardcoded right now
+                # assuming that 0-6 is the actuator of the given joint
+                for i in range(3):
+                    self.sim.data.ctrl[i] = self.pd.get_control(new_trajectory[i].pos(self.time) - self.finger_pos[i], new_trajectory[i].vel(self.time) - self.finger_vel[i])
+                    self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
+
+                self.sim_step()
+
+            return False
+
+        return True
 
     def sim_step(self):
         """
@@ -316,6 +348,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_quat.normalize()
 
         self.finger_vel = self.sim.data.get_joint_qvel('finger')
+        index = self.sim.model.get_joint_qvel_addr('finger')
+        self.finger_acc = np.array([self.sim.data.qacc[index[0]], self.sim.data.qacc[index[0] + 1], self.sim.data.qacc[index[0] + 2]])
+
+        finger_geom_id = get_geom_id(self.sim.model, "finger")
+        geom2body = self.sim.model.geom_bodyid[finger_geom_id]
+        self.finger_external_force_norm = np.linalg.norm(self.sim.data.cfrc_ext[geom2body])
 
         # Calculate the object's length, width and height w.r.t. the surface by
         # using the orientation of the object. The height is the dimension
