@@ -266,30 +266,20 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         init_time = self.time
         desired_quat = Quaternion()
 
-        if target_position[0] is not None:
-            trajectory_x = Trajectory([self.time, self.time + duration], [self.finger_pos[0], target_position[0]])
-        else:
-            trajectory_x = Trajectory([self.time, self.time + duration], [self.finger_pos[0], self.finger_pos[0]])
-        if target_position[1] is not None:
-            trajectory_y = Trajectory([self.time, self.time + duration], [self.finger_pos[1], target_position[1]])
-        else:
-            trajectory_y = Trajectory([self.time, self.time + duration], [self.finger_pos[1], self.finger_pos[1]])
-        if target_position[2] is not None:
-            trajectory_z = Trajectory([self.time, self.time + duration], [self.finger_pos[2], target_position[2]])
-        else:
-            trajectory_z = Trajectory([self.time, self.time + duration], [self.finger_pos[2], self.finger_pos[2]])
+        trajectory = [None, None, None]
+        for i in range(3):
+            if target_position[i] is None:
+                target_position[i] = self.finger_pos[i]
+            trajectory[i] = Trajectory([self.time, self.time + duration], [self.finger_pos[i], target_position[i]])
 
         while self.time <= init_time + duration:
             quat_error = self.finger_quat.error(desired_quat)
 
             # TODO: The indexes of the actuators are hardcoded right now
             # assuming that 0-6 is the actuator of the given joint
-            self.sim.data.ctrl[0] = self.pd.get_control(trajectory_x.pos(self.time) - self.finger_pos[0], trajectory_x.vel(self.time) - self.finger_vel[0])
-            self.sim.data.ctrl[1] = self.pd.get_control(trajectory_y.pos(self.time) - self.finger_pos[1], trajectory_y.vel(self.time) - self.finger_vel[1])
-            self.sim.data.ctrl[2] = self.pd.get_control(trajectory_z.pos(self.time) - self.finger_pos[2], trajectory_z.vel(self.time) - self.finger_vel[2])
-            self.sim.data.ctrl[3] = self.pd_rot[0].get_control(quat_error[0], - self.finger_vel[3])
-            self.sim.data.ctrl[4] = self.pd_rot[1].get_control(quat_error[1], - self.finger_vel[4])
-            self.sim.data.ctrl[5] = self.pd_rot[2].get_control(quat_error[2], - self.finger_vel[5])
+            for i in range(3):
+                self.sim.data.ctrl[i] = self.pd.get_control(trajectory[i].pos(self.time) - self.finger_pos[i], trajectory[i].vel(self.time) - self.finger_vel[i])
+                self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
 
