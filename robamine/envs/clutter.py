@@ -313,6 +313,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Penalize the agent as it gets the target object closer to the edge
         max_cost = -5
         reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
+        if observation[-1] < 0:
+            reward = -10
 
         # For each object push
         reward += -1
@@ -363,7 +365,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
-            self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 
@@ -438,9 +439,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
 
     def generate_random_scene(self, finger_height_range=[.005, .005],
-                                    target_probability_box=.5,
+                                    target_probability_box=1,
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
-                                    obstacle_probability_box=.6,
+                                    obstacle_probability_box=1,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
                                     nr_of_obstacles = [5, 25],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
