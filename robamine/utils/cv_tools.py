@@ -95,7 +95,7 @@ def rgb2bgr(rgb):
     return np.flip(bgr, axis=0)
 
 
-def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.005, plot=False):
+def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=False):
     """
     see kiatos19
     :param point_cloud: point cloud aligned with the target object
@@ -161,7 +161,7 @@ def extract_features(height_map, dim, plot=False):
     cy = int(h/2)
 
     # Target features
-    m_per_pixel = 240 #ToDo:
+    m_per_pixel = 480 #ToDo:
     side = m_per_pixel * bbox
 
     cx1 = cx - int(side[0])
