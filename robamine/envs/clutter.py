@@ -15,6 +15,7 @@ import os
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
 from robamine.utils.orientation import Quaternion
+from robamine.utils.math import sigmoid
 import robamine.utils.cv_tools as cv_tools
 import math
 
@@ -96,10 +97,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Parameters, updated once during reset of the model
         self.surface_normal = np.array([0, 0, 1])
+        self.surface_size = np.zeros(2)  # half size of the table in x, y
         self.finger_length = 0.0
         self.finger_height = 0.0
         self.target_size = np.zeros(3)
         self.table_size = np.zeros(2)
+
+        self.no_of_prev_points_around = 0
         # State variables. Updated after each call in self.sim_step()
         self.time = 0.0
         self.finger_pos = np.zeros(3)
@@ -161,6 +165,24 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_size = 2 * get_geom_size(self.sim.model, 'target')
         self.table_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
 
+        features, point_cloud, dim = self.get_obs()
+        gap = 0.03
+        points_around = []
+        bbox_limit = 0.01
+        for p in point_cloud:
+            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
+                    dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
+                    -dim[1]  < p[1] < dim[1]:
+                points_around.append(p)
+            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
+                    dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
+                    -dim[0]  < p[0] < dim[0]:
+                points_around.append(p)
+
+        # cv_tools.plot_point_cloud(point_cloud)
+        # cv_tools.plot_point_cloud(points_around)
+
+        self.no_of_prev_points_around = len(points_around)
         return self.get_obs()
 
     def get_obs(self):
@@ -193,25 +215,36 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Keep the points above the table
         points_above_table = []
         for p in point_cloud:
-            if p[2] > 0:
+            if p[2] > 0.0:
                 points_above_table.append(p)
 
         dim = get_geom_size(self.sim.model, 'target')
+        dim = get_geom_size(self.sim.model, 'target')
+        geom_id = get_geom_id(self.sim.model, "target")
+        if self.sim.model.geom_type[geom_id] == 5:
+            bbox = [dim[0], dim[0], dim[1]]
+        else:
+            bbox = dim
+
         points_above_table = np.asarray(points_above_table)
         height_map = cv_tools.generate_height_map(points_above_table)
         features = cv_tools.extract_features(height_map, dim)
 
-        # add the position of the target to the feature
-        features.append(target_pose[0, 3])
-        features.append(target_pose[1, 3])
+        # Add the distance of the object from the edge
+        distances = [self.surface_size[0] - self.target_pos[0], \
+                     self.surface_size[0] + self.target_pos[0], \
+                     self.surface_size[1] - self.target_pos[1], \
+                     self.surface_size[1] + self.target_pos[1]]
+        min_distance_from_edge = min(distances)
+        features.append(min_distance_from_edge)
 
-        return features
+        return features, points_above_table, bbox
 
     def step(self, action):
         done = False
-        obs = self.get_obs()
         time = self.do_simulation(action)
-        reward = self.get_reward(obs)
+        obs, pcd, dim = self.get_obs()
+        reward = self.get_reward(obs, pcd, dim)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {}
@@ -248,14 +281,55 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
-    def get_reward(self, observation):
+    def get_reward(self, observation, point_cloud, dim):
+        reward = 0.0
+
+        # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
             self.push_stopped_ext_forces = False
             return -10
 
-        return 0.0
+        # for each push that frees the space around the target
+        points_around = []
+        gap = 0.03
+        bbox_limit = 0.01
+        for p in point_cloud:
+            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
+             dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
+             -dim[1]  < p[1] < dim[1]:
+                points_around.append(p)
+            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
+            dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
+            -dim[0]  < p[0] < dim[0]:
+                points_around.append(p)
+
+        reward = (self.no_of_prev_points_around - len(points_around)) / max(self.no_of_prev_points_around, len(points_around))
+        reward *= 10.0
+        self.no_of_prev_points_around = len(points_around)
+
+        # cv_tools.plot_point_cloud(point_cloud)
+        # cv_tools.plot_point_cloud(points_around)
+
+        # Penalize the agent as it gets the target object closer to the edge
+        max_cost = -5
+        reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
+        if observation[-1] < 0:
+            reward = -10
+
+        # For each object push
+        reward += -1
+        return reward
 
     def terminal_state(self, observation):
+
+        # If the object has fallen from the table
+        if observation[-1] < 0:
+            return True
+
+        # If the object is free from obstacles around (no points around)
+        if self.no_of_prev_points_around == 0:
+            return True
+
         return False
 
     def move_joint_to_target(self, joint_name, target_position, duration = 1, stop_external_forces=False):
@@ -306,7 +380,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             duration = 0.2
             for i in range(3):
                 direction = (target_position - self.finger_pos) / np.linalg.norm(target_position - self.finger_pos)
-                print('direction: ', direction)
                 new_target = self.finger_pos - 0.01 * direction  # move 1 cm backwards from your initial direction
                 new_trajectory[i] = Trajectory([self.time, self.time + duration], [self.finger_pos[i], new_target[i]], [self.finger_vel[i], 0], [self.finger_acc[i], 0])
 
@@ -366,17 +439,26 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
 
     def generate_random_scene(self, finger_height_range=[.005, .005],
-                                    target_probability_box=.5,
+                                    target_probability_box=1,
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
-                                    obstacle_probability_box=.6,
+                                    obstacle_probability_box=1,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [5, 25]):
+                                    nr_of_obstacles = [5, 25],
+                                    surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
         finger_height = self.rng.uniform(finger_height_range[0], finger_height_range[1])
         self.sim.model.geom_size[geom_id][0] = finger_height
 
         random_qpos = self.init_qpos.copy()
+
+        # Randomize surface size
+        self.surface_size[0] = self.rng.uniform(surface_length_range[0], surface_length_range[1])
+        self.surface_size[1] = self.rng.uniform(surface_width_range[0], surface_width_range[1])
+        geom_id = get_geom_id(self.sim.model, "table")
+        self.sim.model.geom_size[geom_id][0] = self.surface_size[0]
+        self.sim.model.geom_size[geom_id][0] = self.surface_size[1]
+
 
         # Randomize target object
         geom_id = get_geom_id(self.sim.model, "target")
@@ -518,6 +600,3 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             raise RuntimeError("Object is not neither a box or a cylinder")
 
         return np.array([length, width, height])
-
-
-
