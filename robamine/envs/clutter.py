@@ -76,12 +76,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([0, 0]),
-                                       high=np.array([2 * math.pi, 1]),
+        self.action_space = spaces.Box(low=np.array([- math.pi, 0]),
+                                       high=np.array([math.pi, 1]),
                                        dtype=np.float32)
 
-        self.observation_space = spaces.Box(low=np.array([-1, -1, -1]),
-                                            high=np.array([1, 1, 1]),
+        self.observation_space = spaces.Box(low=np.full((261,), 0),
+                                            high=np.full((261,), 0.3),
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
@@ -183,7 +183,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # cv_tools.plot_point_cloud(points_around)
 
         self.no_of_prev_points_around = len(points_around)
-        return self.get_obs()
+        observation, _, _ = self.get_obs()
+        return observation
 
     def get_obs(self):
         """
@@ -238,7 +239,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         min_distance_from_edge = min(distances)
         features.append(min_distance_from_edge)
 
-        return features, points_above_table, bbox
+        return np.array(features), points_above_table, bbox
 
     def step(self, action):
         done = False
