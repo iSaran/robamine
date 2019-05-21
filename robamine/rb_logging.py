@@ -38,7 +38,7 @@ class Formatter(logging.Formatter):
     warn_fmt = ('[%(name)s][%(levelname)s] %(message)s')
     err_fmt_colored = ('\033[1m\033[91m[%(name)s][%(levelname)s] %(message)s\033[0m')
     warn_fmt_colored = ('\033[1m\033[93m[%(name)s][%(levelname)s] %(message)s\033[0m')
-    dbg_fmt  = "DBG: %(module)s: %(lineno)d: %(msg)s"
+    dbg_fmt  = "[%(name)s][%(levelname)s] %(message)s"
     info_fmt = ('[%(name)s][%(levelname)s] %(message)s')
 
     def __init__(self, colors=False):
