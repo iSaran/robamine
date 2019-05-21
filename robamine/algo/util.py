@@ -66,12 +66,12 @@ def transform_sec_to_timestamp(seconds):
     minutes, seconds = divmod(rem, 60)
     return "{:0>2}h:{:0>2}m:{:05.2f}s".format(int(hours),int(minutes),seconds)
 
-def print_progress(episode, n_episodes, start_time, steps, dt):
+def print_progress(episode, n_episodes, start_time, steps, experience_time):
     percent = (episode + 1) / n_episodes * 100.0
     time_elapsed = transform_sec_to_timestamp(time.time() - start_time)
     estimated_time = transform_sec_to_timestamp((n_episodes - episode + 1) * (time.time() - start_time) / (episode + 1))
-    experience_time = transform_sec_to_timestamp(steps * dt)
-    logger.info('Progress: Episode: %s from %s (%.2f%%). Time elapsed: %s. Estimated time: %s. Experience time: %s', str(episode + 1), str(n_episodes), percent, time_elapsed, estimated_time, experience_time)
+    experience_time = transform_sec_to_timestamp(experience_time)
+    logger.info('Progress: Episode: %s from %s (%.2f%%). Timesteps: %s. Time elapsed: %s. Estimated time: %s. Experience time: %s.', str(episode + 1), str(n_episodes), percent, steps, time_elapsed, estimated_time, experience_time)
     # logger.info('  Experience Time: %s', transform_sec_to_timestamp(step * dt))
 
 class DataStream:
@@ -156,6 +156,7 @@ class OrnsteinUhlenbeckActionNoise:
 class EpisodeStats:
     def __init__(self):
         self.n_episodes = 0
+        self.experience_time = 0
         self.reward = []
         self.q_value = []
 

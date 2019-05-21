@@ -117,6 +117,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_width = 0.0
         self.target_pos = np.zeros(3)
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
+        self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -184,6 +185,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.no_of_prev_points_around = len(points_around)
         observation, _, _ = self.get_obs()
+
+        self.last_timestamp = self.sim.data.time
         return observation
 
     def get_obs(self):
@@ -244,14 +247,15 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def step(self, action):
         done = False
         time = self.do_simulation(action)
+        experience_time = time - self.last_timestamp
+        self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
         if self.terminal_state(obs):
             done = True
-        return obs, reward, done, {}
+        return obs, reward, done, {'experience_time': experience_time}
 
     def do_simulation(self, action):
-        time = self.sim.data.time
 
         if action[1] > 0.5:
             push_target = True
@@ -268,7 +272,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             self.push_stopped_ext_forces = True
 
-        return time
+        return self.sim.data.time
 
     def _move_finger_outside_the_table(self):
         # Move finger outside the table again
