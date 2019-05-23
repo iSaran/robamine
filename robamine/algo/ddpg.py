@@ -40,7 +40,7 @@ import pickle
 import os
 
 from robamine.algo.core import Network, NetworkParams, Agent, AgentParams
-from robamine.algo.util import OrnsteinUhlenbeckActionNoise
+from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise
 import math
 
 import logging
@@ -90,6 +90,7 @@ class DDPGParams(AgentParams):
                  replay_buffer_size = 1e6,
                  batch_size = 64,
                  gamma = 0.99,
+                 exploration_noise = 'OU',
                  exploration_noise_sigma = 0.2,
                  tau = 1e-3,
                  actor = ActorParams(),
@@ -100,6 +101,7 @@ class DDPGParams(AgentParams):
         self.replay_buffer_size = replay_buffer_size
         self.batch_size = batch_size
         self.gamma = gamma
+        self.exploration_noise = exploration_noise
         self.exploration_noise_sigma = exploration_noise_sigma
         self.tau = tau
         self.actor = actor
@@ -641,7 +643,10 @@ class DDPG(Agent):
         # Initialize replay buffer
         self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size)
 
-        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = self.params.exploration_noise_sigma)
+        if params.exploration_noise == 'Normal':
+            self.exploration_noise = NormalNoise(mu=np.zeros(self.action_dim), sigma = self.params.exploration_noise_sigma)
+        elif params.exploration_noise == 'OU':
+            self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = self.params.exploration_noise_sigma)
 
     @classmethod
     def load(cls, file_path):
