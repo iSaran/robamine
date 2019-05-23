@@ -76,8 +76,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([- math.pi, 0]),
-                                       high=np.array([math.pi, 1]),
+        self.action_space = spaces.Box(low=np.array([-1, -1]),
+                                       high=np.array([1, 1]),
                                        dtype=np.float32)
 
         self.observation_space = spaces.Box(low=np.full((261,), 0),
@@ -256,12 +256,23 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         return obs, reward, done, {'experience_time': experience_time}
 
     def do_simulation(self, action):
+        my_action = action.copy()
 
-        if action[1] > 0.5:
+        # Agent gives actions between [-1, 1]. Convert to the action ranges of
+        # the action space of the environment
+        agent_high = 1
+        agent_low = -1
+        env_low = [-math.pi, 0]
+        env_high = [math.pi, 1]
+        for i in range(len(my_action)):
+            my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
+
+        if my_action[1] > 0.5:
             push_target = True
         else:
             push_target = False
-        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+
+        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 
         init_z = 2 * self.target_height + 0.05
         self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
