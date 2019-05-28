@@ -16,17 +16,12 @@ at the end of this README on how to generate the docs locally.
 
 ### Mujoco
 
-In order to work with `mujoco_py` you should have Mujoco version 1.50 with its license in `~/.mujoco` such that the structure of `~/.mujoco` would be:
+In order to work with `mujoco_py` you should have Mujoco version 2.0 with its license in `~/.mujoco` such that the structure of `~/.mujoco` would be:
 
 ```
 .mujoco
  |-- mjkey.txt
- |-- mjpro150
-     |--bin
-     |-- doc
-     |-- include
-     |-- model
-     |-- sample
+ |-- mujoco200
 ```
 
 ### Install a Python Virtual Env
@@ -52,9 +47,8 @@ Check with `nvidia-smi` which nvidia driver is installed (e.g. 384) and replace 
 export PYTHONPATH="$VIRTUAL_ENV/lib"
 
 # For using Mujoco:
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia-384
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mjpro150/bin
-export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL.so
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco200/bin:/usr/lib/nvidia-384
+export LD_PRELOAD=$HOME/.mujoco/mujoco200/bin/libglew.so:/usr/lib/nvidia-384/libGL.so
 ```
 
 **If you do not have Nvidia:**
@@ -64,7 +58,7 @@ export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/nvidia-384/libGL
 export PYTHONPATH="$VIRTUAL_ENV/lib"
 
 # For using Mujoco:
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mjpro150/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco200/bin
 export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so:/usr/lib/x86_64-linux-gnu/libGL.so
 ```
 
