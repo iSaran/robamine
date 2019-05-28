@@ -191,7 +191,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         Read depth and extract height map as observation
         :return:
         """
-
         start = time.time()
 
         self._move_finger_outside_the_table()
@@ -205,9 +204,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         depth = cv_tools.gl2cv(depth, z_near, z_far)
 
         # Generate point cloud
-        camera_intrinsics = [525, 525, 320, 240]
+        fovy = self.sim.model.vis.global_.fovy
         # point_cloud = cv_tools.depth_to_point_cloud(depth, camera_intrinsics)
-        point_cloud = cv_tools.point_cloud_vectorize(depth, camera_intrinsics)
+        point_cloud = cv_tools.depth2pcd(depth, fovy)
 
         # Get target pose and camera pose
         target_pose = get_body_pose(self.sim, 'target')  # g_wo: object w.r.t. world
@@ -221,6 +220,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         z = point_cloud[:, 2]
         ids = np.where((z > 0.0) & (z < 0.4))
         points_above_table = point_cloud[ids]
+        cv_tools.plot_point_cloud(points_above_table)
 
         dim = get_geom_size(self.sim.model, 'target')
         dim = get_geom_size(self.sim.model, 'target')
