@@ -236,7 +236,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         points_above_table = np.asarray(points_above_table)
         height_map = cv_tools.generate_height_map(points_above_table)
-        features = cv_tools.extract_features(height_map, dim)
+        features = cv_tools.extract_features(height_map, bbox, plot=True)
 
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos[0], \
@@ -247,7 +247,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         features.append(min_distance_from_edge)
 
         end = time.time()
-        print("time elapsed:" end - start)
+        print("time elapsed:", end - start)
 
         return np.array(features), points_above_table, bbox
 

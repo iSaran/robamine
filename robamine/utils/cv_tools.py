@@ -203,14 +203,23 @@ def extract_features(height_map, dim, plot=False):
     # Features around target
     # 1. Define the up left corners for each 32x32 region around the target
     up_left_corners = []
-    up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
-    up_left_corners.append((int(cx + side[0]), int(cy - 16)))  # f_right
-    up_left_corners.append((int(cx - 16), int(cy + side[1])))  # f_down
-    up_left_corners.append((int(cx - side[0] - 32), int(cy - 16)))  # f_left
+    # up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
+    # up_left_corners.append((int(cx + side[0]), int(cy - 16)))  # f_right
+    # up_left_corners.append((int(cx - 16), int(cy + side[1])))  # f_down
+    # up_left_corners.append((int(cx - side[0] - 32), int(cy - 16)))  # f_left
 
-    for corner in up_left_corners:
-        for x in range(8):
-            for y in range(8):
+    up_left_corners.append((int(cx - 32), int(cy - side[1] - 32)))  # f_up
+    up_left_corners.append((int(cx + side[0]), int(cy - 32)))  # f_right
+    up_left_corners.append((int(cx - 32), int(cy + side[1])))  # f_down
+    up_left_corners.append((int(cx - side[0] - 32), int(cy - 32)))  # f_left
+
+    x_limit = [16, 8, 16, 8]
+    y_limit = [8, 16, 8, 16]
+
+    for i in range(len(up_left_corners)):
+        corner = up_left_corners[i]
+        for x in range(x_limit[i]):
+            for y in range(y_limit[i]):
                 c = (corner[0] + x * 4, corner[1] + y * 4)
                 cells.append([c, (c[0]+4, c[1]+4)])
 
@@ -232,9 +241,9 @@ def extract_features(height_map, dim, plot=False):
         if plot:
             rgb = draw_cell(cell, rgb)
 
-    if plot:
-        cv2.imshow('rgb', rgb)
-        cv2.waitKey()
+        if plot:
+            cv2.imshow('rgb', rgb)
+            cv2.waitKey()
 
     return features
 
