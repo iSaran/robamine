@@ -2,6 +2,7 @@
 import numpy as np
 import cv2
 import open3d
+import math
 
 '''
 Computer Vision Utils
@@ -34,25 +35,25 @@ def depth_to_point_cloud(depth, camera_intrinsics):
 
     return np.asarray(point_cloud)
 
-def point_cloud_vectorize(depth, camera_intrinsics):
-    fx = camera_intrinsics[0]
-    fy = camera_intrinsics[1]
-    cx = camera_intrinsics[2]
-    cy = camera_intrinsics[3]
+def depth2pcd(depth, fovy):
+    height, width = depth.shape
+
+    # Camera intrinsics
+    f = 0.5 * height / math.tan(fovy * math.pi / 360)
+    cx = width / 2
+    cy = height / 2
 
     rows, cols = depth.shape
     c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
     valid = (depth > 0)
 
     z = np.where(valid, -depth, 0)
-    x = np.where(valid, z * (c - cx) / fx, 0)
-    y = np.where(valid, z * (r - cy) / fy, 0)
+    x = np.where(valid, z * (c - cx) / f, 0)
+    y = np.where(valid, z * (r - cy) / f, 0)
     pcd = np.dstack((x, y, z))
 
     return pcd.reshape(-1, 3)
     return pcd
-
-
 
 def transform_point_cloud(point_cloud, affine_transformation):
     """
@@ -208,20 +209,26 @@ def extract_features(height_map, dim, plot=False):
     # up_left_corners.append((int(cx - 16), int(cy + side[1])))  # f_down
     # up_left_corners.append((int(cx - side[0] - 32), int(cy - 16)))  # f_left
 
-    up_left_corners.append((int(cx - 32), int(cy - side[1] - 32)))  # f_up
-    up_left_corners.append((int(cx + side[0]), int(cy - 32)))  # f_right
-    up_left_corners.append((int(cx - 32), int(cy + side[1])))  # f_down
-    up_left_corners.append((int(cx - side[0] - 32), int(cy - 32)))  # f_left
+    # up_left_corners.append((int(cx - 32), int(cy - side[1] - 32)))  # f_up
+    # up_left_corners.append((int(cx + side[0]), int(cy - 32)))  # f_right
+    # up_left_corners.append((int(cx - 32), int(cy + side[1])))  # f_down
+    # up_left_corners.append((int(cx - side[0] - 32), int(cy - 32)))  # f_left
+    #
+    # x_limit = [16, 8, 16, 8]
+    # y_limit = [8, 16, 8, 16]
+    #
+    # for i in range(len(up_left_corners)):
+    #     corner = up_left_corners[i]
+    #     for x in range(x_limit[i]):
+    #         for y in range(y_limit[i]):
+    #             c = (corner[0] + x * 4, corner[1] + y * 4)
+    #             cells.append([c, (c[0]+4, c[1]+4)])
 
-    x_limit = [16, 8, 16, 8]
-    y_limit = [8, 16, 8, 16]
-
-    for i in range(len(up_left_corners)):
-        corner = up_left_corners[i]
-        for x in range(x_limit[i]):
-            for y in range(y_limit[i]):
-                c = (corner[0] + x * 4, corner[1] + y * 4)
-                cells.append([c, (c[0]+4, c[1]+4)])
+    corner = (int(cx - 32), int(cy - 32))
+    for x in range(16):
+        for y in range(16):
+            c = (corner[0] + x * 4, corner[1] + y * 4)
+            cells.append([c, (c[0]+4, c[1]+4)])
 
     features = []
     for i in range(len(cells)):
