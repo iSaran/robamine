@@ -152,7 +152,6 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
         cv_height = np.zeros((height, width), dtype=np.float32)
         min_height = np.min(height_grid)
         max_height = np.max(height_grid)
-        print(max_height)
         for i in range(0, width):
             for j in range(0, height):
                 cv_height[i][j] = (height_grid[i][j] - min_height) / (max_height - min_height)
