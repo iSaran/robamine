@@ -34,6 +34,25 @@ def depth_to_point_cloud(depth, camera_intrinsics):
 
     return np.asarray(point_cloud)
 
+def point_cloud_vectorize(depth, camera_intrinsics):
+    fx = camera_intrinsics[0]
+    fy = camera_intrinsics[1]
+    cx = camera_intrinsics[2]
+    cy = camera_intrinsics[3]
+
+    rows, cols = depth.shape
+    c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
+    valid = (depth > 0)
+
+    z = np.where(valid, -depth, 0)
+    x = np.where(valid, z * (c - cx) / fx, 0)
+    y = np.where(valid, z * (r - cy) / fy, 0)
+    pcd = np.dstack((x, y, z))
+
+    return pcd.reshape(-1, 3)
+    return pcd
+
+
 
 def transform_point_cloud(point_cloud, affine_transformation):
     """
@@ -49,6 +68,9 @@ def transform_point_cloud(point_cloud, affine_transformation):
     # Transform cloud
     for i in range(point_cloud.shape[0]):
         point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
+
+    # point_cloud = np.matmul(affine_transformation, point_cloud.T)
+    # point_cloud = point_cloud.T
 
     # Convert homogeneous to cartesian
     w = point_cloud[:, 3]
@@ -68,11 +90,15 @@ def gl2cv(depth, z_near, z_far):
     h, w = depth.shape
     linear_depth = np.zeros((h, w), dtype=np.float32)
 
-    for x in range(0, w):
-        for y in range(0, h):
-            if depth[y][x] != 1:
-                linear_depth[y][x] = 2 * z_far * z_near / (z_far + z_near - (z_far - z_near) * (2 * depth[y][x] - 1))
-
+    # for x in range(0, w):
+    #     for y in range(0, h):
+    #         if depth[y][x] != 1:
+    #             linear_depth[y][x] = 2 * z_far * z_near / (z_far + z_near - (z_far - z_near) * (2 * depth[y][x] - 1))
+    #
+    # linear_depth = np.flip(linear_depth, axis=1)
+    # return np.flip(linear_depth, axis=0)
+    valid = np.where(depth!=1.0)
+    linear_depth[valid] = 2 * z_far * z_near / (z_far + z_near - (z_far - z_near) * (2 * depth[valid] - 1))
     linear_depth = np.flip(linear_depth, axis=1)
     return np.flip(linear_depth, axis=0)
 
@@ -125,6 +151,7 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
         cv_height = np.zeros((height, width), dtype=np.float32)
         min_height = np.min(height_grid)
         max_height = np.max(height_grid)
+        print(max_height)
         for i in range(0, width):
             for j in range(0, height):
                 cv_height[i][j] = (height_grid[i][j] - min_height) / (max_height - min_height)
@@ -176,14 +203,23 @@ def extract_features(height_map, dim, plot=False):
     # Features around target
     # 1. Define the up left corners for each 32x32 region around the target
     up_left_corners = []
-    up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
-    up_left_corners.append((int(cx + side[0]), int(cy - 16)))  # f_right
-    up_left_corners.append((int(cx - 16), int(cy + side[1])))  # f_down
-    up_left_corners.append((int(cx - side[0] - 32), int(cy - 16)))  # f_left
+    # up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
+    # up_left_corners.append((int(cx + side[0]), int(cy - 16)))  # f_right
+    # up_left_corners.append((int(cx - 16), int(cy + side[1])))  # f_down
+    # up_left_corners.append((int(cx - side[0] - 32), int(cy - 16)))  # f_left
 
-    for corner in up_left_corners:
-        for x in range(8):
-            for y in range(8):
+    up_left_corners.append((int(cx - 32), int(cy - side[1] - 32)))  # f_up
+    up_left_corners.append((int(cx + side[0]), int(cy - 32)))  # f_right
+    up_left_corners.append((int(cx - 32), int(cy + side[1])))  # f_down
+    up_left_corners.append((int(cx - side[0] - 32), int(cy - 32)))  # f_left
+
+    x_limit = [16, 8, 16, 8]
+    y_limit = [8, 16, 8, 16]
+
+    for i in range(len(up_left_corners)):
+        corner = up_left_corners[i]
+        for x in range(x_limit[i]):
+            for y in range(y_limit[i]):
                 c = (corner[0] + x * 4, corner[1] + y * 4)
                 cells.append([c, (c[0]+4, c[1]+4)])
 
@@ -205,9 +241,9 @@ def extract_features(height_map, dim, plot=False):
         if plot:
             rgb = draw_cell(cell, rgb)
 
-    if plot:
-        cv2.imshow('rgb', rgb)
-        cv2.waitKey()
+        if plot:
+            cv2.imshow('rgb', rgb)
+            cv2.waitKey()
 
     return features
 

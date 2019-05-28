@@ -11,6 +11,7 @@ from mujoco_py import load_model_from_path, MjSim, MjViewer, MjRenderContextOffs
 from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
+import time
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
@@ -194,6 +195,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         Read depth and extract height map as observation
         :return:
         """
+
+        start = time.time()
+
         self._move_finger_outside_the_table()
 
         # Get the depth image
@@ -206,7 +210,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Generate point cloud
         camera_intrinsics = [525, 525, 320, 240]
-        point_cloud = cv_tools.depth_to_point_cloud(depth, camera_intrinsics)
+        # point_cloud = cv_tools.depth_to_point_cloud(depth, camera_intrinsics)
+        point_cloud = cv_tools.point_cloud_vectorize(depth, camera_intrinsics)
 
         # Get target pose and camera pose
         target_pose = get_body_pose(self.sim, 'target')  # g_wo: object w.r.t. world
@@ -217,10 +222,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         point_cloud = cv_tools.transform_point_cloud(point_cloud, camera_to_target)
 
         # Keep the points above the table
-        points_above_table = []
-        for p in point_cloud:
-            if p[2] > 0.0:
-                points_above_table.append(p)
+        z = point_cloud[:, 2]
+        ids = np.where((z > 0.0) & (z < 0.4))
+        points_above_table = point_cloud[ids]
 
         dim = get_geom_size(self.sim.model, 'target')
         dim = get_geom_size(self.sim.model, 'target')
@@ -232,7 +236,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         points_above_table = np.asarray(points_above_table)
         height_map = cv_tools.generate_height_map(points_above_table)
-        features = cv_tools.extract_features(height_map, dim)
+        features = cv_tools.extract_features(height_map, bbox, plot=True)
 
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos[0], \
@@ -241,6 +245,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[1] + self.target_pos[1]]
         min_distance_from_edge = min(distances)
         features.append(min_distance_from_edge)
+
+        end = time.time()
+        print("time elapsed:", end - start)
 
         return np.array(features), points_above_table, bbox
 
