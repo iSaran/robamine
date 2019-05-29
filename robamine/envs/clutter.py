@@ -381,6 +381,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
+            self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 
@@ -411,6 +412,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                     self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
                 self.sim_step()
+                self.render()
 
             return False
 
@@ -459,7 +461,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
                                     obstacle_probability_box=1,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [5, 25],
+                                    nr_of_obstacles = [0, 0],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
