@@ -67,11 +67,11 @@ def transform_point_cloud(point_cloud, affine_transformation):
     point_cloud = np.concatenate((point_cloud, ones), axis=1)
 
     # Transform cloud
-    for i in range(point_cloud.shape[0]):
-        point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
+    # for i in range(point_cloud.shape[0]):
+    #     point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
 
-    # point_cloud = np.matmul(affine_transformation, point_cloud.T)
-    # point_cloud = point_cloud.T
+    point_cloud = np.matmul(affine_transformation, point_cloud.T)
+    point_cloud = point_cloud.T
 
     # Convert homogeneous to cartesian
     w = point_cloud[:, 3]
