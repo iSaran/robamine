@@ -616,3 +616,51 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             raise RuntimeError("Object is not neither a box or a cylinder")
 
         return np.array([length, width, height])
+
+class ClutterPushOffTable(Clutter):
+    def __init__(self):
+        super().__init__()
+        self.observation_space = spaces.Box(low=np.full((3,), 0),
+                                            high=np.full((3,), 0.5),
+                                            dtype=np.float32)
+
+    def reset_model(self):
+        for _ in range(600):
+            self.sim_step()
+        self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
+        self.finger_height = get_geom_size(self.sim.model, 'finger')[0]  # same as length, its a sphere
+        self.target_size = 2 * get_geom_size(self.sim.model, 'target')
+        self.table_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
+        self.surface_size = [0.25, 0.25]
+        observation = self.get_obs()
+        self.last_timestamp = self.sim.data.time
+        self.last_obs = 0.0;
+        return observation
+
+    def get_obs(self):
+        observation = np.array(self.target_pos);
+        return observation
+
+    def get_reward(self, observation):
+        max_cost = 10
+        reward = -sigmoid(observation[1] - self.last_obs, a=2*max_cost, b=-20, c=0, d=-10)
+        self.last_obs = observation[1];
+        return reward
+
+    def terminal_state(self, observation):
+        # If the object has fallen from the table
+        if np.linalg.norm(observation) > 1.1 * max(self.surface_size):
+            return True
+        return False
+
+    def step(self, action):
+        done = False
+        time = self.do_simulation(action)
+        experience_time = time - self.last_timestamp
+        self.last_timestamp = time
+        obs = self.get_obs()
+        reward = self.get_reward(obs)
+        if self.terminal_state(obs):
+            done = True
+        return obs, reward, done, {'experience_time': experience_time}
+
