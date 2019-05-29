@@ -76,8 +76,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([- math.pi, 0]),
-                                       high=np.array([math.pi, 1]),
+        self.action_space = spaces.Box(low=np.array([-1, -1]),
+                                       high=np.array([1, 1]),
                                        dtype=np.float32)
 
         self.observation_space = spaces.Box(low=np.full((261,), 0),
@@ -262,8 +262,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # the action space of the environment
         agent_high = 1
         agent_low = -1
+        env_low = [-math.pi, 0]
+        env_high = [math.pi, 1]
         for i in range(len(my_action)):
-            my_action[i] = (((my_action[i] - agent_low) * (self.action_space.high[i] - self.action_space.low[i])) / (agent_high - agent_low)) + self.action_space.low[i]
+            my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
 
         if my_action[1] > 0.5:
             push_target = True
