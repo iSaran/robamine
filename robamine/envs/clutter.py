@@ -106,6 +106,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.no_of_prev_points_around = 0
         self.no_of_prev_free_cells = 0
+        self.no_of_occupied_cells = 0
 
         # State variables. Updated after each call in self.sim_step()
         self.time = 0.0
@@ -171,15 +172,15 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         obs, point_cloud, dim = self.get_obs()
 
-        up = obs[4:]
-        free_space = []
-        for i in range(1,7):
-            for j in range(4,8):
-                id = i * 8 + j
-                free_space.append(up[id])
-
-        free_cells = [i for i in free_space if i < 0.01]
-        self.no_of_prev_free_cells = len(free_cells)
+        # up = obs[4:]
+        # free_space = []
+        # for i in range(1,7):
+        #     for j in range(4,8):
+        #         id = i * 8 + j
+        #         free_space.append(up[id])
+        #
+        # free_cells = [i for i in free_space if i < 0.01]
+        # self.no_of_prev_free_cells = len(free_cells)
 
         # gap = 0.03
         # points_around = []
@@ -221,9 +222,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         point_cloud = cv_tools.depth2pcd(depth, fovy)
 
         # Get target pose and camera pose
-        target_pose = get_body_pose(self.sim, 'target')  # g_wo: object w.r.t. world
+        # target_pose = get_body_pose(self.sim, 'target')  # g_wo: object w.r.t. world
+        table_pose = get_body_pose(self.sim, 'table')
         camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
-        camera_to_target = np.matmul(np.linalg.inv(target_pose), camera_pose)  # g_oc = inv(g_wo) * g_wc
+        camera_to_target = np.matmul(np.linalg.inv(table_pose), camera_pose)  # g_oc = inv(g_wo) * g_wc
 
         # Transform point cloud w.r.t. to target
         point_cloud = cv_tools.transform_point_cloud(point_cloud, camera_to_target)
@@ -243,7 +245,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         points_above_table = np.asarray(points_above_table)
         height_map = cv_tools.generate_height_map(points_above_table)
-        features = cv_tools.extract_features(height_map, bbox, plot=False)
+        features = cv_tools.extract_features(height_map, bbox, plot=True)
 
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos[0], \
@@ -262,7 +264,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
-        # print('reward', reward)
+        print('reward', reward)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time}
@@ -318,21 +320,37 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             return -10
 
 
-        up = observation[4:]
+        # up = observation[4:]
+        # free_space = []
+        # for i in range(1,7):
+        #     for j in range(4,8):
+        #         id = i * 8 + j
+        #         free_space.append(up[id])
+
+
         free_space = []
-        for i in range(1,7):
-            for j in range(4,8):
-                id = i * 8 + j
-                free_space.append(up[id])
+        for i in range(16,20):
+            for j in range(0,4):
+                id = i * 20 + j
+                free_space.append(observation[id])
 
-        free_cells = [i for i in free_space if i < 0.01]
+        free_cells = [i for i in free_space if i > 0.05]
 
-        reward = (len(free_cells) - self.no_of_prev_free_cells) / max(self.no_of_prev_free_cells, len(free_cells), 1)
-        reward *= 10.0
-        self.no_of_prev_free_cells = len(free_cells)
+        self.no_of_occupied_cells = len(free_cells)
 
-        if self.no_of_prev_free_cells == len(free_cells):
-            reward += -5.0
+        print('number of occupied cells:', self.no_of_occupied_cells)
+
+        if self.no_of_occupied_cells > 1:
+            reward += 1
+        else:
+            reward -= 1
+
+        # reward = (len(free_cells) - self.no_of_prev_free_cells) / max(self.no_of_prev_free_cells, len(free_cells), 1)
+        # reward *= 10.0
+        # self.no_of_prev_free_cells = len(free_cells)
+        #
+        # if self.no_of_prev_free_cells == len(free_cells):
+        #     reward += -5.0
 
 
         # for each push that frees the space around the target
@@ -357,13 +375,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # cv_tools.plot_point_cloud(points_around)
 
         # Penalize the agent as it gets the target object closer to the edge
-        max_cost = -5
-        reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
-        if observation[-1] < 0:
-            reward = -10
+        # max_cost = -5
+        # reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
+        # if observation[-1] < 0:
+        #     reward = -10
 
         # For each object push
-        reward += -1
+        # reward += -1
         return reward
 
     def terminal_state(self, observation):
@@ -375,7 +393,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # If the object is free from obstacles around (no points around)
         # if self.no_of_prev_points_around == 0:
         #     return True
-        if self.no_of_prev_free_cells == 24:
+        if self.no_of_occupied_cells > 1:
             return True
 
         return False
@@ -413,7 +431,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
-            # self.render()
+            self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 
@@ -444,7 +462,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                     self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
                 self.sim_step()
-                # self.render()
+                self.render()
 
             return False
 
@@ -493,7 +511,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
                                     obstacle_probability_box=1,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [5, 10],
+                                    nr_of_obstacles = [0, 0],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")

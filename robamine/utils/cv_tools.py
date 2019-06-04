@@ -195,25 +195,24 @@ def extract_features(height_map, dim, plot=False):
     cx2 = cx + int(side[0])
     cy1 = cy - int(side[1])
     cy2 = cy + int(side[1])
-    cells.append([(cx1, cy1), (cx, cy)])
-    cells.append([(cx, cy1), (cx2, cy)])
-    cells.append([(cx1, cy), (cx, cy2)])
-    cells.append([(cx, cy), (cx2, cy2)])
+    # cells.append([(cx1, cy1), (cx, cy)])
+    # cells.append([(cx, cy1), (cx2, cy)])
+    # cells.append([(cx1, cy), (cx, cy2)])
+    # cells.append([(cx, cy), (cx2, cy2)])
 
     # Features around target
     # 1. Define the up left corners for each 32x32 region around the target
-    up_left_corners = []
-    up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
+    # up_left_corners = []
+    # up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
     # up_left_corners.append((int(cx + side[0]), int(cy - 16)))  # f_right
     # up_left_corners.append((int(cx - 16), int(cy + side[1])))  # f_down
     # up_left_corners.append((int(cx - side[0] - 32), int(cy - 16)))  # f_left
-
-    for i in range(len(up_left_corners)):
-        corner = up_left_corners[i]
-        for x in range(8):
-            for y in range(8):
-                c = (corner[0] + x * 4, corner[1] + y * 4)
-                cells.append([c, (c[0]+4, c[1]+4)])
+    # for i in range(len(up_left_corners)):
+    #     corner = up_left_corners[i]
+    #     for x in range(8):
+    #         for y in range(8):
+    #             c = (corner[0] + x * 4, corner[1] + y * 4)
+    #             cells.append([c, (c[0]+4, c[1]+4)])
 
     # up_left_corners.append((int(cx - 32), int(cy - side[1] - 32)))  # f_up
     # up_left_corners.append((int(cx + side[0]), int(cy - 32)))  # f_right
@@ -231,11 +230,17 @@ def extract_features(height_map, dim, plot=False):
     #             cells.append([c, (c[0]+4, c[1]+4)])
 
 
-    # corner = (int(cx - 32), int(cy - 32))
-    # for x in range(16):
-    #     for y in range(16):
-    #         c = (corner[0] + x * 4, corner[1] + y * 4)
-    #         cells.append([c, (c[0]+4, c[1]+4)])
+    corner = (int(cx - 40), int(cy - 40))
+    for x in range(20):
+        for y in range(20):
+            c = (corner[0] + x * 4, corner[1] + y * 4)
+            cells.append([c, (c[0]+4, c[1]+4)])
+
+    # free_space = []
+    # for i in range(16,20):
+    #     for j in range(0,4):
+    #         id = i * 16 + j
+    #         free_space.append(observation[id])
 
     features = []
     for i in range(len(cells)):
