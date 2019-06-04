@@ -18,6 +18,7 @@ from robamine.utils.orientation import Quaternion
 from robamine.utils.math import sigmoid
 import robamine.utils.cv_tools as cv_tools
 import math
+import time
 
 from robamine.utils.orientation import rot2quat
 
@@ -30,7 +31,7 @@ class Push:
     of instead of using 4 discrete directions, now we have a continuous angle
     (direction_theta) from which we calculate the direction.
     """
-    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, object_length=0.05, object_width = 0.05, finger_size = 0.02):
+    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.1, direction_theta = 0.0, target = True, object_height = 0.06, object_length=0.05, object_width = 0.05, finger_size = 0.02):
         self.distance = distance
         self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
 
@@ -80,8 +81,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                        high=np.array([1, 1]),
                                        dtype=np.float32)
 
-        self.observation_space = spaces.Box(low=np.full((261,), 0),
-                                            high=np.full((261,), 0.3),
+        self.observation_space = spaces.Box(low=np.full((69,), 0),
+                                            high=np.full((69,), 0.3),
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
@@ -104,6 +105,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.table_size = np.zeros(2)
 
         self.no_of_prev_points_around = 0
+        self.no_of_prev_free_cells = 0
+
         # State variables. Updated after each call in self.sim_step()
         self.time = 0.0
         self.finger_pos = np.zeros(3)
@@ -166,24 +169,33 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_size = 2 * get_geom_size(self.sim.model, 'target')
         self.table_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
 
-        features, point_cloud, dim = self.get_obs()
-        gap = 0.03
-        points_around = []
-        bbox_limit = 0.01
-        for p in point_cloud:
-            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
-                    dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
-                    -dim[1]  < p[1] < dim[1]:
-                points_around.append(p)
-            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
-                    dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
-                    -dim[0]  < p[0] < dim[0]:
-                points_around.append(p)
+        obs, point_cloud, dim = self.get_obs()
 
+        up = obs[4:]
+        free_space = []
+        for i in range(1,7):
+            for j in range(4,8):
+                id = i * 8 + j
+                free_space.append(up[id])
+
+        free_cells = [i for i in free_space if i < 0.01]
+        self.no_of_prev_free_cells = len(free_cells)
+
+        # gap = 0.03
+        # points_around = []
+        # bbox_limit = 0.01
+        # for p in point_cloud:
+        #     if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
+        #             dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
+        #             -dim[1]  < p[1] < dim[1]:
+        #         points_around.append(p)
+        #     if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
+        #             dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
+        #             -dim[0]  < p[0] < dim[0]:
+        #         points_around.append(p)
         # cv_tools.plot_point_cloud(point_cloud)
         # cv_tools.plot_point_cloud(points_around)
-
-        self.no_of_prev_points_around = len(points_around)
+        #self.no_of_prev_points_around = len(points_around)
         observation, _, _ = self.get_obs()
 
         self.last_timestamp = self.sim.data.time
@@ -206,7 +218,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Generate point cloud
         fovy = self.sim.model.vis.global_.fovy
-        # point_cloud = cv_tools.depth_to_point_cloud(depth, camera_intrinsics)
         point_cloud = cv_tools.depth2pcd(depth, fovy)
 
         # Get target pose and camera pose
@@ -251,6 +262,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
+        # print('reward', reward)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time}
@@ -305,23 +317,41 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.push_stopped_ext_forces = False
             return -10
 
-        # for each push that frees the space around the target
-        points_around = []
-        gap = 0.03
-        bbox_limit = 0.01
-        for p in point_cloud:
-            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
-             dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
-             -dim[1]  < p[1] < dim[1]:
-                points_around.append(p)
-            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
-            dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
-            -dim[0]  < p[0] < dim[0]:
-                points_around.append(p)
 
-        reward = (self.no_of_prev_points_around - len(points_around)) / max(self.no_of_prev_points_around, len(points_around))
+        up = observation[4:]
+        free_space = []
+        for i in range(1,7):
+            for j in range(4,8):
+                id = i * 8 + j
+                free_space.append(up[id])
+
+        free_cells = [i for i in free_space if i < 0.01]
+
+        reward = (len(free_cells) - self.no_of_prev_free_cells) / max(self.no_of_prev_free_cells, len(free_cells), 1)
         reward *= 10.0
-        self.no_of_prev_points_around = len(points_around)
+        self.no_of_prev_free_cells = len(free_cells)
+
+        if self.no_of_prev_free_cells == len(free_cells):
+            reward += -5.0
+
+
+        # for each push that frees the space around the target
+        # points_around = []
+        # gap = 0.03
+        # bbox_limit = 0.01
+        # for p in point_cloud:
+        #     if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
+        #      dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
+        #      -dim[1]  < p[1] < dim[1]:
+        #         points_around.append(p)
+        #     if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
+        #     dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
+        #     -dim[0]  < p[0] < dim[0]:
+        #         points_around.append(p)
+
+        # reward = (self.no_of_prev_points_around - len(points_around)) / max(self.no_of_prev_points_around, len(points_around))
+        # reward *= 10.0
+        # self.no_of_prev_points_around = len(points_around)
 
         # cv_tools.plot_point_cloud(point_cloud)
         # cv_tools.plot_point_cloud(points_around)
@@ -343,7 +373,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # If the object is free from obstacles around (no points around)
-        if self.no_of_prev_points_around == 0:
+        # if self.no_of_prev_points_around == 0:
+        #     return True
+        if self.no_of_prev_free_cells == 24:
             return True
 
         return False
@@ -381,7 +413,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
-            self.render()
+            # self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 
@@ -412,7 +444,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                     self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
                 self.sim_step()
-                self.render()
+                # self.render()
 
             return False
 
@@ -461,7 +493,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
                                     obstacle_probability_box=1,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [0, 0],
+                                    nr_of_obstacles = [5, 10],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
@@ -665,4 +697,3 @@ class ClutterPushOffTable(Clutter):
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time}
-
