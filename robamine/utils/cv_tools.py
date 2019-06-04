@@ -67,11 +67,11 @@ def transform_point_cloud(point_cloud, affine_transformation):
     point_cloud = np.concatenate((point_cloud, ones), axis=1)
 
     # Transform cloud
-    for i in range(point_cloud.shape[0]):
-        point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
+    # for i in range(point_cloud.shape[0]):
+    #     point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
 
-    # point_cloud = np.matmul(affine_transformation, point_cloud.T)
-    # point_cloud = point_cloud.T
+    point_cloud = np.matmul(affine_transformation, point_cloud.T)
+    point_cloud = point_cloud.T
 
     # Convert homogeneous to cartesian
     w = point_cloud[:, 3]
@@ -203,10 +203,17 @@ def extract_features(height_map, dim, plot=False):
     # Features around target
     # 1. Define the up left corners for each 32x32 region around the target
     up_left_corners = []
-    # up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
+    up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
     # up_left_corners.append((int(cx + side[0]), int(cy - 16)))  # f_right
     # up_left_corners.append((int(cx - 16), int(cy + side[1])))  # f_down
     # up_left_corners.append((int(cx - side[0] - 32), int(cy - 16)))  # f_left
+
+    for i in range(len(up_left_corners)):
+        corner = up_left_corners[i]
+        for x in range(8):
+            for y in range(8):
+                c = (corner[0] + x * 4, corner[1] + y * 4)
+                cells.append([c, (c[0]+4, c[1]+4)])
 
     # up_left_corners.append((int(cx - 32), int(cy - side[1] - 32)))  # f_up
     # up_left_corners.append((int(cx + side[0]), int(cy - 32)))  # f_right
@@ -223,11 +230,12 @@ def extract_features(height_map, dim, plot=False):
     #             c = (corner[0] + x * 4, corner[1] + y * 4)
     #             cells.append([c, (c[0]+4, c[1]+4)])
 
-    corner = (int(cx - 32), int(cy - 32))
-    for x in range(16):
-        for y in range(16):
-            c = (corner[0] + x * 4, corner[1] + y * 4)
-            cells.append([c, (c[0]+4, c[1]+4)])
+
+    # corner = (int(cx - 32), int(cy - 32))
+    # for x in range(16):
+    #     for y in range(16):
+    #         c = (corner[0] + x * 4, corner[1] + y * 4)
+    #         cells.append([c, (c[0]+4, c[1]+4)])
 
     features = []
     for i in range(len(cells)):
@@ -247,9 +255,9 @@ def extract_features(height_map, dim, plot=False):
         if plot:
             rgb = draw_cell(cell, rgb)
 
-        if plot:
-            cv2.imshow('rgb', rgb)
-            cv2.waitKey()
+    if plot:
+        cv2.imshow('rgb', rgb)
+        cv2.waitKey()
 
     return features
 
