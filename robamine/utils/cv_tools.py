@@ -237,10 +237,10 @@ def extract_features(height_map, dim, plot=False):
             cells.append([c, (c[0]+4, c[1]+4)])
 
     # free_space = []
-    # for i in range(16,20):
-    #     for j in range(0,4):
-    #         id = i * 16 + j
-    #         free_space.append(observation[id])
+    # for i in range(14,20):
+    #     for j in range(0,6):
+    #         id = i * 20 + j
+    #         free_space.append(cells[id])
 
     features = []
     for i in range(len(cells)):

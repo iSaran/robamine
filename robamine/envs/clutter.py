@@ -81,8 +81,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                        high=np.array([1, 1]),
                                        dtype=np.float32)
 
-        self.observation_space = spaces.Box(low=np.full((69,), 0),
-                                            high=np.full((69,), 0.3),
+        self.observation_space = spaces.Box(low=np.full((401,), 0),
+                                            high=np.full((401,), 0.3),
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
@@ -264,7 +264,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
-        print('reward', reward)
+        # print('reward', reward)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time}
@@ -329,16 +329,16 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
 
         free_space = []
-        for i in range(16,20):
-            for j in range(0,4):
+        for i in range(14,20):
+            for j in range(0,6):
                 id = i * 20 + j
                 free_space.append(observation[id])
 
-        free_cells = [i for i in free_space if i > 0.05]
+        free_cells = [i for i in free_space if i > 0.01]
 
         self.no_of_occupied_cells = len(free_cells)
 
-        print('number of occupied cells:', self.no_of_occupied_cells)
+        # print('number of occupied cells:', self.no_of_occupied_cells)
 
         if self.no_of_occupied_cells > 1:
             reward += 1
