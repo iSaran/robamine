@@ -81,8 +81,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                        high=np.array([1, 1]),
                                        dtype=np.float32)
 
-        self.observation_space = spaces.Box(low=np.full((401,), 0),
-                                            high=np.full((401,), 0.3),
+        self.observation_space = spaces.Box(low=np.full((258,), 0),
+                                            high=np.full((258,), 0.3),
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
@@ -257,7 +257,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[1] - self.target_pos[1], \
                      self.surface_size[1] + self.target_pos[1]]
         min_distance_from_edge = min(distances)
-        features.append(min_distance_from_edge)
+        # features.append(min_distance_from_edge)
 
         return np.array(features), points_above_table, bbox
 
@@ -268,7 +268,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
-        print('reward', reward)
+        # print('reward', reward)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time}
@@ -359,9 +359,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Penalize the agent as it gets the target object closer to the edge
         max_cost = -5
-        reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
-        if observation[-1] < 0:
-            reward = -10
+        # reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
+        # if observation[-1] < 0:
+        #     reward = -10
 
         # For each object push
         reward += -1
@@ -445,7 +445,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                     self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
                 self.sim_step()
-                self.render()
+                # self.render()
 
             return False
 
