@@ -219,7 +219,7 @@ class Stats:
     name : str
         A name for these stats
     """
-    def __init__(self, sess, log_dir, tf_writer, name, stats_name = ['mean', 'min', 'max', 'std']):
+    def __init__(self, sess, log_dir, tf_writer, name, stats_name = ['mean', 'min', 'max', 'std', 'sum']):
         self.stats_name = stats_name
         log_var_names = ['n_timesteps']
         for j in stats_name:
