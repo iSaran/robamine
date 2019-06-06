@@ -147,22 +147,22 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         for _ in range(600):
             self.sim_step()
 
-        # for _ in range(300):
-        #     for i in range(1, number_of_obstacles):
-        #         body_id = get_body_names(self.sim.model).index("object"+str(i))
-        #         self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
-        #         self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
+        for _ in range(300):
+            for i in range(1, number_of_obstacles):
+                body_id = get_body_names(self.sim.model).index("object"+str(i))
+                self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
+                self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
 
-        #     self.sim_step()
+            self.sim_step()
 
-        # self.check_target_occlusion(number_of_obstacles)
+        self.check_target_occlusion(number_of_obstacles)
 
-        # for _ in range(100):
-        #     for i in range(1, number_of_obstacles):
-        #          body_id = get_body_names(self.sim.model).index("object"+str(i))
-        #          self.sim.data.xfrc_applied[body_id][0] = 0
-        #          self.sim.data.xfrc_applied[body_id][1] = 0
-        #     self.sim_step()
+        for _ in range(100):
+            for i in range(1, number_of_obstacles):
+                 body_id = get_body_names(self.sim.model).index("object"+str(i))
+                 self.sim.data.xfrc_applied[body_id][0] = 0
+                 self.sim.data.xfrc_applied[body_id][1] = 0
+            self.sim_step()
 
         # Update state variables that need to be updated only once
         self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
@@ -494,7 +494,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
                                     obstacle_probability_box=1,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [3, 3],
+                                    nr_of_obstacles = [3, 5],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
@@ -580,8 +580,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
             # Randomize the positions
             index = self.sim.model.get_joint_qpos_addr("object"+str(i))
-            r = target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1]) + 0.01
-            theta = i * math.pi/2
+            r = self.rng.exponential(0.01) + target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1])
+            theta = np.random.uniform(0, 2*math.pi)
             random_qpos[index[0]] = r * math.cos(theta)
             random_qpos[index[0]+1] = r * math.sin(theta)
             random_qpos[index[0]+2] = self.sim.model.geom_size[geom_id][2]
