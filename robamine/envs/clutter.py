@@ -494,7 +494,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
                                     obstacle_probability_box=1,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [3, 3],
+                                    nr_of_obstacles = [5, 5],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
@@ -580,8 +580,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
             # Randomize the positions
             index = self.sim.model.get_joint_qpos_addr("object"+str(i))
-            r = target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1]) + 0.01
-            theta = i * math.pi/2
+            r = target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1])
+            theta = i * math.pi/3
             random_qpos[index[0]] = r * math.cos(theta)
             random_qpos[index[0]+1] = r * math.sin(theta)
             random_qpos[index[0]+2] = self.sim.model.geom_size[geom_id][2]
