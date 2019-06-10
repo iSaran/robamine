@@ -414,7 +414,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
-            self.render()
+            #self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 

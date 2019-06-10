@@ -9,7 +9,7 @@ def run(env_id, episodes):
     logger = logging.getLogger('robamine')
     world = rm.World(rm.DDPGParams(exploration_noise='Normal'), env_id)
     # world.train(n_episodes=episodes, print_progress_every=1, save_every=10)
-    world.train_and_eval(n_episodes_to_train=episodes, n_episodes_to_evaluate=10, evaluate_every=50, render_train=True, render_eval=False, print_progress_every=1, save_every=10)
+    world.train_and_eval(n_episodes_to_train=episodes, n_episodes_to_evaluate=10, evaluate_every=50, render_train=False, render_eval=False, print_progress_every=1, save_every=10)
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
