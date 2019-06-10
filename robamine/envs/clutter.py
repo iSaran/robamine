@@ -580,7 +580,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
             # Randomize the positions
             index = self.sim.model.get_joint_qpos_addr("object"+str(i))
-            r = target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1])
+            r = target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1]) + 0.01
             theta = i * math.pi/3
             random_qpos[index[0]] = r * math.cos(theta)
             random_qpos[index[0]+1] = r * math.sin(theta)
