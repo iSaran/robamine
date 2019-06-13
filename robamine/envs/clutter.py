@@ -31,34 +31,18 @@ class Push:
     of instead of using 4 discrete directions, now we have a continuous angle
     (direction_theta) from which we calculate the direction.
     """
-    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.1, direction_theta = 0.0, target = True, object_height = 0.06, object_length=0.05, object_width = 0.05, finger_size = 0.02):
+    def __init__(self, initial_pos = np.array([0, 0, 0]), distance = 0.1, direction_theta = 0.0, finger_size = 0.02):
         self.distance = distance
         self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
-
-        if target:
-            # Move the target
-
-            # Z at the center of the target object
-            # If the object is too short just put the finger right above the
-            # table
-            if object_height - finger_size > 0:
-                offset = object_height - finger_size
-            else:
-                offset = 0
-            self.z = finger_size + offset + 0.001
-
-            # Position outside of the object along the pushing directions.
-            # Worst case scenario: the diagonal of the object
-            self.initial_pos = initial_pos - (math.sqrt(pow(object_length, 2) + pow(object_width, 2)) + finger_size + 0.001) * self.direction
-        else:
-            self.z = 2 * object_height + finger_size + 0.001
-            self.initial_pos = initial_pos
+        self.initial_pos = initial_pos
+        self.initial_pos[0] = initial_pos[0] * math.cos(initial_pos[1])
+        self.initial_pos[1] = initial_pos[0] * math.sin(initial_pos[1])
+        self.initial_pos[2] += finger_size + 0.001
 
     def __str__(self):
         return "Initial Position: " + str(self.initial_pos) + "\n" + \
                "Distance: " + str(self.distance) + "\n" + \
-               "Direction: " + str(self.direction) + "\n" + \
-               "z: " + str(self.z) + "\n"
+               "Direction: " + str(self.direction) + "\n"
 
 class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     """
@@ -77,8 +61,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([-1, -1]),
-                                       high=np.array([1, 1]),
+        self.action_space = spaces.Box(low=np.array([-1, -1, -1, -1]),
+                                       high=np.array([1, 1, 1, 1]),
                                        dtype=np.float32)
 
         self.observation_space = spaces.Box(low=np.full((258,), 0),
@@ -280,23 +264,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # the action space of the environment
         agent_high = 1
         agent_low = -1
-        env_low = [-math.pi, 0]
-        env_high = [math.pi, 1]
+        env_low = [-math.pi, -0.1, -math.pi, 0]
+        env_high = [math.pi, 0.1, math.pi, 0.1]
         for i in range(len(my_action)):
             my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
+        my_action[1] = abs(my_action[1])
 
-        if my_action[1] > 0.5:
-            push_target = True
-        else:
-            push_target = False
+        push = Push(initial_pos = np.array([my_action[1], my_action[2], my_action[3]]), direction_theta=my_action[0], finger_size = self.finger_length)
 
-        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
-
-        init_z = 2 * self.target_height + 0.05
+        init_z = push.initial_pos[2] + 0.05
         self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
         self.sim_step()
-        if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
-            end = push.initial_pos + push.distance * push.direction
+        if self.move_joint_to_target('finger', [None, None, push.initial_pos[2]], stop_external_forces=True):
+            end = push.initial_pos[0:2] + push.distance * push.direction
             self.move_joint_to_target('finger', [end[0], end[1], None])
         else:
             self.push_stopped_ext_forces = True
