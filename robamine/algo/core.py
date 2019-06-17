@@ -296,7 +296,7 @@ class WorldMode(Enum):
     TRAIN_EVAL = 3
 
 class World:
-    def __init__(self, agent, env, sec_per_step=0.02, name=None):
+    def __init__(self, agent, env, name=None):
         # Environment setup
         if isinstance(env, gym.Env):
             self.env = env
@@ -337,7 +337,6 @@ class World:
             raise err
 
         self.name = name
-        self.sec_per_step = sec_per_step
 
         try:
             assert self.agent.params.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
@@ -399,11 +398,13 @@ class World:
         counter = 0
         start_time = time.time()
         total_n_timesteps = 0
+        experience_time = 0.0
         for episode in range(n_episodes):
 
             logger.debug('Start episode: %d', episode)
             # Run an episode
             episode_stats = self._episode(render, train)
+            experience_time += episode_stats.experience_time
             if train:
                 self.train_stats.update(episode, episode_stats)
                 total_n_timesteps += episode_stats.n_timesteps
@@ -425,7 +426,7 @@ class World:
 
             # Print progress every print_progress_every episodes
             if print_progress_every and (episode + 1) % print_progress_every == 0:
-                print_progress(episode, n_episodes, start_time, total_n_timesteps, self.sec_per_step)
+                print_progress(episode, n_episodes, start_time, total_n_timesteps, experience_time)
 
             if save_every and (episode + 1) % save_every == 0:
                 self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
@@ -451,6 +452,8 @@ class World:
 
             # Execute the action on the environment and observe reward and next state
             next_state, reward, done, info = self.env.step(action)
+            if 'experience_time' in info:
+                stats.experience_time += info['experience_time']
             logger.debug('Next state by the environment: %s', next_state.__str__())
             logger.debug('Reward by the environment: %f', reward)
 

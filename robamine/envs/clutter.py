@@ -76,12 +76,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([0, 0]),
-                                       high=np.array([2 * math.pi, 1]),
+        self.action_space = spaces.Box(low=np.array([-1, -1]),
+                                       high=np.array([1, 1]),
                                        dtype=np.float32)
 
-        self.observation_space = spaces.Box(low=np.array([-1, -1, -1]),
-                                            high=np.array([1, 1, 1]),
+        self.observation_space = spaces.Box(low=np.full((261,), 0),
+                                            high=np.full((261,), 0.3),
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
@@ -117,6 +117,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_width = 0.0
         self.target_pos = np.zeros(3)
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
+        self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -183,7 +184,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # cv_tools.plot_point_cloud(points_around)
 
         self.no_of_prev_points_around = len(points_around)
-        return self.get_obs()
+        observation, _, _ = self.get_obs()
+
+        self.last_timestamp = self.sim.data.time
+        return observation
 
     def get_obs(self):
         """
@@ -201,8 +205,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         depth = cv_tools.gl2cv(depth, z_near, z_far)
 
         # Generate point cloud
-        camera_intrinsics = [525, 525, 320, 240]
-        point_cloud = cv_tools.depth_to_point_cloud(depth, camera_intrinsics)
+        fovy = self.sim.model.vis.global_.fovy
+        # point_cloud = cv_tools.depth_to_point_cloud(depth, camera_intrinsics)
+        point_cloud = cv_tools.depth2pcd(depth, fovy)
 
         # Get target pose and camera pose
         target_pose = get_body_pose(self.sim, 'target')  # g_wo: object w.r.t. world
@@ -213,10 +218,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         point_cloud = cv_tools.transform_point_cloud(point_cloud, camera_to_target)
 
         # Keep the points above the table
-        points_above_table = []
-        for p in point_cloud:
-            if p[2] > 0.0:
-                points_above_table.append(p)
+        z = point_cloud[:, 2]
+        ids = np.where((z > 0.0) & (z < 0.4))
+        points_above_table = point_cloud[ids]
 
         dim = get_geom_size(self.sim.model, 'target')
         dim = get_geom_size(self.sim.model, 'target')
@@ -228,7 +232,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         points_above_table = np.asarray(points_above_table)
         height_map = cv_tools.generate_height_map(points_above_table)
-        features = cv_tools.extract_features(height_map, dim)
+        features = cv_tools.extract_features(height_map, bbox, plot=False)
 
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos[0], \
@@ -238,25 +242,37 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         min_distance_from_edge = min(distances)
         features.append(min_distance_from_edge)
 
-        return features, points_above_table, bbox
+        return np.array(features), points_above_table, bbox
 
     def step(self, action):
         done = False
         time = self.do_simulation(action)
+        experience_time = time - self.last_timestamp
+        self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
         if self.terminal_state(obs):
             done = True
-        return obs, reward, done, {}
+        return obs, reward, done, {'experience_time': experience_time}
 
     def do_simulation(self, action):
-        time = self.sim.data.time
+        my_action = action.copy()
 
-        if action[1] > 0.5:
+        # Agent gives actions between [-1, 1]. Convert to the action ranges of
+        # the action space of the environment
+        agent_high = 1
+        agent_low = -1
+        env_low = [-math.pi, 0]
+        env_high = [math.pi, 1]
+        for i in range(len(my_action)):
+            my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
+
+        if my_action[1] > 0.5:
             push_target = True
         else:
             push_target = False
-        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+
+        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 
         init_z = 2 * self.target_height + 0.05
         self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
@@ -267,7 +283,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             self.push_stopped_ext_forces = True
 
-        return time
+        return self.sim.data.time
 
     def _move_finger_outside_the_table(self):
         # Move finger outside the table again

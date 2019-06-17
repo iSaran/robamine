@@ -66,12 +66,12 @@ def transform_sec_to_timestamp(seconds):
     minutes, seconds = divmod(rem, 60)
     return "{:0>2}h:{:0>2}m:{:05.2f}s".format(int(hours),int(minutes),seconds)
 
-def print_progress(episode, n_episodes, start_time, steps, dt):
+def print_progress(episode, n_episodes, start_time, steps, experience_time):
     percent = (episode + 1) / n_episodes * 100.0
     time_elapsed = transform_sec_to_timestamp(time.time() - start_time)
     estimated_time = transform_sec_to_timestamp((n_episodes - episode + 1) * (time.time() - start_time) / (episode + 1))
-    experience_time = transform_sec_to_timestamp(steps * dt)
-    logger.info('Progress: Episode: %s from %s (%.2f%%). Time elapsed: %s. Estimated time: %s. Experience time: %s', str(episode + 1), str(n_episodes), percent, time_elapsed, estimated_time, experience_time)
+    experience_time = transform_sec_to_timestamp(experience_time)
+    logger.info('Progress: Episode: %s from %s (%.2f%%). Timesteps: %s. Time elapsed: %s. Estimated time: %s. Experience time: %s.', str(episode + 1), str(n_episodes), percent, steps, time_elapsed, estimated_time, experience_time)
     # logger.info('  Experience Time: %s', transform_sec_to_timestamp(step * dt))
 
 class DataStream:
@@ -127,17 +127,24 @@ class DataStream:
         self.tf_writer.add_summary(summary_str, x)
         self.tf_writer.flush()
 
+class Noise:
+    def __init__(self):
+        self.random = np.random.RandomState()
+
+    def seed(self, seed):
+        self.random.seed(seed)
+
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
 # based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
-class OrnsteinUhlenbeckActionNoise:
+class OrnsteinUhlenbeckActionNoise(Noise):
     def __init__(self, mu, sigma = 0.2, theta=.15, dt=1e-2, x0=None, seed=999):
+        super().__init__()
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
         self.dt = dt
         self.x0 = x0
         self.reset()
-        self.random = np.random.RandomState()
 
     def __call__(self):
         x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * self.random.normal(size=self.mu.shape)
@@ -150,12 +157,22 @@ class OrnsteinUhlenbeckActionNoise:
     def __repr__(self):
         return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
 
-    def seed(self, seed):
-        self.random.seed(seed)
+class NormalNoise(Noise):
+    def __init__(self, mu, sigma):
+        super().__init__()
+        self.mu = mu
+        self.sigma = sigma
+
+    def __call__(self):
+        return self.random.normal(self.mu, self.sigma)
+
+    def __repr__(self):
+        return 'NormalNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
 
 class EpisodeStats:
     def __init__(self):
         self.n_episodes = 0
+        self.experience_time = 0
         self.reward = []
         self.q_value = []
 
