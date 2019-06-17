@@ -13,6 +13,7 @@ from collections import deque
 from random import Random
 import numpy as np
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise
+import pickle
 
 import logging
 logger = logging.getLogger('robamine.algo.ddpg')
@@ -256,13 +257,22 @@ class DDPGTorch(Agent):
 
     @classmethod
     def load(cls, file_path):
-        self.actor.load_state_dict(torch.load(file_path + 'actor.pth'))
-        self.critic.load_state_dict(torch.load(file_path + 'critic.pth'))
+        model = pickle.load(open(file_path, 'rb'))
+        self = cls(model['state_dim'], model['action_dim'])
+        self.actor.load_state_dict(model['actor'])
+        self.critic.load_state_dict(model['critic'])
         logger.info('Agent loaded from %s', file_path)
+        return self
 
     def save(self, file_path):
-        torch.save(self.actor.state_dict(), file_path + 'actor.pth')
-        torch.save(self.critic.state_dict(), file_path + 'critic.pth')
+        actor = self.actor.state_dict()
+        critic = self.critic.state_dict()
+        model = {}
+        model['state_dim'] = self.state_dim
+        model['action_dim'] = self.action_dim
+        model['actor'] = actor
+        model['critic'] = critic
+        pickle.dump(model, open(file_path, 'wb'))
         logger.info('Agent saved to %s', file_path)
 
     def explore(self, state):
