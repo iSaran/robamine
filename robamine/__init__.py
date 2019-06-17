@@ -73,7 +73,7 @@ register(
 )
 
 register(
-    id='Clutter-v1',
+    id='Clutter-v0',
     entry_point='robamine.envs:Clutter',
     max_episode_steps=20
 )

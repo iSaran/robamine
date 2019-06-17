@@ -127,17 +127,24 @@ class DataStream:
         self.tf_writer.add_summary(summary_str, x)
         self.tf_writer.flush()
 
+class Noise:
+    def __init__(self):
+        self.random = np.random.RandomState()
+
+    def seed(self, seed):
+        self.random.seed(seed)
+
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
 # based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
-class OrnsteinUhlenbeckActionNoise:
+class OrnsteinUhlenbeckActionNoise(Noise):
     def __init__(self, mu, sigma = 0.2, theta=.15, dt=1e-2, x0=None, seed=999):
+        super().__init__()
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
         self.dt = dt
         self.x0 = x0
         self.reset()
-        self.random = np.random.RandomState()
 
     def __call__(self):
         x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * self.random.normal(size=self.mu.shape)
@@ -150,8 +157,17 @@ class OrnsteinUhlenbeckActionNoise:
     def __repr__(self):
         return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
 
-    def seed(self, seed):
-        self.random.seed(seed)
+class NormalNoise(Noise):
+    def __init__(self, mu, sigma):
+        super().__init__()
+        self.mu = mu
+        self.sigma = sigma
+
+    def __call__(self):
+        return self.random.normal(self.mu, self.sigma)
+
+    def __repr__(self):
+        return 'NormalNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
 
 class EpisodeStats:
     def __init__(self):

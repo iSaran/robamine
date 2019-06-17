@@ -17,7 +17,7 @@ def run(env_id):
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--env-id', type=str, default='Clutter-v1', help='The id of the gym environment to use')
+    parser.add_argument('--env-id', type=str, default='Clutter-v0', help='The id of the gym environment to use')
     args = parser.parse_args()
     dict_args = vars(args)
     return dict_args
