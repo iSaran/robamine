@@ -268,7 +268,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
-        # print('reward', reward)
+        print('reward', reward)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time}
@@ -350,18 +350,22 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         free_space = [i for i in space_around if i < 0.01]
 
-        reward = (len(free_space) - self.no_of_prev_free_space) / max(self.no_of_prev_free_space, len(free_space), 1)
-        reward *= 10.0
-        self.no_of_prev_free_space = len(free_space)
+        # reward = (len(free_space) - self.no_of_prev_free_space) / max(self.no_of_prev_free_space, len(free_space), 1)
+        # reward *= 10.0
 
-        # if self.no_of_prev_free_cells == len(free_cells):
-        #     reward += -5.0
+        if len(free_space) == len(space_around):
+            reward += 10
+
+        if self.no_of_prev_free_space == len(free_space):
+            reward += -5.0
+
+        self.no_of_prev_free_space = len(free_space)
 
         # Penalize the agent as it gets the target object closer to the edge
         max_cost = -5
-        # reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
-        # if observation[-1] < 0:
-        #     reward = -10
+        reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
+        if observation[-1] < 0:
+            reward = -10
 
         # For each object push
         reward += -1
@@ -414,7 +418,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
-            #self.render()
+            self.render()
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 
@@ -445,7 +449,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                     self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
                 self.sim_step()
-                # self.render()
+                self.render()
 
             return False
 
