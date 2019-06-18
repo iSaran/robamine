@@ -491,10 +491,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def generate_random_scene(self, finger_height_range=[.005, .005],
                                     target_probability_box=1,
-                                    target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
+                                    target_length_range=[.01, .02], target_width_range=[.01, .03], target_height_range=[.005, .01],
                                     obstacle_probability_box=1,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [5, 5],
+                                    nr_of_obstacles = [8, 8],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
@@ -528,9 +528,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.model.geom_solref[geom_id][0] = .002
 
         #   Randomize size
-        target_length = self.rng.uniform(target_length_range[0], target_length_range[1])
+        target_length = ((target_length_range[1] - target_length_range[0]) / 10) * self.rng.randint(10) + target_length_range[0]
         target_width  = self.rng.uniform(target_width_range[0], min(target_length, target_width_range[1]))
         target_height = self.rng.uniform(max(target_height_range[0], finger_height), target_height_range[1])
+        target_width = target_length
         if self.sim.model.geom_type[geom_id] == 6:
             self.sim.model.geom_size[geom_id][0] = target_length
             self.sim.model.geom_size[geom_id][1] = target_width
@@ -567,9 +568,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.model.geom_condim[geom_id] = 4
 
             #   Randomize size
-            obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
+            obstacle_length = ((obstacle_length_range[1] - obstacle_length_range[0]) / 10) * self.rng.randint(10) + obstacle_length_range[0]
             obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
             obstacle_height = self.rng.uniform(max(obstacle_height_range[0], target_height + 2 * finger_height + 0.001), obstacle_height_range[1])
+            obstacle_width = obstacle_length
             if self.sim.model.geom_type[geom_id] == 6:
                 self.sim.model.geom_size[geom_id][0] = obstacle_length
                 self.sim.model.geom_size[geom_id][1] = obstacle_width
@@ -581,10 +583,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             # Randomize the positions
             index = self.sim.model.get_joint_qpos_addr("object"+str(i))
             r = target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1]) + 0.01
-            theta = i * math.pi/3
+            theta = i * 2 * math.pi / 8
             random_qpos[index[0]] = r * math.cos(theta)
             random_qpos[index[0]+1] = r * math.sin(theta)
             random_qpos[index[0]+2] = self.sim.model.geom_size[geom_id][2]
+
+            #   Randomize orientation
+            theta = self.rng.uniform(0, 2 * math.pi)
+            obstacle_orientation = Quaternion()
+            obstacle_orientation.rot_z(theta)
+            random_qpos[index[0] + 3] = obstacle_orientation.w
+            random_qpos[index[0] + 4] = obstacle_orientation.x
+            random_qpos[index[0] + 5] = obstacle_orientation.y
+            random_qpos[index[0] + 6] = obstacle_orientation.z
 
         return random_qpos, number_of_obstacles
 
