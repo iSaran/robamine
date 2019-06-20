@@ -12,16 +12,16 @@ import math
 
 import rospy
 from std_msgs.msg import String
-from fog_msgs.msg import ForceObservations
+from fog_msgs.msg import ForceObservations, ImpedanceActions
 from threading import Lock
 
-ACTION_TOPIC_NAME = 'lwr_ros_action'
+ACTION_TOPIC_NAME = 'impedance_actions'
 OBS_TOPIC_NAME = 'force_observations'
 
 class LWRROS(gym.Env):
     def __init__(self):
-        self.action_space = spaces.Box(low=np.array([0]),
-                                       high=np.array([2 * math.pi]),
+        self.action_space = spaces.Box(low=np.array([0, - math.pi]),
+                                       high=np.array([0.1, math.pi]),
                                        dtype=np.float32)
 
         self.observation_space = spaces.Box(low=np.array([-1, -1, -1]),
@@ -29,7 +29,7 @@ class LWRROS(gym.Env):
                                             dtype=np.float32)
 
         rospy.init_node('lwr_ros_env')
-        self.pub = rospy.Publisher(ACTION_TOPIC_NAME, String, queue_size=10)
+        self.pub = rospy.Publisher(ACTION_TOPIC_NAME, ImpedanceActions, queue_size=10)
         rospy.Subscriber(OBS_TOPIC_NAME, ForceObservations, self.sub_callback)
         self.rate = rospy.Rate(100)
         self.data = None
@@ -71,9 +71,12 @@ class LWRROS(gym.Env):
         return obs, reward, done, {}
 
     def send_command(self, action):
+        a = ImpedanceActions()
+        a.amplitude = action[0]
+        a.angle = action[1]
         if not rospy.is_shutdown():
             time = rospy.get_time()
-            self.pub.publish('fdsa')
+            self.pub.publish(a)
         return time
 
     def get_reward(self, observation):
