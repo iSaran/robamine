@@ -12,9 +12,11 @@ import math
 
 import rospy
 from std_msgs.msg import String
+from fog_msgs.msg import ForceObservations
+from threading import Lock
 
 ACTION_TOPIC_NAME = 'lwr_ros_action'
-OBS_TOPIC_NAME = 'lwr_ros_action'
+OBS_TOPIC_NAME = 'force_observations'
 
 class LWRROS(gym.Env):
     def __init__(self):
@@ -28,13 +30,23 @@ class LWRROS(gym.Env):
 
         rospy.init_node('lwr_ros_env')
         self.pub = rospy.Publisher(ACTION_TOPIC_NAME, String, queue_size=10)
-        rospy.Subscriber(OBS_TOPIC_NAME, String, self.sub_callback)
+        rospy.Subscriber(OBS_TOPIC_NAME, ForceObservations, self.sub_callback)
         self.rate = rospy.Rate(100)
         self.data = None
+        self.mutex = Lock()
 
     def sub_callback(self, data):
-        self.data = data.data
-        rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
+
+        local = np.zeros((len(data.obs), 3))
+
+        for i in range(len(data.obs)):
+            local[i][0] = data.obs[i].x
+            local[i][1] = data.obs[i].y
+            local[i][2] = data.obs[i].z
+
+        self.mutex.acquire()
+        self.data = local
+        self.mutex.release()
 
     def reset(self):
         return
@@ -43,7 +55,10 @@ class LWRROS(gym.Env):
         return
 
     def get_obs(self):
-        return self.observation_space.sample()
+        self.mutex.acquire()
+        local = self.data
+        self.mutex.release()
+        return local
 
     def step(self, action):
         self.rate.sleep()
