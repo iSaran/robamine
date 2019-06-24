@@ -11,7 +11,7 @@ import numpy as np
 import math
 
 import rospy
-from std_msgs.msg import String
+from std_msgs.msg import Float64
 from fog_msgs.msg import ForceObservations, ImpedanceActions
 from threading import Lock
 
@@ -33,6 +33,7 @@ class LWRROS(gym.Env):
         rospy.Subscriber(OBS_TOPIC_NAME, ForceObservations, self.sub_callback)
         self.rate = rospy.Rate(100)
         self.data = None
+        self.reward_data = 0.0
         self.mutex = Lock()
 
     def sub_callback(self, data):
@@ -46,6 +47,7 @@ class LWRROS(gym.Env):
 
         self.mutex.acquire()
         self.data = local
+        self.reward_data = data.reward
         self.mutex.release()
 
     def reset(self):
@@ -80,8 +82,7 @@ class LWRROS(gym.Env):
         return time
 
     def get_reward(self, observation):
-        reward = 0
-        return reward
+        return self.reward_data
 
     def terminal_state(self, observation):
         return False
