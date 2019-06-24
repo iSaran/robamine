@@ -38,40 +38,6 @@
       <include file="../bhand/bhand_robot_optoforce.xml"/>
     </body>
   </worldbody>
-  <equality>
-    <joint
-      name="bhandspread"
-      joint1="bh_j11_joint"
-      joint2="bh_j21_joint"
-      polycoef="0 1 0 0 0"/>
-    <joint
-      name="bh_f1_coupling"
-      joint1="bh_j12_joint"
-      joint2="bh_j13_joint"
-      polycoef="0 3 0 0 0"/>
-    <joint
-      name="bh_f2_coupling"
-      joint1="bh_j22_joint"
-      joint2="bh_j23_joint"
-      polycoef="0 3 0 0 0"/>
-    <joint
-      name="bh_f3_coupling"
-      joint1="bh_j32_joint"
-      joint2="bh_j33_joint"
-      polycoef="0 3 0 0 0"/>
-  </equality>
-  <actuator>
-    <motor  gear="1 0 0 0 0 0" joint="bh_wrist_joint" name="bh_wrist_force_x_actuator"/>
-    <motor  gear="0 1 0 0 0 0" joint="bh_wrist_joint" name="bh_wrist_force_y_actuator"/>
-    <motor  gear="0 0 1 0 0 0" joint="bh_wrist_joint" name="bh_wrist_force_z_actuator"/>
-    <motor  gear="0 0 0 1 0 0" joint="bh_wrist_joint" name="bh_wrist_torque_x_actuator"/>
-    <motor  gear="0 0 0 0 1 0" joint="bh_wrist_joint" name="bh_wrist_torque_y_actuator"/>
-    <motor  gear="0 0 0 0 0 1" joint="bh_wrist_joint" name="bh_wrist_torque_z_actuator"/>
-    <position joint="bh_j11_joint" name="bh_j11_joint" ctrlrange="0 3.14" kp="1000"/>
-    <position joint="bh_j12_joint" name="bh_j12_joint" ctrlrange="0 2.44" kp="10"/>
-    <position joint="bh_j22_joint" name="bh_j22_joint" ctrlrange="0 2.44" kp="10"/>
-    <position joint="bh_j33_joint" name="bh_j32_joint" ctrlrange="0 2.44" kp="10"/>
-  </actuator>
   <sensor>
     <force name="optoforce_1" site="optoforce_1"/>
     <force name="optoforce_2" site="optoforce_2"/>
