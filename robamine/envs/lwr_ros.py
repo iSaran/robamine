@@ -69,15 +69,20 @@ class LWRROS(gym.Env):
 
     def step(self, action):
 
+        assert not np.any(np.isnan(action)), "LWRROS env: at least one action is NaN."
+
         while not rospy.is_shutdown() and not self.first_msg_arrived:
-            rospy.logwarn_throttle(5, "LWRROS env: Waiting for the first msg in " + OBS_TOPIC_NAME + " to arrive.")
+            rospy.logwarn_throttle(10, "LWRROS env: Waiting for the first msg in " + OBS_TOPIC_NAME + " to arrive.")
             sleep(0.01)
 
         self.rate.sleep()
         done = False
-        obs = self.get_obs()
-        reward = self.get_reward(obs)
         time = self.send_command(action)
+        obs = self.get_obs()
+
+        assert not np.any(np.isnan(obs)), "LWRROS env: at least one observation is NaN."
+
+        reward = self.get_reward(obs)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {}
