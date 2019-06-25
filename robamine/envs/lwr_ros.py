@@ -15,6 +15,8 @@ from std_msgs.msg import Float64
 from fog_msgs.msg import ForceObservations, ImpedanceActions
 from threading import Lock
 
+from time import sleep
+
 ACTION_TOPIC_NAME = 'impedance_actions'
 OBS_TOPIC_NAME = 'force_observations'
 
@@ -24,26 +26,29 @@ class LWRROS(gym.Env):
                                        high=np.array([0.1, math.pi]),
                                        dtype=np.float32)
 
-        self.observation_space = spaces.Box(low=np.array([-1, -1, -1]),
-                                            high=np.array([1, 1, 1]),
+        # 300 size: 100 samples of 3d forces
+        self.observation_space = spaces.Box(low=np.full((300,), -1),
+                                            high=np.full((300,), 1),
                                             dtype=np.float32)
 
         rospy.init_node('lwr_ros_env')
         self.pub = rospy.Publisher(ACTION_TOPIC_NAME, ImpedanceActions, queue_size=10)
         rospy.Subscriber(OBS_TOPIC_NAME, ForceObservations, self.sub_callback)
         self.rate = rospy.Rate(100)
-        self.data = None
+        self.data = np.zeros((300))
         self.reward_data = 0.0
         self.mutex = Lock()
+        self.first_msg_arrived = False
 
     def sub_callback(self, data):
 
-        local = np.zeros((len(data.obs), 3))
+        self.first_msg_arrived = True
+        local = np.zeros((len(self.data)))
 
         for i in range(len(data.obs)):
-            local[i][0] = data.obs[i].x
-            local[i][1] = data.obs[i].y
-            local[i][2] = data.obs[i].z
+            local[3 * i + 0] = data.obs[i].x
+            local[3 * i + 1] = data.obs[i].y
+            local[3 * i + 2] = data.obs[i].z
 
         self.mutex.acquire()
         self.data = local
@@ -51,7 +56,7 @@ class LWRROS(gym.Env):
         self.mutex.release()
 
     def reset(self):
-        return
+        return np.zeros(300)
 
     def render(self):
         return
@@ -63,6 +68,11 @@ class LWRROS(gym.Env):
         return local
 
     def step(self, action):
+
+        while not rospy.is_shutdown() and not self.first_msg_arrived:
+            rospy.logwarn_throttle(5, "LWRROS env: Waiting for the first msg in " + OBS_TOPIC_NAME + " to arrive.")
+            sleep(0.01)
+
         self.rate.sleep()
         done = False
         obs = self.get_obs()
