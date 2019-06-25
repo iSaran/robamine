@@ -14,5 +14,6 @@ setup(name='robamine',
                         'sphinx_rtd_theme', \
                         'numpydoc', \
                         'matplotlib',\
-                        'opencv-python==4.0.1.24']
+                        'opencv-python==4.0.1.24',\
+                        'torch']
 )
