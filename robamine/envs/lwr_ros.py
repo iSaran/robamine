@@ -14,6 +14,7 @@ import rospy
 from std_msgs.msg import Float64
 from fog_msgs.msg import ForceObservations, ImpedanceActions
 from threading import Lock
+from std_srvs.srv import Trigger
 
 from time import sleep
 
@@ -34,11 +35,17 @@ class LWRROS(gym.Env):
         rospy.init_node('lwr_ros_env')
         self.pub = rospy.Publisher(ACTION_TOPIC_NAME, ImpedanceActions, queue_size=10)
         rospy.Subscriber(OBS_TOPIC_NAME, ForceObservations, self.sub_callback)
+        terminal_state_srv = rospy.Service('/terminal_state', Trigger, self.terminal_state_cb)
+        self.is_terminal_state = False;
         self.rate = rospy.Rate(100)
         self.data = np.zeros((300))
         self.reward_data = 0.0
         self.mutex = Lock()
         self.first_msg_arrived = False
+
+    def terminal_state_cb(self, req):
+        self.is_terminal_state = True
+        return [True, '']
 
     def sub_callback(self, data):
 
@@ -56,6 +63,16 @@ class LWRROS(gym.Env):
         self.mutex.release()
 
     def reset(self):
+        print('Resetting env')
+        print('Waiting for service "/reset"')
+        rospy.wait_for_service('/reset')
+        try:
+            srv = rospy.ServiceProxy('/reset', Trigger)
+            resp1 = srv()
+            print('Called service /reset successfully')
+        except (rospy.ServiceException, e):
+            print("Service call failed: %s"%e)
+            time.sleep(button_delay)
         return np.zeros(300)
 
     def render(self):
@@ -100,5 +117,8 @@ class LWRROS(gym.Env):
         return self.reward_data
 
     def terminal_state(self, observation):
+        if self.is_terminal_state:
+            self.is_terminal_state = False
+            return True
         return False
 
