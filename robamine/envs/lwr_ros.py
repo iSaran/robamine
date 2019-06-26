@@ -106,8 +106,20 @@ class LWRROS(gym.Env):
 
     def send_command(self, action):
         a = ImpedanceActions()
-        a.amplitude = action[0]
-        a.angle = action[1]
+
+
+        # Agent gives actions between [-1, 1]. Convert to the action ranges of
+        # the action space of the environment
+        my_action = action.copy()
+        agent_high = 1
+        agent_low = -1
+        env_low = [0, -math.pi]
+        env_high = [0.2, math.pi, math.pi]
+        for i in range(len(my_action)):
+            my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
+
+        a.amplitude = my_action[0]
+        a.angle = my_action[1]
         if not rospy.is_shutdown():
             time = rospy.get_time()
             self.pub.publish(a)
