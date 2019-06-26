@@ -84,6 +84,8 @@ class Critic(nn.Module):
         self.l1 = nn.Linear(state_dim + action_dim, params.hidden_units[0])
         self.l2 = nn.Linear(params.hidden_units[0], params.hidden_units[1])
         self.l3 = nn.Linear(params.hidden_units[1], 1)
+        nn.init.uniform_(self.l3.weight, params.final_layer_init[0], params.final_layer_init[1])
+        nn.init.uniform_(self.l3.bias, params.final_layer_init[0], params.final_layer_init[1])
 
     def forward(self, x, u):
         x = nn.functional.relu(self.l1(torch.cat([x, u], x.dim() - 1)))
@@ -98,6 +100,8 @@ class Actor(nn.Module):
         self.l1 = nn.Linear(state_dim, params.hidden_units[0])
         self.l2 = nn.Linear(params.hidden_units[0], params.hidden_units[1])
         self.l3 = nn.Linear(params.hidden_units[1], action_dim)
+        nn.init.uniform_(self.l3.weight, params.final_layer_init[0], params.final_layer_init[1])
+        nn.init.uniform_(self.l3.bias, params.final_layer_init[0], params.final_layer_init[1])
 
     def forward(self, x):
         x = nn.functional.relu(self.l1(x))
