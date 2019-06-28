@@ -5,28 +5,38 @@
   <option
     iterations="200"
     timestep="0.001"
-    solver="CG"/>
+    solver="Newton"
+    cone="elliptic"/> <!-- elliptic cone for grasping works best -->
   <size njmax="500" nconmax="100" />
   <visual>
     <map
       fogstart="1.5"
-      fogend="3"/>
+      fogend="3"
+      znear="0.2"
+      zfar="50"/>
     <quality
       shadowsize="8192"/>
+    <rgba
+      contactforce="0.7 0.9 0.9 1"
+      contactpoint="0.9 0.6 0.2 1"/>
   </visual>
+  <statistic extent="1.0"/> <!--how much you "zoom in", stat.extent is the max limits of the arena-->
   <include file="../bhand/bhand_deps.xml"/>
   <asset>
     <mesh name="table" file="utils/table.stl"/>
     <mesh name="monitor" file="utils/monitor.stl"/>
     <mesh name="small_table" file="utils/small_table.stl"/>
+    <mesh name="obj" file="14.stl"/>
   </asset>
   <worldbody>
-    <include file="../utils/arl_scene.xml"/>
+    <camera name="xtion"
+      pos="0 -0.53 0.53"
+      quat="0.92388 0.382683 0 0" />
     <site name="dominant_centroid" pos="0.0 0.0 0.0" size=".003 .003 .003" type="sphere" rgba="0.8 0.0 0.0 0.3"/>
     <body
       name="bh_wrist"
-      pos="0.2 0.74 0.31"
-      quat="0.707106 -0.7070106 0 0">
+      pos="0.0 0.0 0.75"
+      quat="1 0 0 0">
       <inertial
         pos="0 0 0"
         quat="1 0 0 0"
@@ -37,7 +47,59 @@
         type="free"/>
       <include file="../bhand/bhand_robot_optoforce.xml"/>
     </body>
+    <body
+      name="obj"
+      pos="0.0 0.0 0.05"
+      quat="1 0 0 0">
+      <inertial
+        pos="0 0 0"
+        mass="0.1"
+        diaginertia="1 1 1"/>
+      <joint
+        name="world_to_obj"
+        type="free"
+        damping="1"/>
+      <geom
+        name="obj"
+        type="mesh"
+        mesh="obj"
+        friction="1.5 0.005 0.0001" solimp="0.99 0.99 0.01" solref="0.01 1" condim="4"/> <!-- hard constraints for grasping -->
+    </body>
   </worldbody>
+  <equality>
+    <joint
+      name="bhandspread"
+      joint1="bh_j11_joint"
+      joint2="bh_j21_joint"
+      polycoef="0 1 0 0 0"/>
+    <joint
+      name="bh_f1_coupling"
+      joint1="bh_j12_joint"
+      joint2="bh_j13_joint"
+      polycoef="0 3 0 0 0"/>
+    <joint
+      name="bh_f2_coupling"
+      joint1="bh_j22_joint"
+      joint2="bh_j23_joint"
+      polycoef="0 3 0 0 0"/>
+    <joint
+      name="bh_f3_coupling"
+      joint1="bh_j32_joint"
+      joint2="bh_j33_joint"
+      polycoef="0 3 0 0 0"/>
+  </equality>
+  <actuator>
+    <motor  gear="1 0 0 0 0 0" joint="bh_wrist_joint" name="bh_wrist_force_x_actuator"/>
+    <motor  gear="0 1 0 0 0 0" joint="bh_wrist_joint" name="bh_wrist_force_y_actuator"/>
+    <motor  gear="0 0 1 0 0 0" joint="bh_wrist_joint" name="bh_wrist_force_z_actuator"/>
+    <motor  gear="0 0 0 1 0 0" joint="bh_wrist_joint" name="bh_wrist_torque_x_actuator"/>
+    <motor  gear="0 0 0 0 1 0" joint="bh_wrist_joint" name="bh_wrist_torque_y_actuator"/>
+    <motor  gear="0 0 0 0 0 1" joint="bh_wrist_joint" name="bh_wrist_torque_z_actuator"/>
+    <position joint="bh_j11_joint" name="bh_j11_joint" ctrlrange="0 3.14" kp="1000"/>
+    <position joint="bh_j13_joint" name="bh_j12_joint" ctrlrange="0 2.44" kp="10"/>
+    <position joint="bh_j23_joint" name="bh_j22_joint" ctrlrange="0 2.44" kp="10"/>
+    <position joint="bh_j33_joint" name="bh_j32_joint" ctrlrange="0 2.44" kp="10"/>
+  </actuator>
   <sensor>
     <force name="optoforce_1" site="optoforce_1"/>
     <force name="optoforce_2" site="optoforce_2"/>
