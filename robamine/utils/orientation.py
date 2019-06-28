@@ -227,6 +227,39 @@ class Quaternion:
         self.y = new.y
         self.z = new.z
 
+    def log(self):
+        if abs(self.w - 1) < 1e-12:
+            return np.zero(3)
+        vec_norm = lin.norm(self.vec())
+        return math.atan2(vec_norm, self.w) * self.vec() / vec_norm;
+
+    def mul(self, second):
+        result = Quaternion()
+        result.w = self.w * second.w - np.dot(self.vec(), second.vec())
+        vec = self.w * second.vec() + second.w * self.vec() + np.cross(self.vec(), second.vec())
+        result.x = vec[0]
+        result.y = vec[1]
+        result.z = vec[2]
+        return result
+
+    def inverse(self):
+        result = Quaternion();
+        temp = pow(self.w, 2) + pow(self.x, 2) + pow(self.y, 2) + pow(self.z, 2)
+        result.w = self.w / temp
+        result.x = - self.x / temp
+        result.y = - self.y / temp
+        result.z = - self.z / temp
+        return result
+
+    def log_error(self, desired):
+        diff = self.mul(desired.inverse())
+        if (diff.w < 0):
+            diff.x = - diff.x
+            diff.y = - diff.y
+            diff.z = - diff.z
+            diff.w = - diff.w
+        return 2.0 * diff.log()
+
 def rot_x(theta):
   rot = np.zeros((3, 3))
   rot[0, 0] = 1
