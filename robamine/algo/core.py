@@ -429,7 +429,7 @@ class World:
                 print_progress(episode, n_episodes, start_time, total_n_timesteps, experience_time)
 
             if save_every and (episode + 1) % save_every == 0:
-                self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
+                self.save()
 
 
     def _episode(self, render=False, train=False):
@@ -490,3 +490,25 @@ class World:
             Plotter.create_batch_from_stream(self.log_dir, 'eval', batch_size)
             plotter = Plotter(self.log_dir, ['eval', 'batch_train'])
             plotter.plot()
+
+    @classmethod
+    def load(cls, directory):
+        world = pickle.load(open(os.path.join(directory, 'world.pkl'), 'rb'))
+        agent_name = world['agent_name']
+        agent_handle, agent_params_handle = get_agent_handle(agent_name)
+        agent_params = agent_params_handle()
+        agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
+
+        self = cls(agent, world['env'])
+        logger.info('World loaded from %s', directory)
+        return self
+
+    def save(self):
+        self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
+        world_path = os.path.join(self.log_dir, 'world.pkl')
+        world = {}
+        world['env'] = self.env
+        world['agent_name'] = self.agent_name
+        pickle.dump(world, open(world_path, 'wb'))
+        logger.info('World saved to %s', world_path)
+
