@@ -311,7 +311,10 @@ class World:
             raise err
 
         self.state_dim = int(self.env.observation_space.shape[0])
-        self.action_dim = int(self.env.action_space.shape[0])
+        if isinstance(self.env.action_space, gym.spaces.discrete.Discrete):
+            self.action_dim = self.env.action_space.n
+        else:
+            self.action_dim = int(self.env.action_space.shape[0])
 
         # Agent setup
         if isinstance(agent, str):
