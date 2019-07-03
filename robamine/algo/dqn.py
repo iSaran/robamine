@@ -67,6 +67,8 @@ class DQN(Agent):
 
         self.rng = np.random.RandomState()
 
+        self.info['qnet_loss'] = 0
+
     def predict(self, state):
         s = torch.FloatTensor(state).to(self.device)
         action_value = self.network(s).cpu().detach().numpy()
@@ -113,6 +115,8 @@ class DQN(Agent):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+        self.info['qnet_loss'] = loss.detach().cpu().numpy().copy()
 
     @classmethod
     def load(cls, file_path):

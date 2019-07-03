@@ -73,6 +73,7 @@ class Agent:
         self.params = params
         self.params.state_dim, self.params.action_dim  = state_dim, action_dim
         self.sess = tf.Session()
+        self.info = {}
 
     def explore(self, state):
         """
@@ -389,10 +390,10 @@ class World:
         logger.debug('Start running world')
         if self._mode == WorldMode.TRAIN:
             train = True
-            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train')
+            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
         elif self._mode == WorldMode.EVAL:
             train = False
-            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval')
+            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
         elif self._mode == WorldMode.TRAIN_EVAL:
             train = True
             self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train')
@@ -414,12 +415,6 @@ class World:
             else:
                 self.eval_stats.update(episode, episode_stats)
 
-            # Store episode stats
-            # if train:
-            #     self.train_stats.update_episode(episode, episode_stats)
-            # else:
-            #     self.eval_stats.update_episode(episode, episode_stats)
-
             # Evaluate every some number of training episodes
             if evaluate_every and (episode + 1) % evaluate_every == 0 and episodes_to_evaluate:
                 for eval_episode in range(episodes_to_evaluate):
@@ -436,14 +431,11 @@ class World:
 
 
     def _episode(self, render=False, train=False):
-        stats = EpisodeStats()
+        stats = EpisodeStats(self.agent.info)
         state = self.env.reset()
         while True:
             if (render):
                 self.env.render()
-
-            logger.debug('Timestep %d: ', len(stats.reward))
-            logger.debug('Given state: %s', state.__str__())
 
             # Act: Explore or optimal policy?
             if train:
@@ -451,24 +443,20 @@ class World:
             else:
                 action = self.agent.predict(state)
 
-            logger.debug('Action to explore: %s', action.__str__())
-
             # Execute the action on the environment and observe reward and next state
             next_state, reward, done, info = self.env.step(action)
             if 'experience_time' in info:
                 stats.experience_time += info['experience_time']
-            logger.debug('Next state by the environment: %s', next_state.__str__())
-            logger.debug('Reward by the environment: %f', reward)
-
-            transition = Transition(state, action, reward, next_state, done)
 
             if train:
+                transition = Transition(state, action, reward, next_state, done)
                 self.agent.learn(transition)
 
+            for var in self.agent.info:
+                stats.info[var].append(self.agent.info[var])
+
             # Learn
-            logger.debug('Learn based on this transition')
             Q = self.agent.q_value(state, action)
-            logger.debug('Q value by the agent: %f', Q)
 
             state = next_state
 

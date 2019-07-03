@@ -170,11 +170,14 @@ class NormalNoise(Noise):
         return 'NormalNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
 
 class EpisodeStats:
-    def __init__(self):
+    def __init__(self, additional_info = {}):
         self.n_episodes = 0
         self.experience_time = 0
         self.reward = []
         self.q_value = []
+        self.info = {}
+        for key in additional_info:
+            self.info[key] = []
 
 class Stats:
     """
@@ -213,18 +216,18 @@ class Stats:
     Parameters
     ---------
     dt : float
-        The real timestep in seconds
-    logger : :class:`.Logger`
         Used for logging
     name : str
         A name for these stats
     """
-    def __init__(self, sess, log_dir, tf_writer, name, stats_name = ['mean', 'min', 'max', 'std', 'sum']):
+    def __init__(self, sess, log_dir, tf_writer, name, additional_info = {}, stats_name = ['mean', 'min', 'max', 'std', 'sum']):
         self.stats_name = stats_name
         log_var_names = ['n_timesteps']
         for j in stats_name:
             log_var_names.append(j + '_reward')
             log_var_names.append(j + '_q_value')
+            for k in additional_info:
+                log_var_names.append(j + '_' + k)
 
         self.data_stream = DataStream(sess, log_dir, tf_writer, log_var_names, name)
 
@@ -245,6 +248,8 @@ class Stats:
             operation = getattr(importlib.import_module('numpy'), operation)
             row.append(np.squeeze(operation(np.array(episode_data.reward))))
             row.append(np.squeeze(operation(np.array(episode_data.q_value))))
+            for k in episode_data.info:
+                row.append(np.squeeze(operation(np.array(episode_data.info[k]))))
         self.data_stream.log(episode, row)
 
 class Plotter:
