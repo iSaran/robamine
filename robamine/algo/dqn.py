@@ -74,6 +74,7 @@ class DQN(Agent):
 
         self.rng = np.random.RandomState()
 
+        self.info['qnet_loss'] = 0
         self.epsilon = self.params.epsilon_start
 
     def predict(self, state):
@@ -133,6 +134,7 @@ class DQN(Agent):
         self.optimizer.step()
 
         self.learn_step_counter += 1
+        self.info['qnet_loss'] = loss.detach().cpu().numpy().copy()
 
     @classmethod
     def load(cls, file_path):
