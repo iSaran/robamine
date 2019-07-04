@@ -116,7 +116,7 @@ class DQN(Agent):
 
         q = self.network(state).gather(1, action)
         q_next = self.target_network(next_state)
-        q_target = reward + self.params.gamma * q_next.max(1)[0].view(self.params.batch_size, 1)
+        q_target = reward + (1 - terminal) * self.params.gamma * q_next.max(1)[0].view(self.params.batch_size, 1)
 
         loss = self.loss(q, q_target)
 
