@@ -2,12 +2,15 @@ import argparse
 import tensorflow as tf
 import logging
 import robamine as rm
+import torch
 
 
 def run(env_id, agent_id, episodes):
     rm.rb_logging.init(directory='/tmp/robamine_logs/', file_level=logging.INFO)
     logger = logging.getLogger('robamine')
+    torch.manual_seed(0)
     world = rm.World(agent_id, env_id)
+    world.seed(0)
     world.train(n_episodes=episodes, print_progress_every=100, save_every=100, render=False)
 
 def parse_args():
