@@ -13,6 +13,7 @@ from collections import deque
 from random import Random
 import numpy as np
 import pickle
+import math
 
 import logging
 logger = logging.getLogger('robamine.algo.dqn')
@@ -25,7 +26,9 @@ class DQNParams(AgentParams):
                  replay_buffer_size = 1e6,
                  batch_size = 64,
                  gamma = 0.999,
-                 epsilon = 0.9,
+                 epsilon_start = 0.9,
+                 epsilon_end = 0.05,
+                 epsilon_decay = 0,
                  learning_rate = 1e-4,
                  tau = 0.99,
                  target_net_updates = 1000):
@@ -35,7 +38,9 @@ class DQNParams(AgentParams):
         self.replay_buffer_size = replay_buffer_size
         self.batch_size = batch_size
         self.gamma = gamma
-        self.epsilon = epsilon
+        self.epsilon_start = epsilon_start
+        self.epsilon_end = epsilon_end
+        self.epsilon_decay = epsilon_decay
         self.learning_rate = learning_rate
         self.target_net_updates = target_net_updates
         self.tau = tau
@@ -70,6 +75,7 @@ class DQN(Agent):
         self.rng = np.random.RandomState()
 
         self.info['qnet_loss'] = 0
+        self.epsilon = self.params.epsilon_start
 
     def predict(self, state):
         s = torch.FloatTensor(state).to(self.device)
@@ -77,7 +83,11 @@ class DQN(Agent):
         return np.argmax(action_value)
 
     def explore(self, state):
-        if self.rng.randn() <= self.params.epsilon:
+        if self.params.epsilon_decay > 0:
+            self.epsilon = self.params.epsilon_end + \
+            (self.params.epsilon_start - self.params.epsilon_end) * \
+            math.exp(-1 * self.learn_step_counter / self.params.epsilon_decay)
+        if self.rng.randn() <= self.epsilon:
             return self.predict(state)
         return self.rng.randint(0, self.action_dim)
 
@@ -95,7 +105,6 @@ class DQN(Agent):
         if self.learn_step_counter > self.params.target_net_updates:
             self.target_network.load_state_dict(self.network.state_dict())
             self.learn_step_counter = 0
-        self.learn_step_counter += 1
 
         # new_target_params = {}
         # for key in self.target_network.state_dict():
@@ -124,6 +133,7 @@ class DQN(Agent):
         loss.backward()
         self.optimizer.step()
 
+        self.learn_step_counter += 1
         self.info['qnet_loss'] = loss.detach().cpu().numpy().copy()
 
     @classmethod
