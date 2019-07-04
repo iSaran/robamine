@@ -24,13 +24,13 @@ class DQNParams(AgentParams):
                  action_dim = None,
                  suffix="",
                  replay_buffer_size = 1e6,
-                 batch_size = 64,
-                 gamma = 0.999,
+                 batch_size = 128,
+                 gamma = 0.9,
                  epsilon_start = 0.9,
                  epsilon_end = 0.05,
                  epsilon_decay = 0,
                  learning_rate = 1e-4,
-                 tau = 0.99,
+                 tau = 0.999,
                  target_net_updates = 1000):
         super().__init__(state_dim, action_dim, "DQN", suffix)
 
@@ -102,14 +102,14 @@ class DQN(Agent):
             return
 
         # Update target network if necessary
-        if self.learn_step_counter > self.params.target_net_updates:
-            self.target_network.load_state_dict(self.network.state_dict())
-            self.learn_step_counter = 0
+        # if self.learn_step_counter > self.params.target_net_updates:
+        #     self.target_network.load_state_dict(self.network.state_dict())
+        #     self.learn_step_counter = 0
 
-        # new_target_params = {}
-        # for key in self.target_network.state_dict():
-        #     new_target_params[key] = self.params.tau * self.target_network.state_dict()[key] + (1 - self.params.tau) * self.network.state_dict()[key]
-        # self.target_network.load_state_dict(new_target_params)
+        new_target_params = {}
+        for key in self.target_network.state_dict():
+            new_target_params[key] = self.params.tau * self.target_network.state_dict()[key] + (1 - self.params.tau) * self.network.state_dict()[key]
+        self.target_network.load_state_dict(new_target_params)
 
         # Sample from replay buffer
         batch = self.replay_buffer.sample_batch(self.params.batch_size)
