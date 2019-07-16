@@ -73,6 +73,7 @@ class Agent:
         self.params = params
         self.params.state_dim, self.params.action_dim  = state_dim, action_dim
         self.sess = tf.Session()
+        self.info = {}
 
     def explore(self, state):
         """
@@ -311,7 +312,10 @@ class World:
             raise err
 
         self.state_dim = int(self.env.observation_space.shape[0])
-        self.action_dim = int(self.env.action_space.shape[0])
+        if isinstance(self.env.action_space, gym.spaces.discrete.Discrete):
+            self.action_dim = self.env.action_space.n
+        else:
+            self.action_dim = int(self.env.action_space.shape[0])
 
         # Agent setup
         if isinstance(agent, str):
@@ -386,10 +390,10 @@ class World:
         logger.debug('Start running world')
         if self._mode == WorldMode.TRAIN:
             train = True
-            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train')
+            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
         elif self._mode == WorldMode.EVAL:
             train = False
-            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval')
+            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
         elif self._mode == WorldMode.TRAIN_EVAL:
             train = True
             self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train')
@@ -411,12 +415,6 @@ class World:
             else:
                 self.eval_stats.update(episode, episode_stats)
 
-            # Store episode stats
-            # if train:
-            #     self.train_stats.update_episode(episode, episode_stats)
-            # else:
-            #     self.eval_stats.update_episode(episode, episode_stats)
-
             # Evaluate every some number of training episodes
             if evaluate_every and (episode + 1) % evaluate_every == 0 and episodes_to_evaluate:
                 for eval_episode in range(episodes_to_evaluate):
@@ -429,18 +427,15 @@ class World:
                 print_progress(episode, n_episodes, start_time, total_n_timesteps, experience_time)
 
             if save_every and (episode + 1) % save_every == 0:
-                self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
+                self.save()
 
 
     def _episode(self, render=False, train=False):
-        stats = EpisodeStats()
+        stats = EpisodeStats(self.agent.info)
         state = self.env.reset()
         while True:
             if (render):
                 self.env.render()
-
-            logger.debug('Timestep %d: ', len(stats.reward))
-            logger.debug('Given state: %s', state.__str__())
 
             # Act: Explore or optimal policy?
             if train:
@@ -448,24 +443,20 @@ class World:
             else:
                 action = self.agent.predict(state)
 
-            logger.debug('Action to explore: %s', action.__str__())
-
             # Execute the action on the environment and observe reward and next state
             next_state, reward, done, info = self.env.step(action)
             if 'experience_time' in info:
                 stats.experience_time += info['experience_time']
-            logger.debug('Next state by the environment: %s', next_state.__str__())
-            logger.debug('Reward by the environment: %f', reward)
-
-            transition = Transition(state, action, reward, next_state, done)
 
             if train:
+                transition = Transition(state, action, reward, next_state, done)
                 self.agent.learn(transition)
 
+            for var in self.agent.info:
+                stats.info[var].append(self.agent.info[var])
+
             # Learn
-            logger.debug('Learn based on this transition')
             Q = self.agent.q_value(state, action)
-            logger.debug('Q value by the agent: %f', Q)
 
             state = next_state
 
@@ -490,3 +481,25 @@ class World:
             Plotter.create_batch_from_stream(self.log_dir, 'eval', batch_size)
             plotter = Plotter(self.log_dir, ['eval', 'batch_train'])
             plotter.plot()
+
+    @classmethod
+    def load(cls, directory):
+        world = pickle.load(open(os.path.join(directory, 'world.pkl'), 'rb'))
+        agent_name = world['agent_name']
+        agent_handle, agent_params_handle = get_agent_handle(agent_name)
+        agent_params = agent_params_handle()
+        agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
+
+        self = cls(agent, world['env_id'])
+        logger.info('World loaded from %s', directory)
+        return self
+
+    def save(self):
+        self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
+        world_path = os.path.join(self.log_dir, 'world.pkl')
+        world = {}
+        world['env_id'] = self.env_name
+        world['agent_name'] = self.agent_name
+        pickle.dump(world, open(world_path, 'wb'))
+        logger.info('World saved to %s', world_path)
+

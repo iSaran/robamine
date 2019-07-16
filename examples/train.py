@@ -2,17 +2,19 @@ import argparse
 import tensorflow as tf
 import logging
 import robamine as rm
+import torch
 
 
-def run(env_id, episodes):
+def run(env_id, agent_id, episodes):
     rm.rb_logging.init(directory='/tmp/robamine_logs/', file_level=logging.INFO)
     logger = logging.getLogger('robamine')
-    world = rm.World(rm.DDPGParams(exploration_noise='Normal'), env_id)
-    world.train(n_episodes=episodes, print_progress_every=1, save_every=10)
+    world = rm.World(agent_id, env_id)
+    world.train(n_episodes=episodes, print_progress_every=100, save_every=100, render=True)
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--env-id', type=str, default='Clutter-v0', help='The id of the gym environment to use')
+    parser.add_argument('--agent-id', type=str, default='DDPGTorch', help='The id of the gym environment to use')
     parser.add_argument('--episodes', type=int, default=5000, help='The number of episodes to train')
     args = parser.parse_args()
     dict_args = vars(args)
