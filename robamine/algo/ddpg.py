@@ -39,7 +39,7 @@ import gym
 import pickle
 import os
 
-from robamine.algo.core import Network, NetworkParams, Agent, AgentParams
+from robamine.algo.core import Network, Agent
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise
 import math
 
@@ -47,65 +47,30 @@ import logging
 
 logger = logging.getLogger('robamine.algo.ddpg')
 
-class ActorParams(NetworkParams):
-    def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
-                 hidden_units = (400, 300),
-                 name = "Actor",
-                 learning_rate = 1e-4,
-                 gate_gradients = False,
-                 final_layer_init=(-3e-3, 3e-3),
-                 batch_size = 64):
-        super().__init__(input_dim=state_dim,
-                         output_dim=action_dim,
-                         hidden_units=hidden_units,
-                         name=name)
-        self.learning_rate = learning_rate
-        self.gate_gradients = gate_gradients
-        self.final_layer_init = final_layer_init
-        self.batch_size = batch_size
-
-class CriticParams(NetworkParams):
-    def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
-                 hidden_units = (400, 300),
-                 name = "Critic",
-                 learning_rate = 1e-3,
-                 final_layer_init=(-3e-3, 3e-3)):
-
-        super().__init__(hidden_units=hidden_units,
-                         name=name)
-        self.input_dim = (state_dim, action_dim)
-        self.learning_rate = learning_rate
-        self.final_layer_init = final_layer_init
-        self.output_dim = 1
-
-class DDPGParams(AgentParams):
-    def __init__(self,
-                 state_dim = None,
-                 action_dim = None,
-                 suffix="",
-                 replay_buffer_size = 1e6,
-                 batch_size = 64,
-                 gamma = 0.99,
-                 exploration_noise = 'OU',
-                 exploration_noise_sigma = 0.2,
-                 tau = 1e-3,
-                 actor = ActorParams(),
-                 critic = CriticParams()):
-        super().__init__(state_dim, action_dim, "DDPG", suffix)
-
-        # DDPG params
-        self.replay_buffer_size = replay_buffer_size
-        self.batch_size = batch_size
-        self.gamma = gamma
-        self.exploration_noise = exploration_noise
-        self.exploration_noise_sigma = exploration_noise_sigma
-        self.tau = tau
-        self.actor = actor
-        self.critic = critic
+default_params = {
+        'name' : 'DDPG',
+        'suffix' : '',
+        'replay_buffer_size' : 1e6,
+        'batch_size' : 64,
+        'discount' : 0.99,
+        'tau' : 1e-3,
+        'actor' : {
+            'hidden_units' : [400, 300],
+            'learning_rate' : 1e-4,
+            'final_layer_init' : [-3e-3, 3e-3],
+            'gate_gradients' : False,
+            'batch_size' : 64
+            },
+        'critic' : {
+            'hidden_units' : [400, 300],
+            'learning_rate' : 1e-3,
+            'final_layer_init' : [-3e-3, 3e-3]
+            },
+        'noise' : {
+            'name' : 'OU',
+            'sigma' : 0.2
+            }
+        }
 
 class ReplayBuffer:
     """
@@ -279,30 +244,32 @@ class Actor(Network):
     learning_rate : float
         The learning rate for the optimizer
     """
-    def __init__(self, sess, params):
-        super().__init__(sess, params)
+    def __init__(self, sess, input_dims, hidden_units, output_dim, params):
+        super().__init__(sess, input_dims, hidden_units, output_dim, 'Actor')
         self.state_input = None
+        self.params = params
 
     @classmethod
-    def create(cls, sess, params):
-        self = cls(sess, params)
+    def create(cls, sess, input_dims, hidden_units, output_dim, params):
+        self = cls(sess, input_dims, hidden_units, output_dim, params)
 
-        state_input_dim = self.params.input_dim
-        with tf.variable_scope(self.params.name):
+        state_input_dim = self.input_dim
+        with tf.variable_scope(self.name):
             self.state_input = tf.placeholder(tf.float32, [None, state_input_dim], name='state_input')
             with tf.variable_scope('network'):
-                self.out, self.net_params = self.architecture(self.state_input, self.params.hidden_units, self.params.output_dim, self.params.final_layer_init)
+                self.out, self.net_params = self.architecture(self.state_input, self.hidden_units, self.output_dim, self.params['final_layer_init'])
 
             # Here we store the grad of Q w.r.t the actions. This gradient is
             # provided by the Critic and is used to implement the policy gradient
             # below.
-            self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.params.output_dim], name='gradQ_a')
+            self.grad_q_wrt_a = tf.placeholder(tf.float32, [None, self.output_dim], name='gradQ_a')
 
             # Calculate the gradient of the policy's actions w.r.t. the policy's
             # parameters and multiply it by the gradient of Q w.r.t the actions
-            unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a, gate_gradients=self.params.gate_gradients, name='sum_gradQa_grad_mutheta')
-            gradients = list(map(lambda x: tf.div(x, self.params.batch_size, name='div_by_N'), unnormalized_gradients))
-            self.optimizer = tf.train.AdamOptimizer(self.params.learning_rate, name='optimizer').apply_gradients(zip(gradients, self.net_params))
+            unnormalized_gradients = tf.gradients(self.out, self.net_params, -self.grad_q_wrt_a, gate_gradients=self.params['gate_gradients'], name='sum_gradQa_grad_mutheta')
+            print(self.params)
+            gradients = list(map(lambda x: tf.div(x, self.params['batch_size'], name='div_by_N'), unnormalized_gradients))
+            self.optimizer = tf.train.AdamOptimizer(self.params['learning_rate'], name='optimizer').apply_gradients(zip(gradients, self.net_params))
 
         return self
 
@@ -375,12 +342,11 @@ class Target(Network):
             logger.exception(err)
             raise err
 
-        n = base.params.name + 'Target'
+        n = base.name + 'Target'
         if name is not None:
             n = n + '_' + name
 
-        params = NetworkParams(input_dim=base.params.input_dim, hidden_units=base.params.hidden_units, output_dim=base.params.output_dim, name=n)
-        super().__init__(base.sess, params)
+        super().__init__(base.sess, base.input_dim, base.hidden_units, base.output_dim, n)
 
         self.base_is_actor = False
         if isinstance(base, Actor):
@@ -398,19 +364,19 @@ class Target(Network):
     def create(cls, base, tau):
         self = cls(base, tau)
 
-        with tf.variable_scope(self.params.name):
+        with tf.variable_scope(self.name):
             if isinstance(base, Actor):
-                self.state_input = tf.placeholder(tf.float32, [None, base.params.input_dim], name='state_input')
+                self.state_input = tf.placeholder(tf.float32, [None, base.input_dim], name='state_input')
             elif isinstance(base, Critic):
-                self.state_input = tf.placeholder(tf.float32, [None, base.params.input_dim[0]], name='state_input')
-                self.action_input = tf.placeholder(tf.float32, [None, base.params.input_dim[1]], name='action_input')
+                self.state_input = tf.placeholder(tf.float32, [None, base.input_dim[0]], name='state_input')
+                self.action_input = tf.placeholder(tf.float32, [None, base.input_dim[1]], name='action_input')
 
             with tf.variable_scope('network'):
 
                 if isinstance(base, Actor):
-                    self.out, self.net_params = Actor.architecture(self.state_input, base.params.hidden_units, base.params.output_dim, base.params.final_layer_init)
+                    self.out, self.net_params = Actor.architecture(self.state_input, base.hidden_units, base.output_dim, base.params['final_layer_init'])
                 elif isinstance(base, Critic):
-                    self.out, self.net_params = Critic.architecture(self.state_input, self.action_input, base.params.hidden_units, base.params.final_layer_init)
+                    self.out, self.net_params = Critic.architecture(self.state_input, self.action_input, base.hidden_units, base.params['final_layer_init'])
 
             with tf.variable_scope('update_params_with_base'):
                 self.update_net_params = \
@@ -482,26 +448,27 @@ class Critic(Network):
     learning_rate : float
         The learning rate for the optimizer
     """
-    def __init__(self, sess, params=CriticParams()):
-        super().__init__(sess, params)
-        self.state_dim = self.params.input_dim[0]
-        self.action_dim = self.params.input_dim[1]
+    def __init__(self, sess, input_dims, hidden_units, params=default_params['critic']):
+        super().__init__(sess, input_dims, hidden_units, 1, 'Critic')
+        self.params = params
+        self.state_dim = self.input_dim[0]
+        self.action_dim = self.input_dim[1]
         self.state_input = None
         self.action_input = None
 
     @classmethod
-    def create(cls, sess, params):
-        self = cls(sess, params)
+    def create(cls, sess, input_dims, hidden_units, params=default_params['critic']):
+        self = cls(sess, input_dims, hidden_units, params)
 
-        with tf.variable_scope(self.params.name):
+        with tf.variable_scope(self.name):
             self.state_input = tf.placeholder(tf.float32, [None, self.state_dim], name='state_input')
             self.action_input = tf.placeholder(tf.float32, [None, self.action_dim], name='action_input')
             with tf.variable_scope('network'):
-                self.out, self.net_params = self.architecture(self.state_input, self.action_input, self.params.hidden_units, self.params.final_layer_init)
+                self.out, self.net_params = self.architecture(self.state_input, self.action_input, self.hidden_units, self.params['final_layer_init'])
 
             self.q_value = tf.placeholder(tf.float32, [None, 1], name='Q_value')
             self.loss = tf.losses.mean_squared_error(self.q_value, self.out)
-            self.optimizer = tf.train.AdamOptimizer(self.params.learning_rate, name='optimize_mse').minimize(self.loss)
+            self.optimizer = tf.train.AdamOptimizer(self.params['learning_rate'], name='optimize_mse').minimize(self.loss)
 
             # # Get the gradient of the net w.r.t. the action.
             # # For each action in the minibatch (i.e., for each x in xs),
@@ -619,21 +586,18 @@ class DDPG(Agent):
     exploration_noise_sigma : float
         The sigma for the OrnsteinUhlenbeck Noise for exploration.
     """
-    def __init__(self, state_dim, action_dim, params = DDPGParams()):
+    def __init__(self, state_dim, action_dim, params = default_params):
 
-        super().__init__(state_dim, action_dim, params)
+        super().__init__(state_dim, action_dim, 'DDPG', params)
 
-        with tf.variable_scope(self.params.name + self.params.suffix):
-            # Initialize the Actor network and its target net
-            self.params.actor.input_dim = self.state_dim
-            self.params.actor.output_dim = self.action_dim
-            self.actor = Actor.create(self.sess, self.params.actor)
-            self.target_actor = Target.create(self.actor, self.params.tau)
+        with tf.variable_scope(self.params['name'] + self.params['suffix']):
+
+            self.actor = Actor.create(self.sess, self.state_dim, self.params['actor']['hidden_units'], self.action_dim, self.params['actor'])
+            self.target_actor = Target.create(self.actor, self.params['tau'])
 
             # Initialize the Critic network and its target net
-            self.params.critic.input_dim = (self.state_dim, self.action_dim)
-            self.critic = Critic.create(self.sess, self.params.critic)
-            self.target_critic = Target.create(self.critic, self.params.tau)
+            self.critic = Critic.create(self.sess, [self.state_dim, action_dim], self.params['critic']['hidden_units'], self.params['critic'])
+            self.target_critic = Target.create(self.critic, self.params['tau'])
 
             # Initialize target networks with weights equal to the learned networks
             self.sess.run(tf.global_variables_initializer())
@@ -641,37 +605,41 @@ class DDPG(Agent):
             self.target_critic.equalize_params()
 
         # Initialize replay buffer
-        self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size)
+        self.replay_buffer = ReplayBuffer(self.params['replay_buffer_size'])
 
-        if params.exploration_noise == 'Normal':
-            self.exploration_noise = NormalNoise(mu=np.zeros(self.action_dim), sigma = self.params.exploration_noise_sigma)
-        elif params.exploration_noise == 'OU':
-            self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = self.params.exploration_noise_sigma)
+        if params['noise']['name'] == 'Normal':
+            self.exploration_noise = NormalNoise(mu=np.zeros(self.action_dim), sigma = self.params['noise']['sigma'])
+        elif params['noise']['name'] == 'OU':
+            self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = self.params['noise']['sigma'])
 
     @classmethod
     def load(cls, file_path):
         params = pickle.load(open(file_path, 'rb'))
-        self = cls(params.state_dim, params.action_dim, params)
+        self = cls(params['state_dim'], params['action_dim'], params['params'])
 
         # Set the actor and critic trainable params equal to the in the pickle file
         for i in range(len(self.actor.net_params)):
-            self.sess.run(self.actor.net_params[i].assign(self.params.actor.trainable[i]))
+            self.sess.run(self.actor.net_params[i].assign(params['actor_trainable'][i]))
 
         for i in range(len(self.critic.net_params)):
-            self.sess.run(self.critic.net_params[i].assign(self.params.critic.trainable[i]))
+            self.sess.run(self.critic.net_params[i].assign(params['critic.trainable'][i]))
 
         # Equalize again the target network's parameters
         self.target_actor.equalize_params()
         self.target_critic.equalize_params()
 
-        logger.info('Agent %s loaded from %s', self.params.name + self.params.suffix, file_path)
+        logger.info('Agent %s loaded from %s', self.name + self.params['suffix'], file_path)
         return self
 
     def save(self, file_path):
         logger.info('Saving agent to %s', file_path)
-        self.params.actor.trainable = self.sess.run(self.actor.net_params)
-        self.params.critic.trainable = self.sess.run(self.critic.net_params)
-        pickle.dump(self.params, open(file_path, 'wb'))
+        params = {}
+        params['params'] = self.params
+        params ['actor_trainable'] = self.sess.run(self.actor.net_params)
+        params ['critic_trainable'] = self.sess.run(self.critic.net_params)
+        params ['state_dim'] = self.state_dim
+        params ['action_dim'] = self.action_dim
+        pickle.dump(params, open(file_path, 'wb'))
 
 
     def explore(self, state):
@@ -713,7 +681,7 @@ class DDPG(Agent):
             The optimal action to be performed.
         """
         obs = state.reshape(1, state.shape[0])
-        return np.reshape(self.actor.predict(obs), (self.params.action_dim,))
+        return np.reshape(self.actor.predict(obs), (self.action_dim,))
 
     def learn(self, transition):
         """
@@ -752,11 +720,11 @@ class DDPG(Agent):
 
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
-        if self.replay_buffer.size() < self.params.batch_size:
+        if self.replay_buffer.size() < self.params['batch_size']:
             return
 
         logger.debug("Sampling a minibatch from the replay buffer")
-        state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.params.batch_size)
+        state_batch, action_batch, reward_batch, next_state_batch, terminal_batch = self.replay_buffer.sample_batch(self.params['batch_size'])
         logger.debug("Sampled batches by replay buffer:")
         logger.debug('State batch: %s', state_batch.__str__())
         logger.debug('Action batch: %s', action_batch.__str__())
@@ -806,11 +774,11 @@ class DDPG(Agent):
         logger.debug('Q_target_next: %s', Q_target_next.__str__())
 
         y_i = []
-        for k in range(self.params.batch_size):
+        for k in range(self.params['batch_size']):
             if terminal_batch[k]:
                 y_i.append(reward_batch[k])
             else:
-                y_i.append(reward_batch[k] + self.params.gamma * Q_target_next[k])
+                y_i.append(reward_batch[k] + self.params['discount'] * Q_target_next[k])
 
         y_i = np.reshape(y_i, (64, 1))
 

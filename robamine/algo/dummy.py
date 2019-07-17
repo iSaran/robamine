@@ -5,15 +5,11 @@ Dummy Agent
 A dummy agent which produces random actions. Used for testing.
 """
 
-from robamine.algo.core import Agent, AgentParams
-
-class DummyParams(AgentParams):
-    def __init__(self, state_dim=None, action_dim=None):
-        super().__init__(state_dim, action_dim, name="Dummy")
+from robamine.algo.core import Agent
 
 class Dummy(Agent):
-    def __init__(self, action_space, state_dim=None, action_dim=None, params=DummyParams()):
-        super(Dummy, self).__init__(state_dim, action_dim, params)
+    def __init__(self, action_space, state_dim=None, action_dim=None, params={}):
+        super(Dummy, self).__init__(state_dim, action_dim, 'Dummy', params)
         self.action_space = action_space
 
         # self.logger = Logger(self.sess, self.log_dir, self.name, self.env.spec.id)

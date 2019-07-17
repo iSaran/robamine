@@ -1,8 +1,8 @@
-import trajectory
+import robotics
 import numpy as np
 
-T = trajectory.Trajectory([10, 15], [-10, 20])
-T2 = trajectory.Trajectory([15, 20], [20, -10])
+T = robotics.Trajectory([10, 15], [-10, 20])
+T2 = robotics.Trajectory([15, 20], [20, -10])
 t = np.linspace(10, 20, 200)
 y = []
 for k in t:

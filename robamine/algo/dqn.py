@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from robamine.algo.core import NetworkParams, AgentParams, Agent
+from robamine.algo.core import Agent
 from robamine.algo.ddpgtorch import ReplayBuffer
 from collections import deque
 from random import Random
@@ -18,32 +18,18 @@ import math
 import logging
 logger = logging.getLogger('robamine.algo.dqn')
 
-class DQNParams(AgentParams):
-    def __init__(self,
-                 state_dim = None,
-                 action_dim = None,
-                 suffix="",
-                 replay_buffer_size = 1e6,
-                 batch_size = 128,
-                 gamma = 0.9,
-                 epsilon_start = 0.9,
-                 epsilon_end = 0.05,
-                 epsilon_decay = 0,
-                 learning_rate = 1e-4,
-                 tau = 0.999,
-                 target_net_updates = 1000):
-        super().__init__(state_dim, action_dim, "DQN", suffix)
-
-        # DDPG params
-        self.replay_buffer_size = replay_buffer_size
-        self.batch_size = batch_size
-        self.gamma = gamma
-        self.epsilon_start = epsilon_start
-        self.epsilon_end = epsilon_end
-        self.epsilon_decay = epsilon_decay
-        self.learning_rate = learning_rate
-        self.target_net_updates = target_net_updates
-        self.tau = tau
+default_params = {
+        'name' : 'DQN',
+        'replay_buffer_size' : 1e6,
+        'batch_size' : 128,
+        'discount' : 0.9,
+        'epsilon_start' : 0.9,
+        'epsilon_end' : 0.05,
+        'epsilon_decay' : 0.0,
+        'learning_rate' : 1e-4,
+        'tau' : 0.999
+        'target_net_updates' : 1000
+        }
 
 class QNetwork(nn.Module):
     def __init__(self, state_dim, action_dim):
@@ -61,21 +47,21 @@ class QNetwork(nn.Module):
         return action_prob
 
 class DQN(Agent):
-    def __init__(self, state_dim, action_dim, params = DQNParams()):
-        super().__init__(state_dim, action_dim, params)
+    def __init__(self, state_dim, action_dim, params = default_params):
+        super().__init__(state_dim, action_dim, 'DQN', params)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         self.network, self.target_network = QNetwork(state_dim, action_dim).to(self.device), QNetwork(state_dim, action_dim).to(self.device)
-        self.optimizer = optim.Adam(self.network.parameters(), lr=self.params.learning_rate)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=self.params['learning_rate'])
         self.loss = nn.MSELoss()
-        self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size)
+        self.replay_buffer = ReplayBuffer(self.params['replay_buffer_size'])
         self.learn_step_counter = 0
 
         self.rng = np.random.RandomState()
 
         self.info['qnet_loss'] = 0
-        self.epsilon = self.params.epsilon_start
+        self.epsilon = self.params['epsilon_start']
 
     def predict(self, state):
         s = torch.FloatTensor(state).to(self.device)
@@ -83,10 +69,10 @@ class DQN(Agent):
         return np.argmax(action_value)
 
     def explore(self, state):
-        if self.params.epsilon_decay > 0:
-            self.epsilon = self.params.epsilon_end + \
-            (self.params.epsilon_start - self.params.epsilon_end) * \
-            math.exp(-1 * self.learn_step_counter / self.params.epsilon_decay)
+        if self.params['epsilon_decay'] > 0:
+            self.epsilon = self.params['epsilon_end'] + \
+            (self.params['epsilon_start'] - self.params['epsilon_end']) * \
+            math.exp(-1 * self.learn_step_counter / self.params['epsilon_decay'])
         if self.rng.randn() <= self.epsilon:
             return self.predict(state)
         return self.rng.randint(0, self.action_dim)
@@ -98,21 +84,21 @@ class DQN(Agent):
 
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
-        if self.replay_buffer.size() < self.params.batch_size:
+        if self.replay_buffer.size() < self.params['batch_size']:
             return
 
         # Update target network if necessary
-        # if self.learn_step_counter > self.params.target_net_updates:
+        # if self.learn_step_counter > self.params['target_net_updates']:
         #     self.target_network.load_state_dict(self.network.state_dict())
         #     self.learn_step_counter = 0
 
         new_target_params = {}
         for key in self.target_network.state_dict():
-            new_target_params[key] = self.params.tau * self.target_network.state_dict()[key] + (1 - self.params.tau) * self.network.state_dict()[key]
+            new_target_params[key] = self.params['tau'] * self.target_network.state_dict()[key] + (1 - self.params['tau']) * self.network.state_dict()[key]
         self.target_network.load_state_dict(new_target_params)
 
         # Sample from replay buffer
-        batch = self.replay_buffer.sample_batch(self.params.batch_size)
+        batch = self.replay_buffer.sample_batch(self.params['batch_size'])
         batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
         batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
         batch.action = np.array(batch.action.reshape((batch.action.shape[0], 1)))
@@ -125,7 +111,7 @@ class DQN(Agent):
 
         q = self.network(state).gather(1, action)
         q_next = self.target_network(next_state)
-        q_target = reward + (1 - terminal) * self.params.gamma * q_next.max(1)[0].view(self.params.batch_size, 1)
+        q_target = reward + (1 - terminal) * self.params['discount'] * q_next.max(1)[0].view(self.params['batch_size'], 1)
 
         loss = self.loss(q, q_target)
 

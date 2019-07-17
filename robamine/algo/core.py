@@ -17,21 +17,9 @@ import pickle
 from enum import Enum
 import time
 import numpy as np
+import yaml
 
 logger = logging.getLogger('robamine.algo.core')
-
-class AgentParams:
-    def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
-                 name=None,
-                 suffix=""):
-        self.name = name
-        self.suffix = suffix
-
-        # Store internally the state_dim
-        self.state_dim = state_dim
-        self.action_dim = action_dim
 
 class Agent:
     """
@@ -68,10 +56,10 @@ class Agent:
         A name for the agent.
     """
 
-    def __init__(self, state_dim, action_dim, params=AgentParams()):
+    def __init__(self, state_dim, action_dim, name='', params={}):
         self.state_dim, self.action_dim  = state_dim, action_dim
-        self.params = params
-        self.params.state_dim, self.params.action_dim  = state_dim, action_dim
+        self.name = name
+        self.params = params.copy()
         self.sess = tf.Session()
         self.info = {}
 
@@ -95,7 +83,7 @@ class Agent:
         numpy array
             An action to be performed for exploration.
         """
-        error = 'Agent ' + self.params.name + ' does not implement an exploration policy.'
+        error = 'Agent ' + self.name + ' does not implement an exploration policy.'
         logger.error(error)
         raise NotImplementedError(error)
 
@@ -118,7 +106,7 @@ class Agent:
         terminal : float
             1 if the next state is a terminal state, 0 otherwise.
         """
-        error = 'Agent ' + self.params.name + ' does not implemement a learning algorithm.'
+        error = 'Agent ' + self.name + ' does not implemement a learning algorithm.'
         logger.error(error)
         raise NotImplementedError(error)
 
@@ -137,41 +125,29 @@ class Agent:
         numpy array:
             The optimal action to be performed.
         """
-        error = 'Agent ' + self.params.name + ' does not implement a policy.'
+        error = 'Agent ' + self.name + ' does not implement a policy.'
         logger.error(error)
         raise NotImplementedError(error)
 
     def q_value(self, state, action):
-        error = 'Agent ' + self.params.name + ' does not provide a Q value.'
+        error = 'Agent ' + self.name + ' does not provide a Q value.'
         logger.error(error)
         raise NotImplementedError(error)
 
     def save(self, file_path):
-        error = 'Agent ' + self.params.name + ' does not provide saving capabilities.'
+        error = 'Agent ' + self.name + ' does not provide saving capabilities.'
         logger.error(error)
         raise NotImplementedError(error)
 
     def load(self):
-        error = 'Agent ' + self.params.name + ' does not provide loading capabilities.'
+        error = 'Agent ' + self.name + ' does not provide loading capabilities.'
         logger.error(error)
         raise NotImplementedError(error)
 
     def seed(self, seed):
-        error = 'Agent ' + self.params.name + ' does cannot be seeded.'
+        error = 'Agent ' + self.name + ' does cannot be seeded.'
         logger.error(error)
         raise NotImplementedError(error)
-
-class NetworkParams:
-    def __init__(self,
-                 input_dim=None,
-                 hidden_units=None,
-                 output_dim=None,
-                 name=None):
-        self.hidden_units = hidden_units
-        self.name = name
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.trainable = None
 
 class Network:
     """
@@ -209,13 +185,11 @@ class Network:
         The name of the Neural Network
     """
 
-    def __init__(self, sess, params = NetworkParams()):
-        self.sess = sess
-        self.params = params
+    def __init__(self, sess, input_dim, hidden_units, output_dim, name):
+        self.sess, self.input_dim, self.hidden_units, self.output_dim, self.name = \
+                sess, input_dim, hidden_units, output_dim, name
 
-        self.input = None
-        self.out = None
-        self.net_params = None
+        self.input, self.out, self.net_params, self.trainable = None, None, None, None
 
     @classmethod
     def create(cls):
@@ -263,9 +237,9 @@ class Network:
             return self.sess.run(k)
 
     @classmethod
-    def load(cls, sess, params):
-        self = cls.create(sess, params)
-        sess.run([self.net_params[i].assign(self.params.trainable[i]) for i in range(len(self.net_params))])
+    def load(cls, sess, input_dim, hidden_units, output_dim, name, trainable):
+        self = cls.create(sess, input_dim, hidden_units, output_dim, name)
+        sess.run([self.net_params[i].assign(trainable[i]) for i in range(len(self.net_params))])
         return self
 
 class Transition:
@@ -320,39 +294,35 @@ class World:
         # Agent setup
         if isinstance(agent, str):
             agent_name = agent
-            agent_handle, agent_params_handle = get_agent_handle(agent_name)
-            agent_params = agent_params_handle()
-            if (agent_params.name == 'Dummy'):
-                self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim, agent_params)
+            agent_handle = get_agent_handle(agent_name)
+            if (agent_name == 'Dummy'):
+                self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim)
             else:
-                self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
-        elif isinstance(agent, AgentParams):
-            agent_params = agent
-            agent_handle, _ = get_agent_handle(agent_params.name)
-            if (agent_params.name == 'Dummy'):
-                self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim, agent_params)
-            else:
-                self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
+                self.agent = agent_handle(self.state_dim, self.action_dim)
+        elif isinstance(agent, dict):
+            agent_name = agent['name']
+            agent_handle = get_agent_handle(agent_name)
+            self.agent = agent_handle(self.state_dim, self.action_dim, agent)
         elif isinstance(agent, Agent):
             self.agent = agent
         else:
-            err = ValueError('Provide a Agent, AgentParams, or a string in order to create an agent for the new world')
+            err = ValueError('Provide an Agent or a string in order to create an agent for the new world')
             logger.exception(err)
             raise err
 
         self.name = name
 
         try:
-            assert self.agent.params.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
-            assert self.agent.params.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
+            assert self.agent.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
+            assert self.agent.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
         except AssertionError as err:
             logger.exception(err)
             raise err
 
-        self.agent_name = self.agent.params.name + self.agent.params.suffix
+        self.agent_name = self.agent.name
         self.env_name = self.env.spec.id
 
-        self.log_dir = os.path.join(rb_logging.get_logger_path(), self.agent_name.replace(" ", "_") + '_' + self.env_name.replace(" ", "_"))
+        self.log_dir = rb_logging.get_logger_path()
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
 
@@ -363,6 +333,31 @@ class World:
         self.eval_stats = None
 
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
+
+
+    @classmethod
+    def from_dict(cls, config):
+        env = gym.make(config['env'])
+        if isinstance(env.observation_space, gym.spaces.dict.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
+            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+
+        state_dim = int(env.observation_space.shape[0])
+        if isinstance(env.action_space, gym.spaces.discrete.Discrete):
+            action_dim = env.action_space.n
+        else:
+            action_dim = int(env.action_space.shape[0])
+
+        self = cls(config['agent'], env)
+        conf = config.copy()
+        conf['logging_directory'] = self.log_dir
+        import socket
+        conf['hostname'] = socket.gethostname()
+
+        with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
+            yaml.dump(conf, outfile, default_flow_style=False)
+
+        return self
 
     def seed(self, seed):
         self.env.seed(seed)
