@@ -8,7 +8,7 @@ Most of this is taken from https://github.com/sweetice/Deep-reinforcement-learni
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from robamine.algo.core import NetworkParams, AgentParams, Agent, Transition
+from robamine.algo.core import Agent, Transition
 from collections import deque
 from random import Random
 import numpy as np
@@ -18,74 +18,37 @@ import pickle
 import logging
 logger = logging.getLogger('robamine.algo.ddpg')
 
-class ActorParams(NetworkParams):
-    def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
-                 hidden_units = (400, 300),
-                 name = "Actor",
-                 learning_rate = 1e-4,
-                 gate_gradients = False,
-                 final_layer_init=(-3e-3, 3e-3),
-                 batch_size = 64):
-        super().__init__(input_dim=state_dim,
-                         output_dim=action_dim,
-                         hidden_units=hidden_units,
-                         name=name)
-        self.learning_rate = learning_rate
-        self.gate_gradients = gate_gradients
-        self.final_layer_init = final_layer_init
-        self.batch_size = batch_size
-
-class CriticParams(NetworkParams):
-    def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
-                 hidden_units = (400, 300),
-                 name = "Critic",
-                 learning_rate = 1e-3,
-                 final_layer_init=(-3e-3, 3e-3)):
-
-        super().__init__(hidden_units=hidden_units,
-                         name=name)
-        self.input_dim = (state_dim, action_dim)
-        self.learning_rate = learning_rate
-        self.final_layer_init = final_layer_init
-        self.output_dim = 1
-
-class DDPGTorchParams(AgentParams):
-    def __init__(self,
-                 state_dim = None,
-                 action_dim = None,
-                 suffix="",
-                 replay_buffer_size = 1e6,
-                 batch_size = 64,
-                 gamma = 0.99,
-                 exploration_noise_sigma = 0.2,
-                 tau = 1e-3,
-                 actor = ActorParams(),
-                 critic = CriticParams()):
-        super().__init__(state_dim, action_dim, "DDPGTorch", suffix)
-
-        # DDPG params
-        self.replay_buffer_size = replay_buffer_size
-        self.batch_size = batch_size
-        self.gamma = gamma
-        self.exploration_noise_sigma = exploration_noise_sigma
-        self.tau = tau
-        self.actor = actor
-        self.critic = critic
-
+default_params = {
+        'name' : 'DDPGTorch',
+        'replay_buffer_size' : 1e6,
+        'batch_size' : 64,
+        'discount' : 0.99,
+        'tau' : 1e-3,
+        'actor' : {
+            'hidden_units' : [400, 300],
+            'learning_rate' : 1e-4,
+            'final_layer_init' : [-3e-3, 3e-3],
+            },
+        'critic' : {
+            'hidden_units' : [400, 300],
+            'learning_rate' : 1e-3,
+            'final_layer_init' : [-3e-3, 3e-3]
+            },
+        'noise' : {
+            'name' : 'OU',
+            'sigma' : 0.2
+            }
+        }
 
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, params):
+    def __init__(self, state_dim, action_dim, params=default_params['critic']):
         super(Critic, self).__init__()
 
-        self.l1 = nn.Linear(state_dim + action_dim, params.hidden_units[0])
-        self.l2 = nn.Linear(params.hidden_units[0], params.hidden_units[1])
-        self.l3 = nn.Linear(params.hidden_units[1], 1)
-        nn.init.uniform_(self.l3.weight, params.final_layer_init[0], params.final_layer_init[1])
-        nn.init.uniform_(self.l3.bias, params.final_layer_init[0], params.final_layer_init[1])
+        self.l1 = nn.Linear(state_dim + action_dim, params['hidden_units'][0])
+        self.l2 = nn.Linear(params['hidden_units'][0], params['hidden_units'][1])
+        self.l3 = nn.Linear(params['hidden_units'][1], 1)
+        nn.init.uniform_(self.l3.weight, params['final_layer_init'][0], params['final_layer_init'][1])
+        nn.init.uniform_(self.l3.bias, params['final_layer_init'][0], params['final_layer_init'][1])
 
     def forward(self, x, u):
         x = nn.functional.relu(self.l1(torch.cat([x, u], x.dim() - 1)))
@@ -94,14 +57,14 @@ class Critic(nn.Module):
         return x
 
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, params):
+    def __init__(self, state_dim, action_dim, params=default_params['actor']):
         super(Actor, self).__init__()
 
-        self.l1 = nn.Linear(state_dim, params.hidden_units[0])
-        self.l2 = nn.Linear(params.hidden_units[0], params.hidden_units[1])
-        self.l3 = nn.Linear(params.hidden_units[1], action_dim)
-        nn.init.uniform_(self.l3.weight, params.final_layer_init[0], params.final_layer_init[1])
-        nn.init.uniform_(self.l3.bias, params.final_layer_init[0], params.final_layer_init[1])
+        self.l1 = nn.Linear(state_dim, params['hidden_units'][0])
+        self.l2 = nn.Linear(params['hidden_units'][0], params['hidden_units'][1])
+        self.l3 = nn.Linear(params['hidden_units'][1], action_dim)
+        nn.init.uniform_(self.l3.weight, params['final_layer_init'][0], params['final_layer_init'][1])
+        nn.init.uniform_(self.l3.bias, params['final_layer_init'][0], params['final_layer_init'][1])
 
     def forward(self, x):
         x = nn.functional.relu(self.l1(x))
@@ -240,24 +203,24 @@ class ReplayBuffer:
         self.random.seed(random_seed)
 
 class DDPGTorch(Agent):
-    def __init__(self, state_dim, action_dim, params = DDPGTorchParams()):
-        super().__init__(state_dim, action_dim, params)
+    def __init__(self, state_dim, action_dim, params = default_params):
+        super().__init__(state_dim, action_dim, 'DDPGTorch', params)
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-        self.actor = Actor(state_dim, action_dim, params.actor).to(self.device)
-        self.actor_target = Actor(state_dim, action_dim, params.actor).to(self.device)
+        self.actor = Actor(state_dim, action_dim, params['actor']).to(self.device)
+        self.actor_target = Actor(state_dim, action_dim, params['actor']).to(self.device)
         self.actor_target.load_state_dict(self.actor.state_dict())
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), params.actor.learning_rate)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), params['actor']['learning_rate'])
 
-        self.critic = Critic(state_dim, action_dim, params.critic).to(self.device)
-        self.critic_target = Critic(state_dim, action_dim, params.critic).to(self.device)
+        self.critic = Critic(state_dim, action_dim, params['critic']).to(self.device)
+        self.critic_target = Critic(state_dim, action_dim, params['critic']).to(self.device)
         self.critic_target.load_state_dict(self.critic.state_dict())
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), params.critic.learning_rate)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), params['critic']['learning_rate'])
 
         # Initialize replay buffer
-        self.replay_buffer = ReplayBuffer(self.params.replay_buffer_size)
-        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = self.params.exploration_noise_sigma)
+        self.replay_buffer = ReplayBuffer(self.params['replay_buffer_size'])
+        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim), sigma = self.params['noise']['sigma'])
 
     @classmethod
     def load(cls, file_path):
@@ -295,10 +258,10 @@ class DDPGTorch(Agent):
 
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
-        if self.replay_buffer.size() < self.params.batch_size:
+        if self.replay_buffer.size() < self.params['batch_size']:
             return
 
-        batch = self.replay_buffer.sample_batch(self.params.batch_size)
+        batch = self.replay_buffer.sample_batch(self.params['batch_size'])
         batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
         batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
 
@@ -310,7 +273,7 @@ class DDPGTorch(Agent):
 
         # Compute the target Q value
         target_q = self.critic_target(next_state, self.actor_target(next_state))
-        target_q = reward + ((1 - terminal) * self.params.gamma * target_q).detach()
+        target_q = reward + ((1 - terminal) * self.params['discount'] * target_q).detach()
 
         # Get current Q estimate
         current_q = self.critic(state, action)
@@ -332,10 +295,10 @@ class DDPGTorch(Agent):
 
         # Update the frozen target models
         for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
-            target_param.data.copy_(self.params.tau * param.data + (1 - self.params.tau) * target_param.data)
+            target_param.data.copy_(self.params['tau'] * param.data + (1 - self.params['tau']) * target_param.data)
 
         for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
-            target_param.data.copy_(self.params.tau * param.data + (1 - self.params.tau) * target_param.data)
+            target_param.data.copy_(self.params['tau'] * param.data + (1 - self.params['tau']) * target_param.data)
 
     def q_value(self, state, action):
         s = torch.FloatTensor(state).to(self.device)

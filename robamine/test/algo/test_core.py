@@ -19,24 +19,26 @@ class TestWorld(unittest.TestCase):
             self.assertTrue(isinstance(world.agent, rm.DDPG))
             self.assertTrue(isinstance(world.env, gym.Env))
             self.assertEqual(world.env.spec.id, 'Pendulum-v0')
-            self.assertEqual(world.agent.params.name, 'DDPG')
-            self.assertEqual(world.agent.params.state_dim, 3)
-            self.assertEqual(world.agent.params.action_dim, 1)
+            self.assertEqual(world.agent.name, 'DDPG')
+            self.assertEqual(world.agent.state_dim, 3)
+            self.assertEqual(world.agent.action_dim, 1)
 
     def test_new_world_from_agent_params(self):
         rm.rb_logging.init(console_level=logging.ERROR, file_level=logging.ERROR)  # Do not show info messages in unittests
         rm.seed_everything(999)
 
         with tf.variable_scope('test_new_world_from_agent_params'):
-            world = rm.World(rm.DDPGParams(gamma=0.54), 'Pendulum-v0')
+            agent = rm.algo.ddpg.default_params
+            agent['discount'] = 0.54
+            world = rm.World(agent, 'Pendulum-v0')
 
             self.assertTrue(isinstance(world.agent, rm.DDPG))
             self.assertTrue(isinstance(world.env, gym.Env))
             self.assertEqual(world.env.spec.id, 'Pendulum-v0')
-            self.assertEqual(world.agent.params.name, 'DDPG')
-            self.assertEqual(world.agent.params.state_dim, 3)
-            self.assertEqual(world.agent.params.action_dim, 1)
-            self.assertEqual(world.agent.params.gamma, 0.54)
+            self.assertEqual(world.agent.name, 'DDPG')
+            self.assertEqual(world.agent.state_dim, 3)
+            self.assertEqual(world.agent.action_dim, 1)
+            self.assertEqual(world.agent.params['discount'], 0.54)
 
     def test_new_world_from_agent_object(self):
         rm.rb_logging.init(console_level=logging.ERROR, file_level=logging.ERROR)  # Do not show info messages in unittests
@@ -48,9 +50,9 @@ class TestWorld(unittest.TestCase):
             self.assertTrue(isinstance(world.agent, rm.DDPG))
             self.assertTrue(isinstance(world.env, gym.Env))
             self.assertEqual(world.env.spec.id, 'Pendulum-v0')
-            self.assertEqual(world.agent.params.name, 'DDPG')
-            self.assertEqual(world.agent.params.state_dim, 3)
-            self.assertEqual(world.agent.params.action_dim, 1)
+            self.assertEqual(world.agent.name, 'DDPG')
+            self.assertEqual(world.agent.state_dim, 3)
+            self.assertEqual(world.agent.action_dim, 1)
 
     def test_new_world_failures(self):
         rm.rb_logging.init(console_level=logging.ERROR, file_level=logging.ERROR)  # Do not show info messages in unittests

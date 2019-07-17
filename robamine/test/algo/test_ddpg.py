@@ -4,10 +4,11 @@ import tensorflow as tf
 import numpy as np
 import os
 
-from robamine.algo.ddpg import DDPG, DDPGParams, Actor, ActorParams, Target, Critic, CriticParams, ReplayBuffer
+from robamine.algo.ddpg import DDPG, Actor, Target, Critic, ReplayBuffer
 from robamine.algo.util import Plotter, seed_everything
 from robamine.algo.core import World
 from robamine import rb_logging
+import robamine as roba
 import logging
 
 class TestAgent(unittest.TestCase):
@@ -17,7 +18,9 @@ class TestAgent(unittest.TestCase):
         rb_logging.init(console_level=logging.INFO, file_level=logging.ERROR)  # Do not show info messages in unittests
 
         tf.random.set_random_seed(999)  # DDPG initializes variables in the constructor so you need to set tf seed before creating the world. TODO: fix it.
-        world = World(DDPGParams(actor=ActorParams(gate_gradients=True)), 'Pendulum-v0')
+        ddpg = roba.algo.ddpg.default_params.copy()
+        ddpg['gate_gradients'] = True
+        world = World(ddpg, 'Pendulum-v0')
         world.seed(999)
 
         world.train_and_eval(n_episodes_to_train=5, n_episodes_to_evaluate=1, evaluate_every=1)
@@ -40,7 +43,10 @@ class TestActorCritic(unittest.TestCase):
 
         with tf.Session() as sess, tf.variable_scope('test_actor'):
             # Create an actor
-            actor = Actor.create(sess, ActorParams(state_dim=3, hidden_units=(3, 4), action_dim=2, batch_size=10, learning_rate=1e-4))
+            params = roba.algo.ddpg.default_params['actor'].copy()
+            params['batch_size']=10
+            params['learning_rate']=1e-4
+            actor = Actor.create(sess, 3, [3, 4], 2, params)
             sess.run(tf.global_variables_initializer())
 
             # Test that the names and the shapes of the network's parameters are correct
@@ -71,7 +77,10 @@ class TestActorCritic(unittest.TestCase):
 
         with tf.Session() as sess, tf.variable_scope('test_target_actor'):
             # Create an actor and its target network
-            actor = Actor.create(sess, ActorParams(state_dim=3, hidden_units=(3, 4), action_dim=2, batch_size=10, learning_rate=1e-3))
+            params = roba.algo.ddpg.default_params['actor'].copy()
+            params['batch_size']=10
+            params['learning_rate']=1e-3
+            actor = Actor.create(sess, 3, [3, 4], 2, params)
             tau = 0.01
             target_actor = Target.create(actor, tau)
             sess.run(tf.global_variables_initializer())
@@ -95,7 +104,11 @@ class TestActorCritic(unittest.TestCase):
 
         with tf.Session() as sess, tf.variable_scope('test_critic'):
             # Create an actor
-            critic = Critic.create(sess, CriticParams(state_dim=3, hidden_units=(3, 4), action_dim=2))
+            params = roba.algo.ddpg.default_params['critic'].copy()
+            params['batch_size']=10
+            params['learning_rate']=1e-4
+            critic = Critic.create(sess, [3, 2], (3, 4))
+
             sess.run(tf.global_variables_initializer())
 
             self.assertEqual(critic.state_input.shape[1], 3)
@@ -143,7 +156,7 @@ class TestActorCritic(unittest.TestCase):
             tf.set_random_seed(1)
 
             # Create an critic and its target network
-            critic = Critic.create(sess, CriticParams(state_dim=3, hidden_units=(3, 4), action_dim=2))
+            critic = Critic.create(sess, [3, 2], [3, 4])
             tau = 0.01
             target_critic = Target.create(critic, tau)
             sess.run(tf.global_variables_initializer())
