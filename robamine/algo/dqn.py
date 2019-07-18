@@ -123,9 +123,20 @@ class DQN(Agent):
         terminal = torch.FloatTensor(batch.terminal).to(self.device)
         reward = torch.FloatTensor(batch.reward).to(self.device)
 
+        double_dqn = True
+
         q = self.network(state).gather(1, action)
-        q_next = self.target_network(next_state)
-        q_target = reward + (1 - terminal) * self.params.gamma * q_next.max(1)[0].view(self.params.batch_size, 1)
+
+        if double_dqn:
+            # action selection
+            _, best_action = self.network(next_state).max(1)
+            # action evaluation
+            q_next = self.target_network(next_state).gather(1, best_action.view(self.params.batch_size, 1))
+            
+            q_target = reward + (1 - terminal) * self.params.gamma * q_next
+        else:
+            q_next = self.target_network(next_state)
+            q_target = reward + (1 - terminal) * self.params.gamma * q_next.max(1)[0].view(self.params.batch_size, 1)
 
         loss = self.loss(q, q_target)
 
