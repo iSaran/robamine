@@ -27,22 +27,34 @@ default_params = {
         'epsilon_end' : 0.05,
         'epsilon_decay' : 0.0,
         'learning_rate' : 1e-4,
-        'tau' : 0.999
-        'target_net_updates' : 1000
+        'tau' : 0.999,
+        'target_net_updates' : 1000,
+        'double_dqn' : True,
+        'hidden_units' : [50, 50],
+        'device' : 'cuda'
         }
 
 class QNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, state_dim, action_dim, hidden_units):
         super(QNetwork, self).__init__()
 
-        self.l1 = nn.Linear(state_dim, 50)
-        self.l1.weight.data.normal_(0, 0.01)
-        self.out = nn.Linear(50, action_dim)
-        self.out.weight.data.normal_(0,0.01)
+        self.hidden_layers = nn.ModuleList()
+        self.hidden_layers.append(nn.Linear(state_dim, hidden_units[0]))
+        i = 0
+        for i in range(1, len(hidden_units)):
+            self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
+            self.hidden_layers[i].weight.data.uniform_(-0.003, 0.003)
+            self.hidden_layers[i].bias.data.uniform_(-0.003, 0.003)
+
+        self.out = nn.Linear(hidden_units[i], action_dim)
+
+        self.out.weight.data.uniform_(-0.003, 0.003)
+        self.out.bias.data.uniform_(-0.003, 0.003)
 
     def forward(self, x):
-        x = self.l1(x)
-        x = nn.functional.relu(x)
+        for layer in self.hidden_layers:
+            x = layer(x)
+            x = nn.functional.relu(x)
         action_prob = self.out(x)
         return action_prob
 
@@ -50,9 +62,9 @@ class DQN(Agent):
     def __init__(self, state_dim, action_dim, params = default_params):
         super().__init__(state_dim, action_dim, 'DQN', params)
 
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = self.params['device']
 
-        self.network, self.target_network = QNetwork(state_dim, action_dim).to(self.device), QNetwork(state_dim, action_dim).to(self.device)
+        self.network, self.target_network = QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device), QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device)
         self.optimizer = optim.Adam(self.network.parameters(), lr=self.params['learning_rate'])
         self.loss = nn.MSELoss()
         self.replay_buffer = ReplayBuffer(self.params['replay_buffer_size'])
@@ -62,6 +74,7 @@ class DQN(Agent):
 
         self.info['qnet_loss'] = 0
         self.epsilon = self.params['epsilon_start']
+        self.info['epsilon'] = self.epsilon
 
     def predict(self, state):
         s = torch.FloatTensor(state).to(self.device)
@@ -69,11 +82,10 @@ class DQN(Agent):
         return np.argmax(action_value)
 
     def explore(self, state):
-        if self.params['epsilon_decay'] > 0:
-            self.epsilon = self.params['epsilon_end'] + \
-            (self.params['epsilon_start'] - self.params['epsilon_end']) * \
-            math.exp(-1 * self.learn_step_counter / self.params['epsilon_decay'])
-        if self.rng.randn() <= self.epsilon:
+        self.epsilon = self.params['epsilon_end'] + \
+                       (self.params['epsilon_start'] - self.params['epsilon_end']) * \
+                       math.exp(-1 * self.learn_step_counter / self.params['epsilon_decay'])
+        if self.rng.uniform(0, 1) >= self.epsilon:
             return self.predict(state)
         return self.rng.randint(0, self.action_dim)
 
@@ -109,10 +121,14 @@ class DQN(Agent):
         terminal = torch.FloatTensor(batch.terminal).to(self.device)
         reward = torch.FloatTensor(batch.reward).to(self.device)
 
-        q = self.network(state).gather(1, action)
-        q_next = self.target_network(next_state)
-        q_target = reward + (1 - terminal) * self.params['discount'] * q_next.max(1)[0].view(self.params['batch_size'], 1)
+        if self.params['double_dqn']:
+            best_action = self.network(next_state).max(1)[1]  # action selection
+            q_next = self.target_network(next_state).gather(1, best_action.view(self.params['batch_size'], 1))  # action evaluation
+        else:
+            q_next = self.target_network(next_state).max(1)[0].view(self.params['batch_size'], 1)
 
+        q_target = reward + (1 - terminal) * self.params['discount'] * q_next
+        q = self.network(state).gather(1, action)
         loss = self.loss(q, q_target)
 
         self.optimizer.zero_grad()
@@ -121,6 +137,7 @@ class DQN(Agent):
 
         self.learn_step_counter += 1
         self.info['qnet_loss'] = loss.detach().cpu().numpy().copy()
+        self.info['epsilon'] = self.epsilon
 
     @classmethod
     def load(cls, file_path):
@@ -146,7 +163,7 @@ class DQN(Agent):
 
     def q_value(self, state, action):
         s = torch.FloatTensor(state).to(self.device)
-        return np.max(self.network(s).cpu().detach().numpy())
+        return self.network(s).cpu().detach().numpy()[action]
 
     def seed(self, seed):
         self.replay_buffer.seed(seed)
