@@ -29,6 +29,7 @@ default_params = {
         'learning_rate' : 1e-4,
         'tau' : 0.999
         'target_net_updates' : 1000
+        'double_dqn' : True
         }
 
 class QNetwork(nn.Module):
@@ -109,10 +110,14 @@ class DQN(Agent):
         terminal = torch.FloatTensor(batch.terminal).to(self.device)
         reward = torch.FloatTensor(batch.reward).to(self.device)
 
-        q = self.network(state).gather(1, action)
-        q_next = self.target_network(next_state)
-        q_target = reward + (1 - terminal) * self.params['discount'] * q_next.max(1)[0].view(self.params['batch_size'], 1)
+        if self.params['double_dqn']:
+            _, best_action = self.network(next_state).max(1)  # action selection
+            q_next = self.target_network(next_state).gather(1, best_action.view(self.params['batch_size'], 1))  # action evaluation
+        else:
+            q_next = self.target_network(next_state).max(1)[0].view(self.params['batch_size'], 1)
 
+        q_target = reward + (1 - terminal) * self.params['discount'] * q_next
+        q = self.network(state).gather(1, action)
         loss = self.loss(q, q_target)
 
         self.optimizer.zero_grad()
