@@ -27,18 +27,19 @@ default_params = {
         'epsilon_end' : 0.05,
         'epsilon_decay' : 0.0,
         'learning_rate' : 1e-4,
-        'tau' : 0.999
-        'target_net_updates' : 1000
-        'double_dqn' : True
+        'tau' : 0.999,
+        'target_net_updates' : 1000,
+        'double_dqn' : True,
+        'hidden_units' : 50
         }
 
 class QNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, state_dim, action_dim, hidden_units):
         super(QNetwork, self).__init__()
 
-        self.l1 = nn.Linear(state_dim, 50)
+        self.l1 = nn.Linear(state_dim, hidden_units)
         self.l1.weight.data.normal_(0, 0.01)
-        self.out = nn.Linear(50, action_dim)
+        self.out = nn.Linear(hidden_units, action_dim)
         self.out.weight.data.normal_(0,0.01)
 
     def forward(self, x):
@@ -51,9 +52,9 @@ class DQN(Agent):
     def __init__(self, state_dim, action_dim, params = default_params):
         super().__init__(state_dim, action_dim, 'DQN', params)
 
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        self.network, self.target_network = QNetwork(state_dim, action_dim).to(self.device), QNetwork(state_dim, action_dim).to(self.device)
+        self.network, self.target_network = QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device), QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device)
         self.optimizer = optim.Adam(self.network.parameters(), lr=self.params['learning_rate'])
         self.loss = nn.MSELoss()
         self.replay_buffer = ReplayBuffer(self.params['replay_buffer_size'])
