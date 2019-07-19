@@ -337,7 +337,10 @@ class World:
 
     @classmethod
     def from_dict(cls, config):
-        env = gym.make(config['env'])
+        if len(config['env']) == 1:
+            env = gym.make(config['env']['name'])
+        else:
+            env = gym.make(config['env']['name'], params=config['env'])
         if isinstance(env.observation_space, gym.spaces.dict.Dict):
             logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
             env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
