@@ -1,0 +1,25 @@
+logging_directory: "/tmp/robamine_logs"
+mode: Random  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
+train:
+  episodes: 1000
+  render: False
+eval:
+  episodes: 1000
+  render: False
+eval_every: 10
+save_every: 10
+env: 'Clutter-Discrete-v0'
+agent:
+  name: 'DQN'
+  replay_buffer_size: 1000000
+  batch_size: 128
+  discount: 0.9
+  target_net_updates: 1000
+  tau: 0.999
+  double_dqn: True
+  epsilon_start: 0.9
+  epsilon_end: 0.05
+  epsilon_decay: 0.0
+  learning_rate: 0.0001
+  hidden_units: 50
+

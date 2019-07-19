@@ -8,3 +8,4 @@ from robamine.envs.sphere_reacher import SphereReacher
 from robamine.envs.sphere_reacher_incremental import SphereReacherIncremental
 #from robamine.envs.lwr_ros import LWRROS
 from robamine.envs.clutter import Clutter
+from robamine.envs.clutter_discrete import ClutterDiscrete
