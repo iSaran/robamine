@@ -11,12 +11,11 @@ def run(file):
             rm.rb_logging.init(directory=params['logging_directory'], file_level=logging.INFO)
             logger = logging.getLogger('robamine')
             if params['mode'] == 'Random':
-                env = gym.make(params['env'])
+                env = gym.make(params['env']['name'], params=params['env'])
                 for i_episode in range(params['train']['episodes']):
                     observation = env.reset()
                     for t in range(3000):
                         action = env.action_space.sample()
-                        print(action)
                         observation, reward, done, info = env.step(action)
                         if done:
                             print("Episode finished after {} timesteps".format(t+1))

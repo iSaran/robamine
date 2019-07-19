@@ -24,6 +24,15 @@ from robamine.utils.orientation import rot2quat
 import cv2
 from mujoco_py.cymj import MjRenderContext
 
+default_params = {
+        'name' : 'Clutter-v0',
+        'nr_of_actions' : 8,
+        'render' : True,
+        'nr_of_obstacles' : [5, 10],
+        'target_probability_box': 1.0,
+        'obstacle_probability_box': 1.0,
+        }
+
 class Push:
     """
     Defines a push primitive action as defined in kiatos19, with the difference
@@ -63,7 +72,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     """
     The class for the Gym environment.
     """
-    def __init__(self):
+    def __init__(self, params = default_params):
+        self.params = params
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/clutter.xml")
 
@@ -76,9 +86,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([-1, -1]),
-                                       high=np.array([1, 1]),
-                                       dtype=np.float32)
+        if self.params['discrete']:
+            self.action_space = spaces.Discrete(self.params['nr_of_actions'])
+        else:
+            self.action_space = spaces.Box(low=np.array([-1, -1]),
+                                                   high=np.array([1, 1]),
+                                                   dtype=np.float32)
 
         self.observation_space = spaces.Box(low=np.full((261,), 0),
                                             high=np.full((261,), 0.3),
@@ -256,23 +269,32 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         return obs, reward, done, {'experience_time': experience_time}
 
     def do_simulation(self, action):
-        my_action = action.copy()
-
-        # Agent gives actions between [-1, 1]. Convert to the action ranges of
-        # the action space of the environment
-        agent_high = 1
-        agent_low = -1
-        env_low = [-math.pi, 0]
-        env_high = [math.pi, 1]
-        for i in range(len(my_action)):
-            my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
-
-        if my_action[1] > 0.5:
+        if self.params['discrete']:
+            myaction = action
             push_target = True
+            if myaction > 3:
+                push_target = False
+                myaction -= 4
+            theta = myaction * 2 * math.pi / (self.action_space.n / 2)
+            push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=theta, object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
         else:
-            push_target = False
+            my_action = action.copy()
 
-        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            # agent gives actions between [-1, 1]. convert to the action ranges of
+            # the action space of the environment
+            agent_high = 1
+            agent_low = -1
+            env_low = [-math.pi, 0]
+            env_high = [math.pi, 1]
+            for i in range(len(my_action)):
+                my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
+
+            if my_action[1] > 0.5:
+                push_target = True
+            else:
+                push_target = False
+
+            push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 
         init_z = 2 * self.target_height + 0.05
         self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
@@ -420,6 +442,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         A wrapper for sim.step() which updates every time a local state structure.
         """
+
+        if self.params['render']:
+            self.render()
+
         self.finger_quat_prev = self.finger_quat
 
         self.sim.step()
@@ -455,11 +481,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
 
     def generate_random_scene(self, finger_height_range=[.005, .005],
-                                    target_probability_box=1,
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
-                                    obstacle_probability_box=1,
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [5, 25],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
@@ -481,7 +504,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         #   Randomize type (box or cylinder)
         temp = self.rng.uniform(0, 1)
-        if (temp < target_probability_box):
+        if (temp < self.params['target_probability_box']):
             self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
         else:
             self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
@@ -515,13 +538,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         random_qpos[index[0] + 6] = target_orientation.z
 
         # Randomize obstacles
-        number_of_obstacles = nr_of_obstacles[0] + self.rng.randint(nr_of_obstacles[1] - nr_of_obstacles[0] + 1)  # 5 to 25 obstacles
+        number_of_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
         for i in range(1, number_of_obstacles):
             geom_id = get_geom_id(self.sim.model, "object"+str(i))
 
             # Randomize type (box or cylinder)
             temp = self.rng.uniform(0, 1)
-            if (temp < obstacle_probability_box):
+            if (temp < self.params['obstacle_probability_box']):
                 self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
             else:
                 self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
