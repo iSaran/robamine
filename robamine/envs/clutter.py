@@ -341,7 +341,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             -dim[0]  < p[0] < dim[0]:
                 points_around.append(p)
 
-        reward = (self.no_of_prev_points_around - len(points_around)) / max(self.no_of_prev_points_around, len(points_around))
+        k = max(self.no_of_prev_points_around, len(points_around))
+        if k != 0:
+            reward = (self.no_of_prev_points_around - len(points_around)) / k
+        else:
+            reward = 0.0
         reward *= 10.0
         self.no_of_prev_points_around = len(points_around)
 
