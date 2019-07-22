@@ -30,7 +30,8 @@ default_params = {
         'tau' : 0.999,
         'target_net_updates' : 1000,
         'double_dqn' : True,
-        'hidden_units' : 50
+        'hidden_units' : 50,
+        'device' : 'cuda'
         }
 
 class QNetwork(nn.Module):
@@ -52,7 +53,7 @@ class DQN(Agent):
     def __init__(self, state_dim, action_dim, params = default_params):
         super().__init__(state_dim, action_dim, 'DQN', params)
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = self.params['device']
 
         self.network, self.target_network = QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device), QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device)
         self.optimizer = optim.Adam(self.network.parameters(), lr=self.params['learning_rate'])
