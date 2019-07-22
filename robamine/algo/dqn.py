@@ -38,7 +38,7 @@ class QNetwork(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_units):
         super(QNetwork, self).__init__()
 
-        self.hidden_layers = []
+        self.hidden_layers = nn.ModuleList()
         self.hidden_layers.append(nn.Linear(state_dim, hidden_units[0]))
         i = 0
         for i in range(1, len(hidden_units)):
