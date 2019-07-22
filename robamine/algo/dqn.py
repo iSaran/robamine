@@ -30,7 +30,7 @@ default_params = {
         'tau' : 0.999,
         'target_net_updates' : 1000,
         'double_dqn' : True,
-        'hidden_units' : 50,
+        'hidden_units' : [50, 50],
         'device' : 'cuda'
         }
 
@@ -38,14 +38,20 @@ class QNetwork(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_units):
         super(QNetwork, self).__init__()
 
-        self.l1 = nn.Linear(state_dim, hidden_units)
-        self.l1.weight.data.normal_(0, 0.01)
-        self.out = nn.Linear(hidden_units, action_dim)
+        self.hidden_layers = []
+        self.hidden_layers.append(nn.Linear(state_dim, hidden_units[0]))
+        i = 0
+        for i in range(1, len(hidden_units)):
+            self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
+            self.hidden_layers[i].weight.data.normal_(0, 0.01)
+
+        self.out = nn.Linear(hidden_units[i], action_dim)
         self.out.weight.data.normal_(0,0.01)
 
     def forward(self, x):
-        x = self.l1(x)
-        x = nn.functional.relu(x)
+        for layer in self.hidden_layers:
+            x = layer(x)
+            x = nn.functional.relu(x)
         action_prob = self.out(x)
         return action_prob
 
