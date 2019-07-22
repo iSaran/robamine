@@ -4,8 +4,8 @@ import robamine as rm
 import yaml
 import gym
 
-def run(file):
-    with open("../yaml/" + file + ".yml", 'r') as stream:
+def run(yml):
+    with open("../yaml/" + yml + ".yml", 'r') as stream:
         try:
             params = yaml.safe_load(stream)
             rm.rb_logging.init(directory=params['logging_directory'], file_level=logging.INFO)
@@ -21,7 +21,11 @@ def run(file):
                             print("Episode finished after {} timesteps".format(t+1))
                             break
             else:
-                world = rm.World.from_dict(params)
+                if params['load_world'] != '':
+                    world = rm.World.load(params['load_world'])
+                else:
+                    world = rm.World.from_dict(params)
+
                 if params['mode'] == 'Train & Evaluate':
                     world.train_and_eval(n_episodes_to_train=params['train']['episodes'], \
                                          n_episodes_to_evaluate=params['eval']['episodes'], \
@@ -32,12 +36,13 @@ def run(file):
                                          render_eval=params['eval']['render'])
                 elif params['mode'] == 'Train':
                     world.train(n_episodes=params['train']['episodes'], \
-                                print_progress_every=1, \
+                                render=params['train']['render'], \
+                                print_progress_every=10, \
                                 save_every=params['save_every'])
                 elif params['mode'] == 'Evaluate':
                     world.evaluate(n_episodes=params['eval']['episodes'], \
-                                   print_progress_every=1, \
-                                   save_every=params['save_every'])
+                                   render=params['eval']['render'], \
+                                   print_progress_every=10)
                 else:
                     logger.error('The mode does not exist. Select btn Train, Train & Evaluate and Evaluate.')
         except yaml.YAMLError as exc:
@@ -45,7 +50,7 @@ def run(file):
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--file', type=str, default='clutter', help='The id of the gym environment to use')
+    parser.add_argument('--yml', type=str, default='clutter', help='The yaml file to load')
     args = parser.parse_args()
     dict_args = vars(args)
     return dict_args
