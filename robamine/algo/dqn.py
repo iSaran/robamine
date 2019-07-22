@@ -43,10 +43,13 @@ class QNetwork(nn.Module):
         i = 0
         for i in range(1, len(hidden_units)):
             self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
-            self.hidden_layers[i].weight.data.normal_(0, 0.01)
+            self.hidden_layers[i].weight.data.uniform_(-0.003, 0.003)
+            self.hidden_layers[i].bias.data.uniform_(-0.003, 0.003)
 
         self.out = nn.Linear(hidden_units[i], action_dim)
-        self.out.weight.data.normal_(0,0.01)
+
+        self.out.weight.data.uniform_(-0.003, 0.003)
+        self.out.bias.data.uniform_(-0.003, 0.003)
 
     def forward(self, x):
         for layer in self.hidden_layers:
@@ -119,7 +122,7 @@ class DQN(Agent):
         reward = torch.FloatTensor(batch.reward).to(self.device)
 
         if self.params['double_dqn']:
-            _, best_action = self.network(next_state).max(1)  # action selection
+            best_action = self.network(next_state).max(1)[1]  # action selection
             q_next = self.target_network(next_state).gather(1, best_action.view(self.params['batch_size'], 1))  # action evaluation
         else:
             q_next = self.target_network(next_state).max(1)[0].view(self.params['batch_size'], 1)
