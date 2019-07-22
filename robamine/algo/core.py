@@ -484,8 +484,7 @@ class World:
     def load(cls, directory):
         world = pickle.load(open(os.path.join(directory, 'world.pkl'), 'rb'))
         agent_name = world['agent_name']
-        agent_handle, agent_params_handle = get_agent_handle(agent_name)
-        agent_params = agent_params_handle()
+        agent_handle = get_agent_handle(agent_name)
         agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
 
         self = cls(agent, world['env_id'])
