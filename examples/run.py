@@ -4,6 +4,9 @@ import robamine as rm
 import yaml
 import gym
 
+from tensorboard import default
+from tensorboard import program
+
 def run(yml):
     with open("../yaml/" + yml + ".yml", 'r') as stream:
         try:
@@ -25,6 +28,13 @@ def run(yml):
                     world = rm.World.load(params['load_world'])
                 else:
                     world = rm.World.from_dict(params)
+
+                # Start tensorboard server
+                logging.getLogger('tensorflow').setLevel(logging.ERROR)
+                tb = program.TensorBoard(default.get_plugins(), default.get_assets_zip_provider())
+                tb.configure(argv=[None, '--logdir', world.log_dir])
+                url = tb.launch()
+                logger.info('TensorBoard plots at %s' % url)
 
                 if params['mode'] == 'Train & Evaluate':
                     world.train_and_eval(n_episodes_to_train=params['train']['episodes'], \
