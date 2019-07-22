@@ -65,6 +65,7 @@ class DQN(Agent):
 
         self.info['qnet_loss'] = 0
         self.epsilon = self.params['epsilon_start']
+        self.info['epsilon'] = self.epsilon
 
     def predict(self, state):
         s = torch.FloatTensor(state).to(self.device)
@@ -127,6 +128,7 @@ class DQN(Agent):
 
         self.learn_step_counter += 1
         self.info['qnet_loss'] = loss.detach().cpu().numpy().copy()
+        self.info['epsilon'] = self.epsilon
 
     @classmethod
     def load(cls, file_path):
