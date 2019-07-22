@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter, get_agent_handle
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter, get_agent_handle, transform_sec_to_timestamp
 from robamine import rb_logging
 import logging
 import os
@@ -280,6 +280,8 @@ class World:
             if isinstance(self.env.observation_space, gym.spaces.dict.Dict):
                 logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
                 self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
+        elif isinstance(env, dict):
+            self.env = gym.make(env['name'], params=env)
         else:
             err = ValueError('Provide a gym.Env or a string in order to create a new world')
             logger.exception(err)
@@ -331,6 +333,8 @@ class World:
         self.tf_writer = tf.summary.FileWriter(self.log_dir, self.agent.sess.graph)
         self.train_stats = None
         self.eval_stats = None
+        self.config = {}
+        self.config['results'] = {}
 
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
@@ -352,13 +356,11 @@ class World:
             action_dim = int(env.action_space.shape[0])
 
         self = cls(config['agent'], env)
-        conf = config.copy()
-        conf['logging_directory'] = self.log_dir
+        self.config = config.copy()
+        self.config['results'] = {}
+        self.config['results']['logging_directory'] = self.log_dir
         import socket
-        conf['hostname'] = socket.gethostname()
-
-        with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
-            yaml.dump(conf, outfile, default_flow_style=False)
+        self.config['results']['hostname'] = socket.gethostname()
 
         return self
 
@@ -424,6 +426,11 @@ class World:
             if print_progress_every and (episode + 1) % print_progress_every == 0:
                 print_progress(episode, n_episodes, start_time, total_n_timesteps, experience_time)
 
+            self.config['results']['episodes'] = episode
+            self.config['results']['total_n_timesteps'] = total_n_timesteps
+            self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - start_time)
+            self.config['results']['experience_time'] = transform_sec_to_timestamp(experience_time)
+
             if save_every and (episode + 1) % save_every == 0:
                 self.save()
 
@@ -482,21 +489,33 @@ class World:
 
     @classmethod
     def load(cls, directory):
-        world = pickle.load(open(os.path.join(directory, 'world.pkl'), 'rb'))
-        agent_name = world['agent_name']
+        with open(os.path.join(directory, 'config.yml'), 'r') as stream:
+            try:
+                config = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+
+        if len(config['env']) == 1:
+            env = gym.make(config['env']['name'])
+        else:
+            env = gym.make(config['env']['name'], params=config['env'])
+        if isinstance(env.observation_space, gym.spaces.dict.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
+            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+
+        agent_name = config['agent']['name']
         agent_handle = get_agent_handle(agent_name)
         agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
 
-        self = cls(agent, world['env_id'])
+        self = cls(agent, env)
         logger.info('World loaded from %s', directory)
         return self
 
     def save(self):
         self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
-        world_path = os.path.join(self.log_dir, 'world.pkl')
-        world = {}
-        world['env_id'] = self.env_name
-        world['agent_name'] = self.agent_name
-        pickle.dump(world, open(world_path, 'wb'))
-        logger.info('World saved to %s', world_path)
+
+        with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
+            yaml.dump(self.config, outfile, default_flow_style=False)
+
+        logger.info('World saved to %s', self.log_dir)
 
