@@ -72,11 +72,10 @@ class DQN(Agent):
         return np.argmax(action_value)
 
     def explore(self, state):
-        if self.params['epsilon_decay'] > 0:
-            self.epsilon = self.params['epsilon_end'] + \
-            (self.params['epsilon_start'] - self.params['epsilon_end']) * \
-            math.exp(-1 * self.learn_step_counter / self.params['epsilon_decay'])
-        if self.rng.randn() <= self.epsilon:
+        self.epsilon = self.params['epsilon_end'] + \
+                       (self.params['epsilon_start'] - self.params['epsilon_end']) * \
+                       math.exp(-1 * self.learn_step_counter / self.params['epsilon_decay'])
+        if self.rng.uniform(0, 1) >= self.epsilon:
             return self.predict(state)
         return self.rng.randint(0, self.action_dim)
 
