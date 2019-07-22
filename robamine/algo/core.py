@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter, get_agent_handle
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter, get_agent_handle, transform_sec_to_timestamp
 from robamine import rb_logging
 import logging
 import os
@@ -331,6 +331,8 @@ class World:
         self.tf_writer = tf.summary.FileWriter(self.log_dir, self.agent.sess.graph)
         self.train_stats = None
         self.eval_stats = None
+        self.config = {}
+        self.config['results'] = {}
 
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
@@ -352,13 +354,11 @@ class World:
             action_dim = int(env.action_space.shape[0])
 
         self = cls(config['agent'], env)
-        conf = config.copy()
-        conf['logging_directory'] = self.log_dir
+        self.config = config.copy()
+        self.config['results'] = {}
+        self.config['results']['logging_directory'] = self.log_dir
         import socket
-        conf['hostname'] = socket.gethostname()
-
-        with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
-            yaml.dump(conf, outfile, default_flow_style=False)
+        self.config['results']['hostname'] = socket.gethostname()
 
         return self
 
@@ -423,6 +423,11 @@ class World:
             # Print progress every print_progress_every episodes
             if print_progress_every and (episode + 1) % print_progress_every == 0:
                 print_progress(episode, n_episodes, start_time, total_n_timesteps, experience_time)
+
+            self.config['results']['episodes'] = episode
+            self.config['results']['total_n_timesteps'] = total_n_timesteps
+            self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - start_time)
+            self.config['results']['experience_time'] = transform_sec_to_timestamp(experience_time)
 
             if save_every and (episode + 1) % save_every == 0:
                 self.save()
@@ -498,5 +503,9 @@ class World:
         world['env_id'] = self.env_name
         world['agent_name'] = self.agent_name
         pickle.dump(world, open(world_path, 'wb'))
+
+        with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
+            yaml.dump(self.config, outfile, default_flow_style=False)
+
         logger.info('World saved to %s', world_path)
 
