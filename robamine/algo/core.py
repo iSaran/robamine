@@ -280,6 +280,8 @@ class World:
             if isinstance(self.env.observation_space, gym.spaces.dict.Dict):
                 logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
                 self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
+        elif isinstance(env, dict):
+            self.env = gym.make(env['name'], params=env)
         else:
             err = ValueError('Provide a gym.Env or a string in order to create a new world')
             logger.exception(err)
@@ -492,7 +494,14 @@ class World:
         agent_handle = get_agent_handle(agent_name)
         agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
 
-        self = cls(agent, world['env_id'])
+        #self = cls(agent, world['config']['env'])
+        with open(os.path.join(directory, 'config.yml'), 'r') as stream:
+            try:
+                params = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+
+        self = cls(agent, params['env'])
         logger.info('World loaded from %s', directory)
         return self
 
@@ -502,6 +511,7 @@ class World:
         world = {}
         world['env_id'] = self.env_name
         world['agent_name'] = self.agent_name
+        world['config'] = self.config
         pickle.dump(world, open(world_path, 'wb'))
 
         with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
