@@ -489,33 +489,33 @@ class World:
 
     @classmethod
     def load(cls, directory):
-        world = pickle.load(open(os.path.join(directory, 'world.pkl'), 'rb'))
-        agent_name = world['agent_name']
-        agent_handle = get_agent_handle(agent_name)
-        agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
-
-        #self = cls(agent, world['config']['env'])
         with open(os.path.join(directory, 'config.yml'), 'r') as stream:
             try:
-                params = yaml.safe_load(stream)
+                config = yaml.safe_load(stream)
             except yaml.YAMLError as exc:
                 print(exc)
 
-        self = cls(agent, params['env'])
+        if len(config['env']) == 1:
+            env = gym.make(config['env']['name'])
+        else:
+            env = gym.make(config['env']['name'], params=config['env'])
+        if isinstance(env.observation_space, gym.spaces.dict.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
+            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+
+        agent_name = config['agent']['name']
+        agent_handle = get_agent_handle(agent_name)
+        agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
+
+        self = cls(agent, env)
         logger.info('World loaded from %s', directory)
         return self
 
     def save(self):
         self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
-        world_path = os.path.join(self.log_dir, 'world.pkl')
-        world = {}
-        world['env_id'] = self.env_name
-        world['agent_name'] = self.agent_name
-        world['config'] = self.config
-        pickle.dump(world, open(world_path, 'wb'))
 
         with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
             yaml.dump(self.config, outfile, default_flow_style=False)
 
-        logger.info('World saved to %s', world_path)
+        logger.info('World saved to %s', self.log_dir)
 
