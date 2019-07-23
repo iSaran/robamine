@@ -166,6 +166,7 @@
         size=".01 .01 .01"
         type="box" />
     </body>
+    <!--
     <body
       name="object9"
       pos="-0.05 0.05 -0.28"
@@ -370,6 +371,7 @@
         size=".01 .01 .01"
         type="box" />
     </body>
+    -->
     <body
       name="finger"
       pos="-0.1 -0.2 0.2"
