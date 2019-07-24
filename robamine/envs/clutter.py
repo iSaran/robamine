@@ -334,6 +334,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.push_stopped_ext_forces = False
             return -10
 
+        if observation[-1] < 0:
+            return -10
+
         # for each push that frees the space around the target
         points_around = []
         gap = 0.03
