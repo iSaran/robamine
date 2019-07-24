@@ -264,6 +264,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
+        print("reward:", reward)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time}
@@ -341,26 +342,37 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             -dim[0]  < p[0] < dim[0]:
                 points_around.append(p)
 
-        k = max(self.no_of_prev_points_around, len(points_around))
-        if k != 0:
-            reward = (self.no_of_prev_points_around - len(points_around)) / k
-        else:
-            reward = 0.0
-        reward *= 10.0
+        if self.no_of_prev_points_around == len(points_around):
+            return -5
+
         self.no_of_prev_points_around = len(points_around)
+
+        if len(points_around) == 0:
+            return +10
+
+
+        return -1
+
+        # k = max(self.no_of_prev_points_around, len(points_around))
+        # if k != 0:
+        #     reward = (self.no_of_prev_points_around - len(points_around)) / k
+        # else:
+        #     reward = 0.0
+        # reward *= 10.0
+        # self.no_of_prev_points_around = len(points_around)
 
         # cv_tools.plot_point_cloud(point_cloud)
         # cv_tools.plot_point_cloud(points_around)
 
         # Penalize the agent as it gets the target object closer to the edge
-        max_cost = -5
-        reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
-        if observation[-1] < 0:
-            reward = -10
+        # max_cost = -5
+        # reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
+        # if observation[-1] < 0:
+        #     reward = -10
 
         # For each object push
-        reward += -1
-        return reward
+        # reward += -1
+        # return reward
 
     def terminal_state(self, observation):
 
