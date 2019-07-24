@@ -129,6 +129,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_length = 0.0
         self.target_width = 0.0
         self.target_pos = np.zeros(3)
+        self.target_quat = Quaternion()
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
         self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
 
@@ -276,7 +277,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 push_target = False
                 myaction -= 4
             theta = myaction * 2 * math.pi / (self.action_space.n / 2)
-            push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=theta, object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            push = Push(direction_theta=theta, object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
         else:
             my_action = action.copy()
 
@@ -294,13 +295,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             else:
                 push_target = False
 
-            push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            push = Push(direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+
+        # Transform pushing from target frame to world frame
+        push_direction = np.array([push.direction[0], push.direction[1], 0])
+        push_direction_world = np.matmul(self.target_quat.rotation_matrix(), push_direction)
+        push_initial_pos = np.array([push.initial_pos[0], push.initial_pos[1], 0])
+        push_initial_pos_world = np.matmul(self.target_quat.rotation_matrix(), push_initial_pos) + self.target_pos
 
         init_z = 2 * self.target_height + 0.05
-        self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
+        self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
         self.sim_step()
         if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
-            end = push.initial_pos + push.distance * push.direction
+            end = push_initial_pos_world[:2] + push.distance * push_direction_world[:2]
             self.move_joint_to_target('finger', [end[0], end[1], None])
         else:
             self.push_stopped_ext_forces = True
@@ -494,6 +501,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         temp = self.sim.data.get_joint_qpos('target')
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
+        self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
     def generate_random_scene(self, finger_height_range=[.005, .005],
                                     target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
