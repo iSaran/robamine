@@ -93,8 +93,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                                    high=np.array([1, 1]),
                                                    dtype=np.float32)
 
-        self.observation_space = spaces.Box(low=np.full((261,), 0),
-                                            high=np.full((261,), 0.3),
+        if self.params['split']:
+            obs_dim = 4 * 261
+        else:
+            obs_dim = 261
+
+        self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
+                                            high=np.full((obs_dim,), 0.3),
                                             dtype=np.float32)
 
         self.object_names = ['object1', 'object2', 'object3']
@@ -255,8 +260,15 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[1] + self.target_pos[1]]
         min_distance_from_edge = min(distances)
         features.append(min_distance_from_edge)
+        f = np.array(features)
+        if self.params['split']:
+            fa = np.append(f, f, axis=0)
+            fa = np.append(fa, f, axis=0)
+            fa = np.append(fa, f, axis=0)
+        else:
+            fa = f
 
-        return np.array(features), points_above_table, bbox
+        return fa, points_above_table, bbox
 
     def step(self, action):
         done = False

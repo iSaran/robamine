@@ -17,6 +17,7 @@ env:
   nr_of_obstacles: [5, 8]
   target_probability_box: 1.0
   obstacle_probability_box: 1.0
+  split: True
 agent:
   name: 'DQNSplit'
   replay_buffer_size: 1000000
