@@ -2,7 +2,7 @@ logging_directory: "/tmp/robamine_logs"
 mode: Train  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
 train:
   episodes: 5000
-  render: False
+  render: True
 eval:
   episodes: 1000
   render: True
@@ -13,7 +13,7 @@ env:
   name: 'Clutter-v0'
   discrete: True
   nr_of_actions: 8
-  render: False
+  render: True
   nr_of_obstacles: [5, 8]
   target_probability_box: 1.0
   obstacle_probability_box: 1.0
@@ -30,5 +30,5 @@ agent:
   epsilon_decay: 20000  # number of learning steps for half epsilon, set to 0 if no decay is needed
   learning_rate: 0.0001
   hidden_units: [50, 50]
-  device: 'cpu'  # "cuda", "cpu"
+  device: 'cuda'  # "cuda", "cpu"
 
