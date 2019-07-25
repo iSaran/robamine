@@ -362,6 +362,15 @@ class World:
         import socket
         self.config['results']['hostname'] = socket.gethostname()
 
+        # Store the version of the session
+        import subprocess
+        commit_hash = subprocess.check_output(["git", "describe", '--always']).strip().decode('ascii')
+        try:
+            subprocess.check_output(["git", "diff", "--quiet"])
+        except:
+            commit_hash += '-dirty'
+        self.config['results']['version'] = commit_hash
+
         return self
 
     def seed(self, seed):
