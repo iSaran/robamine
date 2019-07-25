@@ -91,8 +91,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.action_space = spaces.Discrete(self.params['nr_of_actions'])
         else:
             self.action_space = spaces.Box(low=np.array([-1, -1]),
-                                                   high=np.array([1, 1]),
-                                                   dtype=np.float32)
+                                           high=np.array([1, 1]),
+                                           dtype=np.float32)
 
         if self.params['split']:
             obs_dim = 4 * 261
@@ -102,8 +102,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
                                             dtype=np.float32)
-
-        self.object_names = ['object1', 'object2', 'object3']
 
         finger_mass = get_body_mass(self.sim.model, 'finger')
         self.pd = PDController.from_mass(mass = finger_mass)
@@ -398,6 +396,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # return reward
 
     def terminal_state(self, observation):
+
+        # Terminate if the target flips to its side, i.e. if target's z axis is
+        # parallel to table, terminate.
+        target_z = self.target_quat.rotation_matrix()[:,2]
+        world_z = np.array([0, 0, 1])
+        if abs(np.dot(target_z, world_z)) < 0.1:
+            return True
 
         # If the object has fallen from the table
         if observation[-1] < 0:
