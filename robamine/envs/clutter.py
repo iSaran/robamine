@@ -31,6 +31,7 @@ default_params = {
         'nr_of_obstacles' : [5, 10],
         'target_probability_box': 1.0,
         'obstacle_probability_box': 1.0,
+        'push_distance' : 0.2
         }
 
 class Push:
@@ -90,8 +91,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.action_space = spaces.Discrete(self.params['nr_of_actions'])
         else:
             self.action_space = spaces.Box(low=np.array([-1, -1]),
-                                                   high=np.array([1, 1]),
-                                                   dtype=np.float32)
+                                           high=np.array([1, 1]),
+                                           dtype=np.float32)
 
         if self.params['split']:
             obs_dim = 4 * 261
@@ -101,8 +102,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
                                             dtype=np.float32)
-
-        self.object_names = ['object1', 'object2', 'object3']
 
         finger_mass = get_body_mass(self.sim.model, 'finger')
         self.pd = PDController.from_mass(mass = finger_mass)
@@ -289,7 +288,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 push_target = False
                 myaction -= 4
             theta = myaction * 2 * math.pi / (self.action_space.n / 2)
-            push = Push(direction_theta=theta, object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
         else:
             my_action = action.copy()
 
@@ -307,7 +306,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             else:
                 push_target = False
 
-            push = Push(direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            push = Push(direction_theta=my_action[0], distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 
         # Transform pushing from target frame to world frame
         push_direction = np.array([push.direction[0], push.direction[1], 0])
@@ -397,6 +396,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # return reward
 
     def terminal_state(self, observation):
+
+        # Terminate if the target flips to its side, i.e. if target's z axis is
+        # parallel to table, terminate.
+        target_z = self.target_quat.rotation_matrix()[:,2]
+        world_z = np.array([0, 0, 1])
+        if abs(np.dot(target_z, world_z)) < 0.1:
+            return True
 
         # If the object has fallen from the table
         if observation[-1] < 0:
