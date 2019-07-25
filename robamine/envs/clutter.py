@@ -31,6 +31,7 @@ default_params = {
         'nr_of_obstacles' : [5, 10],
         'target_probability_box': 1.0,
         'obstacle_probability_box': 1.0,
+        'push_distance' : 0.2
         }
 
 class Push:
@@ -289,7 +290,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 push_target = False
                 myaction -= 4
             theta = myaction * 2 * math.pi / (self.action_space.n / 2)
-            push = Push(direction_theta=theta, object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
         else:
             my_action = action.copy()
 
@@ -307,7 +308,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             else:
                 push_target = False
 
-            push = Push(direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            push = Push(direction_theta=my_action[0], distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 
         # Transform pushing from target frame to world frame
         push_direction = np.array([push.direction[0], push.direction[1], 0])
