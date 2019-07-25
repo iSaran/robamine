@@ -174,6 +174,7 @@ class EpisodeStats:
         self.experience_time = 0
         self.reward = []
         self.q_value = []
+        self.success = False
         self.info = {}
         for key in additional_info:
             self.info[key] = []
@@ -221,7 +222,7 @@ class Stats:
     """
     def __init__(self, sess, log_dir, tf_writer, name, additional_info = {}, stats_name = ['mean', 'min', 'max', 'std', 'sum']):
         self.stats_name = stats_name
-        log_var_names = ['n_timesteps']
+        log_var_names = ['n_timesteps', 'success']
         for j in stats_name:
             log_var_names.append(j + '_reward')
             log_var_names.append(j + '_q_value')
@@ -242,7 +243,7 @@ class Stats:
         """
         logger.debug('Stats: Updating for episode.')
 
-        row = [episode_data.n_timesteps]
+        row = [episode_data.n_timesteps, int(episode_data.success)]
         for operation in self.stats_name:
             operation = getattr(importlib.import_module('numpy'), operation)
             row.append(np.squeeze(operation(np.array(episode_data.reward))))
