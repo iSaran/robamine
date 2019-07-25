@@ -122,7 +122,7 @@ def rgb2bgr(rgb):
     return np.flip(bgr, axis=0)
 
 
-def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=False):
+def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=False, rotations=4):
     """
     see kiatos19
     :param point_cloud: point cloud aligned with the target object
@@ -148,15 +148,25 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
             if height_grid[idx_y][idx_x] < z:
                 height_grid[idx_y][idx_x] = z
 
+    heightmaps=[]
+    # center = (width / 2, height / 2)
+    # heightmaps = []
+    # for i in range(rotations):
+    #     angle = i * (-90)
+    #     print(angle)
+    #     m = cv2.getRotationMatrix2D(center, angle, scale=1)
+    #     heightmaps.append(cv2.warpAffine(height_grid, m, (height, width)))
+
     if plot:
-        cv_height = np.zeros((height, width), dtype=np.float32)
-        min_height = np.min(height_grid)
-        max_height = np.max(height_grid)
-        for i in range(0, width):
-            for j in range(0, height):
-                cv_height[i][j] = (height_grid[i][j] - min_height) / (max_height - min_height)
-        cv2.imshow("height_map", cv_height)
-        cv2.waitKey()
+        for k in range(rotations):
+            cv_height = np.zeros((height, width), dtype=np.float32)
+            min_height = np.min(heightmaps[k])
+            max_height = np.max(heightmaps[k])
+            for i in range(0, width):
+                for j in range(0, height):
+                    cv_height[i][j] = (heightmaps[k][i][j] - min_height) / (max_height - min_height)
+            cv2.imshow("height_map" + str(k), cv_height)
+            cv2.waitKey()
 
     return height_grid
 

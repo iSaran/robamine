@@ -39,7 +39,7 @@ class Push:
     of instead of using 4 discrete directions, now we have a continuous angle
     (direction_theta) from which we calculate the direction.
     """
-    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, object_length=0.05, object_width = 0.05, finger_size = 0.02):
+    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.1, direction_theta = 0.0, target = True, object_height = 0.06, object_length=0.05, object_width = 0.05, finger_size = 0.02):
         self.distance = distance
         self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
 
@@ -245,7 +245,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             bbox = dim
 
         points_above_table = np.asarray(points_above_table)
-        height_map = cv_tools.generate_height_map(points_above_table)
+        height_map = cv_tools.generate_height_map(points_above_table, plot=False)
         features = cv_tools.extract_features(height_map, bbox, plot=False)
 
         # Add the distance of the object from the edge
@@ -359,8 +359,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if len(points_around) == 0:
             return +10
 
-
-        return -1
+        max_cost = -5
+         
+        return -1 + sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
 
         # k = max(self.no_of_prev_points_around, len(points_around))
         # if k != 0:
