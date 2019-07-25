@@ -255,7 +255,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # height_map = cv_tools.generate_height_map(points_above_table, plot=False)
         if self.params['split']:
-            heightmaps = cv_tools.generate_height_map(points_above_table, rotations=4, plot=True)
+            heightmaps = cv_tools.generate_height_map(points_above_table, rotations=4, plot=False)
             features = []
             for i in range(len(heightmaps)):
                 f = cv_tools.extract_features(heightmaps[i], bbox, plot=False)
