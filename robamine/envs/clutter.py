@@ -250,9 +250,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             bbox = dim
 
+        split = True
         points_above_table = np.asarray(points_above_table)
-        height_map = cv_tools.generate_height_map(points_above_table, plot=False)
-        features = cv_tools.extract_features(height_map, bbox, plot=False)
+
+        # height_map = cv_tools.generate_height_map(points_above_table, plot=False)
+        if self.params['split']:
+            heightmaps = cv_tools.generate_height_map(points_above_table, rotations=4, plot=False)
+            features = []
+            for i in range(len(heightmaps)):
+                f = cv_tools.extract_features(heightmaps[i], bbox, plot=False)
+                features.append(f)
+        else:
+            heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
+            features = cv_tools.extract_features(heightmap, bbox, plot=False)
 
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos[0], \
@@ -260,14 +270,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[1] - self.target_pos[1], \
                      self.surface_size[1] + self.target_pos[1]]
         min_distance_from_edge = min(distances)
-        features.append(min_distance_from_edge)
-        f = np.array(features)
+
         if self.params['split']:
-            fa = np.append(f, f, axis=0)
-            fa = np.append(fa, f, axis=0)
-            fa = np.append(fa, f, axis=0)
+            features[0].append(min_distance_from_edge)
+            features[1].append(min_distance_from_edge)
+            features[2].append(min_distance_from_edge)
+            features[3].append(min_distance_from_edge)
+
+            fa = np.append(features[0], features[1], axis=0)
+            fa = np.append(fa, features[2], axis=0)
+            fa = np.append(fa, features[3], axis=0)
         else:
-            fa = f
+            features.append(min_distance_from_edge)
+            fa = np.array(features)
 
         return fa, points_above_table, bbox
 
