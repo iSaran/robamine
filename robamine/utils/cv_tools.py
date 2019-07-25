@@ -122,7 +122,19 @@ def rgb2bgr(rgb):
     return np.flip(bgr, axis=0)
 
 
-def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=False, rotations=4):
+def plot_height_map(heightmap):
+    width, height = heightmap.shape
+    cv_height = np.zeros((height, width), dtype=np.float32)
+    min_height = np.min(heightmap)
+    max_height = np.max(heightmap)
+    for i in range(0, width):
+        for j in range(0, height):
+            cv_height[i][j] = (heightmap[i][j] - min_height) / (max_height - min_height)
+    cv2.imshow("height_map", cv_height)
+    cv2.waitKey()
+
+
+def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=False, rotations=0):
     """
     see kiatos19
     :param point_cloud: point cloud aligned with the target object
@@ -148,27 +160,24 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
             if height_grid[idx_y][idx_x] < z:
                 height_grid[idx_y][idx_x] = z
 
-    heightmaps=[]
-    # center = (width / 2, height / 2)
-    # heightmaps = []
-    # for i in range(rotations):
-    #     angle = i * (-90)
-    #     print(angle)
-    #     m = cv2.getRotationMatrix2D(center, angle, scale=1)
-    #     heightmaps.append(cv2.warpAffine(height_grid, m, (height, width)))
+    if rotations > 0:
+        center = (width / 2, height / 2)
+        heightmaps = []
+        for i in range(rotations):
+            angle = i * (-90)
+            m = cv2.getRotationMatrix2D(center, angle, scale=1)
+            heightmaps.append(cv2.warpAffine(height_grid, m, (height, width)))
 
-    if plot:
-        for k in range(rotations):
-            cv_height = np.zeros((height, width), dtype=np.float32)
-            min_height = np.min(heightmaps[k])
-            max_height = np.max(heightmaps[k])
-            for i in range(0, width):
-                for j in range(0, height):
-                    cv_height[i][j] = (heightmaps[k][i][j] - min_height) / (max_height - min_height)
-            cv2.imshow("height_map" + str(k), cv_height)
-            cv2.waitKey()
+            if plot:
+                plot_height_map(heightmaps[i])
 
-    return height_grid
+        return heightmaps
+    else:
+        if plot:
+            plot_height_map(height_grid)
+
+        return height_grid
+
 
 
 def extract_features(height_map, dim, plot=False):
