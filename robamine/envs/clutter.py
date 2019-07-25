@@ -372,7 +372,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             return +10
 
         max_cost = -5
-         
+
         return -1 + sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
 
         # k = max(self.no_of_prev_points_around, len(points_around))
