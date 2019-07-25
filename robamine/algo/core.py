@@ -396,8 +396,8 @@ class World:
             self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
         elif self._mode == WorldMode.TRAIN_EVAL:
             train = True
-            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train')
-            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval')
+            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
+            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
 
         counter = 0
         start_time = time.time()
