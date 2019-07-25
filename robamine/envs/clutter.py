@@ -136,6 +136,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_quat = Quaternion()
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
         self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
+        self.success = False
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -205,6 +206,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         observation, _, _ = self.get_obs()
 
         self.last_timestamp = self.sim.data.time
+        success = False
         return observation
 
     def get_obs(self):
@@ -278,7 +280,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         reward = self.get_reward(obs, pcd, dim)
         if self.terminal_state(obs):
             done = True
-        return obs, reward, done, {'experience_time': experience_time}
+        return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
 
     def do_simulation(self, action):
         if self.params['discrete']:
@@ -410,6 +412,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # If the object is free from obstacles around (no points around)
         if self.no_of_prev_points_around == 0:
+            self.success = True
             return True
 
         return False

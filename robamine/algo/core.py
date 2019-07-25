@@ -474,6 +474,8 @@ class World:
             if done:
                 break
 
+        if 'success' in info:
+            stats.success = info['success']
         stats.n_timesteps = len(stats.reward)
         return stats
 
