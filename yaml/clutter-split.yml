@@ -22,7 +22,7 @@ env:
 agent:
   name: 'DQNSplit'
   replay_buffer_size: 1000000
-  batch_size: [5, 5]
+  batch_size: [64, 64]
   discount: 0.9
   target_net_updates: 1000
   tau: 0.999
@@ -30,7 +30,8 @@ agent:
   epsilon_start: 0.9
   epsilon_end: 0.05
   epsilon_decay: 20000  # number of learning steps for half epsilon, set to 0 if no decay is needed
-  learning_rate: [0.0001, 0.0001]
-  hidden_units: [[50, 50], [50, 50]]
+  learning_rate: [0.001, 0.001]
+  hidden_units: [[100], [100]]
+  loss: ['mse', 'mse']  # Options: 'mse', 'huber'
   device: 'cpu'  # "cuda", "cpu"
 
