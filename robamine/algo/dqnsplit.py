@@ -86,6 +86,7 @@ class DQNSplit(Agent):
             self.optimizer.append(optim.Adam(self.network[i].parameters(), lr=self.params['learning_rate'][i]))
             self.replay_buffer.append(ReplayBuffer(self.params['replay_buffer_size']))
         self.loss = nn.MSELoss()
+            self.info['qnet_' +  str(i) + '_loss'] = 0
 
         self.learn_step_counter = 0
         self.rng = np.random.RandomState()
@@ -112,6 +113,7 @@ class DQNSplit(Agent):
         self.replay_buffer[int(np.floor(transition.action / self.nr_substates))].store(transition)
 
         for i in range(self.nr_network):
+            self.info['qnet_' +  str(i) + '_loss'] = 0
 
             # If we have not enough samples just keep storing transitions to the
             # buffer and thus exit.
@@ -156,6 +158,7 @@ class DQNSplit(Agent):
             self.optimizer[i].zero_grad()
             loss.backward()
             self.optimizer[i].step()
+            self.info['qnet_' +  str(i) + '_loss'] = loss.detach().cpu().numpy().copy()
 
         self.learn_step_counter += 1
 
