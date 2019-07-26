@@ -184,8 +184,9 @@ class DQNSplit(Agent):
         model = pickle.load(open(file_path, 'rb'))
         params = model['params']
         self = cls(model['state_dim'], model['action_dim'], params)
-        self.network.load_state_dict(model['network'])
-        self.target_network.load_state_dict(model['target_network'])
+        for i in range(self.nr_network):
+            self.network[i].load_state_dict(model['network'][i])
+            self.target_network[i].load_state_dict(model['target_network'][i])
         self.learn_step_counter = model['learn_step_counter']
         logger.info('Agent loaded from %s', file_path)
         return self
@@ -193,8 +194,10 @@ class DQNSplit(Agent):
     def save(self, file_path):
         model = {}
         model['params'] = self.params
-        model['network'] = self.network.state_dict()
-        model['target_network'] = self.target_network.state_dict()
+        model['network'], model['target_network'] = [], []
+        for i in range(self.nr_network):
+            model['network'].append(self.network[i].state_dict())
+            model['target_network'].append(self.target_network[i].state_dict())
         model['learn_step_counter'] = self.learn_step_counter
         model['state_dim'] = self.state_dim
         model['action_dim'] = self.action_dim
