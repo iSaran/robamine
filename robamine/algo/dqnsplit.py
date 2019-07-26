@@ -147,10 +147,10 @@ class DQNSplit(Agent):
 
             # Calculate current q
             split = np.split(batch.state, self.nr_substates, axis=1)
-            st = np.empty((self.params['batch_size'][i], self.substate_dim))
+            st = np.zeros((self.params['batch_size'][i], self.substate_dim))
             batch.action = np.subtract(batch.action, i * self.nr_substates)
             for m in range(self.params['batch_size'][i]):
-                st[m:] = split[batch.action[m]][m:]
+                st[m, :] = split[batch.action[m]][m, :]
             s = torch.FloatTensor(st).to(self.device)
             q = self.network[i](s)
 
