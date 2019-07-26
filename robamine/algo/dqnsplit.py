@@ -31,6 +31,7 @@ default_params = {
         'target_net_updates' : 1000,
         'double_dqn' : True,
         'hidden_units' : [[50, 50], [50, 50]],
+        'loss': ['mse', 'mse'],
         'device' : 'cuda'
         }
 
@@ -81,11 +82,16 @@ class DQNSplit(Agent):
             self.network.append(QNetwork(self.substate_dim, 1, hidden).to(self.device))
             self.target_network.append(QNetwork(self.substate_dim, 1, hidden).to(self.device))
 
-        self.optimizer, self.replay_buffer = [], []
+        self.optimizer, self.replay_buffer, self.loss = [], [], []
         for i in range(self.nr_network):
             self.optimizer.append(optim.Adam(self.network[i].parameters(), lr=self.params['learning_rate'][i]))
             self.replay_buffer.append(ReplayBuffer(self.params['replay_buffer_size']))
-        self.loss = nn.MSELoss()
+            if self.params['loss'][i] == 'mse':
+                self.loss.append(nn.MSELoss())
+            elif self.params['loss'][i] == 'huber':
+                self.loss.append(nn.SmoothL1Loss())
+            else:
+                raise ValueError('DQNSplit: Loss should be mse or huber')
             self.info['qnet_' +  str(i) + '_loss'] = 0
 
         self.learn_step_counter = 0
@@ -154,7 +160,7 @@ class DQNSplit(Agent):
             s = torch.FloatTensor(st).to(self.device)
             q = self.network[i](s)
 
-            loss = self.loss(q, q_target)
+            loss = self.loss[i](q, q_target)
             self.optimizer[i].zero_grad()
             loss.backward()
             self.optimizer[i].step()
