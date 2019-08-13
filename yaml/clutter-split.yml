@@ -12,7 +12,7 @@ load_world:  "/tmp/robamine_logs/robamine_logs_2019.08.12.16.07.09.648994/" # Pa
 env:
   name: 'Clutter-v0'
   discrete: True
-  nr_of_actions: 8
+  nr_of_actions: 16
   render: False
   nr_of_obstacles: [5, 8]
   target_probability_box: 1.0
