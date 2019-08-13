@@ -161,10 +161,11 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
                 height_grid[idx_y][idx_x] = z
 
     if rotations > 0:
+        step_angle = 360 / rotations
         center = (width / 2, height / 2)
         heightmaps = []
         for i in range(rotations):
-            angle = i * (-90)
+            angle = i * step_angle
             m = cv2.getRotationMatrix2D(center, angle, scale=1)
             heightmaps.append(cv2.warpAffine(height_grid, m, (height, width)))
 
@@ -180,7 +181,7 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
 
 
 
-def extract_features(height_map, dim, plot=False):
+def extract_features(height_map, dim, rotation_angle=0, plot=False):
     """
     Extract features from height map(see kiatos19)
     :param height_map: height map aligned with the target
@@ -214,10 +215,28 @@ def extract_features(height_map, dim, plot=False):
     cx2 = cx + int(side[0])
     cy1 = cy - int(side[1])
     cy2 = cy + int(side[1])
-    cells.append([(cx1, cy1), (cx, cy)])
-    cells.append([(cx, cy1), (cx2, cy)])
-    cells.append([(cx1, cy), (cx, cy2)])
-    cells.append([(cx, cy), (cx2, cy2)])
+    # cells.append([(cx1, cy1), (cx, cy)])
+    # cells.append([(cx, cy1), (cx2, cy)])
+    # cells.append([(cx1, cy), (cx, cy2)])
+    # cells.append([(cx, cy), (cx2, cy2)])
+
+    m = cv2.getRotationMatrix2D((cx, cy), rotation_angle, scale=1)
+    (cx, cy) = np.matmul(m, np.array([cx, cy, 1])).astype(int)
+    c1 = np.matmul(m, np.array([cx1, cy1, 1])).astype(int)
+    c2 = np.matmul(m, np.array([cx2, cy1, 1])).astype(int)
+    c3 = np.matmul(m, np.array([cx2, cy2, 1])).astype(int)
+    c4 = np.matmul(m, np.array([cx1, cy2, 1])).astype(int)
+
+    cx1 = min(c1[0], c2[0], c3[0], c4[0])
+    cy1 = min(c1[1], c2[1], c3[1], c4[1])
+    cx2 = max(c1[0], c2[0], c3[0], c4[0])
+    cy2 = max(c1[1], c2[1], c3[1], c4[1])
+
+    #cells.append([(cx1, cy1), (cx, cy)])
+    #cells.append([(cx, cy1), (cx2, cy)])
+    #cells.append([(cx1, cy), (cx, cy2)])
+    #cells.append([(cx, cy), (cx2, cy2)])
+
 
     # Features around target
     # 1. Define the up left corners for each 32x32 region around the target
