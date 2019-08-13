@@ -95,7 +95,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                            dtype=np.float32)
 
         if self.params['split']:
-            obs_dim = (self.params['nr_of_actions'] / 2) * 260
+            obs_dim = int(self.params['nr_of_actions'] / 2) * 260
         else:
             obs_dim = 260
 
@@ -254,20 +254,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         split = True
         points_above_table = np.asarray(points_above_table)
 
-        # height_map = cv_tools.generate_height_map(points_above_table, plot=False)
-        if self.params['split']:
-            heightmaps = cv_tools.generate_height_map(points_above_table, rotations=4, plot=False)
-            features = []
-            for i in range(0, len(heightmaps)):
-                f = cv_tools.extract_features(heightmaps[i], bbox, rotation_angle=i*90, plot=False)
-                f.append(i*90)
-                f.append(bbox[0])
-                f.append(bbox[1])
-                features.append(f)
-        else:
-            heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
-            features = cv_tools.extract_features(heightmap, bbox, plot=False)
-
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos[0], \
                      self.surface_size[0] + self.target_pos[0], \
@@ -275,20 +261,29 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[1] + self.target_pos[1]]
         min_distance_from_edge = min(distances)
 
+        # height_map = cv_tools.generate_height_map(points_above_table, plot=False)
         if self.params['split']:
-            features[0].append(min_distance_from_edge)
-            features[1].append(min_distance_from_edge)
-            features[2].append(min_distance_from_edge)
-            features[3].append(min_distance_from_edge)
+            heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / 2), plot=False)
+            features = []
+            rot_angle = 360 / int(self.params['nr_of_actions'] / 2)
+            for i in range(0, len(heightmaps)):
+                f = cv_tools.extract_features(heightmaps[i], bbox, rotation_angle=i*rot_angle, plot=False)
+                f.append(i*rot_angle)
+                f.append(bbox[0])
+                f.append(bbox[1])
+                f.append(min_distance_from_edge)
+                features.append(f)
 
-            fa = np.append(features[0], features[1], axis=0)
-            fa = np.append(fa, features[2], axis=0)
-            fa = np.append(fa, features[3], axis=0)
+            final_feature = np.append(features[0], features[1], axis=0)
+            for i in range(2, len(features)):
+                final_feature = np.append(final_feature, features[i], axis=0)
         else:
+            heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
+            features = cv_tools.extract_features(heightmap, bbox, plot=False)
             features.append(min_distance_from_edge)
-            fa = np.array(features)
+            final_feature = np.array(features)
 
-        return fa, points_above_table, bbox
+        return final_feature, points_above_table, bbox
 
     def step(self, action):
         done = False
@@ -305,9 +300,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.params['discrete']:
             myaction = action
             push_target = True
-            if myaction > 3:
+            if myaction > int(self.params['nr_of_actions'] / 2) - 1:
                 push_target = False
-                myaction -= 4
+                myaction -= int(self.params['nr_of_actions'] / 2)
             theta = myaction * 2 * math.pi / (self.action_space.n / 2)
             push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
         else:
