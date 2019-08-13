@@ -95,9 +95,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                            dtype=np.float32)
 
         if self.params['split']:
-            obs_dim = 4 * 261
+            obs_dim = (self.params['nr_of_actions'] / 2) * 260
         else:
-            obs_dim = 261
+            obs_dim = 260
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -250,6 +250,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             bbox = dim
 
+
         split = True
         points_above_table = np.asarray(points_above_table)
 
@@ -257,8 +258,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.params['split']:
             heightmaps = cv_tools.generate_height_map(points_above_table, rotations=4, plot=False)
             features = []
-            for i in range(len(heightmaps)):
-                f = cv_tools.extract_features(heightmaps[i], bbox, plot=False)
+            for i in range(0, len(heightmaps)):
+                f = cv_tools.extract_features(heightmaps[i], bbox, rotation_angle=i*90, plot=False)
+                f.append(i*90)
+                f.append(bbox[0])
+                f.append(bbox[1])
                 features.append(f)
         else:
             heightmap = cv_tools.generate_height_map(points_above_table, plot=False)

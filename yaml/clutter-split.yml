@@ -1,14 +1,14 @@
 logging_directory: "/tmp/robamine_logs"
-mode: Train  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
+mode: Evaluate  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
 train:
   episodes: 5000
   render: False
 eval:
-  episodes: 1000
-  render: True
-eval_every: 10
+  episodes: 10
+  render: False
+eval_every: 20
 save_every: 10
-load_world: ""  # Path to load world. Empty string means new world
+load_world:  "/tmp/robamine_logs/robamine_logs_2019.08.12.16.07.09.648994/" # Path to load world. Empty string means new world
 env:
   name: 'Clutter-v0'
   discrete: True

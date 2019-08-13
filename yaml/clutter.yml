@@ -6,7 +6,7 @@ train:
 eval:
   episodes: 10
   render: False
-eval_every: 1000
+eval_every: 100
 save_every: 10
 load_world: ""  # Path to load world. Empty string means new world
 env:
@@ -18,7 +18,7 @@ env:
   target_probability_box: 1.0
   obstacle_probability_box: 1.0
   push_distance: 0.1
-  split: False
+  split: True
 agent:
   name: 'DQN'
   replay_buffer_size: 1000000
