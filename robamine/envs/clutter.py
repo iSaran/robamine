@@ -31,7 +31,9 @@ default_params = {
         'nr_of_obstacles' : [5, 10],
         'target_probability_box': 1.0,
         'obstacle_probability_box': 1.0,
-        'push_distance' : 0.2
+        'push_distance' : 0.2,
+        'target_height_range' : [.005, .01],
+        'obstacle_height_range' : [.005, .02]
         }
 
 class Push:
@@ -95,9 +97,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                            dtype=np.float32)
 
         if self.params['split']:
-            obs_dim = int(self.params['nr_of_actions'] / 2) * 260
+            obs_dim = int(self.params['nr_of_actions'] / 2) * 263
         else:
-            obs_dim = 260
+            obs_dim = 263
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -206,7 +208,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         observation, _, _ = self.get_obs()
 
         self.last_timestamp = self.sim.data.time
-        success = False
+        self.success = False
         return observation
 
     def get_obs(self):
@@ -258,7 +260,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[0] + self.target_pos[0], \
                      self.surface_size[1] - self.target_pos[1], \
                      self.surface_size[1] + self.target_pos[1]]
-        min_distance_from_edge = min(distances)
 
         # height_map = cv_tools.generate_height_map(points_above_table, plot=False)
         if self.params['split']:
@@ -270,7 +271,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 f.append(i*rot_angle)
                 f.append(bbox[0])
                 f.append(bbox[1])
-                f.append(min_distance_from_edge)
+                f.append(distances[0])
+                f.append(distances[1])
+                f.append(distances[2])
+                f.append(distances[3])
                 features.append(f)
 
             final_feature = np.append(features[0], features[1], axis=0)
@@ -282,8 +286,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             features.append(0)
             features.append(bbox[0])
             features.append(bbox[1])
-            features.append(min_distance_from_edge)
-            print(len(features))
+            features.append(distances[0])
+            features.append(distances[1])
+            features.append(distances[2])
+            features.append(distances[3])
             final_feature = np.array(features)
 
         return final_feature, points_above_table, bbox
@@ -361,10 +367,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
-            self.push_stopped_ext_forces = False
             return -10
 
-        if observation[-1] < 0:
+        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
             return -10
 
         # for each push that frees the space around the target
@@ -391,7 +396,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         max_cost = -5
 
-        return -1 + sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
+        return -1
 
         # k = max(self.no_of_prev_points_around, len(points_around))
         # if k != 0:
@@ -416,6 +421,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def terminal_state(self, observation):
 
+        # Terminal if collision is detected
+        if self.push_stopped_ext_forces:
+            self.push_stopped_ext_forces = False
+            return True
+
         # Terminate if the target flips to its side, i.e. if target's z axis is
         # parallel to table, terminate.
         target_z = self.target_quat.rotation_matrix()[:,2]
@@ -424,7 +434,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # If the object has fallen from the table
-        if observation[-1] < 0:
+        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
             return True
 
         # If the object is free from obstacles around (no points around)
@@ -546,8 +556,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
     def generate_random_scene(self, finger_height_range=[.005, .005],
-                                    target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
-                                    obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
+                                    target_length_range=[.01, .03], target_width_range=[.01, .03],
+                                    obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
@@ -583,7 +593,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         #   Randomize size
         target_length = self.rng.uniform(target_length_range[0], target_length_range[1])
         target_width  = self.rng.uniform(target_width_range[0], min(target_length, target_width_range[1]))
-        target_height = self.rng.uniform(max(target_height_range[0], finger_height), target_height_range[1])
+        target_height = self.rng.uniform(max(self.params['target_height_range'][0], finger_height), self.params['target_height_range'][1])
         if self.sim.model.geom_type[geom_id] == 6:
             self.sim.model.geom_size[geom_id][0] = target_length
             self.sim.model.geom_size[geom_id][1] = target_width
@@ -622,7 +632,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             #   Randomize size
             obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
             obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
-            obstacle_height = self.rng.uniform(max(obstacle_height_range[0], target_height + 2 * finger_height + 0.001), obstacle_height_range[1])
+            obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
+            if (obstacle_height > target_height) and (obstacle_height < (target_height + finger_height + 0.001)):
+                obstacle_height = target_height + finger_height + 0.001
+
             if self.sim.model.geom_type[geom_id] == 6:
                 self.sim.model.geom_size[geom_id][0] = obstacle_length
                 self.sim.model.geom_size[geom_id][1] = obstacle_width
