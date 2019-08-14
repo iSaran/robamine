@@ -31,7 +31,9 @@ default_params = {
         'nr_of_obstacles' : [5, 10],
         'target_probability_box': 1.0,
         'obstacle_probability_box': 1.0,
-        'push_distance' : 0.2
+        'push_distance' : 0.2,
+        'target_height_range' : [.005, .01],
+        'obstacle_height_range' : [.005, .02]
         }
 
 class Push:
@@ -546,8 +548,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
     def generate_random_scene(self, finger_height_range=[.005, .005],
-                                    target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
-                                    obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
+                                    target_length_range=[.01, .03], target_width_range=[.01, .03],
+                                    obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
@@ -583,7 +585,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         #   Randomize size
         target_length = self.rng.uniform(target_length_range[0], target_length_range[1])
         target_width  = self.rng.uniform(target_width_range[0], min(target_length, target_width_range[1]))
-        target_height = self.rng.uniform(max(target_height_range[0], finger_height), target_height_range[1])
+        target_height = self.rng.uniform(max(self.params['target_height_range'][0], finger_height), self.params['target_height_range'][1])
         if self.sim.model.geom_type[geom_id] == 6:
             self.sim.model.geom_size[geom_id][0] = target_length
             self.sim.model.geom_size[geom_id][1] = target_width
@@ -622,7 +624,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             #   Randomize size
             obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
             obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
-            obstacle_height = self.rng.uniform(max(obstacle_height_range[0], target_height + 2 * finger_height + 0.001), obstacle_height_range[1])
+            obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
             if self.sim.model.geom_type[geom_id] == 6:
                 self.sim.model.geom_size[geom_id][0] = obstacle_length
                 self.sim.model.geom_size[geom_id][1] = obstacle_width
