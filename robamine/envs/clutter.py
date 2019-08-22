@@ -624,7 +624,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             #   Randomize size
             obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
             obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
-            obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
+            obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], target_height + 2 * finger_height + 0.001), self.params['obstacle_height_range'][1])
             if self.sim.model.geom_type[geom_id] == 6:
                 self.sim.model.geom_size[geom_id][0] = obstacle_length
                 self.sim.model.geom_size[geom_id][1] = obstacle_width
