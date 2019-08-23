@@ -97,9 +97,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                            dtype=np.float32)
 
         if self.params['split']:
-            obs_dim = int(self.params['nr_of_actions'] / 2) * 260
+            obs_dim = int(self.params['nr_of_actions'] / 2) * 263
         else:
-            obs_dim = 260
+            obs_dim = 263
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -260,7 +260,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[0] + self.target_pos[0], \
                      self.surface_size[1] - self.target_pos[1], \
                      self.surface_size[1] + self.target_pos[1]]
-        min_distance_from_edge = min(distances)
 
         # height_map = cv_tools.generate_height_map(points_above_table, plot=False)
         if self.params['split']:
@@ -272,7 +271,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 f.append(i*rot_angle)
                 f.append(bbox[0])
                 f.append(bbox[1])
-                f.append(min_distance_from_edge)
+                f.append(distances[0])
+                f.append(distances[1])
+                f.append(distances[2])
+                f.append(distances[3])
                 features.append(f)
 
             final_feature = np.append(features[0], features[1], axis=0)
@@ -284,7 +286,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             features.append(0)
             features.append(bbox[0])
             features.append(bbox[1])
-            features.append(min_distance_from_edge)
+            features.append(distances[0])
+            features.append(distances[1])
+            features.append(distances[2])
+            features.append(distances[3])
             final_feature = np.array(features)
 
         return final_feature, points_above_table, bbox
@@ -365,7 +370,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.push_stopped_ext_forces = False
             return -10
 
-        if observation[-1] < 0:
+        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
             return -10
 
         # for each push that frees the space around the target
@@ -425,7 +430,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # If the object has fallen from the table
-        if observation[-1] < 0:
+        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
             return True
 
         # If the object is free from obstacles around (no points around)
