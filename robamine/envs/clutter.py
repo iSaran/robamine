@@ -285,7 +285,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             features.append(bbox[0])
             features.append(bbox[1])
             features.append(min_distance_from_edge)
-            print(len(features))
             final_feature = np.array(features)
 
         return final_feature, points_above_table, bbox
@@ -393,7 +392,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         max_cost = -5
 
-        return -1 + sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
+        return -1
 
         # k = max(self.no_of_prev_points_around, len(points_around))
         # if k != 0:
