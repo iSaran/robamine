@@ -27,3 +27,6 @@ class RandomDiscrete(Agent):
 
     def seed(self, seed):
         self.rng.seed(seed)
+
+    def save(self, path):
+        pass
