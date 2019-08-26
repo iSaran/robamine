@@ -208,7 +208,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         observation, _, _ = self.get_obs()
 
         self.last_timestamp = self.sim.data.time
-        success = False
+        self.success = False
         return observation
 
     def get_obs(self):
