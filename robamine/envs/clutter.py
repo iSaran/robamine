@@ -367,7 +367,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
-            self.push_stopped_ext_forces = False
             return -10
 
         if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
@@ -421,6 +420,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # return reward
 
     def terminal_state(self, observation):
+
+        # Terminal if collision is detected
+        if self.push_stopped_ext_forces:
+            self.push_stopped_ext_forces = False
+            return True
 
         # Terminate if the target flips to its side, i.e. if target's z axis is
         # parallel to table, terminate.
