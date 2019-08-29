@@ -252,7 +252,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             bbox = dim
 
-
         points_above_table = np.asarray(points_above_table)
 
         # Add the distance of the object from the edge
@@ -261,13 +260,17 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[1] - self.target_pos[1], \
                      self.surface_size[1] + self.target_pos[1]]
 
-        # height_map = cv_tools.generate_height_map(points_above_table, plot=False)
+        distances = [x / 0.5 for x in distances]
+
+        obstacle_height_range = self.params['obstacle_height_range']
+        max_height = 2 * obstacle_height_range[1]
+
         if self.params['split']:
             heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / 2), plot=False)
             features = []
             rot_angle = 360 / int(self.params['nr_of_actions'] / 2)
             for i in range(0, len(heightmaps)):
-                f = cv_tools.extract_features(heightmaps[i], bbox, rotation_angle=i*rot_angle, plot=False)
+                f = cv_tools.extract_features(heightmaps[i], bbox, max_height, rotation_angle=i*rot_angle, plot=False)
                 f.append(i*rot_angle)
                 f.append(bbox[0])
                 f.append(bbox[1])
@@ -282,7 +285,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 final_feature = np.append(final_feature, features[i], axis=0)
         else:
             heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
-            features = cv_tools.extract_features(heightmap, bbox, plot=False)
+            features = cv_tools.extract_features(heightmap, max_height, bbox, plot=False)
             features.append(0)
             features.append(bbox[0])
             features.append(bbox[1])

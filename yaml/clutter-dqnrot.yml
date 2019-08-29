@@ -1,18 +1,18 @@
 logging_directory: "/tmp/robamine_logs"
-mode: Evaluate  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
+mode: Train & Evaluate  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
 train:
   episodes: 5000
   render: False
 eval:
-  episodes: 1000
+  episodes: 10
   render: False
 eval_every: 20
 save_every: 10
-load_world:  "/tmp/robamine_logs/robamine_logs_2019.08.27.18.32.21.434989/" # Path to load world. Empty string means new world
+load_world: ""  # Path to load world. Empty string means new world
 env:
   name: 'Clutter-v0'
   discrete: True
-  nr_of_actions: 16
+  nr_of_actions: 16  # u x w
   render: False
   nr_of_obstacles: [5, 8]
   target_probability_box: 1.0
@@ -22,18 +22,16 @@ env:
   push_distance: 0.1
   split: True
 agent:
-  name: 'DQNSplit'
+  name: 'DQNRot'
   replay_buffer_size: 1000000
-  batch_size: [64, 64]
+  batch_size: 32
   discount: 0.9
   target_net_updates: 1000
   tau: 0.999
-  double_dqn: False
   epsilon_start: 0.9
   epsilon_end: 0.05
   epsilon_decay: 20000  # number of learning steps for half epsilon, set to 0 if no decay is needed
-  learning_rate: [0.001, 0.001]
-  hidden_units: [[100, 100], [100, 100]]
-  loss: ['mse', 'mse']  # Options: 'mse', 'huber'
+  learning_rate: 0.001
+  hidden_units: [140, 140]
   device: 'cpu'  # "cuda", "cpu"
-
+  low_level_actions: 8  # w

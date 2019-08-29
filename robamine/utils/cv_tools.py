@@ -181,7 +181,7 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
 
 
 
-def extract_features(height_map, dim, rotation_angle=0, plot=False):
+def extract_features(height_map, dim, max_height, normalize=True, rotation_angle=0, plot=False):
     """
     Extract features from height map(see kiatos19)
     :param height_map: height map aligned with the target
@@ -288,6 +288,10 @@ def extract_features(height_map, dim, rotation_angle=0, plot=False):
         if plot:
             cv2.imshow('rgb', rgb)
             cv2.waitKey()
+
+    if normalize:
+        for i in range(len(features)):
+            features[i] /= max_height
 
     return features
 
