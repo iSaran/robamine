@@ -285,7 +285,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 final_feature = np.append(final_feature, features[i], axis=0)
         else:
             heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
-            features = cv_tools.extract_features(heightmap, max_height, bbox, plot=False)
+            features = cv_tools.extract_features(heightmap, bbox, max_height, plot=False)
             features.append(0)
             features.append(bbox[0])
             features.append(bbox[1])
