@@ -336,6 +336,8 @@ class World:
         self.config = {}
         self.config['results'] = {}
 
+        self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
+        self.expected_values_file.write('expected,real\n')
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
 
@@ -447,6 +449,8 @@ class World:
     def _episode(self, render=False, train=False):
         stats = EpisodeStats(self.agent.info)
         state = self.env.reset()
+        expected_return = []
+        true_return = []
         while True:
             if (render):
                 self.env.render()
@@ -472,6 +476,12 @@ class World:
             # Learn
             Q = self.agent.q_value(state, action)
 
+            if not train:
+                expected_return.append(np.squeeze(Q))
+                true_return.append(reward)
+                for i in range(0, len(true_return) - 1):
+                    true_return[i] += reward
+
             state = next_state
 
             # self.train_stats.update_timestep({'reward': reward, 'q_value': Q})
@@ -482,6 +492,13 @@ class World:
 
             if done:
                 break
+
+        if not train:
+            for i in range (0, len(true_return)):
+                true_return[i] = true_return[i] / (len(true_return) - i)
+                self.expected_values_file.write(str(expected_return[i]) + ',' + str(true_return[i]) + '\n')
+                self.expected_values_file.flush()
+
 
         if 'success' in info:
             stats.success = info['success']
