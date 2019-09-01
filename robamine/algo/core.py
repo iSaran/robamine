@@ -336,7 +336,7 @@ class World:
         self.config = {}
         self.config['results'] = {}
 
-        self.expected_values_file = open(os.path.join((self.log_path, 'expected_values' + '.csv'), "w+")
+        self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
         self.expected_values_file.write('expected,real\n')
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
@@ -480,7 +480,7 @@ class World:
                 expected_return.append(Q)
                 true_return.append(reward)
                 for i in range(0, len(true_return) - 1):
-                    true_return += reward
+                    true_return[i] += reward
 
             state = next_state
 
