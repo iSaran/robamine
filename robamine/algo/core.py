@@ -338,6 +338,8 @@ class World:
 
         self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
         self.expected_values_file.write('expected,real\n')
+
+        self.actions_file = open(os.path.join(self.log_dir, 'actions' + '.csv'), "w+")
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
 
@@ -451,6 +453,7 @@ class World:
         state = self.env.reset()
         expected_return = []
         true_return = []
+        action_log = []
         while True:
             if (render):
                 self.env.render()
@@ -460,6 +463,7 @@ class World:
                 action = self.agent.explore(state)
             else:
                 action = self.agent.predict(state)
+                action_log.append(action)
 
             # Execute the action on the environment and observe reward and next state
             next_state, reward, done, info = self.env.step(action)
@@ -499,6 +503,10 @@ class World:
                 self.expected_values_file.write(str(expected_return[i]) + ',' + str(true_return[i]) + '\n')
                 self.expected_values_file.flush()
 
+            for i in range(len(action_log) - 1):
+                self.actions_file.write(str(action_log[i]) + ',')
+            self.actions_file.write(str(action_log[len(action_log) - 1]) + '\n')
+            self.actions_file.flush()
 
         if 'success' in info:
             stats.success = info['success']
