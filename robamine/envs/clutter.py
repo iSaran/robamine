@@ -33,8 +33,30 @@ default_params = {
         'obstacle_probability_box': 1.0,
         'push_distance' : 0.2,
         'target_height_range' : [.005, .01],
-        'obstacle_height_range' : [.005, .02]
+        'obstacle_height_range' : [.005, .02],
+        'extra_primitive' : True
         }
+
+class PushingPrimitiveC:
+    def __init__(self, distance = 0.1, direction_theta = 0.0, surface_size = 0.30, object_height = 0.06, finger_size = 0.02):
+        self.distance = surface_size + distance
+        self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
+        self.initial_pos = - self.direction * surface_size
+
+        # Z at the center of the target object
+        # If the object is too short just put the finger right above the
+        # table
+        if object_height - finger_size > 0:
+            offset = object_height - finger_size
+        else:
+            offset = 0
+        self.z = finger_size + offset + 0.001
+
+    def __str__(self):
+        return "Initial Position: " + str(self.initial_pos) + "\n" + \
+               "Distance: " + str(self.distance) + "\n" + \
+               "Direction: " + str(self.direction) + "\n" + \
+               "z: " + str(self.z) + "\n"
 
 class Push:
     """
@@ -96,8 +118,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                                            high=np.array([1, 1]),
                                            dtype=np.float32)
 
+        if self.params['extra_primitive']:
+            self.nr_primitives = 3
+        else:
+            self.nr_primitives = 2
+
         if self.params['split']:
-            obs_dim = int(self.params['nr_of_actions'] / 2) * 263
+            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * 263
         else:
             obs_dim = 263
 
@@ -266,9 +293,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         max_height = 2 * obstacle_height_range[1]
 
         if self.params['split']:
-            heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / 2), plot=False)
+            heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / self.nr_primitives), plot=False)
             features = []
-            rot_angle = 360 / int(self.params['nr_of_actions'] / 2)
+            rot_angle = 360 / int(self.params['nr_of_actions'] / self.nr_primitives)
             for i in range(0, len(heightmaps)):
                 f = cv_tools.extract_features(heightmaps[i], bbox, max_height, rotation_angle=i*rot_angle, plot=False)
                 f.append(i*rot_angle)
@@ -310,13 +337,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def do_simulation(self, action):
         if self.params['discrete']:
-            myaction = action
-            push_target = True
-            if myaction > int(self.params['nr_of_actions'] / 2) - 1:
-                push_target = False
-                myaction -= int(self.params['nr_of_actions'] / 2)
-            theta = myaction * 2 * math.pi / (self.action_space.n / 2)
-            push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            theta = action * 2 * math.pi / (self.action_space.n / self.nr_primitives)
+            if action > 2 * int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
+                push = PushingPrimitiveC(distance=self.params['push_distance'], direction_theta=theta, object_height=self.target_height, finger_size=self.finger_length)
+            elif action > int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
+                push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=False, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            else:
+                push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=True, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
         else:
             my_action = action.copy()
 
@@ -345,9 +372,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         init_z = 2 * self.target_height + 0.05
         self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
         self.sim_step()
+        duration = 1
+        if isinstance(push, PushingPrimitiveC):
+            duration = 3
         if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
             end = push_initial_pos_world[:2] + push.distance * push_direction_world[:2]
-            self.move_joint_to_target('finger', [end[0], end[1], None])
+            self.move_joint_to_target('finger', [end[0], end[1], None], duration)
         else:
             self.push_stopped_ext_forces = True
 
