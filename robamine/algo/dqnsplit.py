@@ -14,6 +14,7 @@ from random import Random
 import numpy as np
 import pickle
 import math
+import os
 
 import logging
 logger = logging.getLogger('robamine.algo.dqnsplit')
@@ -32,7 +33,8 @@ default_params = {
         'double_dqn' : True,
         'hidden_units' : [[50, 50], [50, 50]],
         'loss': ['mse', 'mse'],
-        'device' : 'cuda'
+        'device' : 'cuda',
+        'load_nets' : ''
         }
 
 class QNetwork(nn.Module):
@@ -97,6 +99,13 @@ class DQNSplit(Agent):
         self.learn_step_counter = 0
         self.rng = np.random.RandomState()
         self.epsilon = self.params['epsilon_start']
+
+        if self.params['load_nets'] != '':
+            logger.warn("Overwriting the first 2 network params from stored model")
+            prev_models = pickle.load(open(os.path.join(self.params['load_nets'], 'model.pkl'), 'rb'))
+            for i in range(2):
+                self.network[i].load_state_dict(prev_models['network'][i])
+                self.target_network[i].load_state_dict(prev_models['target_network'][i])
 
     def predict(self, state):
         action_value = []
