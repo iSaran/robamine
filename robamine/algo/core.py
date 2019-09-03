@@ -477,7 +477,7 @@ class World:
             Q = self.agent.q_value(state, action)
 
             if not train:
-                expected_return.append(Q)
+                expected_return.append(np.squeeze(Q))
                 true_return.append(reward)
                 for i in range(0, len(true_return) - 1):
                     true_return[i] += reward
