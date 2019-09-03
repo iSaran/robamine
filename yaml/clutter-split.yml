@@ -21,6 +21,7 @@ env:
   obstacle_height_range: [0.005, 0.02]
   push_distance: 0.1
   split: True
+  extra_primitive: False
 agent:
   name: 'DQNSplit'
   replay_buffer_size: 1000000
