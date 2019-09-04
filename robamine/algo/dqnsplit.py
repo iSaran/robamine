@@ -34,7 +34,8 @@ default_params = {
         'hidden_units' : [[50, 50], [50, 50]],
         'loss': ['mse', 'mse'],
         'device' : 'cuda',
-        'load_nets' : ''
+        'load_nets' : '',
+        'load_buffers' : ''
         }
 
 class QNetwork(nn.Module):
@@ -106,6 +107,11 @@ class DQNSplit(Agent):
             for i in range(2):
                 self.network[i].load_state_dict(prev_models['network'][i])
                 self.target_network[i].load_state_dict(prev_models['target_network'][i])
+
+        if self.params['load_buffers'] != '':
+            logger.warn("PreLoading buffers")
+            for i in range(3):
+                self.replay_buffer[i].load(os.path.join(self.params['load_buffers'], 'replay_buffer' + str(i) + '.pkl'))
 
     def predict(self, state):
         action_value = []
