@@ -111,7 +111,7 @@ class DQNSplit(Agent):
         if self.params['load_buffers'] != '':
             logger.warn("PreLoading buffers")
             for i in range(3):
-                self.replay_buffer[i].load(os.path.join(self.params['load_buffers'], 'replay_buffer' + str(i) + '.pkl'))
+                self.replay_buffer[i] = ReplayBuffer.load(os.path.join(self.params['load_buffers'], 'replay_buffer' + str(i) + '.pkl'))
 
     def predict(self, state):
         action_value = []
