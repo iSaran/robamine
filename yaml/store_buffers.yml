@@ -1,0 +1,18 @@
+logging_directory: "/tmp/robamine_logs"
+timesteps: 3000
+buffer_size: 1000000
+nr_primitives: 3
+nr_substates: 8  # w
+env:
+  name: 'Clutter-v0'
+  discrete: True
+  nr_of_actions: 24  # u x w
+  render: False
+  nr_of_obstacles: [5, 8]
+  target_probability_box: 1.0
+  target_height_range: [0.005, 0.01]
+  obstacle_probability_box: 1.0
+  obstacle_height_range: [0.005, 0.02]
+  push_distance: 0.1
+  split: True
+  extra_primitive: True
