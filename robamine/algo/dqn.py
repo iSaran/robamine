@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from robamine.algo.core import Agent
-from robamine.algo.ddpgtorch import ReplayBuffer
+from robamine.utils.memory import ReplayBuffer
 from collections import deque
 from random import Random
 import numpy as np
