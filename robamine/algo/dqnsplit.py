@@ -109,9 +109,10 @@ class DQNSplit(Agent):
                 self.target_network[i].load_state_dict(prev_models['target_network'][i])
 
         if self.params['load_buffers'] != '':
-            logger.warn("PreLoading buffers")
-            for i in range(3):
-                self.replay_buffer[i] = ReplayBuffer.load(os.path.join(self.params['load_buffers'], 'replay_buffer' + str(i) + '.pkl'))
+            for i in range(self.nr_network):
+                filepath = os.path.join(self.params['load_buffers'], 'replay_buffer' + str(i) + '.pkl')
+                self.replay_buffer[i] = ReplayBuffer.load(filepath)
+                logger.warn("DQNSplit: Preloaded buffer of size " + str(self.replay_buffer[i].size()) + " from " + filepath)
 
     def predict(self, state):
         action_value = []
