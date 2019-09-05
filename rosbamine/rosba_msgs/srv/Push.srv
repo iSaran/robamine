@@ -1,0 +1,5 @@
+float64 distance
+geometry_msgs/Vector3 initial_position
+float64 theta
+---
+bool success
