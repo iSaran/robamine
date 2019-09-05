@@ -12,6 +12,8 @@ find_package(catkin REQUIRED
   std_srvs
   autharl_core
   rosba_msgs
+  tf2
+  tf2_ros
   )
 
 catkin_package(

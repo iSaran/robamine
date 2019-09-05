@@ -25,25 +25,68 @@
 #include <autharl_core>
 #include <rosba_msgs/Push.h>
 
+#include <tf2_ros/transform_listener.h>
+#include <geometry_msgs/TransformStamped.h>
+
 std::shared_ptr<arl::robot::Robot> robot;
 
 bool callback(rosba_msgs::Push::Request  &req,
               rosba_msgs::Push::Response &res)
 {
-
+  // Move arm to home position
+  ROS_INFO("Moving arm to home position");
   Eigen::VectorXd joint(7);
   joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
   robot->setMode(arl::robot::Mode::POSITION_CONTROL);
   robot->setJointTrajectory(joint, 2);
 
-  this->push_final_pos(0) = push_distance * std::cos(theta);
-  this->push_final_pos(1) = push_distance * std::sin(theta);
-  this->push_final_pos(2) = this->push_init_pos(2);
+  // Call object detection
+  ROS_INFO("Call object detection.");
+  ros::Duration(5.0).sleep();
 
-  Eigen::Vector3d final_pos;
-  void setParams(final_pos, 2.0);
+  // Read pose of object
+  ROS_INFO("Reading target object pose");
+  tf2_ros::Buffer tfBuffer;
+  tf2_ros::TransformListener tfListener(tfBuffer);
+  geometry_msgs::TransformStamped transformStamped;
+  int k = 0;
+  for (unsigned int i = 0; i < 5; i++)
+  {
+    try
+    {
+      transformStamped = tfBuffer.lookupTransform("asus_xtion_rgb_optical_frame", "target_object", ros::Time(0));
+    }
+    catch (tf2::TransformException &ex)
+    {
+      ROS_WARN("%s",ex.what());
+      ros::Duration(0.5).sleep();
+      k++;
+      if (k > 4)
+      {
+        ROS_ERROR("Transformation wasn't found!!!!");
+      }
+      continue;
+    }
+  }
 
-  res.success = true;
+  std::cout << transformStamped << std::endl;
+
+  // Move arm to home position
+  ROS_INFO("Moving arm to home position");
+  joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
+  robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+  robot->setJointTrajectory(joint, 2);
+
+
+  /// this->push_final_pos(0) = push_distance * std::cos(theta);
+  /// this->push_final_pos(1) = push_distance * std::sin(theta);
+  /// this->push_final_pos(2) = this->push_init_pos(2);
+
+  /// Eigen::Vector3d final_pos;
+  /// void setParams(final_pos, 2.0);
+
+  /// res.success = true;
+  ROS_INFO("Pusher finished.");
   return true;
 
   // if (t > 3 * this->duration)
