@@ -148,3 +148,10 @@ class ReplayBuffer:
         self.buffer = b['buffer']
         self.count = b['count']
         return self
+
+    def merge(self, replay):
+        if self.size() + replay.size() < self.buffer_size:
+            self.buffer += replay.buffer
+            self.count += replay.count
+        else:
+            raise RuntimeError('Buffer overflow during attempting merging.')
