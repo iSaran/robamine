@@ -168,7 +168,7 @@ class DQN(Agent):
 
     def q_value(self, state, action):
         s = torch.FloatTensor(state).to(self.device)
-        return np.max(self.network(s).cpu().detach().numpy())
+        return self.network(s).cpu().detach().numpy()[action]
 
     def seed(self, seed):
         self.replay_buffer.seed(seed)
