@@ -35,7 +35,8 @@ default_params = {
         'loss': ['mse', 'mse'],
         'device' : 'cuda',
         'load_nets' : '',
-        'load_buffers' : ''
+        'load_buffers' : '',
+        'update_every_net' : True
         }
 
 class QNetwork(nn.Module):
@@ -132,55 +133,63 @@ class DQNSplit(Agent):
         return self.rng.randint(0, self.action_dim)
 
     def learn(self, transition):
-        self.replay_buffer[int(np.floor(transition.action / self.nr_substates))].store(transition)
+        i = int(np.floor(transition.action / self.nr_substates))
+        self.replay_buffer[i].store(transition)
 
-        for i in range(self.nr_network):
-            self.info['qnet_' +  str(i) + '_loss'] = 0
+        if self.params['update_every_net']:
+            for j in range(self.nr_network):
+                self.update_i_net(j)
+        else:
+            self.update_i_net(i)
 
-            # If we have not enough samples just keep storing transitions to the
-            # buffer and thus exit.
-            if self.replay_buffer[i].size() < self.params['batch_size'][i]:
-                continue
 
-            # Update target net's params
-            new_target_params = {}
-            for key in self.target_network[i].state_dict():
-                new_target_params[key] = self.params['tau'] * self.target_network[i].state_dict()[key] + (1 - self.params['tau']) * self.network[i].state_dict()[key]
-            self.target_network[i].load_state_dict(new_target_params)
+    def update_i_net(self, i):
+        self.info['qnet_' +  str(i) + '_loss'] = 0
 
-            # Sample from replay buffer
-            batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
-            batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
-            batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
+        # If we have not enough samples just keep storing transitions to the
+        # buffer and thus exit.
+        if self.replay_buffer[i].size() < self.params['batch_size'][i]:
+            return
 
-            # Calculate maxQ(s_next, a_next) with max over next actions
-            batch_next_state_split = np.split(batch.next_state, self.nr_substates, axis=1)
-            q_next = torch.FloatTensor().to(self.device)
-            for net in range(self.nr_network):
-                for k in range (self.nr_substates):
-                    next_state = torch.FloatTensor(batch_next_state_split[k]).to(self.device)
-                    q_next_i = self.target_network[net](next_state)
-                    q_next = torch.cat((q_next, q_next_i), dim=1)
-            q_next = q_next.max(1)[0].view(self.params['batch_size'][i], 1)
+        # Update target net's params
+        new_target_params = {}
+        for key in self.target_network[i].state_dict():
+            new_target_params[key] = self.params['tau'] * self.target_network[i].state_dict()[key] + (1 - self.params['tau']) * self.network[i].state_dict()[key]
+        self.target_network[i].load_state_dict(new_target_params)
 
-            reward = torch.FloatTensor(batch.reward).to(self.device)
-            terminal = torch.FloatTensor(batch.terminal).to(self.device)
-            q_target = reward + (1 - terminal) * self.params['discount'] * q_next
+        # Sample from replay buffer
+        batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
+        batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
+        batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
 
-            # Calculate current q
-            split = np.split(batch.state, self.nr_substates, axis=1)
-            st = np.zeros((self.params['batch_size'][i], self.substate_dim))
-            batch.action = np.subtract(batch.action, i * self.nr_substates)
-            for m in range(self.params['batch_size'][i]):
-                st[m, :] = split[batch.action[m]][m, :]
-            s = torch.FloatTensor(st).to(self.device)
-            q = self.network[i](s)
+        # Calculate maxQ(s_next, a_next) with max over next actions
+        batch_next_state_split = np.split(batch.next_state, self.nr_substates, axis=1)
+        q_next = torch.FloatTensor().to(self.device)
+        for net in range(self.nr_network):
+            for k in range (self.nr_substates):
+                next_state = torch.FloatTensor(batch_next_state_split[k]).to(self.device)
+                q_next_i = self.target_network[net](next_state)
+                q_next = torch.cat((q_next, q_next_i), dim=1)
+        q_next = q_next.max(1)[0].view(self.params['batch_size'][i], 1)
 
-            loss = self.loss[i](q, q_target)
-            self.optimizer[i].zero_grad()
-            loss.backward()
-            self.optimizer[i].step()
-            self.info['qnet_' +  str(i) + '_loss'] = loss.detach().cpu().numpy().copy()
+        reward = torch.FloatTensor(batch.reward).to(self.device)
+        terminal = torch.FloatTensor(batch.terminal).to(self.device)
+        q_target = reward + (1 - terminal) * self.params['discount'] * q_next
+
+        # Calculate current q
+        split = np.split(batch.state, self.nr_substates, axis=1)
+        st = np.zeros((self.params['batch_size'][i], self.substate_dim))
+        batch.action = np.subtract(batch.action, i * self.nr_substates)
+        for m in range(self.params['batch_size'][i]):
+            st[m, :] = split[batch.action[m]][m, :]
+        s = torch.FloatTensor(st).to(self.device)
+        q = self.network[i](s)
+
+        loss = self.loss[i](q, q_target)
+        self.optimizer[i].zero_grad()
+        loss.backward()
+        self.optimizer[i].step()
+        self.info['qnet_' +  str(i) + '_loss'] = loss.detach().cpu().numpy().copy()
 
         self.learn_step_counter += 1
 

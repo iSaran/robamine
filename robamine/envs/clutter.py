@@ -34,7 +34,8 @@ default_params = {
         'push_distance' : 0.2,
         'target_height_range' : [.005, .01],
         'obstacle_height_range' : [.005, .02],
-        'extra_primitive' : True
+        'extra_primitive' : True,
+        'all_equal_height_prob' : 0.1
         }
 
 class PushingPrimitiveC:
@@ -330,7 +331,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
-        reward = self.get_reward(obs, pcd, dim)
+        reward = self.get_reward(obs, pcd, dim, action)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
@@ -395,7 +396,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
-    def get_reward(self, observation, point_cloud, dim):
+    def get_reward(self, observation, point_cloud, dim, action):
         reward = 0.0
 
         # Penalize external forces during going downwards
@@ -427,7 +428,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if len(points_around) == 0:
             return +10
 
-        max_cost = -5
+        if self.params['extra_primitive'] and action >= self.params['nr_of_actions'] * (2/3):
+            return -5
 
         return -1
 
@@ -463,7 +465,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # parallel to table, terminate.
         target_z = self.target_quat.rotation_matrix()[:,2]
         world_z = np.array([0, 0, 1])
-        if np.dot(target_z, world_z) < 0.1:
+        if np.dot(target_z, world_z) < 0.9:
             return True
 
         # If the object has fallen from the table
@@ -647,6 +649,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Randomize obstacles
         number_of_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
+        all_equal_height = self.rng.uniform(0, 1)
+
         for i in range(1, number_of_obstacles):
             geom_id = get_geom_id(self.sim.model, "object"+str(i))
 
@@ -665,9 +669,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             #   Randomize size
             obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
             obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
-            obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
-            if (obstacle_height > target_height) and (obstacle_height < (target_height + finger_height + 0.001)):
-                obstacle_height = target_height + finger_height + 0.001
+
+
+            if all_equal_height < self.params['all_equal_height_prob']:
+                obstacle_height = target_height
+            else:
+                obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
 
             if self.sim.model.geom_type[geom_id] == 6:
                 self.sim.model.geom_size[geom_id][0] = obstacle_length

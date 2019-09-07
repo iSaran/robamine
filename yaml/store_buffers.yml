@@ -16,3 +16,4 @@ env:
   push_distance: 0.1
   split: True
   extra_primitive: True
+  all_equal_height_prob: 0.1
