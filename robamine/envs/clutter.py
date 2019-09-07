@@ -464,7 +464,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # parallel to table, terminate.
         target_z = self.target_quat.rotation_matrix()[:,2]
         world_z = np.array([0, 0, 1])
-        if np.dot(target_z, world_z) < 0.1:
+        if np.dot(target_z, world_z) < 0.9:
             return True
 
         # If the object has fallen from the table
