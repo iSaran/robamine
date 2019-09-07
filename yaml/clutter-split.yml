@@ -37,4 +37,4 @@ agent:
   hidden_units: [[100, 100], [100, 100]]
   loss: ['mse', 'mse']  # Options: 'mse', 'huber'
   device: 'cpu'  # "cuda", "cpu"
-
+  update_every_net: True
