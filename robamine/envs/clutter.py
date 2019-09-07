@@ -331,7 +331,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
-        reward = self.get_reward(obs, pcd, dim)
+        reward = self.get_reward(obs, pcd, dim, action)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
@@ -396,7 +396,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
-    def get_reward(self, observation, point_cloud, dim):
+    def get_reward(self, observation, point_cloud, dim, action):
         reward = 0.0
 
         # Penalize external forces during going downwards
@@ -428,7 +428,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if len(points_around) == 0:
             return +10
 
-        max_cost = -5
+        if self.params['extra_primitive'] and action >= self.params['nr_of_actions'] * (2/3):
+            return -5
 
         return -1
 
