@@ -34,7 +34,8 @@ default_params = {
         'push_distance' : 0.2,
         'target_height_range' : [.005, .01],
         'obstacle_height_range' : [.005, .02],
-        'extra_primitive' : True
+        'extra_primitive' : True,
+        'all_equal_height_prob' : 0.1
         }
 
 class PushingPrimitiveC:
@@ -647,6 +648,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Randomize obstacles
         number_of_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
+        all_equal_height = self.rng.uniform(0, 1)
+
         for i in range(1, number_of_obstacles):
             geom_id = get_geom_id(self.sim.model, "object"+str(i))
 
@@ -665,9 +668,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             #   Randomize size
             obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
             obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
-            obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
-            if (obstacle_height > target_height) and (obstacle_height < (target_height + finger_height + 0.001)):
-                obstacle_height = target_height + finger_height + 0.001
+
+
+            if all_equal_height < self.params['all_equal_height_prob']:
+                obstacle_height = target_height
+            else:
+                obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
 
             if self.sim.model.geom_type[geom_id] == 6:
                 self.sim.model.geom_size[geom_id][0] = obstacle_length
