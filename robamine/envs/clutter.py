@@ -300,8 +300,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             for i in range(0, len(heightmaps)):
                 f = cv_tools.extract_features(heightmaps[i], bbox, max_height, rotation_angle=i*rot_angle, plot=False)
                 f.append(i*rot_angle)
-                f.append(bbox[0])
-                f.append(bbox[1])
+                f.append(bbox[0] / 0.03)
+                f.append(bbox[1] / 0.03)
                 f.append(distances[0])
                 f.append(distances[1])
                 f.append(distances[2])
@@ -315,8 +315,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
             features = cv_tools.extract_features(heightmap, bbox, max_height, plot=False)
             features.append(0)
-            features.append(bbox[0])
-            features.append(bbox[1])
+            features.append(bbox[0]/0.03)
+            features.append(bbox[1]/0.03)
             features.append(distances[0])
             features.append(distances[1])
             features.append(distances[2])
@@ -331,7 +331,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
-        reward = self.get_reward(obs, pcd, dim)
+        reward = self.get_reward(obs, pcd, dim, action)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
@@ -396,7 +396,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
-    def get_reward(self, observation, point_cloud, dim):
+    def get_reward(self, observation, point_cloud, dim, action):
         reward = 0.0
 
         # Penalize external forces during going downwards
@@ -425,12 +425,14 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.no_of_prev_points_around = len(points_around)
 
+        extra_penalty = 0
+        if self.params['extra_primitive'] and action >= self.params['nr_of_actions'] * (2/3):
+            extra_penalty = -5
+
         if len(points_around) == 0:
-            return +10
+            return +10 + extra_penalty
 
-        max_cost = -5
-
-        return -1
+        return -1 + extra_penalty
 
         # k = max(self.no_of_prev_points_around, len(points_around))
         # if k != 0:
@@ -464,7 +466,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # parallel to table, terminate.
         target_z = self.target_quat.rotation_matrix()[:,2]
         world_z = np.array([0, 0, 1])
-        if np.dot(target_z, world_z) < 0.1:
+        if np.dot(target_z, world_z) < 0.9:
             return True
 
         # If the object has fallen from the table
