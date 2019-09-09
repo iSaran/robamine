@@ -84,9 +84,7 @@ class DataStream:
         self.name = name
 
         # Setup file logging.
-        if not os.path.exists(os.path.join(self.log_path, name)):
-            os.makedirs(os.path.join(self.log_path, name))
-        self.file = open(os.path.join(os.path.join(self.log_path, name), name + '.log'), "w+")
+        self.file = open(os.path.join(self.log_path, name + '.csv'), "w+")
         # Setup the first row (the name of the logged variables)
         self.file.write(','.join(stats_name) + '\n')
 
