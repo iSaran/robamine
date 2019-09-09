@@ -1,5 +1,5 @@
 logging_directory: "/tmp/robamine_logs"
-timesteps: 3000
+timesteps: 250
 buffer_size: 1000000
 nr_primitives: 3
 nr_substates: 8  # w

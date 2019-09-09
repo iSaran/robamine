@@ -28,7 +28,7 @@ def run(yml):
                     if timestep >= params['timesteps']:
                         break
                     timestep += 1
-                    action = env.action_space.sample()
+                    action = np.random.randint(16, 24)
                     observation_new, reward, done, info = env.step(action)
                     transition = Transition(observation, action, reward, observation_new, done)
                     replay_buffer[int(np.floor(transition.action / params['nr_substates']))].store(transition)
