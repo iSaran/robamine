@@ -425,6 +425,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.no_of_prev_points_around = len(points_around)
 
+        extra_penalty = 0
         if self.params['extra_primitive'] and action >= self.params['nr_of_actions'] * (2/3):
             extra_penalty = -5
 
