@@ -445,7 +445,7 @@ class World:
             self.config['results']['experience_time'] = transform_sec_to_timestamp(experience_time)
 
             if save_every and (episode + 1) % save_every == 0:
-                self.save(episode)
+                self.save(episode, train)
 
 
     def _episode(self, render=False, train=False):
@@ -547,9 +547,11 @@ class World:
         logger.info('World loaded from %s', directory)
         return self
 
-    def save(self, episode):
+    def save(self, episode, train):
         self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
-        self.agent.save(os.path.join(self.log_dir, 'model_' + str(episode) + '.pkl'))
+
+        if train:
+            self.agent.save(os.path.join(self.log_dir, 'model_' + str(episode) + '.pkl'))
 
         with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
             yaml.dump(self.config, outfile, default_flow_style=False)
