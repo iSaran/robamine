@@ -1,5 +1,5 @@
 logging_directory: "/tmp/robamine_logs"
-timesteps: 3000
+timesteps: 500
 buffer_size: 1000000
 nr_primitives: 3
 nr_substates: 8  # w
@@ -8,7 +8,7 @@ env:
   discrete: True
   nr_of_actions: 24  # u x w
   render: False
-  nr_of_obstacles: [5, 8]
+  nr_of_obstacles: [8, 13]
   target_probability_box: 1.0
   target_height_range: [0.005, 0.01]
   obstacle_probability_box: 1.0
@@ -16,4 +16,4 @@ env:
   push_distance: 0.1
   split: True
   extra_primitive: True
-  all_equal_height_prob: 0.1
+  all_equal_height_prob: 0.2

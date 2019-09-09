@@ -649,8 +649,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         random_qpos[index[0] + 6] = target_orientation.z
 
         # Randomize obstacles
-        number_of_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
         all_equal_height = self.rng.uniform(0, 1)
+
+        if all_equal_height < self.params['all_equal_height_prob']:
+            number_of_obstacles = self.params['nr_of_obstacles'][1]
+        else:
+            number_of_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
 
         for i in range(1, number_of_obstacles):
             geom_id = get_geom_id(self.sim.model, "object"+str(i))
