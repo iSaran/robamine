@@ -425,13 +425,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.no_of_prev_points_around = len(points_around)
 
-        if len(points_around) == 0:
-            return +10
-
         if self.params['extra_primitive'] and action >= self.params['nr_of_actions'] * (2/3):
-            return -5
+            extra_penalty = -5
 
-        return -1
+        if len(points_around) == 0:
+            return +10 + extra_penalty
+
+        return -1 + extra_penalty
 
         # k = max(self.no_of_prev_points_around, len(points_around))
         # if k != 0:
