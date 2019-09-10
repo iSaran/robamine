@@ -43,6 +43,7 @@ private:
   double duration;
   std::shared_ptr<arl::robot::Sensor> sensor;
   Eigen::Quaterniond arm_quat_d;
+  Eigen::Vector3d arm_pos_init;
   arl::primitive::Trajectory<Eigen::Vector3d> traj;
   bool push_done, traj_interrupted;
   bool stop_if_force;

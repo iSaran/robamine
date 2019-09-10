@@ -14,6 +14,7 @@ find_package(catkin REQUIRED
   rosba_msgs
   tf2
   tf2_ros
+  lwr_robot
   )
 
 catkin_package(

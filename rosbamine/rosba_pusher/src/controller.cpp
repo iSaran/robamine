@@ -37,15 +37,19 @@ Controller::Controller(const std::shared_ptr<arl::robot::Robot>& arm,
   , traj_interrupted(false)
   , duration(2)
 {
+  this->arm_pos_init.setZero();
 }
 
 void Controller::init()
 {
+  std::cout << "INITTTA" << std::endl;
   push_done = false;
   traj_interrupted = false;
   this->t = 0.0;
+  this->arm_pos_init = robot->getTaskPosition();
   this->arm_quat_d = Eigen::Quaterniond(robot->getTaskOrientation());
   robot->setMode(arl::robot::Mode::TORQUE_CONTROL);
+  std::cout << "INITTTA: end" << std::endl;
 }
 
 void Controller::setParams(double duration, const Eigen::Vector3d& final_pos, bool stop_if_force)
@@ -60,40 +64,43 @@ void Controller::setParams(double duration, const Eigen::Vector3d& final_pos, bo
 
 void Controller::update()
 {
+  std::cout << "UPDATE" << std::endl;
   if (this->t > duration)
   {
     push_done = true;
   }
 
-  if (sensor->getData().norm() > 10 && this->stop_if_force)
-  {
-    this->traj_interrupted = true;
-  }
+  // if (sensor->getData().norm() > 10 && this->stop_if_force)
+  // {
+  //   this->traj_interrupted = true;
+  // }
 
+  std::cout << "UPDATE read state" << std::endl;
   // Read state from the robot
   Eigen::Vector3d arm_pos = robot->getTaskPosition();
   Eigen::Matrix3d arm_rot = robot->getTaskOrientation();
   Eigen::Quaterniond arm_quat = Eigen::Quaterniond(arm_rot);
   Eigen::MatrixXd jac = robot->getJacobian();
 
-  Eigen::Vector3d arm_pos_d = this->traj.pos(this->t);
+  // Eigen::Vector3d arm_pos_d = this->traj.pos(this->t);
+  Eigen::Vector3d arm_pos_d = this->arm_pos_init;
 
   Eigen::Vector6d pos_error;
   pos_error.segment(0, 3) = arm_pos - arm_pos_d;
   pos_error.segment(3, 3) = arm_quat.log_error(arm_quat_d);
 
   // Calculate arm's velocity
+  std::cout << "UPDATE calculate velocity " << std::endl;
   Eigen::VectorXd joint_vel = robot->getJointVelocity();
   Eigen::VectorXd vel = jac * joint_vel;
 
   // # A simple force with variable stiffness
+  std::cout << "UPDATE calculate impedance" << std::endl;
   double max_stiff_trans = 500;
   double stiff_rot = 50.0;
   Eigen::Vector6d stiffness;
   stiffness << max_stiff_trans, max_stiff_trans, max_stiff_trans, stiff_rot, stiff_rot, stiff_rot;
   Eigen::Vector6d force = stiffness.asDiagonal() * pos_error;
-
-  // # Add a damping to the force
   Eigen::Vector6d vel_d = Eigen::Vector6d::Zero();
   Eigen::Vector6d vel_error = vel - vel_d;
   double damp_trans = 20.0;
@@ -104,7 +111,9 @@ void Controller::update()
 
   // # Command the robot
   Eigen::VectorXd arm_commanded_torques = - jac.transpose() * force;
+  std::cout << "UPDATE Sending joint torques: " << arm_commanded_torques << std::endl;
   robot->setJointTorque(arm_commanded_torques);
+  std::cout << "UPDATE end" << std::endl;
 }
 
 bool Controller::success()
