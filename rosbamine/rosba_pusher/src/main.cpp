@@ -24,6 +24,7 @@
 #include <thread>
 #include <autharl_core>
 #include <lwr_robot/robot_sim.h>
+#include <lwr_robot/robot.h>
 #include <rosba_msgs/Push.h>
 #include <rosba_pusher/controller.h>
 
@@ -41,17 +42,12 @@ const unsigned int PRIMITIVES = 3;
 const double BOUNDING_BOX_Z = 0.05;
 const double BOUNDING_BOX_XY_MAX = 0.05;
 const double SURFACE_SIZE = 0.2;
-const double PUSH_DURATION = 4;
+const double PUSH_DURATION = 8;
 
 bool callback(rosba_msgs::Push::Request  &req,
               rosba_msgs::Push::Response &res)
 {
-  // Move arm to home position
-  ROS_INFO("Moving arm to home position");
-  Eigen::VectorXd joint(7);
-  joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
-  robot->setMode(arl::robot::Mode::POSITION_CONTROL);
-  robot->setJointTrajectory(joint, 8);
+
 
   // Call object detection to publish object pos in TF
   ROS_INFO("Call object detection.");
@@ -63,7 +59,7 @@ bool callback(rosba_msgs::Push::Request  &req,
   tf2_ros::TransformListener tfListener(tfBuffer);
   geometry_msgs::TransformStamped transformStamped;
   int k = 0;
-  for (unsigned int i = 0; i < 5; i++)
+  for (unsigned int i = 0; i < 10; i++)
   {
     try
     {
@@ -101,12 +97,15 @@ bool callback(rosba_msgs::Push::Request  &req,
   {
     case 0:
       push_init_pos = -(std::sqrt(std::pow(BOUNDING_BOX_XY_MAX, 2) + std::pow(BOUNDING_BOX_XY_MAX, 2)) + 0.001) * direction;
+      ROS_INFO_STREAM("PUSH TARGET with theta = " << theta);
       break;
     case 1:
       push_init_pos(2) = BOUNDING_BOX_Z;
+      ROS_INFO_STREAM("PUSH OBSTACLE with theta = " << theta);
       break;
     case 2:
       push_init_pos = - SURFACE_SIZE * direction;
+      ROS_INFO_STREAM("EXTRA with theta = " << theta);
       break;
     default:
       ROS_ERROR("Error in pushing primitive id. 0, 1 or 2.");
@@ -128,8 +127,27 @@ bool callback(rosba_msgs::Push::Request  &req,
   push_final_pos(1) = temp(1);
   push_final_pos(2) = temp(2);
 
+  push_init_pos(2) += 0.2;
   controller->setParams(PUSH_DURATION, push_init_pos);
   controller->run();
+
+  push_init_pos(2) -= 0.2;
+  controller->setParams(PUSH_DURATION, push_init_pos);
+  controller->run();
+
+  controller->setParams(PUSH_DURATION, push_final_pos);
+  controller->run();
+
+  push_final_pos(2) += 0.2;
+  controller->setParams(PUSH_DURATION, push_final_pos);
+  controller->run();
+
+  // Move arm to home position
+  ROS_INFO("Moving arm to home position");
+  Eigen::VectorXd joint(7);
+  joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
+  robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+  robot->setJointTrajectory(joint, 8);
 
   res.success = true;
   ROS_INFO("Pusher finished.");
@@ -139,16 +157,16 @@ bool callback(rosba_msgs::Push::Request  &req,
 int main(int argc, char** argv)
 {
   // Initialize the ROS node
-  ros::init(argc, argv, "rosba_push");
+  ros::init(argc, argv, "rosba_pusher");
   ros::NodeHandle n;
-  ROS_INFO("Ready to push objects.");
 
   // Create the robot after you have launch the URDF on the parameter server
   auto model = std::make_shared<arl::robot::ROSModel>();
 
   // Create a simulated robot
   // auto robot = std::make_shared<arl::robot::RobotSim>(model, 1e-3);
-  robot.reset(new arl::lwr::RobotSim(model, 1e-3));
+  // robot.reset(new arl::lwr::RobotSim(model, 1e-3));
+  robot.reset(new arl::lwr::Robot(model));
   std::shared_ptr<arl::robot::Sensor> sensor;
 
   // Create a visualizater for see the result in rviz
@@ -157,6 +175,12 @@ int main(int argc, char** argv)
   std::thread rviz_thread(&arl::viz::RosStatePublisher::run, rviz);
 
   controller.reset(new roba::Controller(robot, sensor));
+
+  ROS_INFO("Moving arm to home position");
+  Eigen::VectorXd joint(7);
+  joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
+  robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+  robot->setJointTrajectory(joint, 8);
 
   ros::ServiceServer service = n.advertiseService("push", callback);
   ROS_INFO("Ready to push objects.");
