@@ -36,13 +36,13 @@
 std::shared_ptr<arl::robot::Robot> robot;
 std::shared_ptr<roba::Controller> controller;
 
-const double PUSH_DISTANCE = 0.1;
+const double PUSH_DISTANCE = 0.15;
 const unsigned int NR_ROTATIONS = 8;
 const unsigned int PRIMITIVES = 3;
-const double BOUNDING_BOX_Z = 0.05;
-const double BOUNDING_BOX_XY_MAX = 0.05;
+const double BOUNDING_BOX_Z = 0.02;
+const double BOUNDING_BOX_XY_MAX = 0.02;
 const double SURFACE_SIZE = 0.2;
-const double PUSH_DURATION = 8;
+const double PUSH_DURATION = 5;
 
 bool callback(rosba_msgs::Push::Request  &req,
               rosba_msgs::Push::Response &res)
@@ -52,6 +52,8 @@ bool callback(rosba_msgs::Push::Request  &req,
   // Call object detection to publish object pos in TF
   ROS_INFO("Call object detection.");
   ros::Duration(5.0).sleep();
+
+  Eigen::Vector3d arm_init_pos = robot->getTaskPosition();
 
   // Read pose of object from TF
   ROS_INFO("Reading target object pose");
@@ -63,14 +65,14 @@ bool callback(rosba_msgs::Push::Request  &req,
   {
     try
     {
-      transformStamped = tfBuffer.lookupTransform("world", "target_object", ros::Time(0));
+      transformStamped = tfBuffer.lookupTransform("world", "target_object", ros::Time(0), ros::Duration(10));
     }
     catch (tf2::TransformException &ex)
     {
       ROS_WARN("%s",ex.what());
       ros::Duration(0.5).sleep();
       k++;
-      if (k > 4)
+      if (k > 10)
       {
         ROS_ERROR("Object frame transformation wasn't found!!!!");
         res.success = false;
@@ -140,6 +142,9 @@ bool callback(rosba_msgs::Push::Request  &req,
 
   push_final_pos(2) += 0.2;
   controller->setParams(PUSH_DURATION, push_final_pos);
+  controller->run();
+
+  controller->setParams(PUSH_DURATION, arm_init_pos);
   controller->run();
 
   // Move arm to home position
