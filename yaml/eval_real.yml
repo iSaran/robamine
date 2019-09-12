@@ -14,5 +14,5 @@ env:
   split: false
   extra_primitive: False
 agent:
-  name: 'RandomDiscrete'
+  name: 'HumanDiscrete'
   # load: "/home/iason/Dropbox/projects/phd/clutter/clutter-shared/training/2019.09.09_difficult_env/train/dqn"

@@ -11,7 +11,7 @@ from gym import spaces
 import numpy as np
 
 import rospy
-from rosba_msgs.srv import Push
+from rosba_msgs.srv import Push, ExtractFeatures
 from std_srvs.srv import Trigger
 
 import logging
@@ -52,28 +52,28 @@ class ClutterReal(gym.Env):
         rospy.init_node('clutter_real_env')
 
     def reset(self):
-        self._go_home()
+        # self._go_home()
         input("Resetting env. Set up the objects on the table and press enter to continue...")
+        self._detect_target()
         observation = self.get_obs()
+        print(observation)
         return observation
 
     def get_obs(self):
         # Call feature extraction service
         logger.info('Calling feature extraction service...')
 
-        # rospy.wait_for_service('extract_feature')
-        # try:
-        #     extract_feature = rospy.ServiceProxy('extract_feature', Push)
-        #     response = pushing()
-        #     logger.info('Feature received')
-        #     return response
-        # except rospy.ServiceException:
-        #     logger.error('Extract feature service failed')
+        rospy.wait_for_service('extract_features')
+        try:
+            extract_feature = rospy.ServiceProxy('extract_features', ExtractFeatures)
+            response = extract_feature()
+            logger.info('Feature received')
+            return response
+        except rospy.ServiceException:
+            logger.error('Extract feature service failed')
 
-        # logger.info('Feature received')
+        logger.info('Feature received')
         return np.zeros(263), np.zeros(500), 1
-
-
 
     def step(self, action):
         done = False
@@ -83,21 +83,22 @@ class ClutterReal(gym.Env):
         experience_time = 0
         self._go_home()
         self._detect_target()
-        obs, pcd, dim = self.get_obs()
-        reward = self.get_reward(obs, pcd, dim)
+        obs = self.get_obs()
+        # reward = self.get_reward(obs, pcd, dim)
+        reward = -1;
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
 
     def _detect_target(self):
         logger.info('Calling detect target service...')
-        rospy.wait_for_service('detect_target')
+        rospy.wait_for_service('estimate_pose')
         try:
-            pushing = rospy.ServiceProxy('go_home', Push)
+            pushing = rospy.ServiceProxy('estimate_pose', Trigger)
             response = pushing()
             return response
         except rospy.ServiceException:
-            logger.error('Go home service failed')
+            logger.error('estimate_pose service failed')
 
     def _go_home(self):
         logger.info('Calling go home service...')
@@ -120,62 +121,10 @@ class ClutterReal(gym.Env):
             logger.error('Push service failed')
 
     def get_reward(self, observation, point_cloud, dim):
-        reward = 0.0
-
-        # Penalize external forces during going downwards
-        if self.push_stopped_ext_forces:
-            return -10
-
-        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
-            return -10
-
-        # for each push that frees the space around the target
-        points_around = []
-        gap = 0.03
-        bbox_limit = 0.01
-        for p in point_cloud:
-            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
-             dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
-             -dim[1]  < p[1] < dim[1]:
-                points_around.append(p)
-            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
-            dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
-            -dim[0]  < p[0] < dim[0]:
-                points_around.append(p)
-
-        if self.no_of_prev_points_around == len(points_around):
-            return -5
-
-        self.no_of_prev_points_around = len(points_around)
-
-        if len(points_around) == 0:
-            return +10
-
-        max_cost = -5
-
-        return -1
+        return float(input('Enter reward: '))
 
     def terminal_state(self, observation):
-
-        # Terminal if collision is detected
-        if self.push_failed:
-            self.push_failed = False
+        k = int(input('Terminal state?: '))
+        if k > 0:
             return True
-
-        # Terminate if the target flips to its side, i.e. if target's z axis is
-        # parallel to table, terminate.
-        target_z = self.target_quat.rotation_matrix()[:,2]
-        world_z = np.array([0, 0, 1])
-        if abs(np.dot(target_z, world_z)) < 0.1:
-            return True
-
-        # If the object has fallen from the table
-        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
-            return True
-
-        # If the object is free from obstacles around (no points around)
-        if self.no_of_prev_points_around == 0:
-            self.success = True
-            return True
-
         return False

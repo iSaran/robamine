@@ -46,6 +46,12 @@ bool already_home = false;
 bool callback(rosba_msgs::Push::Request  &req,
               rosba_msgs::Push::Response &res)
 {
+  Eigen::VectorXd joint(7);
+  joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
+  // joint << 1.0425608158111572, -0.17295242846012115, 0.41580450534820557, 1.1572487354278564, -0.04072001576423645, -1.6935195922851562, -1.5933283567428589;
+  robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+  robot->setJointTrajectory(joint, 8);
+
   already_home = false;
   Eigen::Vector3d arm_init_pos = robot->getTaskPosition();
 
@@ -85,7 +91,6 @@ bool callback(rosba_msgs::Push::Request  &req,
   // Create points w.r.t. {O} for trajectory given pushing primitive
   Eigen::Vector3d push_init_pos, push_final_pos, direction;
   push_init_pos.setZero();
-
 
   unsigned int nr_primitives;
   if (req.extra_primitive)
@@ -203,7 +208,10 @@ bool goHome(std_srvs::Trigger::Request  &req,
   // Move arm to home position
   ROS_INFO("Moving arm to home position");
   Eigen::VectorXd joint(7);
-  joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
+  // joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
+  joint << 1.0425608158111572, -0.17295242846012115, 0.41580450534820557, 1.1572487354278564, -0.04072001576423645, -1.6935195922851562, -1.5933283567428589;
+
+
   robot->setMode(arl::robot::Mode::POSITION_CONTROL);
   robot->setJointTrajectory(joint, 8);
 
@@ -225,8 +233,8 @@ int main(int argc, char** argv)
 
   // Create a simulated robot
   // auto robot = std::make_shared<arl::robot::RobotSim>(model, 1e-3);
-  robot.reset(new arl::lwr::RobotSim(model, 1e-3));
-  // robot.reset(new arl::lwr::Robot(model));
+  // robot.reset(new arl::lwr::RobotSim(model, 1e-3));
+  robot.reset(new arl::lwr::Robot(model));
   std::shared_ptr<arl::robot::Sensor> sensor;
 
   // Create a visualizater for see the result in rviz
@@ -238,7 +246,8 @@ int main(int argc, char** argv)
 
   ROS_INFO("Moving arm to home position");
   Eigen::VectorXd joint(7);
-  joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
+  // joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
+  joint << 1.0425608158111572, -0.17295242846012115, 0.41580450534820557, 1.1572487354278564, -0.04072001576423645, -1.6935195922851562, -1.5933283567428589;
   robot->setMode(arl::robot::Mode::POSITION_CONTROL);
   robot->setJointTrajectory(joint, 8);
 

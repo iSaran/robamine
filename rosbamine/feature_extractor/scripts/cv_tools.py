@@ -2,7 +2,8 @@
 import numpy as np
 import cv2
 import math
-
+import open3d
+import open3d as o3d
 '''
 Computer Vision Utils
 ============
@@ -305,3 +306,9 @@ def draw_cell(cell, rgb):
     cv2.line(rgb, p3, p4, (0, 255, 0), thickness=1)
     cv2.line(rgb, p4, p1, (0, 255, 0), thickness=1)
     return rgb
+
+def plot_point_cloud(point_cloud):
+    pcd = open3d.geometry.PointCloud()
+    pcd.points = open3d.utility.Vector3dVector(point_cloud)
+    frame = open3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
+    open3d.visualization.draw_geometries([pcd, frame])

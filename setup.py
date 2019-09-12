@@ -7,7 +7,6 @@ setup(name='robamine',
       author_email='iasons@auth.gr',
       install_requires=['tensorflow==1.12.0', \
                         'gym==0.12.1', \
-                        'mujoco-py==1.50.1.68', \
                         'sphinx', \
                         'sphinxcontrib-bibtex', \
                         'pandas==0.24.2', \
