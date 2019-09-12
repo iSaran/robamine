@@ -36,7 +36,8 @@ default_params = {
         'device' : 'cuda',
         'load_nets' : '',
         'load_buffers' : '',
-        'update_every_net' : True
+        'update_every_net' : True,
+        'update_iter' : [1, 1, 5]
         }
 
 class QNetwork(nn.Module):
@@ -138,12 +139,13 @@ class DQNSplit(Agent):
 
         if self.params['update_every_net']:
             for j in range(self.nr_network):
-                self.update_i_net(j)
+                self.update_net(j)
         else:
-            self.update_i_net(i)
+            for _ in range(self.params['update_iter'][i]):
+                self.update_net(i)
 
 
-    def update_i_net(self, i):
+    def update_net(self, i):
         self.info['qnet_' +  str(i) + '_loss'] = 0
 
         # If we have not enough samples just keep storing transitions to the
