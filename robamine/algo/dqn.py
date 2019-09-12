@@ -14,6 +14,7 @@ from random import Random
 import numpy as np
 import pickle
 import math
+import os
 
 import logging
 logger = logging.getLogger('robamine.algo.dqn')
@@ -75,6 +76,10 @@ class DQN(Agent):
         self.info['qnet_loss'] = 0
         self.epsilon = self.params['epsilon_start']
         self.info['epsilon'] = self.epsilon
+
+        if self.params['load_buffers'] != '':
+            self.replay_buffer = ReplayBuffer.load(os.path.join(self.params['load_buffers']))
+            logger.warn("DQN: Preloaded buffer of size " + str(self.replay_buffer.size())+ " from " + self.params['load_buffers'])
 
     def predict(self, state):
         s = torch.FloatTensor(state).to(self.device)
@@ -163,7 +168,7 @@ class DQN(Agent):
 
     def q_value(self, state, action):
         s = torch.FloatTensor(state).to(self.device)
-        return np.max(self.network(s).cpu().detach().numpy())
+        return self.network(s).cpu().detach().numpy()[action]
 
     def seed(self, seed):
         self.replay_buffer.seed(seed)
