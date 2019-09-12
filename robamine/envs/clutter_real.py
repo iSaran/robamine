@@ -12,6 +12,10 @@ import numpy as np
 
 import rospy
 from rosba_msgs.srv import Push
+from std_srvs.srv import Trigger
+
+import logging
+logger = logging.getLogger('robamine.env.clutter_real')
 
 default_params = {
         'name' : 'ClutterReal-v0',
@@ -24,7 +28,7 @@ default_params = {
         'split' : True
         }
 
-class ClutterReal():
+class ClutterReal(gym.Env):
     def __init__(self, params = default_params):
         self.params = params
 
@@ -44,92 +48,76 @@ class ClutterReal():
                                             high=np.full((obs_dim,), 0.3),
                                             dtype=np.float32)
 
+        self.push_failed = False
         rospy.init_node('clutter_real_env')
 
-        # Services
-        serf.push_srv = rospy.Service('/push', Push, handle_add_two_ints)
-
-    def reset_model(self):
-        observation, _, _ = self.get_obs()
-
-        self.last_timestamp = self.sim.data.time
-        self.success = False
+    def reset(self):
+        self._go_home()
+        input("Resetting env. Set up the objects on the table and press enter to continue...")
+        observation = self.get_obs()
         return observation
 
     def get_obs(self):
         # Call feature extraction service
-        return final_feature, points_above_table, bbox
+        logger.info('Calling feature extraction service...')
+
+        # rospy.wait_for_service('extract_feature')
+        # try:
+        #     extract_feature = rospy.ServiceProxy('extract_feature', Push)
+        #     response = pushing()
+        #     logger.info('Feature received')
+        #     return response
+        # except rospy.ServiceException:
+        #     logger.error('Extract feature service failed')
+
+        # logger.info('Feature received')
+        return np.zeros(263), np.zeros(500), 1
+
+
 
     def step(self, action):
         done = False
-        time = self._push(action)
-        experience_time = time - self.last_timestamp
-        self.last_timestamp = time
+        success = self._push(action)
+        if not success:
+            self.push_failed = True
+        experience_time = 0
+        self._go_home()
+        self._detect_target()
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim)
         if self.terminal_state(obs):
             done = True
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
 
+    def _detect_target(self):
+        logger.info('Calling detect target service...')
+        rospy.wait_for_service('detect_target')
+        try:
+            pushing = rospy.ServiceProxy('go_home', Push)
+            response = pushing()
+            return response
+        except rospy.ServiceException:
+            logger.error('Go home service failed')
+
+    def _go_home(self):
+        logger.info('Calling go home service...')
+        rospy.wait_for_service('go_home')
+        try:
+            pushing = rospy.ServiceProxy('go_home', Trigger)
+            response = pushing()
+            return response
+        except rospy.ServiceException:
+            logger.error('Go home service failed')
+
     def _push(self, action):
+        logger.info('Calling pushing service...')
         rospy.wait_for_service('push')
         try:
             pushing = rospy.ServiceProxy('push', Push)
-            response = pushing(action, self.params['push_distance'])
-            return resp1.sum
-        except rospy.ServiceException, e:
-            print "Service call failed: %s"%e
-
-    def do_simulation(self, action):
-        if self.params['discrete']:
-            myaction = action
-            push_target = True
-            if myaction > int(self.params['nr_of_actions'] / 2) - 1:
-                push_target = False
-                myaction -= int(self.params['nr_of_actions'] / 2)
-            theta = myaction * 2 * math.pi / (self.action_space.n / 2)
-            push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
-        else:
-            my_action = action.copy()
-
-            # agent gives actions between [-1, 1]. convert to the action ranges of
-            # the action space of the environment
-            agent_high = 1
-            agent_low = -1
-            env_low = [-math.pi, 0]
-            env_high = [math.pi, 1]
-            for i in range(len(my_action)):
-                my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
-
-            if my_action[1] > 0.5:
-                push_target = True
-            else:
-                push_target = False
-
-            push = Push(direction_theta=my_action[0], distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
-
-        # Transform pushing from target frame to world frame
-        push_direction = np.array([push.direction[0], push.direction[1], 0])
-        push_direction_world = np.matmul(self.target_quat.rotation_matrix(), push_direction)
-        push_initial_pos = np.array([push.initial_pos[0], push.initial_pos[1], 0])
-        push_initial_pos_world = np.matmul(self.target_quat.rotation_matrix(), push_initial_pos) + self.target_pos
-
-        init_z = 2 * self.target_height + 0.05
-        self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
-        self.sim_step()
-        if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
-            end = push_initial_pos_world[:2] + push.distance * push_direction_world[:2]
-            self.move_joint_to_target('finger', [end[0], end[1], None])
-        else:
-            self.push_stopped_ext_forces = True
-
-        return self.sim.data.time
-
-    def viewer_setup(self):
-        # Set the camera configuration (spherical coordinates)
-        self.viewer.cam.distance = 0.75
-        self.viewer.cam.elevation = -90  # default -90
-        self.viewer.cam.azimuth = 90
+            response = pushing(action, self.params['push_distance'], self.params['nr_of_actions'], self.params['extra_primitive'])
+            return response
+        except rospy.ServiceException:
+            logger.error('Push service failed')
 
     def get_reward(self, observation, point_cloud, dim):
         reward = 0.0
@@ -167,32 +155,11 @@ class ClutterReal():
 
         return -1
 
-        # k = max(self.no_of_prev_points_around, len(points_around))
-        # if k != 0:
-        #     reward = (self.no_of_prev_points_around - len(points_around)) / k
-        # else:
-        #     reward = 0.0
-        # reward *= 10.0
-        # self.no_of_prev_points_around = len(points_around)
-
-        # cv_tools.plot_point_cloud(point_cloud)
-        # cv_tools.plot_point_cloud(points_around)
-
-        # Penalize the agent as it gets the target object closer to the edge
-        # max_cost = -5
-        # reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
-        # if observation[-1] < 0:
-        #     reward = -10
-
-        # For each object push
-        # reward += -1
-        # return reward
-
     def terminal_state(self, observation):
 
         # Terminal if collision is detected
-        if self.push_stopped_ext_forces:
-            self.push_stopped_ext_forces = False
+        if self.push_failed:
+            self.push_failed = False
             return True
 
         # Terminate if the target flips to its side, i.e. if target's z axis is
