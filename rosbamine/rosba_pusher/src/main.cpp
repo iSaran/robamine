@@ -26,6 +26,7 @@
 #include <lwr_robot/robot_sim.h>
 #include <lwr_robot/robot.h>
 #include <rosba_msgs/Push.h>
+#include <std_srvs/Trigger.h>
 #include <rosba_pusher/controller.h>
 
 #include <tf2_ros/transform_listener.h>
@@ -36,23 +37,16 @@
 std::shared_ptr<arl::robot::Robot> robot;
 std::shared_ptr<roba::Controller> controller;
 
-const double PUSH_DISTANCE = 0.15;
-const unsigned int NR_ROTATIONS = 8;
-const unsigned int PRIMITIVES = 3;
 const double BOUNDING_BOX_Z = 0.02;
 const double BOUNDING_BOX_XY_MAX = 0.02;
 const double SURFACE_SIZE = 0.2;
 const double PUSH_DURATION = 5;
+bool already_home = false;
 
 bool callback(rosba_msgs::Push::Request  &req,
               rosba_msgs::Push::Response &res)
 {
-
-
-  // Call object detection to publish object pos in TF
-  ROS_INFO("Call object detection.");
-  ros::Duration(5.0).sleep();
-
+  already_home = false;
   Eigen::Vector3d arm_init_pos = robot->getTaskPosition();
 
   // Read pose of object from TF
@@ -91,9 +85,27 @@ bool callback(rosba_msgs::Push::Request  &req,
   // Create points w.r.t. {O} for trajectory given pushing primitive
   Eigen::Vector3d push_init_pos, push_final_pos, direction;
   push_init_pos.setZero();
-  unsigned int primitive_action = static_cast<unsigned int>(std::floor(req.action / NR_ROTATIONS));
-  unsigned int rotation = static_cast<unsigned int>(req.action - primitive_action * NR_ROTATIONS);
-  double theta = rotation * 2 * M_PI / NR_ROTATIONS;
+
+
+  unsigned int nr_primitives;
+  if (req.extra_primitive)
+  {
+    nr_primitives = 3;
+  }
+  else
+  {
+    nr_primitives = 2;
+  }
+
+  std::cout << "nr_primitives: " << nr_primitives << std::endl;
+
+  unsigned int nr_rotations = req.nr_actions / nr_primitives;
+  std::cout << "nr_rotations: " << nr_rotations << std::endl;
+
+
+  unsigned int primitive_action = static_cast<unsigned int>(std::floor(req.action / nr_rotations));
+  unsigned int rotation = static_cast<unsigned int>(req.action - primitive_action * nr_rotations);
+  double theta = rotation * 2 * M_PI / nr_rotations;
   direction << std::cos(theta), std::sin(theta), 0.0;
   switch (primitive_action)
   {
@@ -120,8 +132,8 @@ bool callback(rosba_msgs::Push::Request  &req,
   push_init_pos(0) = temp(0);
   push_init_pos(1) = temp(1);
   push_init_pos(2) = temp(2);
-  push_final_pos(0) = PUSH_DISTANCE * std::cos(theta);
-  push_final_pos(1) = PUSH_DISTANCE * std::sin(theta);
+  push_final_pos(0) = req.distance * std::cos(theta);
+  push_final_pos(1) = req.distance * std::sin(theta);
   push_final_pos(2) = push_init_pos(2);
   temp << push_final_pos, 1.0;
   temp = target_frame * temp;
@@ -131,21 +143,62 @@ bool callback(rosba_msgs::Push::Request  &req,
 
   push_init_pos(2) += 0.2;
   controller->setParams(PUSH_DURATION, push_init_pos);
-  controller->run();
+  if (!controller->run())
+  {
+    res.success = false;
+    ROS_ERROR("Pusher failed.");
+    return false;
+  }
 
   push_init_pos(2) -= 0.2;
   controller->setParams(PUSH_DURATION, push_init_pos);
-  controller->run();
+  if (!controller->run())
+  {
+    res.success = false;
+    ROS_ERROR("Pusher failed.");
+    return false;
+  }
 
   controller->setParams(PUSH_DURATION, push_final_pos);
-  controller->run();
+  if (!controller->run())
+  {
+    res.success = false;
+    ROS_ERROR("Pusher failed.");
+    return false;
+  }
 
   push_final_pos(2) += 0.2;
   controller->setParams(PUSH_DURATION, push_final_pos);
-  controller->run();
+  if (!controller->run())
+  {
+    res.success = false;
+    ROS_ERROR("Pusher failed.");
+    return false;
+  }
 
   controller->setParams(PUSH_DURATION, arm_init_pos);
-  controller->run();
+  if (!controller->run())
+  {
+    res.success = false;
+    ROS_ERROR("Pusher failed.");
+    return false;
+  }
+
+
+  res.success = true;
+  ROS_INFO("Pusher finished.");
+  return true;
+}
+
+bool goHome(std_srvs::Trigger::Request  &req,
+            std_srvs::Trigger::Response &res)
+{
+  if (already_home)
+  {
+    ROS_INFO("Arm already home");
+    res.success = true;
+    return true;
+  }
 
   // Move arm to home position
   ROS_INFO("Moving arm to home position");
@@ -153,6 +206,8 @@ bool callback(rosba_msgs::Push::Request  &req,
   joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
   robot->setMode(arl::robot::Mode::POSITION_CONTROL);
   robot->setJointTrajectory(joint, 8);
+
+  already_home = true;
 
   res.success = true;
   ROS_INFO("Pusher finished.");
@@ -170,8 +225,8 @@ int main(int argc, char** argv)
 
   // Create a simulated robot
   // auto robot = std::make_shared<arl::robot::RobotSim>(model, 1e-3);
-  // robot.reset(new arl::lwr::RobotSim(model, 1e-3));
-  robot.reset(new arl::lwr::Robot(model));
+  robot.reset(new arl::lwr::RobotSim(model, 1e-3));
+  // robot.reset(new arl::lwr::Robot(model));
   std::shared_ptr<arl::robot::Sensor> sensor;
 
   // Create a visualizater for see the result in rviz
@@ -188,6 +243,7 @@ int main(int argc, char** argv)
   robot->setJointTrajectory(joint, 8);
 
   ros::ServiceServer service = n.advertiseService("push", callback);
+  ros::ServiceServer go_home_srv = n.advertiseService("go_home", goHome);
   ROS_INFO("Ready to push objects.");
   ros::spin();
 

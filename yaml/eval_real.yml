@@ -1,0 +1,18 @@
+logging_directory: "/tmp/robamine_logs"
+mode: Evaluate  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
+eval:
+  episodes: 1000
+  render: False
+eval_every: 20
+save_every: 10
+load_world:  "" # Path to load world. Empty string means new world
+env:
+  name: 'ClutterReal-v0'
+  discrete: True
+  nr_of_actions: 16
+  push_distance: 0.1
+  split: false
+  extra_primitive: False
+agent:
+  name: 'RandomDiscrete'
+  # load: "/home/iason/Dropbox/projects/phd/clutter/clutter-shared/training/2019.09.09_difficult_env/train/dqn"

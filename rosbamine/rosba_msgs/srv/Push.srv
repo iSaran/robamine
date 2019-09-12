@@ -1,4 +1,6 @@
 int32 action
 float64 distance
+int32 nr_actions
+bool extra_primitive
 ---
 bool success
