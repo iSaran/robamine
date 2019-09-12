@@ -345,6 +345,8 @@ class World:
 
     @classmethod
     def from_dict(cls, config):
+
+        # Create environment
         if len(config['env']) == 1:
             env = gym.make(config['env']['name'])
         else:
@@ -359,7 +361,17 @@ class World:
         else:
             action_dim = int(env.action_space.shape[0])
 
-        self = cls(config['agent'], env)
+        # Load or create agent
+        if 'load' in config['agent']:
+            agent_name = config['agent']['name']
+            agent_handle = get_agent_handle(agent_name)
+            agent = agent_handle.load(os.path.join(config['agent']['load'], 'model.pkl'))
+        else:
+            agent = config['agent']
+
+        # Create world
+        self = cls(agent, env)
+
         self.config = config.copy()
         self.config['results'] = {}
         self.config['results']['logging_directory'] = self.log_dir
