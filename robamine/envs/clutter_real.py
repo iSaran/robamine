@@ -49,14 +49,17 @@ class ClutterReal(gym.Env):
                                             dtype=np.float32)
 
         self.push_failed = False
+        self.success = False
         rospy.init_node('clutter_real_env')
 
     def reset(self):
         # self._go_home()
+        logger.warn('New episode :)')
         input("Resetting env. Set up the objects on the table and press enter to continue...")
         self._detect_target()
         observation = self.get_obs()
         print(observation)
+        self.success = False
         return observation
 
     def get_obs(self):
@@ -126,5 +129,10 @@ class ClutterReal(gym.Env):
     def terminal_state(self, observation):
         k = int(input('Terminal state?: '))
         if k > 0:
+            l = int(input('Was the episode successful?: '))
+            if l > 0:
+                self.success = True
+            else:
+                self.success = False
             return True
         return False
