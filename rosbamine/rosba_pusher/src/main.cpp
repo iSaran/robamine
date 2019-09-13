@@ -37,8 +37,6 @@
 std::shared_ptr<arl::robot::Robot> robot;
 std::shared_ptr<roba::Controller> controller;
 
-const double BOUNDING_BOX_Z = 0.02;
-const double BOUNDING_BOX_XY_MAX = 0.02;
 const double SURFACE_SIZE = 0.2;
 const double PUSH_DURATION = 5;
 bool already_home = false;
@@ -115,11 +113,11 @@ bool callback(rosba_msgs::Push::Request  &req,
   switch (primitive_action)
   {
     case 0:
-      push_init_pos = -(std::sqrt(std::pow(BOUNDING_BOX_XY_MAX, 2) + std::pow(BOUNDING_BOX_XY_MAX, 2)) + 0.001) * direction;
+      push_init_pos = -(std::sqrt(std::pow(req.bounding_box.x, 2) + std::pow(req.bounding_box.x, 2)) + 0.001) * direction;
       ROS_INFO_STREAM("PUSH TARGET with theta = " << theta);
       break;
     case 1:
-      push_init_pos(2) = BOUNDING_BOX_Z;
+      push_init_pos(2) = req.bounding_box.z;
       ROS_INFO_STREAM("PUSH OBSTACLE with theta = " << theta);
       break;
     case 2:

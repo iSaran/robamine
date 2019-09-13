@@ -19,8 +19,11 @@ def callback(req):
     # target objcet dimensions
     b = [0.025, 0.025, 0.025]
 
+    print('===================')
     # get the point cloud
-    pcd2 = rospy.wait_for_message("/asus_xtion/depth/points", PointCloud2)
+    pcd2 = rospy.wait_for_message("/rosba_pc", PointCloud2)
+    print('===================')
+
     pcd = []
     for point in sensor_msgs.point_cloud2.read_points(pcd2, skip_nans=True):
         pcd.append([point[0], point[1], point[2]])
@@ -71,7 +74,8 @@ def callback(req):
     # cv.plot_point_cloud(points_above_table)
 
     # max height of the scene(max height of obstacles)
-    max_height = np.max(point_cloud[:, 2])
+    max_height = np.max(z)
+    print("max_z:", np.max(z))
 
     # generate rotated heightmaps
     heightmaps = cv.generate_height_map(points_above_table, rotations=8, plot=False)
@@ -86,9 +90,6 @@ def callback(req):
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             rate.sleep()
             continue
-
-    print(tff.transform.translation.x)
-    print(tff.transform.translation.y)
 
     table_limits_x = []
     table_limits_y = []
@@ -111,6 +112,8 @@ def callback(req):
     rot_angle = 360 / 8.0
     for i in range(0, len(heightmaps)):
         f = cv.extract_features(heightmaps[i], b, max_height, rotation_angle=i*rot_angle, plot=False)
+        fff = np.array(f)
+        print('i = ', i, np.where(fff > 1))
         f.append(i*rot_angle)
         f.append(b[0])
         f.append(b[1])
@@ -124,6 +127,7 @@ def callback(req):
     for i in range(2, len(features)):
         final_feature = np.append(final_feature, features[i], axis=0)
 
+    rospy.loginfo('Feature extraced. Waiting for new trigger...')
     return final_feature
 
 

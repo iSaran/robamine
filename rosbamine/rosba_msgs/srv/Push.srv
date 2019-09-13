@@ -2,5 +2,6 @@ int32 action
 float64 distance
 int32 nr_actions
 bool extra_primitive
+geometry_msgs/Vector3 bounding_box
 ---
 bool success

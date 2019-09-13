@@ -62,6 +62,7 @@ add_service_files(
   FILES
   Push.srv
   ExtractFeatures.srv
+  ModifyPose.srv
 )
 
 ## Generate actions in the 'action' folder

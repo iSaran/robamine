@@ -9,10 +9,12 @@ This module contains the implementation of a cluttered environment, based on
 import gym
 from gym import spaces
 import numpy as np
+import math
 
 import rospy
 from rosba_msgs.srv import Push, ExtractFeatures
 from std_srvs.srv import Trigger
+from geometry_msgs.msg import Point
 
 import logging
 logger = logging.getLogger('robamine.env.clutter_real')
@@ -53,10 +55,13 @@ class ClutterReal(gym.Env):
         rospy.init_node('clutter_real_env')
 
     def reset(self):
-        # self._go_home()
+        self._go_home()
         logger.warn('New episode :)')
         input("Resetting env. Set up the objects on the table and press enter to continue...")
-        self._detect_target()
+        for _ in range(20):
+            self._detect_target()
+            if input('Do you like detection? If no I will try again. (y/n): ') == 'y':
+                break;
         observation = self.get_obs()
         print(observation)
         self.success = False
@@ -65,13 +70,12 @@ class ClutterReal(gym.Env):
     def get_obs(self):
         # Call feature extraction service
         logger.info('Calling feature extraction service...')
-
         rospy.wait_for_service('extract_features')
         try:
             extract_feature = rospy.ServiceProxy('extract_features', ExtractFeatures)
             response = extract_feature()
             logger.info('Feature received')
-            return response
+            return np.array(response.feature)
         except rospy.ServiceException:
             logger.error('Extract feature service failed')
 
@@ -80,16 +84,32 @@ class ClutterReal(gym.Env):
 
     def step(self, action):
         done = False
+
+        nr_primitives = 2;
+        nr_rotations = self.params['nr_of_actions'] / nr_primitives
+        primitive_action = int(np.floor(action / nr_rotations))
+        rotation = int(action - primitive_action * nr_rotations)
+        if primitive_action == 0:
+            primitive_action = 'PUSH-TARGET'
+        elif primitive_action == 1:
+            primitive_action = 'PUSH-OBSTACLE'
+        deg = rotation *360 / nr_rotations
+        if deg > 180:
+            deg -= 360
+        logger.warn('ACTION: ' + primitive_action + ' for theta = ' + str(deg))
+
         success = self._push(action)
         if not success:
             self.push_failed = True
         experience_time = 0
         self._go_home()
-        self._detect_target()
+        for _ in range(20):
+            self._detect_target()
+            if input('Do you like detection? If no I will try again. (y/n): ') == 'y':
+                break;
         obs = self.get_obs()
-        # reward = self.get_reward(obs, pcd, dim)
-        reward = -1;
-        if self.terminal_state(obs):
+        reward = self._get_reward()
+        if self._terminal_state():
             done = True
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
 
@@ -114,23 +134,23 @@ class ClutterReal(gym.Env):
             logger.error('Go home service failed')
 
     def _push(self, action):
+        # return True
         logger.info('Calling pushing service...')
+
         rospy.wait_for_service('push')
         try:
             pushing = rospy.ServiceProxy('push', Push)
-            response = pushing(action, self.params['push_distance'], self.params['nr_of_actions'], self.params['extra_primitive'])
+            response = pushing(action, self.params['push_distance'], self.params['nr_of_actions'], self.params['extra_primitive'], Point(x=self.params['target_bb'][0], y=self.params['target_bb'][1], z=self.params['target_bb'][2]))
             return response
         except rospy.ServiceException:
             logger.error('Push service failed')
 
-    def get_reward(self, observation, point_cloud, dim):
+    def _get_reward(self):
         return float(input('Enter reward: '))
 
-    def terminal_state(self, observation):
-        k = int(input('Terminal state?: '))
-        if k > 0:
-            l = int(input('Was the episode successful?: '))
-            if l > 0:
+    def _terminal_state(self):
+        if input('Terminal state? (y/n): ') == 'y':
+            if input('Was the episode successful? (y/n): ') == 'y':
                 self.success = True
             else:
                 self.success = False
