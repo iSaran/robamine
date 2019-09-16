@@ -97,7 +97,12 @@ def callback(req):
     table_center = np.array([0.2, 0.65])
     surface_size = np.array([0.25, 0.25])
 
+    print('tff:', tff.transform.translation.x, tff.transform.translation.y)
+
     obj = [tff.transform.translation.x - table_center[0], tff.transform.translation.y - table_center[1]];
+
+    print('obj:', obj)
+
 
     # Add the distance of the object from the edge
     distances = [surface_size[0]  - obj[0], \
@@ -105,8 +110,12 @@ def callback(req):
                  surface_size[1] - obj[1], \
                  surface_size[1] + obj[1]]
 
-    distances = [x / 2*surface_size[0] for x in distances]
+    print('distances withoud nrom: ', distances)
 
+    print(2*surface_size[0])
+    distances = [(x / (2*surface_size[0])) for x in distances]
+
+    print('distances: ', distances)
 
     features = []
     rot_angle = 360 / 8.0
@@ -115,8 +124,8 @@ def callback(req):
         fff = np.array(f)
         print('i = ', i, np.where(fff > 1))
         f.append(i*rot_angle)
-        f.append(b[0])
-        f.append(b[1])
+        f.append(b[0]/0.03)
+        f.append(b[1]/0.03)
         f.append(distances[0])
         f.append(distances[1])
         f.append(distances[2])
