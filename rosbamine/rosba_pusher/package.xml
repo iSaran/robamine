@@ -38,10 +38,12 @@
      <build_depend>autharl_core</build_depend>
      <build_depend>roba_msgs</build_depend>
      <build_depend>lwr_robot</build_depend>
+     <build_depend>moveit_ros_planning_interface</build_depend>
      <exec_depend>roscpp</exec_depend>
      <exec_depend>autharl_core</exec_depend>
      <exec_depend>roba_msgs</exec_depend>
      <exec_depend>lwr_robot</exec_depend>
+     <exec_depend>moveit_ros_planning_interface</exec_depend>
   <!--   <exec_depend>roscpp</exec_depend> -->
   <!-- Use build_depend for packages you need at compile time: -->
   <!--   <build_depend>message_generation</build_depend> -->

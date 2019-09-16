@@ -15,6 +15,7 @@ find_package(catkin REQUIRED
   tf2
   tf2_ros
   lwr_robot
+  moveit_ros_planning_interface
   )
 
 catkin_package(

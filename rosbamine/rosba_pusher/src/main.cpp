@@ -34,28 +34,36 @@
 
 #include <cmath>
 
+// Moveit staff
+#include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
+
 std::shared_ptr<arl::robot::Robot> robot;
 std::shared_ptr<roba::Controller> controller;
 
 const double SURFACE_SIZE = 0.2;
 const double PUSH_DURATION = 5;
 bool already_home = false;
+std::string group_name = "lwr_ati_xtion_handle";
+const bool MOVEIT = true;
+
+geometry_msgs::Pose toROS(const Eigen::Affine3d& input)
+{
+  geometry_msgs::Pose result;
+  result.position.x = input.translation()(0);
+  result.position.y = input.translation()(1);
+  result.position.z = input.translation()(2);
+  auto q = Eigen::Quaterniond(input.linear().matrix());
+  result.orientation.x = q.x();
+  result.orientation.y = q.y();
+  result.orientation.z = q.z();
+  result.orientation.w = q.w();
+  return result;
+}
 
 bool callback(rosba_msgs::Push::Request  &req,
               rosba_msgs::Push::Response &res)
 {
-  Eigen::VectorXd joint(7);
-  joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
-  // joint << 1.0425608158111572, -0.17295242846012115, 0.41580450534820557, 1.1572487354278564, -0.04072001576423645, -1.6935195922851562, -1.5933283567428589;
-  robot->setMode(arl::robot::Mode::POSITION_CONTROL);
-  ros::Duration(1.0).sleep();
-  robot->setJointTrajectory(joint, 8);
-  ros::Duration(1.0).sleep();
-
-  robot->setMode(arl::robot::Mode::TORQUE_CONTROL);
-  ros::Duration(1.0).sleep();
-
-
   already_home = false;
   Eigen::Vector3d arm_init_pos = robot->getTaskPosition();
 
@@ -139,61 +147,126 @@ bool callback(rosba_msgs::Push::Request  &req,
   temp << push_init_pos, 1.0;
   temp = target_frame * temp;
   push_init_pos(0) = temp(0);
-  push_init_pos(1) = temp(1) + 0.01;
+  push_init_pos(1) = temp(1);
   push_init_pos(2) = temp(2);
   push_final_pos(0) = req.distance * std::cos(theta);
   push_final_pos(1) = req.distance * std::sin(theta);
-  push_final_pos(2) = push_init_pos(2) - 0.01;
+  push_final_pos(2) = push_init_pos(2);
   temp << push_final_pos, 1.0;
   temp = target_frame * temp;
   push_final_pos(0) = temp(0);
   push_final_pos(1) = temp(1);
   push_final_pos(2) = temp(2);
 
-  push_init_pos(2) += 0.2;
-  ros::Duration(0.5).sleep();
-  controller->setParams(PUSH_DURATION, push_init_pos);
-  if (!controller->run())
-  {
-    res.success = false;
-    ROS_ERROR("Pusher failed.");
-    return false;
-  }
-  ros::Duration(0.5).sleep();
-  push_init_pos(2) -= 0.2;
-  controller->setParams(PUSH_DURATION, push_init_pos);
-  if (!controller->run())
-  {
-    res.success = false;
-    ROS_ERROR("Pusher failed.");
-    return false;
-  }
-  ros::Duration(0.5).sleep();
-  controller->setParams(PUSH_DURATION, push_final_pos);
-  if (!controller->run())
-  {
-    res.success = false;
-    ROS_ERROR("Pusher failed.");
-    return false;
-  }
-  ros::Duration(0.5).sleep();
-  push_final_pos(2) += 0.2;
-  controller->setParams(PUSH_DURATION, push_final_pos);
-  if (!controller->run())
-  {
-    res.success = false;
-    ROS_ERROR("Pusher failed.");
-    return false;
-  }
-  ros::Duration(0.5).sleep();
-  controller->setParams(PUSH_DURATION, arm_init_pos);
-  if (!controller->run())
-  {
-    res.success = false;
-    ROS_ERROR("Pusher failed.");
-    return false;
-  }
 
+  if (MOVEIT)
+  {
+    // Define way points for the push
+    Eigen::Affine3d pose;
+    pose.linear() << 1,  0,  0, 0, -1,  0, 0,  0, -1;
+    pose.translation() = push_init_pos;
+    std::cout << "push_final_pose:" << push_init_pos << std::endl;
+    pose.translation()(2) += 0.3;
+    std::vector<geometry_msgs::Pose> waypoints;
+    waypoints.push_back(toROS(pose));
+    pose.translation()(2) -= 0.3;
+    waypoints.push_back(toROS(pose));
+    pose.translation() = push_final_pos;
+    std::cout << "push_final_pose:" << push_final_pos << std::endl;
+    waypoints.push_back(toROS(pose));
+    pose.translation()(2) += 0.3;
+    waypoints.push_back(toROS(pose));
+
+    // Define constraints
+/////////////moveit_msgs::PositionConstraint con;
+    /////////con.link_name = "handle_tool";
+    /////////con.target_point_offset.x = 0.0;
+    /////////con.target_point_offset.y = 0.0;
+    /////////con.target_point_offset.z = 0.0;
+    /////////shape_msgs::SolidPrimitive prim;
+    /////////prim.type = shape_msgs::SolidPrimitive::CYLINDER;
+    /////////prim.dimensions.push_back(req.distance);
+    /////////prim.dimensions.push_back(0.005);
+    /////////con.constraint_region.primitives.push_back(prim);
+    /////////con.constraint_region.pose.push_back(prim)
+
+
+    moveit::planning_interface::MoveGroupInterface group(group_name);
+    group.setMaxVelocityScalingFactor(1);
+    moveit_msgs::RobotTrajectory traj;
+    double re  = group.computeCartesianPath(waypoints, 0.01, 0, traj);
+
+    if (re < 0.9)
+    {
+      ROS_ERROR("Moveit failed to produce plan for this push");
+      return false;
+    }
+
+    // Send the planned trajectory to the robot
+    robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+    arl::primitive::JointTrajectory trajectory(traj.joint_trajectory);
+    arl::controller::JointTrajectory trajectory_controller(robot);
+    trajectory.scale(20 / trajectory.duration());
+    std::cout << "DURATION: " << trajectory.duration();
+    trajectory_controller.reference(trajectory);
+    trajectory_controller.run();
+
+
+  }
+  else
+  {
+    Eigen::VectorXd joint(7);
+    joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
+    // joint << 1.0425608158111572, -0.17295242846012115, 0.41580450534820557, 1.1572487354278564, -0.04072001576423645, -1.6935195922851562, -1.5933283567428589;
+    robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+    ros::Duration(1.0).sleep();
+    robot->setJointTrajectory(joint, 8);
+    ros::Duration(1.0).sleep();
+
+    push_init_pos(2) += 0.2;
+    ros::Duration(0.5).sleep();
+    controller->setParams(PUSH_DURATION, push_init_pos);
+    if (!controller->run())
+    {
+      res.success = false;
+      ROS_ERROR("Pusher failed.");
+      return false;
+    }
+    ros::Duration(0.5).sleep();
+    push_init_pos(2) -= 0.2;
+    controller->setParams(PUSH_DURATION, push_init_pos);
+    if (!controller->run())
+    {
+      res.success = false;
+      ROS_ERROR("Pusher failed.");
+      return false;
+    }
+    ros::Duration(0.5).sleep();
+    controller->setParams(PUSH_DURATION, push_final_pos);
+    if (!controller->run())
+    {
+      res.success = false;
+      ROS_ERROR("Pusher failed.");
+      return false;
+    }
+    ros::Duration(0.5).sleep();
+    push_final_pos(2) += 0.2;
+    controller->setParams(PUSH_DURATION, push_final_pos);
+    if (!controller->run())
+    {
+      res.success = false;
+      ROS_ERROR("Pusher failed.");
+      return false;
+    }
+    ros::Duration(0.5).sleep();
+    controller->setParams(PUSH_DURATION, arm_init_pos);
+    if (!controller->run())
+    {
+      res.success = false;
+      ROS_ERROR("Pusher failed.");
+      return false;
+    }
+  }
 
   res.success = true;
   ROS_INFO("Pusher finished.");
@@ -228,19 +301,24 @@ bool goHome(std_srvs::Trigger::Request  &req,
   return true;
 }
 
+
 int main(int argc, char** argv)
 {
   // Initialize the ROS node
   ros::init(argc, argv, "rosba_pusher");
   ros::NodeHandle n;
 
+  // Start an async spinner for MoveIt!
+  ros::AsyncSpinner spinner(2);
+  spinner.start();
+
   // Create the robot after you have launch the URDF on the parameter server
   auto model = std::make_shared<arl::robot::ROSModel>();
 
   // Create a simulated robot
   // auto robot = std::make_shared<arl::robot::RobotSim>(model, 1e-3);
-  // robot.reset(new arl::lwr::RobotSim(model, 1e-3));
-  robot.reset(new arl::lwr::Robot(model));
+  robot.reset(new arl::lwr::RobotSim(model, 1e-3));
+  // robot.reset(new arl::lwr::Robot(model));
   std::shared_ptr<arl::robot::Sensor> sensor;
 
   // Create a visualizater for see the result in rviz
@@ -260,7 +338,6 @@ int main(int argc, char** argv)
   ros::ServiceServer service = n.advertiseService("push", callback);
   ros::ServiceServer go_home_srv = n.advertiseService("go_home", goHome);
   ROS_INFO("Ready to push objects.");
-  ros::spin();
 
   rviz_thread.join();
   return 0;
