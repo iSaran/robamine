@@ -96,14 +96,14 @@ void Controller::update()
 
   // # A simple force with variable stiffness
   // std::cout << "UPDATE calculate impedance" << std::endl;
-  double max_stiff_trans = 500;
+  double max_stiff_trans = 800;
   double stiff_rot = 50.0;
   Eigen::Vector6d stiffness;
   stiffness << max_stiff_trans, max_stiff_trans, max_stiff_trans, stiff_rot, stiff_rot, stiff_rot;
   Eigen::Vector6d force = stiffness.asDiagonal() * pos_error;
   Eigen::Vector6d vel_d = Eigen::Vector6d::Zero();
   Eigen::Vector6d vel_error = vel - vel_d;
-  double damp_trans = 20.0;
+  double damp_trans = 30.0;
   double damp_rot = 2.0;
   Eigen::Vector6d damping;
   damping << damp_trans, damp_trans, damp_trans, damp_rot, damp_rot, damp_rot;
