@@ -39,15 +39,15 @@ int main(int argc, char** argv)
     geometry_msgs::TransformStamped transformStamped;
 
     transformStamped.header.stamp = ros::Time::now();
-    transformStamped.header.frame_id = "asus_xtion_rgb_optical_frame";
+    transformStamped.header.frame_id = "world";
     transformStamped.child_frame_id = "target_object";
-    transformStamped.transform.translation.x = 0;
-    transformStamped.transform.translation.y = 0;
-    transformStamped.transform.translation.z = 0.55;
-    transformStamped.transform.rotation.x = 1;
+    transformStamped.transform.translation.x = 0.1;
+    transformStamped.transform.translation.y = 0.60;
+    transformStamped.transform.translation.z = 0.01;
+    transformStamped.transform.rotation.x = 0;
     transformStamped.transform.rotation.y = 0;
     transformStamped.transform.rotation.z = 0;
-    transformStamped.transform.rotation.w = 0;
+    transformStamped.transform.rotation.w = 1;
 
     br.sendTransform(transformStamped);
 
