@@ -41,11 +41,17 @@
 std::shared_ptr<arl::robot::Robot> robot;
 std::shared_ptr<roba::Controller> controller;
 
+// Parameters
 const double SURFACE_SIZE = 0.2;
-const double PUSH_DURATION = 5;
+const double PUSH_DURATION = 3.5;
+const double PLANNING_TIME = 5.0;
+const bool MOVEIT = true;
+const bool REAL_ROBOT = true;
+
+// Global variables
 bool already_home = false;
 std::string group_name = "lwr_ati_xtion_handle";
-const bool MOVEIT = true;
+
 
 geometry_msgs::Pose toROS(const Eigen::Affine3d& input)
 {
@@ -161,21 +167,151 @@ bool callback(rosba_msgs::Push::Request  &req,
 
   if (MOVEIT)
   {
-    // Define way points for the push
+    // Create group_name
+    moveit::planning_interface::MoveGroupInterface group(group_name);
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    moveit_msgs::RobotState start_state;
+    group.setPlanningTime(PLANNING_TIME);
+    group.setNumPlanningAttempts(30);
+    group.setGoalTolerance(0.005);
+
+    // Create joint trajectory controlle for executing plans
+    robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+    arl::controller::JointTrajectory trajectory_controller(robot);
+    trajectory_msgs::JointTrajectory final_trajectory;
+
+    // Go above the scene
     Eigen::Affine3d pose;
     pose.linear() << 1,  0,  0, 0, -1,  0, 0,  0, -1;
     pose.translation() = push_init_pos;
-    std::cout << "push_final_pose:" << push_init_pos << std::endl;
-    pose.translation()(2) += 0.3;
-    std::vector<geometry_msgs::Pose> waypoints;
-    waypoints.push_back(toROS(pose));
-    pose.translation()(2) -= 0.3;
-    waypoints.push_back(toROS(pose));
+    pose.translation()(2) += 0.1;
+    group.setPoseTarget(toROS(pose));
+
+    ROS_INFO("Planning above push init pose");
+    bool success = (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    arl::primitive::JointTrajectory trajectory0(plan.trajectory_.joint_trajectory);
+    trajectory0.scale(2 * PUSH_DURATION / trajectory0.duration());
+    // ROS_INFO_STREAM("Plan started from: ");
+    // for (unsigned int i = 0; i < 7; i++)
+    // {
+    //   std::cout << plan.start_state_.joint_state.position.at(i) << ",";
+    // }
+    // std::cout << std::endl;
+    //
+    // ROS_INFO_STREAM("Plan ended to: " );
+    // for (unsigned int i = 0; i < 7; i++)
+    // {
+    //   std::cout << plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size() - 1].positions.at(i) << ",";
+    // }
+    // std::cout << std::endl;
+    // std::cout << "iwill reach: " << final_trajectory.points[final_trajectory.points.size() - 1].positions << std::endl;
+
+
+    ROS_INFO("Planning push init pose");
+    start_state.joint_state.name =  plan.trajectory_.joint_trajectory.joint_names;
+    start_state.joint_state.position = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size() - 1].positions;
+    group.setStartState(start_state);
+    pose.translation()(2) -= 0.1;
+    if (success)
+    {
+      group.setPoseTarget(toROS(pose));
+      success = (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    }
+    else
+    {
+        ROS_ERROR_STREAM("Moveit failed to produce plan...");
+        return false;
+    }
+    arl::primitive::JointTrajectory trajectory1(plan.trajectory_.joint_trajectory);
+    trajectory1.scale(PUSH_DURATION / trajectory1.duration());
+    // ROS_INFO_STREAM("Plan started from: ");
+    // for (unsigned int i = 0; i < 7; i++)
+    // {
+    //   std::cout << plan.start_state_.joint_state.position.at(i) << ",";
+    // }
+    // std::cout << std::endl;
+    //
+    // ROS_INFO_STREAM("Plan ended to: " );
+    // for (unsigned int i = 0; i < 7; i++)
+    // {
+    //   std::cout << plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size() - 1].positions.at(i) << ",";
+    // }
+    // std::cout << std::endl;
+
+    ROS_INFO("Planning push final pose");
+    start_state.joint_state.name =  plan.trajectory_.joint_trajectory.joint_names;
+    start_state.joint_state.position = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size() - 1].positions;
+    group.setStartState(start_state);
     pose.translation() = push_final_pos;
-    std::cout << "push_final_pose:" << push_final_pos << std::endl;
-    waypoints.push_back(toROS(pose));
-    pose.translation()(2) += 0.3;
-    waypoints.push_back(toROS(pose));
+    if (success)
+    {
+      group.setPoseTarget(toROS(pose));
+      success = (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    }
+    else
+    {
+        ROS_ERROR_STREAM("Moveit failed to produce plan...");
+        return false;
+    }
+    arl::primitive::JointTrajectory trajectory2(plan.trajectory_.joint_trajectory);
+    trajectory2.scale(PUSH_DURATION / trajectory2.duration());
+
+    ROS_INFO("Planning above push final pose");
+    start_state.joint_state.name =  plan.trajectory_.joint_trajectory.joint_names;
+    start_state.joint_state.position = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size() - 1].positions;
+    group.setStartState(start_state);
+    pose.translation()(2) += 0.1;
+    if (success)
+    {
+      group.setPoseTarget(toROS(pose));
+      success = (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+      for (unsigned int i = 0; i < plan.trajectory_.joint_trajectory.points.size(); i++)
+      {
+        final_trajectory.points.push_back(plan.trajectory_.joint_trajectory.points[i]);
+      }
+    }
+    else
+    {
+        ROS_ERROR_STREAM("Moveit failed to produce plan...");
+        return false;
+    }
+    arl::primitive::JointTrajectory trajectory3(plan.trajectory_.joint_trajectory);
+    trajectory3.scale(PUSH_DURATION / trajectory3.duration());
+
+    // Compute path with waypoints
+    // std::vector<geometry_msgs::Pose> waypoints;
+    // waypoints.push_back(toROS(pose));
+    // pose.translation()(2) -= 0.1;
+    // waypoints.push_back(toROS(pose));
+    // pose.translation() = push_final_pos;
+    // std::cout << "push_final_pose:" << push_final_pos << std::endl;
+    // waypoints.push_back(toROS(pose));
+    // pose.translation()(2) += 0.1;
+    // waypoints.push_back(toROS(pose));
+    // moveit_msgs::RobotTrajectory traj;
+    // double perc = group.computeCartesianPath(waypoints, 0.005, 0, traj);
+    // if (perc < 0.1)
+    // {
+    //   ROS_ERROR_STREAM("Moveit failed to produce plan for this push. Percentage of trajectory completion is: " << perc);
+    //   return false;
+    // }
+
+    // Execute plan
+    // arl::primitive::JointTrajectory trajectory(my_plan.trajectory_.joint_trajectory);
+    trajectory_controller.reference(trajectory0);
+    trajectory_controller.run();
+    trajectory_controller.reference(trajectory1);
+    trajectory_controller.run();
+    trajectory_controller.reference(trajectory2);
+    trajectory_controller.run();
+    trajectory_controller.reference(trajectory3);
+    trajectory_controller.run();
+
+
+
+    // // group.setMaxVelocityScalingFactor(1);
+
+
 
     // Define constraints
 /////////////moveit_msgs::PositionConstraint con;
@@ -191,27 +327,8 @@ bool callback(rosba_msgs::Push::Request  &req,
     /////////con.constraint_region.pose.push_back(prim)
 
 
-    moveit::planning_interface::MoveGroupInterface group(group_name);
-    group.setMaxVelocityScalingFactor(1);
-    moveit_msgs::RobotTrajectory traj;
-    double re  = group.computeCartesianPath(waypoints, 0.01, 0, traj);
-
-    if (re < 0.9)
-    {
-      ROS_ERROR("Moveit failed to produce plan for this push");
-      return false;
-    }
 
     // Send the planned trajectory to the robot
-    robot->setMode(arl::robot::Mode::POSITION_CONTROL);
-    arl::primitive::JointTrajectory trajectory(traj.joint_trajectory);
-    arl::controller::JointTrajectory trajectory_controller(robot);
-    trajectory.scale(20 / trajectory.duration());
-    std::cout << "DURATION: " << trajectory.duration();
-    trajectory_controller.reference(trajectory);
-    trajectory_controller.run();
-
-
   }
   else
   {
@@ -317,8 +434,16 @@ int main(int argc, char** argv)
 
   // Create a simulated robot
   // auto robot = std::make_shared<arl::robot::RobotSim>(model, 1e-3);
-  robot.reset(new arl::lwr::RobotSim(model, 1e-3));
-  // robot.reset(new arl::lwr::Robot(model));
+
+  if (REAL_ROBOT)
+  {
+    robot.reset(new arl::lwr::Robot(model));
+  }
+  else
+  {
+    robot.reset(new arl::lwr::RobotSim(model, 1e-3));
+  }
+
   std::shared_ptr<arl::robot::Sensor> sensor;
 
   // Create a visualizater for see the result in rviz
