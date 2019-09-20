@@ -41,8 +41,14 @@ class ClutterReal(gym.Env):
                                            high=np.array([1, 1]),
                                            dtype=np.float32)
 
+
+        if self.params['extra_primitive']:
+            self.nr_primitives = 3
+        else:
+            self.nr_primitives = 2
+
         if self.params['split']:
-            obs_dim = int(self.params['nr_of_actions'] / 2) * 263
+            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * 263
         else:
             obs_dim = 263
 
@@ -85,17 +91,16 @@ class ClutterReal(gym.Env):
     def step(self, action):
         done = False
 
-        nr_primitives = 2;
-        nr_rotations = self.params['nr_of_actions'] / nr_primitives
+        nr_rotations = self.params['nr_of_actions'] / self.nr_primitives
         primitive_action = int(np.floor(action / nr_rotations))
         rotation = int(action - primitive_action * nr_rotations)
         if primitive_action == 0:
             primitive_action = 'PUSH-TARGET'
         elif primitive_action == 1:
             primitive_action = 'PUSH-OBSTACLE'
+        elif primitive_action == 2:
+            primitive_action = 'EXTRA'
         deg = rotation *360 / nr_rotations
-        if deg > 180:
-            deg -= 360
         logger.warn('ACTION: ' + primitive_action + ' for theta = ' + str(deg))
 
         success = self._push(action)
