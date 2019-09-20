@@ -43,7 +43,7 @@ int main(int argc, char** argv)
     transformStamped.child_frame_id = "target_object";
     transformStamped.transform.translation.x = 0.1;
     transformStamped.transform.translation.y = 0.60;
-    transformStamped.transform.translation.z = 0.01;
+    transformStamped.transform.translation.z = 0.025;
     transformStamped.transform.rotation.x = 0;
     transformStamped.transform.rotation.y = 0;
     transformStamped.transform.rotation.z = 0;

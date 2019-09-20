@@ -42,7 +42,7 @@ std::shared_ptr<arl::robot::Robot> robot;
 std::shared_ptr<roba::Controller> controller;
 
 // Parameters
-const double SURFACE_SIZE = 0.2;
+const double SURFACE_SIZE = 0.15;
 const double PUSH_DURATION = 3.5;
 const double PLANNING_TIME = 5.0;
 const bool MOVEIT = true;
@@ -243,6 +243,7 @@ bool callback(rosba_msgs::Push::Request  &req,
     start_state.joint_state.position = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size() - 1].positions;
     group.setStartState(start_state);
     pose.translation() = push_final_pos;
+    pose.translation()(2) -= 0.02;
     if (success)
     {
       group.setPoseTarget(toROS(pose));
@@ -260,7 +261,7 @@ bool callback(rosba_msgs::Push::Request  &req,
     start_state.joint_state.name =  plan.trajectory_.joint_trajectory.joint_names;
     start_state.joint_state.position = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size() - 1].positions;
     group.setStartState(start_state);
-    pose.translation()(2) += 0.1;
+    pose.translation()(2) += 0.2;
     if (success)
     {
       group.setPoseTarget(toROS(pose));
