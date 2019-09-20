@@ -210,6 +210,8 @@ class DQNSplit(Agent):
     def load(cls, file_path):
         model = pickle.load(open(file_path, 'rb'))
         params = model['params']
+        params['load_nets'] = ''
+        params['load_buffers'] = ''
         self = cls(model['state_dim'], model['action_dim'], params)
         for i in range(self.nr_network):
             self.network[i].load_state_dict(model['network'][i])
@@ -230,4 +232,3 @@ class DQNSplit(Agent):
         model['action_dim'] = self.action_dim
         pickle.dump(model, open(file_path, 'wb'))
         logger.info('Agent saved to %s', file_path)
-
