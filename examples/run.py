@@ -52,7 +52,8 @@ def run(yml):
                 elif params['mode'] == 'Evaluate':
                     world.evaluate(n_episodes=params['eval']['episodes'], \
                                    render=params['eval']['render'], \
-                                   print_progress_every=10)
+                                   print_progress_every=10,
+                                   save_every=params['save_every'])
                 else:
                     logger.error('The mode does not exist. Select btn Train, Train & Evaluate and Evaluate.')
         except yaml.YAMLError as exc:
