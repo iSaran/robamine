@@ -1,0 +1,14 @@
+name: 'Clutter'
+params:
+  discrete: True
+  nr_of_actions: 16  # u x w
+  render: False
+  nr_of_obstacles: [8, 13]
+  target_probability_box: 1.0
+  target_height_range: [0.005, 0.01]
+  obstacle_probability_box: 1.0
+  obstacle_height_range: [0.005, 0.02]
+  push_distance: 0.1
+  split: False
+  extra_primitive: False
+  all_equal_height_prob: 0.2

@@ -15,5 +15,6 @@ setup(name='robamine',
                         'numpydoc', \
                         'matplotlib',\
                         'opencv-python==4.0.1.24',\
+                        'PyQt5==5.12.3'
                         'torch']
 )

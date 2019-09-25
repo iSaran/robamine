@@ -1,0 +1,8 @@
+env:
+  - Clutter
+  - ClutterReal
+agent:
+  - DQN
+  - SplitDQN
+  - RandomDiscrete
+
