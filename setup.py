@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(name='robamine',
       description='Python codebase with Gym Environments and RL training for AUTh-ARL robots',
-      version='0.0.1',
+      version='0.1',
       author='Iason Sarantopoulos',
       author_email='iasons@auth.gr',
       install_requires=['tensorflow==1.12.0', \

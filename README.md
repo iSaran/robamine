@@ -1,4 +1,4 @@
-# Robamine ![version](https://img.shields.io/badge/version-v0.0.1-blue.svg) 
+# Robamine ![version](https://img.shields.io/badge/version-v0.1-blue.svg) 
 
 Python code and OpenAI Gym environments for testing RL algorithms with models of ARL's robots.
 
