@@ -1,8 +1,8 @@
 from robamine import rb_logging
 
 from robamine.algo.core import World
-from robamine.algo.dummy import Dummy, DummyParams
-from robamine.algo.ddpg import DDPG, DDPGParams, Actor, ActorParams
+from robamine.algo.dummy import Dummy
+from robamine.algo.ddpg import DDPG, Actor
 from robamine.algo.util import Plotter, seed_everything
 
 from gym.envs.registration import register

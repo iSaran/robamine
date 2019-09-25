@@ -26,8 +26,7 @@ import importlib
 def get_agent_handle(agent_name):
     module = importlib.import_module('robamine.algo.' + agent_name.lower())
     handle = getattr(module, agent_name)
-    params_handle = getattr(module, agent_name + 'Params')
-    return handle, params_handle
+    return handle
 
 def seed_everything(random_seed):
     random.seed(random_seed)
@@ -85,9 +84,7 @@ class DataStream:
         self.name = name
 
         # Setup file logging.
-        if not os.path.exists(os.path.join(self.log_path, name)):
-            os.makedirs(os.path.join(self.log_path, name))
-        self.file = open(os.path.join(os.path.join(self.log_path, name), name + '.log'), "w+")
+        self.file = open(os.path.join(self.log_path, name + '.csv'), "w+")
         # Setup the first row (the name of the logged variables)
         self.file.write(','.join(stats_name) + '\n')
 
@@ -175,6 +172,7 @@ class EpisodeStats:
         self.experience_time = 0
         self.reward = []
         self.q_value = []
+        self.success = False
         self.info = {}
         for key in additional_info:
             self.info[key] = []
@@ -222,7 +220,7 @@ class Stats:
     """
     def __init__(self, sess, log_dir, tf_writer, name, additional_info = {}, stats_name = ['mean', 'min', 'max', 'std', 'sum']):
         self.stats_name = stats_name
-        log_var_names = ['n_timesteps']
+        log_var_names = ['n_timesteps', 'success']
         for j in stats_name:
             log_var_names.append(j + '_reward')
             log_var_names.append(j + '_q_value')
@@ -243,7 +241,7 @@ class Stats:
         """
         logger.debug('Stats: Updating for episode.')
 
-        row = [episode_data.n_timesteps]
+        row = [episode_data.n_timesteps, int(episode_data.success)]
         for operation in self.stats_name:
             operation = getattr(importlib.import_module('numpy'), operation)
             row.append(np.squeeze(operation(np.array(episode_data.reward))))

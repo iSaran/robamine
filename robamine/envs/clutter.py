@@ -24,13 +24,48 @@ from robamine.utils.orientation import rot2quat
 import cv2
 from mujoco_py.cymj import MjRenderContext
 
+default_params = {
+        'name' : 'Clutter-v0',
+        'nr_of_actions' : 8,
+        'render' : True,
+        'nr_of_obstacles' : [5, 10],
+        'target_probability_box': 1.0,
+        'obstacle_probability_box': 1.0,
+        'push_distance' : 0.2,
+        'target_height_range' : [.005, .01],
+        'obstacle_height_range' : [.005, .02],
+        'extra_primitive' : True,
+        'all_equal_height_prob' : 0.1
+        }
+
+class PushingPrimitiveC:
+    def __init__(self, distance = 0.1, direction_theta = 0.0, surface_size = 0.30, object_height = 0.06, finger_size = 0.02):
+        self.distance = surface_size + distance
+        self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
+        self.initial_pos = - self.direction * surface_size
+
+        # Z at the center of the target object
+        # If the object is too short just put the finger right above the
+        # table
+        if object_height - finger_size > 0:
+            offset = object_height - finger_size
+        else:
+            offset = 0
+        self.z = finger_size + offset + 0.001
+
+    def __str__(self):
+        return "Initial Position: " + str(self.initial_pos) + "\n" + \
+               "Distance: " + str(self.distance) + "\n" + \
+               "Direction: " + str(self.direction) + "\n" + \
+               "z: " + str(self.z) + "\n"
+
 class Push:
     """
     Defines a push primitive action as defined in kiatos19, with the difference
     of instead of using 4 discrete directions, now we have a continuous angle
     (direction_theta) from which we calculate the direction.
     """
-    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.2, direction_theta = 0.0, target = True, object_height = 0.06, object_length=0.05, object_width = 0.05, finger_size = 0.02):
+    def __init__(self, initial_pos = np.array([0, 0]), distance = 0.1, direction_theta = 0.0, target = True, object_height = 0.06, object_length=0.05, object_width = 0.05, finger_size = 0.02):
         self.distance = distance
         self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
 
@@ -63,7 +98,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     """
     The class for the Gym environment.
     """
-    def __init__(self):
+    def __init__(self, params = default_params):
+        self.params = params
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/clutter.xml")
 
@@ -76,15 +112,26 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        self.action_space = spaces.Box(low=np.array([-1, -1]),
-                                       high=np.array([1, 1]),
-                                       dtype=np.float32)
+        if self.params['discrete']:
+            self.action_space = spaces.Discrete(self.params['nr_of_actions'])
+        else:
+            self.action_space = spaces.Box(low=np.array([-1, -1]),
+                                           high=np.array([1, 1]),
+                                           dtype=np.float32)
 
-        self.observation_space = spaces.Box(low=np.full((261,), 0),
-                                            high=np.full((261,), 0.3),
+        if self.params['extra_primitive']:
+            self.nr_primitives = 3
+        else:
+            self.nr_primitives = 2
+
+        if self.params['split']:
+            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * 263
+        else:
+            obs_dim = 263
+
+        self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
+                                            high=np.full((obs_dim,), 0.3),
                                             dtype=np.float32)
-
-        self.object_names = ['object1', 'object2', 'object3']
 
         finger_mass = get_body_mass(self.sim.model, 'finger')
         self.pd = PDController.from_mass(mass = finger_mass)
@@ -116,8 +163,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_length = 0.0
         self.target_width = 0.0
         self.target_pos = np.zeros(3)
+        self.target_quat = Quaternion()
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
         self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
+        self.success = False
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -187,6 +236,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         observation, _, _ = self.get_obs()
 
         self.last_timestamp = self.sim.data.time
+        self.success = False
         return observation
 
     def get_obs(self):
@@ -231,18 +281,49 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             bbox = dim
 
         points_above_table = np.asarray(points_above_table)
-        height_map = cv_tools.generate_height_map(points_above_table)
-        features = cv_tools.extract_features(height_map, bbox, plot=False)
 
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos[0], \
                      self.surface_size[0] + self.target_pos[0], \
                      self.surface_size[1] - self.target_pos[1], \
                      self.surface_size[1] + self.target_pos[1]]
-        min_distance_from_edge = min(distances)
-        features.append(min_distance_from_edge)
 
-        return np.array(features), points_above_table, bbox
+        distances = [x / 0.5 for x in distances]
+
+        obstacle_height_range = self.params['obstacle_height_range']
+        max_height = 2 * obstacle_height_range[1]
+
+        if self.params['split']:
+            heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / self.nr_primitives), plot=False)
+            features = []
+            rot_angle = 360 / int(self.params['nr_of_actions'] / self.nr_primitives)
+            for i in range(0, len(heightmaps)):
+                f = cv_tools.extract_features(heightmaps[i], bbox, max_height, rotation_angle=i*rot_angle, plot=False)
+                f.append(i*rot_angle)
+                f.append(bbox[0] / 0.03)
+                f.append(bbox[1] / 0.03)
+                f.append(distances[0])
+                f.append(distances[1])
+                f.append(distances[2])
+                f.append(distances[3])
+                features.append(f)
+
+            final_feature = np.append(features[0], features[1], axis=0)
+            for i in range(2, len(features)):
+                final_feature = np.append(final_feature, features[i], axis=0)
+        else:
+            heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
+            features = cv_tools.extract_features(heightmap, bbox, max_height, plot=False)
+            features.append(0)
+            features.append(bbox[0]/0.03)
+            features.append(bbox[1]/0.03)
+            features.append(distances[0])
+            features.append(distances[1])
+            features.append(distances[2])
+            features.append(distances[3])
+            final_feature = np.array(features)
+
+        return final_feature, points_above_table, bbox
 
     def step(self, action):
         done = False
@@ -250,36 +331,54 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
-        reward = self.get_reward(obs, pcd, dim)
+        reward = self.get_reward(obs, pcd, dim, action)
         if self.terminal_state(obs):
             done = True
-        return obs, reward, done, {'experience_time': experience_time}
+        return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
 
     def do_simulation(self, action):
-        my_action = action.copy()
-
-        # Agent gives actions between [-1, 1]. Convert to the action ranges of
-        # the action space of the environment
-        agent_high = 1
-        agent_low = -1
-        env_low = [-math.pi, 0]
-        env_high = [math.pi, 1]
-        for i in range(len(my_action)):
-            my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
-
-        if my_action[1] > 0.5:
-            push_target = True
+        if self.params['discrete']:
+            theta = action * 2 * math.pi / (self.action_space.n / self.nr_primitives)
+            if action > 2 * int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
+                push = PushingPrimitiveC(distance=self.params['push_distance'], direction_theta=theta, object_height=self.target_height, finger_size=self.finger_length)
+            elif action > int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
+                push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=False, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            else:
+                push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=True, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
         else:
-            push_target = False
+            my_action = action.copy()
 
-        push = Push(initial_pos = np.array([self.target_pos[0], self.target_pos[1]]), direction_theta=my_action[0], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            # agent gives actions between [-1, 1]. convert to the action ranges of
+            # the action space of the environment
+            agent_high = 1
+            agent_low = -1
+            env_low = [-math.pi, 0]
+            env_high = [math.pi, 1]
+            for i in range(len(my_action)):
+                my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
+
+            if my_action[1] > 0.5:
+                push_target = True
+            else:
+                push_target = False
+
+            push = Push(direction_theta=my_action[0], distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+
+        # Transform pushing from target frame to world frame
+        push_direction = np.array([push.direction[0], push.direction[1], 0])
+        push_direction_world = np.matmul(self.target_quat.rotation_matrix(), push_direction)
+        push_initial_pos = np.array([push.initial_pos[0], push.initial_pos[1], 0])
+        push_initial_pos_world = np.matmul(self.target_quat.rotation_matrix(), push_initial_pos) + self.target_pos
 
         init_z = 2 * self.target_height + 0.05
-        self.sim.data.set_joint_qpos('finger', [push.initial_pos[0], push.initial_pos[1], init_z, 1, 0, 0, 0])
+        self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
         self.sim_step()
+        duration = 1
+        if isinstance(push, PushingPrimitiveC):
+            duration = 3
         if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
-            end = push.initial_pos + push.distance * push.direction
-            self.move_joint_to_target('finger', [end[0], end[1], None])
+            end = push_initial_pos_world[:2] + push.distance * push_direction_world[:2]
+            self.move_joint_to_target('finger', [end[0], end[1], None], duration)
         else:
             self.push_stopped_ext_forces = True
 
@@ -297,12 +396,14 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
-    def get_reward(self, observation, point_cloud, dim):
+    def get_reward(self, observation, point_cloud, dim, action):
         reward = 0.0
 
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
-            self.push_stopped_ext_forces = False
+            return -10
+
+        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
             return -10
 
         # for each push that frees the space around the target
@@ -319,31 +420,62 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             -dim[0]  < p[0] < dim[0]:
                 points_around.append(p)
 
-        reward = (self.no_of_prev_points_around - len(points_around)) / max(self.no_of_prev_points_around, len(points_around))
-        reward *= 10.0
+        if self.no_of_prev_points_around == len(points_around):
+            return -5
+
         self.no_of_prev_points_around = len(points_around)
+
+        extra_penalty = 0
+        if self.params['extra_primitive'] and action >= self.params['nr_of_actions'] * (2/3):
+            extra_penalty = -5
+
+        if len(points_around) == 0:
+            return +10 + extra_penalty
+
+        return -1 + extra_penalty
+
+        # k = max(self.no_of_prev_points_around, len(points_around))
+        # if k != 0:
+        #     reward = (self.no_of_prev_points_around - len(points_around)) / k
+        # else:
+        #     reward = 0.0
+        # reward *= 10.0
+        # self.no_of_prev_points_around = len(points_around)
 
         # cv_tools.plot_point_cloud(point_cloud)
         # cv_tools.plot_point_cloud(points_around)
 
         # Penalize the agent as it gets the target object closer to the edge
-        max_cost = -5
-        reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
-        if observation[-1] < 0:
-            reward = -10
+        # max_cost = -5
+        # reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
+        # if observation[-1] < 0:
+        #     reward = -10
 
         # For each object push
-        reward += -1
-        return reward
+        # reward += -1
+        # return reward
 
     def terminal_state(self, observation):
 
+        # Terminal if collision is detected
+        if self.push_stopped_ext_forces:
+            self.push_stopped_ext_forces = False
+            return True
+
+        # Terminate if the target flips to its side, i.e. if target's z axis is
+        # parallel to table, terminate.
+        target_z = self.target_quat.rotation_matrix()[:,2]
+        world_z = np.array([0, 0, 1])
+        if np.dot(target_z, world_z) < 0.9:
+            return True
+
         # If the object has fallen from the table
-        if observation[-1] < 0:
+        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
             return True
 
         # If the object is free from obstacles around (no points around)
         if self.no_of_prev_points_around == 0:
+            self.success = True
             return True
 
         return False
@@ -420,6 +552,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         A wrapper for sim.step() which updates every time a local state structure.
         """
+
+        if self.params['render']:
+            self.render()
+
         self.finger_quat_prev = self.finger_quat
 
         self.sim.step()
@@ -453,13 +589,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         temp = self.sim.data.get_joint_qpos('target')
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
+        self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
     def generate_random_scene(self, finger_height_range=[.005, .005],
-                                    target_probability_box=1,
-                                    target_length_range=[.01, .03], target_width_range=[.01, .03], target_height_range=[.005, .01],
-                                    obstacle_probability_box=1,
-                                    obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02], obstacle_height_range=[.005, .02],
-                                    nr_of_obstacles = [5, 25],
+                                    target_length_range=[.01, .03], target_width_range=[.01, .03],
+                                    obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
@@ -481,7 +615,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         #   Randomize type (box or cylinder)
         temp = self.rng.uniform(0, 1)
-        if (temp < target_probability_box):
+        if (temp < self.params['target_probability_box']):
             self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
         else:
             self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
@@ -495,7 +629,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         #   Randomize size
         target_length = self.rng.uniform(target_length_range[0], target_length_range[1])
         target_width  = self.rng.uniform(target_width_range[0], min(target_length, target_width_range[1]))
-        target_height = self.rng.uniform(max(target_height_range[0], finger_height), target_height_range[1])
+        target_height = self.rng.uniform(max(self.params['target_height_range'][0], finger_height), self.params['target_height_range'][1])
         if self.sim.model.geom_type[geom_id] == 6:
             self.sim.model.geom_size[geom_id][0] = target_length
             self.sim.model.geom_size[geom_id][1] = target_width
@@ -515,13 +649,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         random_qpos[index[0] + 6] = target_orientation.z
 
         # Randomize obstacles
-        number_of_obstacles = nr_of_obstacles[0] + self.rng.randint(nr_of_obstacles[1] - nr_of_obstacles[0] + 1)  # 5 to 25 obstacles
+        all_equal_height = self.rng.uniform(0, 1)
+
+        if all_equal_height < self.params['all_equal_height_prob']:
+            number_of_obstacles = self.params['nr_of_obstacles'][1]
+        else:
+            number_of_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
+
         for i in range(1, number_of_obstacles):
             geom_id = get_geom_id(self.sim.model, "object"+str(i))
 
             # Randomize type (box or cylinder)
             temp = self.rng.uniform(0, 1)
-            if (temp < obstacle_probability_box):
+            if (temp < self.params['obstacle_probability_box']):
                 self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
             else:
                 self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
@@ -534,7 +674,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             #   Randomize size
             obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
             obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
-            obstacle_height = self.rng.uniform(max(obstacle_height_range[0], target_height + 2 * finger_height + 0.001), obstacle_height_range[1])
+
+
+            if all_equal_height < self.params['all_equal_height_prob']:
+                obstacle_height = target_height
+            else:
+                obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
+
             if self.sim.model.geom_type[geom_id] == 6:
                 self.sim.model.geom_size[geom_id][0] = obstacle_length
                 self.sim.model.geom_size[geom_id][1] = obstacle_width

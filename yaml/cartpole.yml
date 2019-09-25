@@ -1,0 +1,28 @@
+logging_directory: "/tmp/robamine_logs"
+mode: Train  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
+train:
+  episodes: 1000
+  render: False
+eval:
+  episodes: 1000
+  render: True
+eval_every: 10
+save_every: 10
+load_world: ""  # Path to load world. Empty string means new world
+env:
+  name: 'CartPole-v0'
+agent:
+  name: 'DQN'
+  replay_buffer_size: 1000000
+  batch_size: 64
+  discount: 0.9
+  target_net_updates: 1000
+  tau: 0.999
+  double_dqn: True
+  epsilon_start: 0.9
+  epsilon_end: 0.05
+  epsilon_decay: 20000  # number of learning steps for half epsilon, set to 0 if no decay is needed
+  learning_rate: 0.0001
+  hidden_units: [50, 50]
+  device: 'cuda'
+

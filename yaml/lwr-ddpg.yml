@@ -1,0 +1,28 @@
+logging_directory: "/tmp/robamine_logs"
+mode: Train
+train:
+  episodes: 1000
+  render: False
+eval:
+  episodes: 1000
+  render: False
+eval_every: 10
+save_every: 10
+env: 'LWRROS-v1'
+agent:
+  name: 'DDPGTorch'
+  replay_buffer_size: 1000000
+  batch_size: 64
+  discount: 0.99
+  tau: 0.001
+  actor:
+    hidden_units: [400, 300]
+    learning_rate: 0.0001
+    final_layer_init: [-0.003, 0.003]
+  critic:
+    hidden_units: [400, 300]
+    learning_rate: 0.001
+    final_layer_init: [-0.003, 0.003]
+  noise:
+    name: 'OU'
+    sigma: 0.05

@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter, get_agent_handle
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter, get_agent_handle, transform_sec_to_timestamp
 from robamine import rb_logging
 import logging
 import os
@@ -17,21 +17,9 @@ import pickle
 from enum import Enum
 import time
 import numpy as np
+import yaml
 
 logger = logging.getLogger('robamine.algo.core')
-
-class AgentParams:
-    def __init__(self,
-                 state_dim=None,
-                 action_dim=None,
-                 name=None,
-                 suffix=""):
-        self.name = name
-        self.suffix = suffix
-
-        # Store internally the state_dim
-        self.state_dim = state_dim
-        self.action_dim = action_dim
 
 class Agent:
     """
@@ -68,10 +56,10 @@ class Agent:
         A name for the agent.
     """
 
-    def __init__(self, state_dim, action_dim, params=AgentParams()):
+    def __init__(self, state_dim, action_dim, name='', params={}):
         self.state_dim, self.action_dim  = state_dim, action_dim
-        self.params = params
-        self.params.state_dim, self.params.action_dim  = state_dim, action_dim
+        self.name = name
+        self.params = params.copy()
         self.sess = tf.Session()
         self.info = {}
 
@@ -95,7 +83,7 @@ class Agent:
         numpy array
             An action to be performed for exploration.
         """
-        error = 'Agent ' + self.params.name + ' does not implement an exploration policy.'
+        error = 'Agent ' + self.name + ' does not implement an exploration policy.'
         logger.error(error)
         raise NotImplementedError(error)
 
@@ -118,7 +106,7 @@ class Agent:
         terminal : float
             1 if the next state is a terminal state, 0 otherwise.
         """
-        error = 'Agent ' + self.params.name + ' does not implemement a learning algorithm.'
+        error = 'Agent ' + self.name + ' does not implemement a learning algorithm.'
         logger.error(error)
         raise NotImplementedError(error)
 
@@ -137,41 +125,29 @@ class Agent:
         numpy array:
             The optimal action to be performed.
         """
-        error = 'Agent ' + self.params.name + ' does not implement a policy.'
+        error = 'Agent ' + self.name + ' does not implement a policy.'
         logger.error(error)
         raise NotImplementedError(error)
 
     def q_value(self, state, action):
-        error = 'Agent ' + self.params.name + ' does not provide a Q value.'
+        error = 'Agent ' + self.name + ' does not provide a Q value.'
         logger.error(error)
         raise NotImplementedError(error)
 
     def save(self, file_path):
-        error = 'Agent ' + self.params.name + ' does not provide saving capabilities.'
+        error = 'Agent ' + self.name + ' does not provide saving capabilities.'
         logger.error(error)
         raise NotImplementedError(error)
 
     def load(self):
-        error = 'Agent ' + self.params.name + ' does not provide loading capabilities.'
+        error = 'Agent ' + self.name + ' does not provide loading capabilities.'
         logger.error(error)
         raise NotImplementedError(error)
 
     def seed(self, seed):
-        error = 'Agent ' + self.params.name + ' does cannot be seeded.'
+        error = 'Agent ' + self.name + ' does cannot be seeded.'
         logger.error(error)
         raise NotImplementedError(error)
-
-class NetworkParams:
-    def __init__(self,
-                 input_dim=None,
-                 hidden_units=None,
-                 output_dim=None,
-                 name=None):
-        self.hidden_units = hidden_units
-        self.name = name
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.trainable = None
 
 class Network:
     """
@@ -209,13 +185,11 @@ class Network:
         The name of the Neural Network
     """
 
-    def __init__(self, sess, params = NetworkParams()):
-        self.sess = sess
-        self.params = params
+    def __init__(self, sess, input_dim, hidden_units, output_dim, name):
+        self.sess, self.input_dim, self.hidden_units, self.output_dim, self.name = \
+                sess, input_dim, hidden_units, output_dim, name
 
-        self.input = None
-        self.out = None
-        self.net_params = None
+        self.input, self.out, self.net_params, self.trainable = None, None, None, None
 
     @classmethod
     def create(cls):
@@ -263,9 +237,9 @@ class Network:
             return self.sess.run(k)
 
     @classmethod
-    def load(cls, sess, params):
-        self = cls.create(sess, params)
-        sess.run([self.net_params[i].assign(self.params.trainable[i]) for i in range(len(self.net_params))])
+    def load(cls, sess, input_dim, hidden_units, output_dim, name, trainable):
+        self = cls.create(sess, input_dim, hidden_units, output_dim, name)
+        sess.run([self.net_params[i].assign(trainable[i]) for i in range(len(self.net_params))])
         return self
 
 class Transition:
@@ -306,6 +280,8 @@ class World:
             if isinstance(self.env.observation_space, gym.spaces.dict.Dict):
                 logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
                 self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
+        elif isinstance(env, dict):
+            self.env = gym.make(env['name'], params=env)
         else:
             err = ValueError('Provide a gym.Env or a string in order to create a new world')
             logger.exception(err)
@@ -320,39 +296,35 @@ class World:
         # Agent setup
         if isinstance(agent, str):
             agent_name = agent
-            agent_handle, agent_params_handle = get_agent_handle(agent_name)
-            agent_params = agent_params_handle()
-            if (agent_params.name == 'Dummy'):
-                self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim, agent_params)
+            agent_handle = get_agent_handle(agent_name)
+            if (agent_name == 'Dummy'):
+                self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim)
             else:
-                self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
-        elif isinstance(agent, AgentParams):
-            agent_params = agent
-            agent_handle, _ = get_agent_handle(agent_params.name)
-            if (agent_params.name == 'Dummy'):
-                self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim, agent_params)
-            else:
-                self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
+                self.agent = agent_handle(self.state_dim, self.action_dim)
+        elif isinstance(agent, dict):
+            agent_name = agent['name']
+            agent_handle = get_agent_handle(agent_name)
+            self.agent = agent_handle(self.state_dim, self.action_dim, agent)
         elif isinstance(agent, Agent):
             self.agent = agent
         else:
-            err = ValueError('Provide a Agent, AgentParams, or a string in order to create an agent for the new world')
+            err = ValueError('Provide an Agent or a string in order to create an agent for the new world')
             logger.exception(err)
             raise err
 
         self.name = name
 
         try:
-            assert self.agent.params.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
-            assert self.agent.params.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
+            assert self.agent.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
+            assert self.agent.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
         except AssertionError as err:
             logger.exception(err)
             raise err
 
-        self.agent_name = self.agent.params.name + self.agent.params.suffix
+        self.agent_name = self.agent.name
         self.env_name = self.env.spec.id
 
-        self.log_dir = os.path.join(rb_logging.get_logger_path(), self.agent_name.replace(" ", "_") + '_' + self.env_name.replace(" ", "_"))
+        self.log_dir = rb_logging.get_logger_path()
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
 
@@ -361,8 +333,49 @@ class World:
         self.tf_writer = tf.summary.FileWriter(self.log_dir, self.agent.sess.graph)
         self.train_stats = None
         self.eval_stats = None
+        self.config = {}
+        self.config['results'] = {}
 
+        self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
+        self.expected_values_file.write('expected,real\n')
+
+        self.actions_file = open(os.path.join(self.log_dir, 'actions' + '.csv'), "w+")
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
+
+
+    @classmethod
+    def from_dict(cls, config):
+        if len(config['env']) == 1:
+            env = gym.make(config['env']['name'])
+        else:
+            env = gym.make(config['env']['name'], params=config['env'])
+        if isinstance(env.observation_space, gym.spaces.dict.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
+            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+
+        state_dim = int(env.observation_space.shape[0])
+        if isinstance(env.action_space, gym.spaces.discrete.Discrete):
+            action_dim = env.action_space.n
+        else:
+            action_dim = int(env.action_space.shape[0])
+
+        self = cls(config['agent'], env)
+        self.config = config.copy()
+        self.config['results'] = {}
+        self.config['results']['logging_directory'] = self.log_dir
+        import socket
+        self.config['results']['hostname'] = socket.gethostname()
+
+        # Store the version of the session
+        import subprocess
+        commit_hash = subprocess.check_output(["git", "describe", '--always']).strip().decode('ascii')
+        try:
+            subprocess.check_output(["git", "diff", "--quiet"])
+        except:
+            commit_hash += '-dirty'
+        self.config['results']['version'] = commit_hash
+
+        return self
 
     def seed(self, seed):
         self.env.seed(seed)
@@ -373,10 +386,10 @@ class World:
         self._mode = WorldMode.TRAIN
         self._run(n_episodes, None, None, print_progress_every, render, False, save_every)
 
-    def evaluate(self, n_episodes, render=False, print_progress_every=1):
+    def evaluate(self, n_episodes, render=False, print_progress_every=1, save_every=None):
         logger.info('%s evaluating on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
         self._mode = WorldMode.EVAL
-        self._run(n_episodes, None, None, print_progress_every, render, False, None)
+        self._run(n_episodes, None, None, print_progress_every, render, False, save_every)
 
     def train_and_eval(self, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every, render_train=False, render_eval=False, print_progress_every=1, save_every=None):
         logger.info('%s training on %s for %d episodes and evaluating for %d episodes every %d episodes of training', self.agent_name, self.env_name, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every)
@@ -396,8 +409,8 @@ class World:
             self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
         elif self._mode == WorldMode.TRAIN_EVAL:
             train = True
-            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train')
-            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval')
+            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
+            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
 
         counter = 0
         start_time = time.time()
@@ -426,13 +439,21 @@ class World:
             if print_progress_every and (episode + 1) % print_progress_every == 0:
                 print_progress(episode, n_episodes, start_time, total_n_timesteps, experience_time)
 
+            self.config['results']['episodes'] = episode
+            self.config['results']['total_n_timesteps'] = total_n_timesteps
+            self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - start_time)
+            self.config['results']['experience_time'] = transform_sec_to_timestamp(experience_time)
+
             if save_every and (episode + 1) % save_every == 0:
-                self.save()
+                self.save(episode, train)
 
 
     def _episode(self, render=False, train=False):
         stats = EpisodeStats(self.agent.info)
         state = self.env.reset()
+        expected_return = []
+        true_return = []
+        action_log = []
         while True:
             if (render):
                 self.env.render()
@@ -442,6 +463,7 @@ class World:
                 action = self.agent.explore(state)
             else:
                 action = self.agent.predict(state)
+                action_log.append(action)
 
             # Execute the action on the environment and observe reward and next state
             next_state, reward, done, info = self.env.step(action)
@@ -458,6 +480,12 @@ class World:
             # Learn
             Q = self.agent.q_value(state, action)
 
+            if not train:
+                expected_return.append(np.squeeze(Q))
+                true_return.append(reward)
+                for i in range(0, len(true_return) - 1):
+                    true_return[i] += reward
+
             state = next_state
 
             # self.train_stats.update_timestep({'reward': reward, 'q_value': Q})
@@ -469,6 +497,19 @@ class World:
             if done:
                 break
 
+        if not train:
+            for i in range (0, len(true_return)):
+                true_return[i] = true_return[i] / (len(true_return) - i)
+                self.expected_values_file.write(str(expected_return[i]) + ',' + str(true_return[i]) + '\n')
+                self.expected_values_file.flush()
+
+            for i in range(len(action_log) - 1):
+                self.actions_file.write(str(action_log[i]) + ',')
+            self.actions_file.write(str(action_log[len(action_log) - 1]) + '\n')
+            self.actions_file.flush()
+
+        if 'success' in info:
+            stats.success = info['success']
         stats.n_timesteps = len(stats.reward)
         return stats
 
@@ -484,22 +525,36 @@ class World:
 
     @classmethod
     def load(cls, directory):
-        world = pickle.load(open(os.path.join(directory, 'world.pkl'), 'rb'))
-        agent_name = world['agent_name']
-        agent_handle, agent_params_handle = get_agent_handle(agent_name)
-        agent_params = agent_params_handle()
+        with open(os.path.join(directory, 'config.yml'), 'r') as stream:
+            try:
+                config = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+
+        if len(config['env']) == 1:
+            env = gym.make(config['env']['name'])
+        else:
+            env = gym.make(config['env']['name'], params=config['env'])
+        if isinstance(env.observation_space, gym.spaces.dict.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
+            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+
+        agent_name = config['agent']['name']
+        agent_handle = get_agent_handle(agent_name)
         agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
 
-        self = cls(agent, world['env_id'])
+        self = cls(agent, env)
         logger.info('World loaded from %s', directory)
         return self
 
-    def save(self):
+    def save(self, episode, train):
         self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
-        world_path = os.path.join(self.log_dir, 'world.pkl')
-        world = {}
-        world['env_id'] = self.env_name
-        world['agent_name'] = self.agent_name
-        pickle.dump(world, open(world_path, 'wb'))
-        logger.info('World saved to %s', world_path)
+
+        if train:
+            self.agent.save(os.path.join(self.log_dir, 'model_' + str(episode) + '.pkl'))
+
+        with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
+            yaml.dump(self.config, outfile, default_flow_style=False)
+
+        logger.info('World saved to %s', self.log_dir)
 
