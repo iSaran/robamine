@@ -11,11 +11,11 @@ def run(yml):
     with open("../yaml/" + yml + ".yml", 'r') as stream:
         try:
             params = yaml.safe_load(stream)
-            rm.rb_logging.init(directory=params['logging_directory'], file_level=logging.INFO)
+            rm.rb_logging.init(directory=params['world']['logging_directory'], file_level=logging.INFO)
             logger = logging.getLogger('robamine')
-            if params['mode'] == 'Random':
+            if params['world']['mode'] == 'Random':
                 env = gym.make(params['env']['name'], params=params['env'])
-                for i_episode in range(params['train']['episodes']):
+                for i_episode in range(params['world']['episodes']):
                     observation = env.reset()
                     for t in range(3000):
                         action = env.action_space.sample()
@@ -24,8 +24,8 @@ def run(yml):
                             print("Episode finished after {} timesteps".format(t+1))
                             break
             else:
-                if params['load_world'] != '':
-                    world = rm.World.load(params['load_world'])
+                if params['world']['load'] != '':
+                    world = rm.World.load(params['world']['load'])
                 else:
                     world = rm.World.from_dict(params)
 
@@ -36,22 +36,22 @@ def run(yml):
                 # url = tb.launch()
                 # logger.info('TensorBoard plots at %s' % url)
 
-                if params['mode'] == 'Train & Evaluate':
-                    world.train_and_eval(n_episodes_to_train=params['train']['episodes'], \
-                                         n_episodes_to_evaluate=params['eval']['episodes'], \
-                                         evaluate_every=params['eval_every'], \
-                                         save_every=params['save_every'], \
+                if params['world']['mode'] == 'Train & Evaluate':
+                    world.train_and_eval(n_episodes_to_train=params['world']['episodes'], \
+                                         n_episodes_to_evaluate=params['world']['eval']['episodes'], \
+                                         evaluate_every=params['world']['eval']['every'], \
+                                         save_every=params['world']['save_every'], \
                                          print_progress_every=10, \
-                                         render_train=params['train']['render'], \
-                                         render_eval=params['eval']['render'])
-                elif params['mode'] == 'Train':
-                    world.train(n_episodes=params['train']['episodes'], \
-                                render=params['train']['render'], \
+                                         render_train=params['world']['render'], \
+                                         render_eval=params['world']['eval']['render'])
+                elif params['world']['mode'] == 'Train':
+                    world.train(n_episodes=params['world']['episodes'], \
+                                render=params['world']['render'], \
                                 print_progress_every=10, \
                                 save_every=params['save_every'])
-                elif params['mode'] == 'Evaluate':
-                    world.evaluate(n_episodes=params['eval']['episodes'], \
-                                   render=params['eval']['render'], \
+                elif params['world']['mode'] == 'Evaluate':
+                    world.evaluate(n_episodes=params['world']['episodes'], \
+                                   render=params['world']['render'], \
                                    print_progress_every=10,
                                    save_every=params['save_every'])
                 else:

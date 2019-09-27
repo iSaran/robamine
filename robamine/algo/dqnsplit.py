@@ -36,7 +36,6 @@ default_params = {
         'device' : 'cuda',
         'load_nets' : '',
         'load_buffers' : '',
-        'update_every_net' : True,
         'update_iter' : [1, 1, 5]
         }
 
@@ -137,12 +136,8 @@ class DQNSplit(Agent):
         i = int(np.floor(transition.action / self.nr_substates))
         self.replay_buffer[i].store(transition)
 
-        if self.params['update_every_net']:
-            for j in range(self.nr_network):
-                self.update_net(j)
-        else:
-            for _ in range(self.params['update_iter'][i]):
-                self.update_net(i)
+        for _ in range(self.params['update_iter'][i]):
+            self.update_net(i)
 
 
     def update_net(self, i):
