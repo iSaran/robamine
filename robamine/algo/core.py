@@ -10,6 +10,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 import gym
 import tensorflow as tf
 from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter, get_agent_handle, transform_sec_to_timestamp
+from robamine.utils.info import get_pc_and_version
 from robamine import rb_logging
 import logging
 import os
@@ -363,17 +364,7 @@ class World:
         self.config = config.copy()
         self.config['results'] = {}
         self.config['results']['logging_directory'] = self.log_dir
-        import socket
-        self.config['results']['hostname'] = socket.gethostname()
-
-        # Store the version of the session
-        import subprocess
-        commit_hash = subprocess.check_output(["git", "describe", '--always']).strip().decode('ascii')
-        try:
-            subprocess.check_output(["git", "diff", "--quiet"])
-        except:
-            commit_hash += '-dirty'
-        self.config['results']['version'] = commit_hash
+        self.config['results']['hostname'], _, self.config['results']['version'] = get_pc_and_version()
 
         return self
 
