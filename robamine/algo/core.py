@@ -9,14 +9,15 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, EpisodeStats, Plotter, get_agent_handle, transform_sec_to_timestamp
-from robamine.utils.info import get_pc_and_version
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, Plotter, get_agent_handle, transform_sec_to_timestamp
+from robamine.utils.info import get_pc_and_version, get_dir_size
 from robamine import rb_logging
 import logging
 import os
 import pickle
 from enum import Enum
 import time
+import datetime
 import numpy as np
 import yaml
 
@@ -266,13 +267,10 @@ class Transition:
                 ', next_state: ' + str(self.next_state) + \
                 ', terminal: ' + str(self.terminal) + ']'
 
-class WorldMode(Enum):
-    TRAIN = 1
-    EVAL = 2
-    TRAIN_EVAL = 3
+# World classes
 
 class World:
-    def __init__(self, agent, env, name=None):
+    def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
         # Environment setup
         if isinstance(env, gym.Env):
             self.env = env
@@ -288,11 +286,13 @@ class World:
             logger.exception(err)
             raise err
 
+        # State dimensions
         self.state_dim = int(self.env.observation_space.shape[0])
         if isinstance(self.env.action_space, gym.spaces.discrete.Discrete):
             self.action_dim = self.env.action_space.n
         else:
             self.action_dim = int(self.env.action_space.shape[0])
+        self.env_name = self.env.spec.id
 
         # Agent setup
         if isinstance(agent, str):
@@ -305,16 +305,18 @@ class World:
         elif isinstance(agent, dict):
             agent_name = agent['name']
             agent_handle = get_agent_handle(agent_name)
-            self.agent = agent_handle(self.state_dim, self.action_dim, agent)
+            self.agent = agent_handle(self.state_dim, self.action_dim, agent['params'])
         elif isinstance(agent, Agent):
             self.agent = agent
         else:
             err = ValueError('Provide an Agent or a string in order to create an agent for the new world')
             logger.exception(err)
             raise err
+        self.agent_name = self.agent.name
 
         self.name = name
 
+        # Check if environment and agent are compatible
         try:
             assert self.agent.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
             assert self.agent.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
@@ -322,34 +324,48 @@ class World:
             logger.exception(err)
             raise err
 
-        self.agent_name = self.agent.name
-        self.env_name = self.env.spec.id
-
+        # Setup logging directory and tf writers
         self.log_dir = rb_logging.get_logger_path()
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
-
-        self._mode = WorldMode.EVAL
-
         self.tf_writer = tf.summary.FileWriter(self.log_dir, self.agent.sess.graph)
-        self.train_stats = None
-        self.eval_stats = None
+        self.stats = None
+
+        # Setup the internal config dictionary
         self.config = {}
         self.config['results'] = {}
+        self.config['results']['logging_dir'] = self.log_dir
+        self.config['results']['n_episodes'] = 0
+        self.config['results']['n_timesteps'] = 0
+        hostname, username, version = get_pc_and_version()
+        self.config['results']['hostname'] = hostname + ':' + username
+        self.config['results']['version'] = version
+        self.config['results']['started_on'] = None
+        self.config['results']['estimated_time'] = None
+        self.config['results']['time_elapsed'] = None
+        self.config['results']['dir_size'] = 0
 
-        self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
-        self.expected_values_file.write('expected,real\n')
-
-        self.actions_file = open(os.path.join(self.log_dir, 'actions' + '.csv'), "w+")
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
+        self.episodes = n_episodes
+        self.render = render
+        self.save_every = save_every
+        self.print_every = print_every
+
+        # Other variables for running episodes
+        self.experience_time = 0.0
+        self.start_time = None
+
+        # A list in which dictionaries for episodes stats are stored
+        self.episode_stats = []
 
     @classmethod
     def from_dict(cls, config):
+        # Setup the environment
         if len(config['env']) == 1:
-            env = gym.make(config['env']['name'])
+            env = gym.make(config['env']['name'] + '-v0')
         else:
-            env = gym.make(config['env']['name'], params=config['env'])
+            env = gym.make(config['env']['name'] + '-v0', params=config['env']['params'])
         if isinstance(env.observation_space, gym.spaces.dict.Dict):
             logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
             env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
@@ -360,11 +376,13 @@ class World:
         else:
             action_dim = int(env.action_space.shape[0])
 
-        self = cls(config['agent'], env)
-        self.config = config.copy()
-        self.config['results'] = {}
-        self.config['results']['logging_directory'] = self.log_dir
-        self.config['results']['hostname'], _, self.config['results']['version'] = get_pc_and_version()
+        # Create the world
+        self = cls(config['agent'], env, config['world']['episodes'], config['world']['render'], config['world']['save_every'], 1)
+
+        # Save the config
+        self.config['world'] = config['world'].copy()
+        self.config['env'] = config['env'].copy()
+        self.config['agent'] = config['agent'].copy()
 
         return self
 
@@ -372,137 +390,46 @@ class World:
         self.env.seed(seed)
         self.agent.seed(seed)
 
-    def train(self, n_episodes, render=False, print_progress_every=1, save_every=None):
-        logger.info('%s training on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
-        self._mode = WorldMode.TRAIN
-        self._run(n_episodes, None, None, print_progress_every, render, False, save_every)
+    def init(self):
+        self.experience_time = 0
+        self.start_time = time.time()
+        self.config['results']['started_on'] = str(datetime.datetime.now())
+        self.episode_stats = []
 
-    def evaluate(self, n_episodes, render=False, print_progress_every=1, save_every=None):
-        logger.info('%s evaluating on %s for %d episodes', self.agent_name, self.env_name, n_episodes)
-        self._mode = WorldMode.EVAL
-        self._run(n_episodes, None, None, print_progress_every, render, False, save_every)
+    def run_episode(self, episode, i):
+        # Run the episode. Assumed that the episode has been already created by
+        # child classes
+        episode.run(self.render)
 
-    def train_and_eval(self, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every, render_train=False, render_eval=False, print_progress_every=1, save_every=None):
-        logger.info('%s training on %s for %d episodes and evaluating for %d episodes every %d episodes of training', self.agent_name, self.env_name, n_episodes_to_train, n_episodes_to_evaluate, evaluate_every)
-        self._mode = WorldMode.TRAIN_EVAL
-        self._run(n_episodes_to_train, evaluate_every, n_episodes_to_evaluate, print_progress_every, render_train, render_eval, save_every)
+        # Update tensorboard stats
+        self.stats.update(i, episode.stats)
+        self.episode_stats.append(episode.stats)
 
-    def _run(self, n_episodes, evaluate_every, episodes_to_evaluate, print_progress_every, render, render_eval, save_every):
-        if evaluate_every:
-            assert n_episodes % evaluate_every == 0
+        # Save agent model
+        self.save()
+        if self.save_every and (i + 1) % self.save_every == 0:
+            self.save(suffix='_' + str(i+1))
 
-        logger.debug('Start running world')
-        if self._mode == WorldMode.TRAIN:
-            train = True
-            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
-        elif self._mode == WorldMode.EVAL:
-            train = False
-            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
-        elif self._mode == WorldMode.TRAIN_EVAL:
-            train = True
-            self.train_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
-            self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
+        # Save the config in YAML file
+        self.experience_time += episode.stats['experience_time']
+        self.config['results']['n_episodes'] = i + 1
+        self.config['results']['n_timesteps'] += episode.stats['n_timesteps']
+        self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - self.start_time)
+        self.config['results']['experience_time'] = transform_sec_to_timestamp(self.experience_time)
+        self.config['results']['estimated_time'] = transform_sec_to_timestamp((self.episodes - i + 1) * (time.time() - self.start_time) / (i + 1))
+        self.config['results']['dir_size'] = get_dir_size(self.log_dir)
+        with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
+            yaml.dump(self.config, outfile, default_flow_style=False)
 
-        counter = 0
-        start_time = time.time()
-        total_n_timesteps = 0
-        experience_time = 0.0
-        for episode in range(n_episodes):
+    def run(self):
+        logger.info('%s running on %s for %d episodes', self.agent_name, self.env_name, self.episodes)
+        self.init()
+        for i in range(self.episodes):
+            self.run_episode(i)
 
-            logger.debug('Start episode: %d', episode)
-            # Run an episode
-            episode_stats = self._episode(render, train)
-            experience_time += episode_stats.experience_time
-            if train:
-                self.train_stats.update(episode, episode_stats)
-                total_n_timesteps += episode_stats.n_timesteps
-            else:
-                self.eval_stats.update(episode, episode_stats)
-
-            # Evaluate every some number of training episodes
-            if evaluate_every and (episode + 1) % evaluate_every == 0 and episodes_to_evaluate:
-                for eval_episode in range(episodes_to_evaluate):
-                    episode_stats = self._episode(render_eval, train=False)
-                    self.eval_stats.update(episodes_to_evaluate * counter + eval_episode, episode_stats)
-                counter += 1
-
-            # Print progress every print_progress_every episodes
-            if print_progress_every and (episode + 1) % print_progress_every == 0:
-                print_progress(episode, n_episodes, start_time, total_n_timesteps, experience_time)
-
-            self.config['results']['episodes'] = episode
-            self.config['results']['total_n_timesteps'] = total_n_timesteps
-            self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - start_time)
-            self.config['results']['experience_time'] = transform_sec_to_timestamp(experience_time)
-
-            if save_every and (episode + 1) % save_every == 0:
-                self.save(episode, train)
-
-
-    def _episode(self, render=False, train=False):
-        stats = EpisodeStats(self.agent.info)
-        state = self.env.reset()
-        expected_return = []
-        true_return = []
-        action_log = []
-        while True:
-            if (render):
-                self.env.render()
-
-            # Act: Explore or optimal policy?
-            if train:
-                action = self.agent.explore(state)
-            else:
-                action = self.agent.predict(state)
-                action_log.append(action)
-
-            # Execute the action on the environment and observe reward and next state
-            next_state, reward, done, info = self.env.step(action)
-            if 'experience_time' in info:
-                stats.experience_time += info['experience_time']
-
-            if train:
-                transition = Transition(state, action, reward, next_state, done)
-                self.agent.learn(transition)
-
-            for var in self.agent.info:
-                stats.info[var].append(self.agent.info[var])
-
-            # Learn
-            Q = self.agent.q_value(state, action)
-
-            if not train:
-                expected_return.append(np.squeeze(Q))
-                true_return.append(reward)
-                for i in range(0, len(true_return) - 1):
-                    true_return[i] += reward
-
-            state = next_state
-
-            # self.train_stats.update_timestep({'reward': reward, 'q_value': Q})
-
-            # Compile stats
-            stats.reward.append(reward)
-            stats.q_value.append(Q)
-
-            if done:
-                break
-
-        if not train:
-            for i in range (0, len(true_return)):
-                true_return[i] = true_return[i] / (len(true_return) - i)
-                self.expected_values_file.write(str(expected_return[i]) + ',' + str(true_return[i]) + '\n')
-                self.expected_values_file.flush()
-
-            for i in range(len(action_log) - 1):
-                self.actions_file.write(str(action_log[i]) + ',')
-            self.actions_file.write(str(action_log[len(action_log) - 1]) + '\n')
-            self.actions_file.flush()
-
-        if 'success' in info:
-            stats.success = info['success']
-        stats.n_timesteps = len(stats.reward)
-        return stats
+            # Print progress
+            if self.print_every and (i + 1) % self.print_every == 0:
+                print_progress(i, self.episodes, self.start_time, self.config['results']['n_timesteps'], self.experience_time)
 
     def plot(self, batch_size=5):
         if self.train_stats:
@@ -538,14 +465,204 @@ class World:
         logger.info('World loaded from %s', directory)
         return self
 
-    def save(self, episode, train):
-        self.agent.save(os.path.join(self.log_dir, 'model.pkl'))
+    def save(self, suffix=''):
+        pickle.dump(self.episode_stats, open(os.path.join(self.log_dir, 'episode_stats.pkl'), 'wb'))
 
-        if train:
-            self.agent.save(os.path.join(self.log_dir, 'model_' + str(episode) + '.pkl'))
+class TrainWorld(World):
+    def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
+        super(TrainWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every, name)
+        self.stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
 
-        with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
-            yaml.dump(self.config, outfile, default_flow_style=False)
+    def run_episode(self, i):
+        episode = TrainingEpisode(self.agent, self.env)
+        super(TrainWorld, self).run_episode(episode, i)
 
-        logger.info('World saved to %s', self.log_dir)
+    def save(self, suffix=''):
+        super(TrainWorld, self).save(suffix)
+        agent_model_file_name = os.path.join(self.log_dir, 'model' + suffix + '.pkl')
+        self.agent.save(agent_model_file_name)
 
+class EvalWorld(World):
+    def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
+        super(EvalWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every, name)
+        self.stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
+        self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
+        self.expected_values_file.write('expected,real\n')
+        self.actions_file = open(os.path.join(self.log_dir, 'actions' + '.csv'), "w+")
+
+    def run_episode(self, i):
+        episode = TestingEpisode(self.agent, self.env)
+        super(EvalWorld, self).run_episode(episode, i)
+        for i in range (0, episode.stats['n_timesteps']):
+            self.expected_values_file.write(str(episode.stats['q_value'][i]) + ',' + str(episode.stats['monte_carlo_return'][i]) + '\n')
+            self.expected_values_file.flush()
+
+        for i in range(len(episode.stats['actions_performed']) - 1):
+            self.actions_file.write(str(episode.stats['actions_performed'][i]) + ',')
+        self.actions_file.write(str(episode.stats['actions_performed'][-1]) + '\n')
+        self.actions_file.flush()
+
+class TrainEvalWorld(World):
+    def __init__(self, agent, env, n_episodes, render, save_every, print_every, eval_episodes, render_eval, eval_every, name=None):
+        super(TrainEvalWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every, name)
+        self.eval_episodes = eval_episodes
+        self.render_eval = render_eval
+        self.eval_every = eval_every
+
+        self.stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
+        self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
+        self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
+        self.expected_values_file.write('expected,real\n')
+        self.actions_file = open(os.path.join(self.log_dir, 'actions' + '.csv'), "w+")
+
+        self.counter = 0
+
+        self.episode_stats_eval = []
+
+    def init(self):
+        super(TrainEvalWorld, self).init()
+        self.episode_stats_eval = []
+        self.counter = 0
+
+    def run_episode(self, i):
+        episode = TrainingEpisode(self.agent, self.env)
+        super(TrainEvalWorld, self).run_episode(episode, i)
+
+        # Evaluate every some number of training episodes
+        if (i + 1) % self.eval_every == 0:
+            for j in range(self.eval_episodes):
+                episode = TestingEpisode(self.agent, self.env)
+                episode.run(self.render_eval)
+                self.eval_stats.update(self.eval_episodes * self.counter + j, episode.stats)
+                self.episode_stats_eval.append(episode.stats)
+                pickle.dump(self.episode_stats_eval, open(os.path.join(self.log_dir, 'episode_stats_eval.pkl'), 'wb'))
+
+                for k in range (0, episode.stats['n_timesteps']):
+                    self.expected_values_file.write(str(episode.stats['q_value'][k]) + ',' + str(episode.stats['monte_carlo_return'][k]) + '\n')
+                    self.expected_values_file.flush()
+
+                for k in range(len(episode.stats['actions_performed']) - 1):
+                    self.actions_file.write(str(episode.stats['actions_performed'][k]) + ',')
+                self.actions_file.write(str(episode.stats['actions_performed'][-1]) + '\n')
+                self.actions_file.flush()
+
+            self.counter += 1
+
+    def save(self, suffix=''):
+        super(TrainEvalWorld, self).save(suffix)
+        agent_model_file_name = os.path.join(self.log_dir, 'model' + suffix + '.pkl')
+        self.agent.save(agent_model_file_name)
+
+    @classmethod
+    def from_dict(cls, config):
+        # Setup the environment
+        if len(config['env']) == 1:
+            env = gym.make(config['env']['name'] + '-v0')
+        else:
+            env = gym.make(config['env']['name'] + '-v0', params=config['env']['params'])
+        if isinstance(env.observation_space, gym.spaces.dict.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
+            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+
+        state_dim = int(env.observation_space.shape[0])
+        if isinstance(env.action_space, gym.spaces.discrete.Discrete):
+            action_dim = env.action_space.n
+        else:
+            action_dim = int(env.action_space.shape[0])
+
+        # Create the world
+        self = cls(config['agent'], env, config['world']['episodes'], config['world']['render'], config['world']['save_every'], 0, config['world']['eval']['episodes'], config['world']['eval']['render'], config['world']['eval']['every'])
+
+        # Save the config
+        self.config['world'] = config['world'].copy()
+        self.config['env'] = config['env'].copy()
+        self.config['agent'] = config['agent'].copy()
+
+        return self
+
+# Episode classes
+
+class Episode:
+    '''Represents a rollout of multiple timesteps of interaction between
+    environment and agent'''
+    def __init__(self, agent, env):
+        self.env = env
+        self.agent = agent
+
+        # Set up stats dictionary
+        self.stats = {}
+        self.stats['n_timesteps'] = 0
+        self.stats['experience_time'] = 0
+        self.stats['reward'] = []
+        self.stats['q_value'] = []
+        self.stats['success'] = False
+        self.stats['info'] = {}
+        self.stats['actions_performed'] = []
+        self.stats['monte_carlo_return'] = []
+        for key in self.agent.info:
+            self.stats['info'][key] = []
+
+    def run(self, render):
+        state = self.env.reset()
+
+        while True:
+            if (render):
+                self.env.render()
+            action = self._action_policy(state)
+            next_state, reward, done, info = self.env.step(action)
+            transition = Transition(state, action, reward, next_state, done)
+            self._learn(transition)
+            self._update_stats_step(transition, info)
+
+            state = next_state
+            if done:
+                break
+
+        self._update_states_episode(info)
+
+    def _action_policy(self, state):
+        raise NotImplementedError('Should be implemented by child classes.')
+
+    def _learn(self, transition):
+        raise NotImplementedError('Should be implemented by child classes.')
+
+    def _update_stats_step(self, transition, info):
+        self.stats['n_timesteps'] += 1
+        if 'experience_time' in info:
+            self.stats['experience_time'] += info['experience_time']
+        self.stats['reward'].append(transition.reward)
+        self.stats['q_value'].append(self.agent.q_value(transition.state, transition.action))
+        for var in self.agent.info:
+            self.stats['info'][var].append(self.agent.info[var])
+
+        self.stats['actions_performed'].append(transition.action)
+        self.stats['monte_carlo_return'].append(transition.reward)
+        for i in range(0, len(self.stats['monte_carlo_return']) - 1):
+            self.stats['monte_carlo_return'][i] += transition.reward
+
+    def _update_states_episode(self, last_info):
+        if 'success' in last_info:
+            self.stats['success'] = last_info['success']
+
+        for i in range (0, self.stats['n_timesteps']):
+            self.stats['monte_carlo_return'][i] = self.stats['monte_carlo_return'][i] / (self.stats['n_timesteps'] - i)
+
+class TrainingEpisode(Episode):
+    def __init__(self, agent, env):
+        super(TrainingEpisode, self).__init__(agent, env)
+
+    def _action_policy(self, state):
+        return self.agent.explore(state)
+
+    def _learn(self, transition):
+        self.agent.learn(transition)
+
+class TestingEpisode(Episode):
+    def __init__(self, agent, env):
+        super(TestingEpisode, self).__init__(agent, env)
+
+    def _action_policy(self, state):
+        return self.agent.predict(state)
+
+    def _learn(self, transition):
+        pass
