@@ -12,3 +12,4 @@ params:
   split: False
   extra_primitive: False
   all_equal_height_prob: 0.2
+  finger_size: [0.005, 0.01]

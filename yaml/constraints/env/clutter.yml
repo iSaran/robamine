@@ -25,8 +25,8 @@ obstacle_height_range:
   range: [0.001, 0.1]
   decimals: 3
 push_distance:
-  type: rangefloat
-  range: [0.0, 0.5]
+  type: floatrange
+  range: [0.001, 0.5]
   decimals: 2
 split:
   type: bool
@@ -36,3 +36,7 @@ all_equal_height_prob:
   type: float
   range: [0.0, 1.0]
   decimals: 2
+finger_size:
+  type: floatrange
+  range: [0.001, 0.02]
+  decimals: 3

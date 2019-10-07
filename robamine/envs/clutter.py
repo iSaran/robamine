@@ -24,6 +24,8 @@ from robamine.utils.orientation import rot2quat
 import cv2
 from mujoco_py.cymj import MjRenderContext
 
+OBSERVATION_DIM = 265
+
 class PushingPrimitiveC:
     def __init__(self, distance = 0.1, direction_theta = 0.0, surface_size = 0.30, object_height = 0.06, finger_size = 0.02):
         self.distance = surface_size + distance
@@ -111,9 +113,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.nr_primitives = 2
 
         if self.params['split']:
-            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * 263
+            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * OBSERVATION_DIM
         else:
-            obs_dim = 263
+            obs_dim = OBSERVATION_DIM
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -294,6 +296,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 f.append(distances[2])
                 f.append(distances[3])
                 f.append(rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1]))
+                f.append(rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1]))
                 features.append(f)
 
             final_feature = np.append(features[0], features[1], axis=0)
@@ -310,6 +313,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             features.append(distances[2])
             features.append(distances[3])
             features.append(rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1]))
+            features.append(rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1]))
             final_feature = np.array(features)
 
         return final_feature, points_above_table, bbox
@@ -580,13 +584,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
-    def generate_random_scene(self, finger_height_range=[.005, .005],
-                                    target_length_range=[.01, .03], target_width_range=[.01, .03],
+    def generate_random_scene(self, target_length_range=[.01, .03], target_width_range=[.01, .03],
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
-        finger_height = self.rng.uniform(finger_height_range[0], finger_height_range[1])
+        finger_height = self.rng.uniform(self.params['finger_size'][0], self.params['finger_size'][1])
         self.sim.model.geom_size[geom_id][0] = finger_height
 
         random_qpos = self.init_qpos.copy()
