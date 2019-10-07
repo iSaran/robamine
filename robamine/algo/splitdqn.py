@@ -206,12 +206,24 @@ class SplitDQN(Agent):
         model = pickle.load(open(file_path, 'rb'))
         params = model['params']
         self = cls(model['state_dim'], model['action_dim'], params)
-        for i in range(self.nr_network):
-            self.network[i].load_state_dict(model['network'][i])
-            self.target_network[i].load_state_dict(model['target_network'][i])
+        self.load_trainable(model)
         self.learn_step_counter = model['learn_step_counter']
         logger.info('Agent loaded from %s', file_path)
         return self
+
+    def load_trainable(self, input):
+        if isinstance(input, dict):
+            trainable = input
+            logger.warn('Trainable parameters loaded from dictionary.')
+        elif isinstance(input, str):
+            trainable = pickle.load(open(input, 'rb'))
+            logger.warn('Trainable parameters loaded from: ' + input)
+        else:
+            raise ValueError('Dict or string is valid')
+
+        for i in range(self.nr_network):
+            self.network[i].load_state_dict(trainable['network'][i])
+            self.target_network[i].load_state_dict(trainable['target_network'][i])
 
     def save(self, file_path):
         model = {}
@@ -224,4 +236,3 @@ class SplitDQN(Agent):
         model['state_dim'] = self.state_dim
         model['action_dim'] = self.action_dim
         pickle.dump(model, open(file_path, 'wb'))
-        logger.info('Agent saved to %s', file_path)

@@ -146,6 +146,11 @@ class Agent:
         logger.error(error)
         raise NotImplementedError(error)
 
+    def load_trainable(self):
+        error = 'Agent ' + self.name + ' does not provide loading capabilities.'
+        logger.error(error)
+        raise NotImplementedError(error)
+
     def seed(self, seed):
         error = 'Agent ' + self.name + ' does cannot be seeded.'
         logger.error(error)
@@ -379,6 +384,9 @@ class World:
         # Create the world
         self = cls(config['agent'], env, config['world']['episodes'], config['world']['render'], config['world']['save_every'], 1)
 
+        if 'trainable_params' in config['agent'] and config['agent']['trainable_params'] != '':
+            self.agent.load_trainable(config['agent']['trainable_params'])
+
         # Save the config
         self.config['world'] = config['world'].copy()
         self.config['env'] = config['env'].copy()
@@ -572,6 +580,9 @@ class TrainEvalWorld(World):
 
         # Create the world
         self = cls(config['agent'], env, config['world']['episodes'], config['world']['render'], config['world']['save_every'], 0, config['world']['eval']['episodes'], config['world']['eval']['render'], config['world']['eval']['every'])
+
+        if 'trainable_params' in config['agent'] and config['agent']['trainable_params'] != '':
+            self.agent.load_trainable(config['agent']['trainable_params'])
 
         # Save the config
         self.config['world'] = config['world'].copy()

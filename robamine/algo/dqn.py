@@ -149,11 +149,24 @@ class DQN(Agent):
         model = pickle.load(open(file_path, 'rb'))
         params = model['params']
         self = cls(model['state_dim'], model['action_dim'], params)
-        self.network.load_state_dict(model['network'])
-        self.target_network.load_state_dict(model['target_network'])
+        self.load_trainable(model)
         self.learn_step_counter = model['learn_step_counter']
         logger.info('Agent loaded from %s', file_path)
         return self
+
+    def load_trainable(self, input):
+        if isinstance(input, dict):
+            trainable = input
+            logger.warn('Trainable parameters loaded from dictionary.')
+        elif isinstance(input, str):
+            trainable = pickle.load(open(input, 'rb'))
+            logger.warn('Trainable parameters loaded from: ' + input)
+        else:
+            raise ValueError('Dict or string is valid')
+
+        self.network.load_state_dict(trainable['network'])
+        self.target_network.load_state_dict(trainable['target_network'])
+
 
     def save(self, file_path):
         model = {}
@@ -164,7 +177,6 @@ class DQN(Agent):
         model['state_dim'] = self.state_dim
         model['action_dim'] = self.action_dim
         pickle.dump(model, open(file_path, 'wb'))
-        logger.info('Agent saved to %s', file_path)
 
     def q_value(self, state, action):
         s = torch.FloatTensor(state).to(self.device)

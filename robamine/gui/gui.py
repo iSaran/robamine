@@ -342,6 +342,9 @@ class RobamineGUI(QMainWindow):
                 except yaml.YAMLError as exc:
                     print(exc)
 
+        if 'results' in self.state and 'logging_dir' in self.state['results']:
+            self.state['agent']['trainable_params'] = os.path.join(self.state['results']['logging_dir'], 'model.pkl')
+
         self.state2gui()
 
     def episodes_input_cb(self, text):
