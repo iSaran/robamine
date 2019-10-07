@@ -25,7 +25,7 @@ obstacle_height_range:
   range: [0.001, 0.1]
   decimals: 3
 push_distance:
-  type: float
+  type: rangefloat
   range: [0.0, 0.5]
   decimals: 2
 split:

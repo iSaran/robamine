@@ -15,7 +15,7 @@ import os
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
 from robamine.utils.orientation import Quaternion
-from robamine.utils.math import sigmoid
+from robamine.utils.math import sigmoid, rescale
 import robamine.utils.cv_tools as cv_tools
 import math
 
@@ -23,20 +23,6 @@ from robamine.utils.orientation import rot2quat
 
 import cv2
 from mujoco_py.cymj import MjRenderContext
-
-default_params = {
-        'name' : 'Clutter-v0',
-        'nr_of_actions' : 8,
-        'render' : True,
-        'nr_of_obstacles' : [5, 10],
-        'target_probability_box': 1.0,
-        'obstacle_probability_box': 1.0,
-        'push_distance' : 0.2,
-        'target_height_range' : [.005, .01],
-        'obstacle_height_range' : [.005, .02],
-        'extra_primitive' : True,
-        'all_equal_height_prob' : 0.1
-        }
 
 class PushingPrimitiveC:
     def __init__(self, distance = 0.1, direction_theta = 0.0, surface_size = 0.30, object_height = 0.06, finger_size = 0.02):
@@ -98,7 +84,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     """
     The class for the Gym environment.
     """
-    def __init__(self, params = default_params):
+    def __init__(self, params):
         self.params = params
         path = os.path.join(os.path.dirname(__file__),
                             "assets/xml/robots/clutter.xml")
@@ -167,6 +153,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
         self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
         self.success = False
+        self.push_distance = 0.0
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -306,6 +293,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 f.append(distances[1])
                 f.append(distances[2])
                 f.append(distances[3])
+                f.append(rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1]))
                 features.append(f)
 
             final_feature = np.append(features[0], features[1], axis=0)
@@ -321,6 +309,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             features.append(distances[1])
             features.append(distances[2])
             features.append(distances[3])
+            features.append(rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1]))
             final_feature = np.array(features)
 
         return final_feature, points_above_table, bbox
@@ -340,11 +329,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.params['discrete']:
             theta = action * 2 * math.pi / (self.action_space.n / self.nr_primitives)
             if action > 2 * int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
-                push = PushingPrimitiveC(distance=self.params['push_distance'], direction_theta=theta, object_height=self.target_height, finger_size=self.finger_length)
+                push = PushingPrimitiveC(distance=self.push_distance, direction_theta=theta, object_height=self.target_height, finger_size=self.finger_length)
             elif action > int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
-                push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=False, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+                push = Push(direction_theta=theta, distance=self.push_distance, object_height = self.target_height, target=False, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
             else:
-                push = Push(direction_theta=theta, distance=self.params['push_distance'], object_height = self.target_height, target=True, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+                push = Push(direction_theta=theta, distance=self.push_distance, object_height = self.target_height, target=True, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
         else:
             my_action = action.copy()
 
@@ -362,7 +351,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             else:
                 push_target = False
 
-            push = Push(direction_theta=my_action[0], distance=self.params['push_distance'], object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
+            push = Push(direction_theta=my_action[0], distance=self.push_distance, object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 
         # Transform pushing from target frame to world frame
         push_direction = np.array([push.direction[0], push.direction[1], 0])
@@ -601,6 +590,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.sim.model.geom_size[geom_id][0] = finger_height
 
         random_qpos = self.init_qpos.copy()
+
+        # Randomize pushing distance
+        self.push_distance = self.rng.uniform(self.params['push_distance'][0], self.params['push_distance'][1])
 
         # Randomize surface size
         self.surface_size[0] = self.rng.uniform(surface_length_range[0], surface_length_range[1])
