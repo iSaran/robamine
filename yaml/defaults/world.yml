@@ -1,0 +1,15 @@
+agent:
+  name: DQN
+env:
+  name: Clutter
+world:
+  comments: ''
+  episodes: 1000
+  logging_dir: /tmp/robamine_logs/
+  mode: Train & Evaluate
+  render: false
+  save_every: 20
+  eval:
+    episodes: 10
+    render: false
+    every: 20

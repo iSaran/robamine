@@ -23,6 +23,30 @@ logger = logging.getLogger('robamine.algo.util')
 
 import importlib
 
+class Transition:
+    def __init__(self,
+                 state=None,
+                 action=None,
+                 reward=None,
+                 next_state=None,
+                 terminal=None):
+        self.state = state
+        self.action = action
+        self.reward = reward
+        self.next_state = next_state
+        self.terminal = terminal
+
+    def array(self):
+        return np.array([self.state, self.action, self.reward, self.next_state, self.terminal])
+
+    def __str__(self):
+        return '[state: ' + str(self.state) + \
+                ', action: ' + str(self.action) + \
+                ', reward: ' + str(self.reward) + \
+                ', next_state: ' + str(self.next_state) + \
+                ', terminal: ' + str(self.terminal) + ']'
+
+
 def get_agent_handle(agent_name):
     module = importlib.import_module('robamine.algo.' + agent_name.lower())
     handle = getattr(module, agent_name)
@@ -166,17 +190,6 @@ class NormalNoise(Noise):
     def __repr__(self):
         return 'NormalNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
 
-class EpisodeStats:
-    def __init__(self, additional_info = {}):
-        self.n_episodes = 0
-        self.experience_time = 0
-        self.reward = []
-        self.q_value = []
-        self.success = False
-        self.info = {}
-        for key in additional_info:
-            self.info[key] = []
-
 class Stats:
     """
     Compiles stats from training and evaluation. The stats (the attributes of
@@ -241,13 +254,13 @@ class Stats:
         """
         logger.debug('Stats: Updating for episode.')
 
-        row = [episode_data.n_timesteps, int(episode_data.success)]
+        row = [episode_data['n_timesteps'], int(episode_data['success'])]
         for operation in self.stats_name:
             operation = getattr(importlib.import_module('numpy'), operation)
-            row.append(np.squeeze(operation(np.array(episode_data.reward))))
-            row.append(np.squeeze(operation(np.array(episode_data.q_value))))
-            for k in episode_data.info:
-                row.append(np.squeeze(operation(np.array(episode_data.info[k]))))
+            row.append(np.squeeze(operation(np.array(episode_data['reward']))))
+            row.append(np.squeeze(operation(np.array(episode_data['q_value']))))
+            for k in episode_data['info']:
+                row.append(np.squeeze(operation(np.array(episode_data['info'][k]))))
         self.data_stream.log(episode, row)
 
 class Plotter:
@@ -340,4 +353,3 @@ class Plotter:
             result.to_csv(os.path.join(file_path, 'batch_' + file_name))
             logger.info('Writing batch file to: %s', os.path.join(file_path, 'batch_' + file_name))
         return result
-

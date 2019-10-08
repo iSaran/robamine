@@ -1,0 +1,8 @@
+name: 'ClutterReal'
+params:
+  discrete: True
+  nr_of_actions: 16
+  push_distance: 0.1
+  split: True
+  extra_primitive: False
+  target_bb: [0.031, 0.031, 0.025]

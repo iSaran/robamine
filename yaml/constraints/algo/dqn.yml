@@ -1,0 +1,44 @@
+replay_buffer_size:
+  type: int
+  range: [0, 2000000]
+low_level_actions:
+  type: int
+  range: [0, 64]
+batch_size:
+  type: int
+  range: [1, 132]
+discount:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 3
+tau:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 3
+double_dqn:
+  type: bool
+epsilon_start:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 3
+epsilon_end:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 3
+epsilon_decay: # number of learning steps for half epsilon, set to 0 if no decay is needed
+  type: int
+  range: [0, 50000]
+learning_rate:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 5
+hidden_units:
+  type: intvectorx
+  range: [1, 1000]
+device:
+  type: combo
+  options: ['cpu', 'cuda']
+load_nets:
+  type: str
+load_buffers:
+  type: str

@@ -1,4 +1,4 @@
-# Robamine ![version](https://img.shields.io/badge/version-v0.1-blue.svg) 
+# Robamine ![version](https://img.shields.io/badge/version-v0.1-blue.svg)
 
 Python code and OpenAI Gym environments for testing RL algorithms with models of ARL's robots.
 
@@ -100,27 +100,18 @@ export PYTHONPATH="$VIRTUAL_ENV/lib"
 
 And finally, uncomment the commented imports of the ROS environments from `robamine/envs/__init__.py`.
 
-## Run examples
+## Run
 
-### Train Pendulum with DDPG:
-
-```bash
-cd robamine/examples
-python train-ddpg-pendulum.py
-```
-
-In another terminal (with the virtual env activated), open tensorboard to see plots and network graph:
-
-```
-tensorboard --logdir=PATH_TO_LOGS
-```
-where `PATH_TO_LOGS` the path showed in console in the beginning of the training example.
-
-### Train a Mujoco environment:
+To run with GUI simply run the following script (recommended):
 
 ```bash
-cd robamine/examples
-python train-ddpg-sphere-reacher.py
+python run.py
+```
+
+To run without GUI:
+
+```bash
+python run.py --no-gui --yml=YAML_FILE
 ```
 
 ## Run unit tests
@@ -141,3 +132,10 @@ make html
 ```
 
 It will be build in `doc/_build/index.html`.
+
+## Development
+
+Follow the steps below in order to add a new algorithm or environment:
+
+1. Add the Python class of the agent/environment in `algo` or `env`.
+2. Add its name in `yaml/available.yml`, its default values as a yaml file in `yaml/defaults` and value constraints in `yaml/constraints`.

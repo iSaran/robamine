@@ -24,7 +24,7 @@ env:
   extra_primitive: False
   all_equal_height_prob: 0.1
 agent:
-  name: 'DQNSplit'
+  name: 'SplitDQN'
   replay_buffer_size: 1000000
   batch_size: [64, 64]
   discount: 0.9

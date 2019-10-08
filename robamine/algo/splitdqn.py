@@ -17,10 +17,10 @@ import math
 import os
 
 import logging
-logger = logging.getLogger('robamine.algo.dqnsplit')
+logger = logging.getLogger('robamine.algo.splitdqn')
 
 default_params = {
-        'name' : 'DQNSplit',
+        'name' : 'SplitDQN',
         'replay_buffer_size' : [1e6, 1e6],
         'batch_size' : [128, 128],
         'discount' : 0.9,
@@ -63,9 +63,9 @@ class QNetwork(nn.Module):
         action_prob = self.out(x)
         return action_prob
 
-class DQNSplit(Agent):
+class SplitDQN(Agent):
     def __init__(self, state_dim, action_dim, params = default_params):
-        super().__init__(state_dim, action_dim, 'DQNSplit', params)
+        super().__init__(state_dim, action_dim, 'SplitDQN', params)
 
         # The number of networks is the number of high level actions (e.g. push
         # target, push obstacles, grasp). One network per high level action.
@@ -95,7 +95,7 @@ class DQNSplit(Agent):
             elif self.params['loss'][i] == 'huber':
                 self.loss.append(nn.SmoothL1Loss())
             else:
-                raise ValueError('DQNSplit: Loss should be mse or huber')
+                raise ValueError('SplitDQN: Loss should be mse or huber')
             self.info['qnet_' +  str(i) + '_loss'] = 0
 
         self.learn_step_counter = 0
@@ -113,7 +113,7 @@ class DQNSplit(Agent):
             for i in range(self.nr_network):
                 filepath = os.path.join(self.params['load_buffers'], 'replay_buffer' + str(i) + '.pkl')
                 self.replay_buffer[i] = ReplayBuffer.load(filepath)
-                logger.warn("DQNSplit: Preloaded buffer of size " + str(self.replay_buffer[i].size()) + " from " + filepath)
+                logger.warn("SplitDQN: Preloaded buffer of size " + str(self.replay_buffer[i].size()) + " from " + filepath)
 
     def predict(self, state):
         action_value = []
@@ -206,12 +206,24 @@ class DQNSplit(Agent):
         model = pickle.load(open(file_path, 'rb'))
         params = model['params']
         self = cls(model['state_dim'], model['action_dim'], params)
-        for i in range(self.nr_network):
-            self.network[i].load_state_dict(model['network'][i])
-            self.target_network[i].load_state_dict(model['target_network'][i])
+        self.load_trainable(model)
         self.learn_step_counter = model['learn_step_counter']
         logger.info('Agent loaded from %s', file_path)
         return self
+
+    def load_trainable(self, input):
+        if isinstance(input, dict):
+            trainable = input
+            logger.warn('Trainable parameters loaded from dictionary.')
+        elif isinstance(input, str):
+            trainable = pickle.load(open(input, 'rb'))
+            logger.warn('Trainable parameters loaded from: ' + input)
+        else:
+            raise ValueError('Dict or string is valid')
+
+        for i in range(self.nr_network):
+            self.network[i].load_state_dict(trainable['network'][i])
+            self.target_network[i].load_state_dict(trainable['target_network'][i])
 
     def save(self, file_path):
         model = {}
@@ -224,5 +236,3 @@ class DQNSplit(Agent):
         model['state_dim'] = self.state_dim
         model['action_dim'] = self.action_dim
         pickle.dump(model, open(file_path, 'wb'))
-        logger.info('Agent saved to %s', file_path)
-

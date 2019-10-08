@@ -2,7 +2,7 @@ import argparse
 import yaml
 import gym
 from robamine.utils.memory import ReplayBuffer
-from robamine.algo.core import Transition
+from robamine.algo.util import Transition
 import numpy as np
 import robamine as rm
 import logging

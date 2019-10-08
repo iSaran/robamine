@@ -2,7 +2,7 @@ from random import Random
 from collections import deque
 import pickle
 import numpy as np
-from robamine.algo.core import Transition
+from robamine.algo.util import Transition
 
 class ReplayBuffer:
     """

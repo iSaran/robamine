@@ -1,0 +1,17 @@
+discrete:
+  type: bool
+nr_of_actions:
+  type: int
+  range: [1, 64]
+push_distance:
+  type: float
+  range: [0.0, 0.5]
+  decimals: 2
+split:
+  type: bool
+extra_primitive:
+  type: bool
+target_bb:
+  type: floatvector
+  range: [0.001, 0.1]
+  decimals: 3

@@ -1,0 +1,38 @@
+discrete:
+  type: bool
+nr_of_actions:
+  type: int
+  range: [1, 64]
+render:
+  type: bool
+nr_of_obstacles:
+  type: intrange
+  range: [0, 13]
+target_probability_box:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 2
+target_height_range:
+  type: floatrange
+  range: [0.001, 0.1]
+  decimals: 3
+obstacle_probability_box:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 2
+obstacle_height_range:
+  type: floatrange
+  range: [0.001, 0.1]
+  decimals: 3
+push_distance:
+  type: float
+  range: [0.0, 0.5]
+  decimals: 2
+split:
+  type: bool
+extra_primitive:
+  type: bool
+all_equal_height_prob:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 2
