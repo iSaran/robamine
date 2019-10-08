@@ -89,6 +89,11 @@
                    </item>
                    <item>
                     <property name="text">
+                     <string>Data Acquisition</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
                      <string>Resume</string>
                     </property>
                    </item>

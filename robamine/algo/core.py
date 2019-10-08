@@ -11,6 +11,7 @@ import gym
 import tensorflow as tf
 from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, Plotter, get_agent_handle, transform_sec_to_timestamp, Transition
 from robamine.utils.info import get_pc_and_version, get_dir_size
+from robamine.utils.memory import ReplayBuffer
 from robamine import rb_logging
 import logging
 import os
@@ -287,7 +288,8 @@ class World:
         elif isinstance(agent, dict):
             agent_name = agent['name']
             agent_handle = get_agent_handle(agent_name)
-            self.agent = agent_handle(self.state_dim, self.action_dim, agent['params'])
+            agent_params = agent['params'] if 'params' in agent else {}
+            self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
         elif isinstance(agent, Agent):
             self.agent = agent
         else:
@@ -568,6 +570,21 @@ class TrainEvalWorld(World):
 
         return self
 
+class DataAcquisitionWorld(World):
+    def __init__(self, agent, env, n_episodes, render, save_every, print_every):
+        super(DataAcquisitionWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every)
+        self.stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
+        self.data = ReplayBuffer(1e6)
+
+    def run_episode(self, i):
+        episode = DataAcquisitionEpisode(self.agent, self.env)
+        super(DataAcquisitionWorld, self).run_episode(episode, i)
+        self.data.merge(episode.buffer)
+        self.data.save(os.path.join(self.log_dir, 'data.pkl'))
+
+    def save(self, suffix=''):
+        pass
+
 # Episode classes
 
 class Episode:
@@ -602,7 +619,7 @@ class Episode:
             self._learn(transition)
             self._update_stats_step(transition, info)
 
-            state = next_state
+            state = next_state.copy()
             if done:
                 break
 
@@ -654,3 +671,14 @@ class TestingEpisode(Episode):
 
     def _learn(self, transition):
         pass
+
+class DataAcquisitionEpisode(Episode):
+    def __init__(self, agent, env, buffer_size=1e6):
+        super(DataAcquisitionEpisode, self).__init__(agent, env)
+        self.buffer = ReplayBuffer(buffer_size)
+
+    def _action_policy(self, state):
+        return self.agent.predict(state)
+
+    def _learn(self, transition):
+        self.buffer.store(transition)

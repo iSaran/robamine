@@ -7,7 +7,7 @@ from robamine.utils.qt import QRange, QDoubleRange, QDoubleVector, QDoubleVector
 
 # Robamine
 from robamine import rb_logging
-from robamine.algo.core import TrainWorld, EvalWorld, TrainEvalWorld
+from robamine.algo.core import TrainWorld, EvalWorld, TrainEvalWorld, DataAcquisitionWorld
 from robamine.utils.info import get_pc_and_version, start_tensorboard_server, bytes2human
 
 # General
@@ -43,6 +43,8 @@ class RobamineApp(QObject):
             self.world = EvalWorld.from_dict(self.params)
         elif self.params['world']['mode'] == 'Train & Evaluate':
             self.world = TrainEvalWorld.from_dict(self.params)
+        elif self.params['world']['mode'] == 'Data Acquisition':
+            self.world = DataAcquisitionWorld.from_dict(self.params)
 
         self.termination_flag = False
 
