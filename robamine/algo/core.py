@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, Plotter, get_agent_handle, transform_sec_to_timestamp
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, Plotter, get_agent_handle, transform_sec_to_timestamp, Transition
 from robamine.utils.info import get_pc_and_version, get_dir_size
 from robamine import rb_logging
 import logging
@@ -248,29 +248,6 @@ class Network:
         self = cls.create(sess, input_dim, hidden_units, output_dim, name)
         sess.run([self.net_params[i].assign(trainable[i]) for i in range(len(self.net_params))])
         return self
-
-class Transition:
-    def __init__(self,
-                 state=None,
-                 action=None,
-                 reward=None,
-                 next_state=None,
-                 terminal=None):
-        self.state = state
-        self.action = action
-        self.reward = reward
-        self.next_state = next_state
-        self.terminal = terminal
-
-    def array(self):
-        return np.array([self.state, self.action, self.reward, self.next_state, self.terminal])
-
-    def __str__(self):
-        return '[state: ' + str(self.state) + \
-                ', action: ' + str(self.action) + \
-                ', reward: ' + str(self.reward) + \
-                ', next_state: ' + str(self.next_state) + \
-                ', terminal: ' + str(self.terminal) + ']'
 
 # World classes
 

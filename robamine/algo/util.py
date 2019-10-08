@@ -23,6 +23,30 @@ logger = logging.getLogger('robamine.algo.util')
 
 import importlib
 
+class Transition:
+    def __init__(self,
+                 state=None,
+                 action=None,
+                 reward=None,
+                 next_state=None,
+                 terminal=None):
+        self.state = state
+        self.action = action
+        self.reward = reward
+        self.next_state = next_state
+        self.terminal = terminal
+
+    def array(self):
+        return np.array([self.state, self.action, self.reward, self.next_state, self.terminal])
+
+    def __str__(self):
+        return '[state: ' + str(self.state) + \
+                ', action: ' + str(self.action) + \
+                ', reward: ' + str(self.reward) + \
+                ', next_state: ' + str(self.next_state) + \
+                ', terminal: ' + str(self.terminal) + ']'
+
+
 def get_agent_handle(agent_name):
     module = importlib.import_module('robamine.algo.' + agent_name.lower())
     handle = getattr(module, agent_name)

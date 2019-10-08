@@ -8,11 +8,11 @@ Most of this is taken from https://github.com/sweetice/Deep-reinforcement-learni
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from robamine.algo.core import Agent, Transition
+from robamine.algo.core import Agent
 from collections import deque
 from random import Random
 import numpy as np
-from robamine.algo.util import OrnsteinUhlenbeckActionNoise
+from robamine.algo.util import OrnsteinUhlenbeckActionNoise, Transition
 import pickle
 
 import logging
