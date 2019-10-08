@@ -39,6 +39,17 @@ default_params = {
         'update_iter' : [1, 1, 5]
         }
 
+def split_replay_buffer(buffer, nr_buffers, nr_substates):
+    """ Splits a buffer with mixed transitions (from different primitives) to
+    one buffer per primitive.
+    """
+    result = []
+    for _ in range(nr_buffers):
+        result.append(ReplayBuffer(1e6))
+    for i in range(buffer.size()):
+        result[int(np.floor(buffer(i).action / nr_substates))].store(buffer(i))
+    return result
+
 class QNetwork(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_units):
         super(QNetwork, self).__init__()
@@ -110,10 +121,10 @@ class SplitDQN(Agent):
                 self.target_network[i].load_state_dict(prev_models['target_network'][i])
 
         if self.params['load_buffers'] != '':
+            buffer = ReplayBuffer.load(self.params['load_buffers'])
+            self.replay_buffer = split_replay_buffer(buffer, self.nr_network, self.nr_substates)
             for i in range(self.nr_network):
-                filepath = os.path.join(self.params['load_buffers'], 'replay_buffer' + str(i) + '.pkl')
-                self.replay_buffer[i] = ReplayBuffer.load(filepath)
-                logger.warn("SplitDQN: Preloaded buffer of size " + str(self.replay_buffer[i].size()) + " from " + filepath)
+                logger.warn("SplitDQN: Preloaded buffer of size " + str(self.replay_buffer[i].size()) + " splitted from " + self.params['load_buffers'])
 
     def predict(self, state):
         action_value = []
