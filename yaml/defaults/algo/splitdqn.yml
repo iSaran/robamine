@@ -16,5 +16,6 @@ params:
   device: 'cpu'  # "cuda", "cpu"
   load_nets: ''
   load_buffers: ''
+  load_buffers_max_size: 1000
   update_iter: [1, 1]
 trainable_params: ''

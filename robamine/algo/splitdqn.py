@@ -123,7 +123,10 @@ class SplitDQN(Agent):
         if self.params['load_buffers'] != '':
             buffer = ReplayBuffer.load(self.params['load_buffers'])
             self.replay_buffer = split_replay_buffer(buffer, self.nr_network, self.nr_substates)
+
             for i in range(self.nr_network):
+                while (self.replay_buffer[i].size() > self.params['load_buffers_max_size']):
+                    self.replay_buffer[i].remove(-1)
                 logger.warn("SplitDQN: Preloaded buffer of size " + str(self.replay_buffer[i].size()) + " splitted from " + self.params['load_buffers'])
 
     def predict(self, state):

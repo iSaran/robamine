@@ -155,3 +155,7 @@ class ReplayBuffer:
             self.count += replay.count
         else:
             raise RuntimeError('Buffer overflow during attempting merging.')
+
+    def remove(self, index):
+        del self.buffer[index]
+        self.count -= 1
