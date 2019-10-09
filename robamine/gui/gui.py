@@ -1,7 +1,7 @@
 # Qt5
 from PyQt5.QtWidgets import QMainWindow, QApplication, QFileDialog, QFormLayout, QLabel, QLineEdit, qApp, QSpinBox, QCheckBox, QDoubleSpinBox, QComboBox, QDialog
 from PyQt5 import uic
-from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot, QUrl, Qt
+from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot, QUrl, Qt, QDateTime
 from PyQt5.QtGui import QIcon, QDesktopServices, QPixmap
 from robamine.utils.qt import QRange, QDoubleRange, QDoubleVector, QDoubleVectorX, dict2form, form2dict
 
@@ -100,6 +100,7 @@ class RobamineGUI(QMainWindow):
 
         # Placeholders
         self.robamine_app, self.robamine_thread = None, None
+        self.scheduler_app, self.scheduler_thread = None, None
         self.state = {}
         self.state['results'] = {}
 
@@ -136,6 +137,8 @@ class RobamineGUI(QMainWindow):
 
         self.state2gui()
 
+        self.scheduled_time = None
+
         # Connect callbacks to buttons
         self.start_button.clicked.connect(self.start)
         self.stop_button.clicked.connect(self.stop)
@@ -153,6 +156,7 @@ class RobamineGUI(QMainWindow):
         self.tensorboard_button.clicked.connect(lambda : QDesktopServices.openUrl(QUrl(self.robamine_app.tensorboard_url)))
         self.about_action.triggered.connect(self.about_action_cb)
         self.progress_details_button.clicked.connect(self.progress_details_button_cb)
+        self.schedule_action.triggered.connect(self.schedule_action_cb)
 
         self.hostname, self.username, self.version = get_pc_and_version()
 
@@ -391,6 +395,25 @@ class RobamineGUI(QMainWindow):
         dialog.exec_()
         dialog.show()
 
+    def schedule_action_cb(self):
+        if self.current_mode == Mode.CONFIG:
+            dialog = SchedulerDialog()
+            self.scheduled_time = dialog.getDateTime()
+            if self.scheduled_time is not None:
+                self.scheduled_time_label.setText('Scheduled for: ' + self.scheduled_time.toString())
+                self.scheduler_app = SchedulerApp(self.scheduled_time)
+                self.scheduler_thread = QThread()
+                self.scheduler_app.time_is_up.connect(self.start)
+                self.scheduler_app.moveToThread(self.scheduler_thread)
+                self.scheduler_thread.start()
+                self.scheduler_thread.started.connect(self.scheduler_app.run)
+            else:
+                self.scheduled_time_label.setText('')
+                del self.scheduler_app, self.scheduler_thread
+                self.scheduler_app, self.scheduler_thread = None, None
+        else:
+            print('Scheduler is available only in CONFIGURING mode.')
+
 # Qt Dialogs
 
 class ProgressDetailsDialog(QDialog):
@@ -408,6 +431,46 @@ class ProgressDetailsDialog(QDialog):
         self.machine.setText(str(results['hostname']))
         self.version.setText(str(results['version']))
         self.dir_size.setText(bytes2human(results['dir_size']))
+
+class SchedulerDialog(QDialog):
+    def __init__(self, init_state=None, parent=None):
+        super(SchedulerDialog, self).__init__(parent)
+        uic.loadUi(os.path.join(os.path.dirname(__file__), 'scheduler.ui'), self)
+        self.datetime_input.setDateTime(QDateTime.currentDateTime())
+        self.datetime_input.setDisabled(not self.check_box.isChecked())
+        self.check_box.stateChanged.connect(self.check_box_cb)
+        self.accepted.connect(self.schedule_action_accepted_cb)
+        self.datetime = None
+
+    def check_box_cb(self, state):
+        self.datetime_input.setDisabled(not state)
+
+    def getDateTime(self):
+        self.exec_()
+        self.show()
+        return self.datetime
+
+    def schedule_action_accepted_cb(self):
+        if self.check_box.isChecked():
+            self.datetime = self.datetime_input.dateTime()
+        else:
+            self.datetime = None
+
+class SchedulerApp(QObject):
+    time_is_up = pyqtSignal()
+
+    def __init__(self, scheduled_time):
+        super(SchedulerApp, self).__init__()
+        self.scheduled_time = scheduled_time
+
+    @pyqtSlot()
+    def run(self):
+        while(True):
+            current_time = QDateTime.currentDateTime()
+            if current_time > self.scheduled_time:
+                self.time_is_up.emit()
+                break
+            time.sleep(5.0)
 
 class AboutDialog(QDialog):
     def __init__(self, version, parent=None):

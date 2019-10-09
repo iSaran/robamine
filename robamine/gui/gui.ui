@@ -247,6 +247,21 @@
            <item>
             <widget class="QWidget" name="comments_start_stop" native="true">
              <layout class="QVBoxLayout" name="verticalLayout_9">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <property name="leftMargin">
+               <number>0</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
               <item>
                <widget class="QWidget" name="widget" native="true">
                 <layout class="QHBoxLayout" name="horizontalLayout_7">
@@ -321,6 +336,13 @@
                  </widget>
                 </item>
                </layout>
+              </item>
+              <item>
+               <widget class="QLabel" name="scheduled_time_label">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
               </item>
              </layout>
             </widget>
@@ -694,6 +716,7 @@
      <string>&amp;Tools</string>
     </property>
     <addaction name="action_Set_As_Default"/>
+    <addaction name="schedule_action"/>
    </widget>
    <addaction name="menu_File"/>
    <addaction name="menuTools"/>
@@ -751,6 +774,11 @@
   <action name="action_Open_directory">
    <property name="text">
     <string>&amp;Open directory</string>
+   </property>
+  </action>
+  <action name="schedule_action">
+   <property name="text">
+    <string>Schedule Experiment</string>
    </property>
   </action>
  </widget>
