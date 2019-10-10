@@ -7,7 +7,7 @@ from robamine.utils.qt import QRange, QDoubleRange, QDoubleVector, QDoubleVector
 
 # Robamine
 from robamine import rb_logging
-from robamine.algo.core import TrainWorld, EvalWorld, TrainEvalWorld, DataAcquisitionWorld
+from robamine.algo.core import TrainWorld, EvalWorld, TrainEvalWorld, DataAcquisitionWorld, WorldState
 from robamine.utils.info import get_pc_and_version, start_tensorboard_server, bytes2human
 
 # General
@@ -17,6 +17,7 @@ from enum import Enum
 import sys
 import time
 import logging
+import threading
 
 # Paths to yaml files
 path_to_yamls = os.path.join(os.path.dirname(__file__), '../../yaml/')
@@ -51,15 +52,24 @@ class RobamineApp(QObject):
     @pyqtSlot()
     def run(self):
         self.tensorboard_url = start_tensorboard_server(self.world.log_dir)
-        self.world.init()
-        self.update_progress.emit(self.world.config['results'])
+        world_thread = threading.Thread(target=self.world.run, args=())
+        world_thread.start()
         self.started.emit()
-        for i in range(self.world.episodes):
-            self.world.run_episode(i)
-            self.update_progress.emit(self.world.config['results'])
 
-            if self.termination_flag:
-                break
+        while self.world.get_state() != WorldState.FINISHED:
+            self.world.results_lock.acquire()
+            results_copy = self.world.config['results'].copy()
+            self.world.results_lock.release()
+            self.update_progress.emit(results_copy)
+            self.world.stop_running = self.termination_flag
+            time.sleep(1.0)
+
+        # Update progress for the last time
+        self.world.results_lock.acquire()
+        results_copy = self.world.config['results'].copy()
+        self.world.results_lock.release()
+        self.update_progress.emit(results_copy)
+
         self.finished.emit()
 
     def terminate(self):

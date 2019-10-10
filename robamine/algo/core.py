@@ -21,6 +21,7 @@ import time
 import datetime
 import numpy as np
 import yaml
+from threading import Lock
 
 logger = logging.getLogger('robamine.algo.core')
 
@@ -252,6 +253,12 @@ class Network:
 
 # World classes
 
+
+class WorldState(Enum):
+    IDLE = 1
+    RUNNING = 2
+    FINISHED = 3
+
 class World:
     def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
         # Environment setup
@@ -343,6 +350,11 @@ class World:
         # A list in which dictionaries for episodes stats are stored
         self.episode_stats = []
 
+        self.stop_running = False
+        self.results_lock = Lock()
+        self.state_lock = Lock()
+        self.current_state = WorldState.IDLE
+
     @classmethod
     def from_dict(cls, config):
         # Setup the environment
@@ -377,11 +389,13 @@ class World:
         self.env.seed(seed)
         self.agent.seed(seed)
 
-    def init(self):
+    def reset(self):
         self.experience_time = 0
         self.start_time = time.time()
         self.config['results']['started_on'] = str(datetime.datetime.now())
         self.episode_stats = []
+        self.stop_running = False
+        self.set_state(WorldState.IDLE)
 
     def run_episode(self, episode, i):
         # Run the episode. Assumed that the episode has been already created by
@@ -399,24 +413,32 @@ class World:
 
         # Save the config in YAML file
         self.experience_time += episode.stats['experience_time']
+        self.results_lock.acquire()
         self.config['results']['n_episodes'] = i + 1
         self.config['results']['n_timesteps'] += episode.stats['n_timesteps']
         self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - self.start_time)
         self.config['results']['experience_time'] = transform_sec_to_timestamp(self.experience_time)
         self.config['results']['estimated_time'] = transform_sec_to_timestamp((self.episodes - i + 1) * (time.time() - self.start_time) / (i + 1))
         self.config['results']['dir_size'] = get_dir_size(self.log_dir)
+        self.results_lock.release()
         with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
             yaml.dump(self.config, outfile, default_flow_style=False)
 
     def run(self):
         logger.info('%s running on %s for %d episodes', self.agent_name, self.env_name, self.episodes)
-        self.init()
+        self.reset()
+        self.set_state(WorldState.RUNNING)
         for i in range(self.episodes):
             self.run_episode(i)
 
             # Print progress
             if self.print_every and (i + 1) % self.print_every == 0:
                 print_progress(i, self.episodes, self.start_time, self.config['results']['n_timesteps'], self.experience_time)
+
+            if self.stop_running:
+                break
+
+        self.set_state(WorldState.FINISHED)
 
     def plot(self, batch_size=5):
         if self.train_stats:
@@ -454,6 +476,17 @@ class World:
 
     def save(self, suffix=''):
         pickle.dump(self.episode_stats, open(os.path.join(self.log_dir, 'episode_stats.pkl'), 'wb'))
+
+    def set_state(self, state):
+        self.state_lock.acquire()
+        self.current_state = state
+        self.state_lock.release()
+
+    def get_state(self):
+        self.state_lock.acquire()
+        result = self.current_state
+        self.state_lock.release()
+        return result
 
 class TrainWorld(World):
     def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
@@ -506,8 +539,8 @@ class TrainEvalWorld(World):
 
         self.episode_stats_eval = []
 
-    def init(self):
-        super(TrainEvalWorld, self).init()
+    def reset(self):
+        super(TrainEvalWorld, self).reset()
         self.episode_stats_eval = []
         self.counter = 0
 
