@@ -1,0 +1,6 @@
+name: 'Eval'
+logging_dir: /tmp/robamine_logs/
+comments: ''
+params:
+  episodes: 1000
+  render: false

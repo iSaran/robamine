@@ -294,6 +294,8 @@ def dict2form(values, constraints, layout):
     for key, value in sorted(values.items()):
         con = constraints[key]
         label = QLabel(key)
+        if 'help' in con:
+            label.setToolTip(con['help'])
 
         if con['type'] == 'int':
             w = QSpinBox()
@@ -354,6 +356,9 @@ def dict2form(values, constraints, layout):
         elif con['type'] == 'bool':
             w = QCheckBox()
             w.setChecked(value)
+        elif con['type'] == 'str':
+            w = QLineEdit()
+            w.setText(str(value))
         else:
             w = QLineEdit()
             w.setText(str(value))

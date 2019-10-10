@@ -19,6 +19,8 @@ import time
 import logging
 import threading
 
+import importlib
+
 # Paths to yaml files
 path_to_yamls = os.path.join(os.path.dirname(__file__), '../../yaml/')
 path_to_defaults = os.path.join(path_to_yamls, 'defaults')
@@ -38,14 +40,10 @@ class RobamineApp(QObject):
         self.params = params.copy()
         rb_logging.init(directory=params['world']['logging_dir'], file_level=logging.INFO)
 
-        if self.params['world']['mode'] == 'Train':
-            self.world = TrainWorld.from_dict(self.params)
-        elif self.params['world']['mode'] == 'Evaluate':
-            self.world = EvalWorld.from_dict(self.params)
-        elif self.params['world']['mode'] == 'Train & Evaluate':
-            self.world = TrainEvalWorld.from_dict(self.params)
-        elif self.params['world']['mode'] == 'Data Acquisition':
-            self.world = DataAcquisitionWorld.from_dict(self.params)
+        # Load the desired world type
+        module = importlib.import_module('robamine.algo.core')
+        world_handle = getattr(module, self.params['world']['name']+'World')
+        self.world = world_handle.from_dict(self.params)
 
         self.termination_flag = False
 
@@ -83,21 +81,15 @@ class Mode(Enum):
     STOPPING = 4
     FINISHED = 5
 
-def load_defaults(path, available_envs, available_agents):
-    env_defaults, agent_defaults = {}, {}
-    for name in available_envs:
-        with open(os.path.join(path, 'env/' + name.lower() + '.yml'), 'r') as stream:
+def yaml2dict(path, list_of_names):
+    result = {}
+    for name in list_of_names:
+        with open(os.path.join(path, name.lower() + '.yml'), 'r') as stream:
             try:
-                env_defaults[name] = yaml.safe_load(stream)
+                result[name] = yaml.safe_load(stream)
             except yaml.YAMLError as exc:
                 print(exc)
-    for name in available_agents:
-        with open(os.path.join(path, 'algo/' + name.lower() + '.yml'), 'r') as stream:
-            try:
-                agent_defaults[name] = yaml.safe_load(stream)
-            except yaml.YAMLError as exc:
-                print(exc)
-    return env_defaults, agent_defaults
+    return result
 
 class RobamineGUI(QMainWindow):
     """
@@ -127,13 +119,20 @@ class RobamineGUI(QMainWindow):
 
         self.env_name.addItems(self.available['env'])
         self.agent_name.addItems(self.available['agent'])
+        self.world_name.addItems(self.available['world'])
 
-        self.env_defaults, self.agent_defaults = load_defaults(path_to_defaults, self.available['env'], self.available['agent'])
-        self.env_stored, self.agent_stored = self.env_defaults.copy(), self.agent_defaults.copy()
-        self.env_constraints, self.agent_constraints = load_defaults(path_to_constraints, self.available['env'], self.available['agent'])
+        self.env_defaults = yaml2dict(os.path.join(path_to_defaults, 'env'), self.available['env'])
+        self.agent_defaults = yaml2dict(os.path.join(path_to_defaults, 'agent'), self.available['agent'])
+        self.world_defaults = yaml2dict(os.path.join(path_to_defaults, 'world'), self.available['world'])
+        self.env_stored, self.agent_stored, self.world_stored = self.env_defaults.copy(), self.agent_defaults.copy(), self.world_defaults.copy()
+
+        self.env_constraints = yaml2dict(os.path.join(path_to_constraints, 'env'), self.available['env'])
+        self.agent_constraints = yaml2dict(os.path.join(path_to_constraints, 'agent'), self.available['agent'])
+        self.world_constraints = yaml2dict(os.path.join(path_to_constraints, 'world'), self.available['world'])
 
         self.env_name_prev = self.env_name.currentText()
         self.agent_name_prev = self.agent_name.currentText()
+        self.world_name_prev = self.world_name.currentText()
 
         # Load state
         with open(os.path.join(path_to_defaults, 'world.yml'), 'r') as stream:
@@ -142,6 +141,7 @@ class RobamineGUI(QMainWindow):
             except yaml.YAMLError as exc:
                 print(exc)
 
+        self.state['world'] = self.world_defaults[self.state['world']['name']].copy()
         self.state['env'] = self.env_defaults[self.state['env']['name']].copy()
         self.state['agent'] = self.agent_defaults[self.state['agent']['name']].copy()
 
@@ -155,11 +155,10 @@ class RobamineGUI(QMainWindow):
         self.save_as_action.triggered.connect(self.save_as)
         self.load_yaml_action.triggered.connect(self.load_yaml)
         self.quit_action.triggered.connect(self.closeEvent)
-        self.episodes_input.valueChanged.connect(self.episodes_input_cb)
         self.browse_button.clicked.connect(self.browse_button_cb)
-        self.mode_input.activated.connect(self.disable_groups_based_on_mode)
         self.env_name.activated.connect(self.env_name_cb)
         self.agent_name.activated.connect(self.agent_name_cb)
+        self.world_name.activated.connect(self.world_name_cb)
         self.progress_open_dir_button.clicked.connect(lambda : os.system('xdg-open "%s"' % self.progress_logging_dir.text()))
         self.env_reset_defaults_button.clicked.connect(self.env_reset_defaults_button_cb)
         self.agent_reset_defaults_button.clicked.connect(self.agent_reset_defaults_button_cb)
@@ -213,39 +212,32 @@ class RobamineGUI(QMainWindow):
 
         self.current_mode = mode
 
-    def disable_groups_based_on_mode(self):
-        self.state['world']['mode'] = str(self.mode_input.currentText())
-        if self.state['world']['mode'] == 'Train & Evaluate':
-            self.train_eval_group.setDisabled(False)
-        else:
-            self.train_eval_group.setDisabled(True)
-
     def update_progress(self, results):
         self.progress_logging_dir.setText(str(results['logging_dir']))
-        self.progressBar.setValue((results['n_episodes'] / self.state['world']['episodes']) * 100)
+        possible_steps = ['episodes', 'timesteps', 'epochs']
+        for step in possible_steps:
+            if step in self.state['world']['params']:
+                break;
+        progress = results['n_' + step] / self.state['world']['params'][step]
+
+        self.progressBar.setValue(progress * 100)
         self.state['results'] = results
 
     # Transformations between GUI and dictionaries
 
     def gui2state(self):
-        self.state['world']['mode'] = self.mode_input.currentText()
-        self.state['world']['logging_dir'] = self.logging_dir_input.text()
-        self.state['world']['episodes'] = self.episodes_input.value()
-        self.state['world']['save_every'] = self.save_every_input.value()
-        self.state['world']['render'] = self.render_input.isChecked()
-        self.state['world']['comments'] = self.comments.toPlainText()
-
-        if self.state['world']['mode'] == 'Train & Evaluate':
-            self.state['world']['eval']['episodes'] = self.eval_episodes_input.value()
-            self.state['world']['eval']['every'] = self.eval_every_input.value()
-            self.state['world']['eval']['render'] = self.eval_render_input.isChecked()
-        else:
-            self.state['world']['eval']['episodes'] = None
-            self.state['world']['eval']['every'] = None
-            self.state['world']['eval']['render'] = None
-
+        self.state['world'] = self.gui2world()
         self.state['env'] = self.gui2env()
         self.state['agent'] = self.gui2agent()
+
+    def gui2world(self):
+        world = {}
+        world['name'] = self.world_name.currentText()
+        world['logging_dir'] = self.logging_dir_input.text()
+        world['comments'] = self.comments.toPlainText()
+        if 'params' in self.world_defaults[world['name']]:
+            world['params'] = form2dict(self.world_params_layout)
+        return world
 
     def gui2env(self):
         env = {}
@@ -265,21 +257,22 @@ class RobamineGUI(QMainWindow):
 
     def state2gui(self):
         # Update World group
-        self.mode_input.setCurrentIndex(self.mode_input.findText(self.state['world']['mode']))
-        self.disable_groups_based_on_mode()
-        self.logging_dir_input.setText(self.state['world']['logging_dir'])
-        self.episodes_input.setValue(int(self.state['world']['episodes']))
-        self.save_every_input.setValue(int(self.state['world']['save_every']))
-        self.render_input.setChecked(self.state['world']['render'])
-        self.comments.setText(self.state['world']['comments'])
-
-        if self.state['world']['mode'] == 'Train & Evaluate':
-            self.eval_episodes_input.setValue(int(self.state['world']['eval']['episodes']))
-            self.eval_every_input.setValue(int(self.state['world']['eval']['every']))
-            self.eval_render_input.setChecked(int(self.state['world']['eval']['render']))
-
+        self.world2gui(self.state['world'])
         self.env2gui(self.state['env'])
         self.agent2gui(self.state['agent'])
+
+    def world2gui(self, world):
+        if world['name'] not in self.available['world']:
+            raise ValueError('The world name: ' + world['name'] + ' is not supported.')
+        self.logging_dir_input.setText(self.state['world']['logging_dir'])
+        self.comments.setText(self.state['world']['comments'])
+
+        self.world_name.setCurrentIndex(self.world_name.findText(world['name']))
+        if 'params' in world:
+            dict2form(world['params'], self.world_constraints[world['name']], self.world_params_layout)
+        else:
+            for i in reversed(range(self.world_params_layout.rowCount())):
+                self.world_params_layout.removeRow(i)
 
     def env2gui(self, env):
         if env['name'] not in self.available['env']:
@@ -289,8 +282,8 @@ class RobamineGUI(QMainWindow):
         if 'params' in env:
             dict2form(env['params'], self.env_constraints[env['name']], self.env_params_layout)
         else:
-            for i in reversed(range(self.agent_params_layout.rowCount())):
-                self.agent_params_layout.removeRow(i)
+            for i in reversed(range(self.env_params_layout.rowCount())):
+                self.env_params_layout.removeRow(i)
 
     def agent2gui(self, agent):
         if agent['name'] not in self.available['agent']:
@@ -353,24 +346,28 @@ class RobamineGUI(QMainWindow):
         name, _ = QFileDialog.getOpenFileName(self,"Load YAML file", "","YAML Files (*.yml)", options=options)
         if name != '':
             with open(name, 'r') as stream:
-                try:
-                    self.state = yaml.safe_load(stream)
-                except yaml.YAMLError as exc:
-                    print(exc)
+                self.state = yaml.safe_load(stream)
 
         if 'results' in self.state and 'logging_dir' in self.state['results']:
             self.state['agent']['trainable_params'] = os.path.join(self.state['results']['logging_dir'], 'model.pkl')
 
         self.state2gui()
 
-    def episodes_input_cb(self, text):
-        self.save_every_input.setMaximum(text)
-        self.eval_every_input.setMaximum(text)
+        self.world_name_prev = self.world_name.currentText()
+        self.env_name_prev = self.env_name.currentText()
+        self.agent_name_prev = self.agent_name.currentText()
 
     def browse_button_cb(self):
         new = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
         if new != '':
             self.logging_dir_input.setText(new)
+
+    def world_name_cb(self):
+        desired = self.world_name.currentText()
+        self.world_name.setCurrentIndex(self.world_name.findText(self.world_name_prev))
+        self.world_stored[self.world_name_prev] = self.gui2world().copy()
+        self.world2gui(self.world_stored[desired])
+        self.world_name_prev = desired
 
     def env_name_cb(self):
         desired = self.env_name.currentText()

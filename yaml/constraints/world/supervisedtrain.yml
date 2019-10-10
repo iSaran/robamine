@@ -1,0 +1,3 @@
+epochs:
+  type: int
+  range: [1, 5000]

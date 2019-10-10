@@ -1,0 +1,6 @@
+name: 'DataAcquisition'
+logging_dir: /tmp/robamine_logs/
+comments: ''
+params:
+  timesteps: 3000
+  render: false

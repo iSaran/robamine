@@ -1,8 +1,14 @@
+world:
+  - TrainEval
+  - Train
+  - Eval
+  - SupervisedTrain
+  - DataAcquisition
 env:
   - Clutter
   - ClutterReal
+  - Dataset
 agent:
   - DQN
   - SplitDQN
   - RandomDiscrete
-
