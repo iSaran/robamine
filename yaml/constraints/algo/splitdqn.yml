@@ -48,6 +48,9 @@ load_nets:
   type: str
 load_buffers:
   type: str
+load_buffers_max_size:
+  type: int
+  range: [1, 50000]
 update_iter:
   type: intvectorx
   range: [1, 50]
