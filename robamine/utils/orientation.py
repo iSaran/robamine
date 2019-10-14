@@ -127,6 +127,11 @@ def rotation_6x6(orientation):
     output[3:6, 3:6] = orientation
     return output
 
+def rot2angleaxis(R):
+    angle = np.arccos((np.trace(R) - 1) / 2)
+    axis = (1/(2 * np.sin(angle)) * np.array([R[2][1] - R[1][2], R[0][2] - R[2][0], R[1][0] - R[0][1]]))
+    return angle, axis
+
 class Quaternion:
     def __init__(self, w=1, x=0, y=0, z=0):
         self.w = w

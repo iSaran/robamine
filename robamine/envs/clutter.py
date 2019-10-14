@@ -14,7 +14,7 @@ import os
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
-from robamine.utils.orientation import Quaternion
+from robamine.utils.orientation import Quaternion, rot2angleaxis
 from robamine.utils.math import sigmoid, rescale
 import robamine.utils.cv_tools as cv_tools
 import math
@@ -152,6 +152,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_width = 0.0
         self.target_pos = np.zeros(3)
         self.target_quat = Quaternion()
+        self.target_pos_prev_state = np.zeros(3)
+        self.target_quat_prev_state = Quaternion()
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
         self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
         self.success = False
@@ -226,6 +228,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.last_timestamp = self.sim.data.time
         self.success = False
+
+        self.target_pos_prev_state = self.target_pos
+        self.target_quat_prev_state = self.target_quat
+
         return observation
 
     def get_obs(self):
@@ -327,7 +333,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         reward = self.get_reward(obs, pcd, dim, action)
         if self.terminal_state(obs):
             done = True
-        return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
+
+        return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': self.get_target_displacement()}
 
     def do_simulation(self, action):
         if self.params['discrete']:
@@ -757,3 +764,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             raise RuntimeError("Object is not neither a box or a cylinder")
 
         return np.array([length, width, height])
+
+    def get_target_displacement(self):
+        '''Returns [x, y, theta]: the displacement of the target between steps'''
+        displacement = np.zeros(3)
+        temp = np.matmul(np.transpose(self.target_quat_prev_state.rotation_matrix()), (self.target_pos - self.target_pos_prev_state))
+        displacement[0] = temp[0]
+        displacement[1] = temp[1]
+        if np.linalg.norm(displacement) < 1e-3:
+            return np.zeros(3)
+
+        rot_mat = np.matmul(np.transpose(self.target_quat_prev_state.rotation_matrix()), self.target_quat.rotation_matrix())
+        displacement[2], axis = rot2angleaxis(rot_mat)
+        displacement[2] *= np.sign(axis[2])
+        self.target_pos_prev_state = self.target_pos
+        self.target_quat_prev_state = self.target_quat
+        return displacement
