@@ -231,7 +231,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.target_pos_prev_state = self.target_pos
         self.target_quat_prev_state = self.target_quat
-
         return observation
 
     def get_obs(self):
@@ -780,3 +779,23 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos_prev_state = self.target_pos
         self.target_quat_prev_state = self.target_quat
         return displacement
+
+    def load_state_dict(self, state):
+        self.sim_step()
+        state['qpos'] = self.sim.data.qpos.copy()
+        self.sim.model.geom_size = state['geom_size'].copy()
+        self.sim.model.geom_type = state['geom_type'].copy()
+        self.sim.model.geom_friction = state['geom_friction'].copy()
+        self.sim.model.geom_condim = state['geom_condim'].copy()
+
+        self.set_state(state['qpos'], state['qvel'])
+
+    def get_state_dict(self):
+        state = {}
+        state['qpos'] = self.sim.data.qpos.copy()
+        state['qvel'] = self.sim.data.qvel.copy()
+        state['geom_size'] = self.sim.model.geom_size.copy()
+        state['geom_type'] = self.sim.model.geom_type.copy()
+        state['geom_friction'] = self.sim.model.geom_friction.copy()
+        state['geom_condim'] = self.sim.model.geom_condim.copy()
+        return state

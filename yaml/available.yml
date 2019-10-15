@@ -4,6 +4,7 @@ world:
   - Eval
   - SupervisedTrain
   - DataAcquisition
+  - StoreSamplesFromInitStates
 env:
   - Clutter
   - ClutterReal

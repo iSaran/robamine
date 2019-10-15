@@ -450,9 +450,8 @@ class SupervisedTrainWorld(World):
         agent_model_file_name = os.path.join(self.log_dir, 'model' + suffix + '.pkl')
         self.agent.save(agent_model_file_name)
 
-
 class RLWorld(World):
-    def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
+    def __init__(self, agent, env, params, name=None):
         super(RLWorld, self).__init__(name)
         # Environment setup
         if isinstance(env, gym.Env):
@@ -512,10 +511,10 @@ class RLWorld(World):
 
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
-        self.episodes = n_episodes
-        self.render = render
-        self.save_every = save_every
-        self.print_every = print_every
+        self.iteration_name = 'episodes'
+        self.iterations = params.get(self.iteration_name, 0)
+        self.save_every = params.get('save_every', None)
+        self.render = params.get('render', False)
 
         # Other variables for running episodes
         self.experience_time = 0.0
@@ -542,7 +541,7 @@ class RLWorld(World):
             action_dim = int(env.action_space.shape[0])
 
         # Create the world
-        self = cls(config['agent'], env, config['world']['params']['episodes'], config['world']['params']['render'], config['world']['params']['save_every'], 1)
+        self = cls(config['agent'], env, config['world']['params'], config['world']['name'])
 
         if 'trainable_params' in config['agent'] and config['agent']['trainable_params'] != '':
             self.agent.load_trainable(config['agent']['trainable_params'])
@@ -581,18 +580,14 @@ class RLWorld(World):
 
         # Save the config in YAML file
         self.experience_time += episode.stats['experience_time']
-        self.update_results(n_episodes = i + 1, n_timesteps = episode.stats['n_timesteps'])
+        self.update_results(n_iterations = i + 1, n_timesteps = episode.stats['n_timesteps'])
 
     def run(self):
-        logger.info('%s running on %s for %d episodes', self.agent_name, self.env_name, self.episodes)
+        logger.info('%s running on %s for %d episodes', self.agent_name, self.env_name, self.iterations)
         self.reset()
         self.set_state(WorldState.RUNNING)
-        for i in range(self.episodes):
+        for i in range(self.iterations):
             self.run_episode(i)
-
-            # Print progress
-            if self.print_every and (i + 1) % self.print_every == 0:
-                print_progress(i, self.episodes, self.start_time, self.config['results']['n_timesteps'], self.experience_time)
 
             if self.stop_running:
                 break
@@ -636,15 +631,15 @@ class RLWorld(World):
     def save(self, suffix=''):
         pickle.dump(self.episode_stats, open(os.path.join(self.log_dir, 'episode_stats.pkl'), 'wb'))
 
-    def update_results(self, n_episodes, n_timesteps, thread_safe=True, write_yaml=True):
+    def update_results(self, n_iterations, n_timesteps, thread_safe=True, write_yaml=True):
 
         # Update the results fields in config
         if thread_safe:
             self.results_lock.acquire()
 
-        self.config['results']['n_episodes'] = n_episodes
+        self.config['results']['n_' + self.iteration_name] = n_iterations
         self.config['results']['n_timesteps'] += n_timesteps
-        prog = self.config['results']['n_episodes'] / self.config['world']['params']['episodes']
+        prog = self.config['results']['n_' + self.iteration_name] / self.iterations
         super(RLWorld, self).update_results(progress=prog, thread_safe=False, write_yaml=False)
 
         if thread_safe:
@@ -656,8 +651,8 @@ class RLWorld(World):
                 yaml.dump(self.config, outfile, default_flow_style=False)
 
 class TrainWorld(RLWorld):
-    def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
-        super(TrainWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every, name)
+    def __init__(self, agent, env, params, name=None):
+        super(TrainWorld, self).__init__(agent, env, params, name)
         self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
 
     def run_episode(self, i):
@@ -670,8 +665,8 @@ class TrainWorld(RLWorld):
         self.agent.save(agent_model_file_name)
 
 class EvalWorld(RLWorld):
-    def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
-        super(EvalWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every, name)
+    def __init__(self, agent, env, params, name=''):
+        super(EvalWorld, self).__init__(agent, env, params, name)
         self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
         self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
         self.expected_values_file.write('expected,real\n')
@@ -690,11 +685,12 @@ class EvalWorld(RLWorld):
         self.actions_file.flush()
 
 class TrainEvalWorld(RLWorld):
-    def __init__(self, agent, env, n_episodes, render, save_every, print_every, eval_episodes, render_eval, eval_every, name=None):
-        super(TrainEvalWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every, name)
-        self.eval_episodes = eval_episodes
-        self.render_eval = render_eval
-        self.eval_every = eval_every
+    def __init__(self, agent, env, params, name=None):
+        #n_episodes, render, save_every, eval_episodes, render_eval, eval_every
+        super(TrainEvalWorld, self).__init__(agent, env, params, name)
+        self.eval_episodes = params['eval_episodes']
+        self.render_eval = params['eval_render']
+        self.eval_every = params['eval_every']
 
         self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
         self.eval_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
@@ -740,58 +736,26 @@ class TrainEvalWorld(RLWorld):
         agent_model_file_name = os.path.join(self.log_dir, 'model' + suffix + '.pkl')
         self.agent.save(agent_model_file_name)
 
-    @classmethod
-    def from_dict(cls, config):
-        # Setup the environment
-        if len(config['env']) == 1:
-            env = gym.make(config['env']['name'] + '-v0')
-        else:
-            env = gym.make(config['env']['name'] + '-v0', params=config['env']['params'])
-        if isinstance(env.observation_space, gym.spaces.dict.Dict):
-            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
-            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
-
-        state_dim = int(env.observation_space.shape[0])
-        if isinstance(env.action_space, gym.spaces.discrete.Discrete):
-            action_dim = env.action_space.n
-        else:
-            action_dim = int(env.action_space.shape[0])
-
-        # Create the world
-        self = cls(config['agent'], env,
-                   config['world']['params']['episodes'], \
-                   config['world']['params']['render'], \
-                   config['world']['params']['save_every'], 0, \
-                   config['world']['params']['eval_episodes'], \
-                   config['world']['params']['eval_render'], \
-                   config['world']['params']['eval_every'])
-
-        if 'trainable_params' in config['agent'] and config['agent']['trainable_params'] != '':
-            self.agent.load_trainable(config['agent']['trainable_params'])
-
-        # Save the config
-        self.config['world'] = config['world'].copy()
-        self.config['env'] = config['env'].copy()
-        self.config['agent'] = config['agent'].copy()
-
-        return self
-
 class DataAcquisitionWorld(RLWorld):
-    def __init__(self, agent, env, n_timesteps, render):
-        super(DataAcquisitionWorld, self).__init__(agent, env, n_timesteps, render, save_every=0, print_every=0)
+    def __init__(self, agent, env, params):
+        super(DataAcquisitionWorld, self).__init__(agent, env, params)
         self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
         self.data = ReplayBuffer(1e6)
         self.extra_data = []
+        self.iteration_name = 'timesteps'
+        self.iterations = params[self.iteration_name]
 
     def run(self):
-        logger.info('Data acquisition, %s running on %s for %d timesteps', self.agent_name, self.env_name, self.episodes)
+        logger.info('Data acquisition, %s running on %s for %d timesteps', self.agent_name, self.env_name, self.iterations)
         self.reset()
         self.set_state(WorldState.RUNNING)
         i = 0
+        timesteps = 0
         while self.config['results']['progress'] < 1:
 
             episode = DataAcquisitionEpisode(self.agent, self.env)
             episode.run(self.render)
+            timesteps += episode.stats['n_timesteps']
 
             # Update tensorboard stats
             self.stats.update(i, episode.stats)
@@ -799,7 +763,7 @@ class DataAcquisitionWorld(RLWorld):
 
             # Save the config in YAML file
             self.experience_time += episode.stats['experience_time']
-            self.update_results(n_timesteps = episode.stats['n_timesteps'])
+            self.update_results(n_iterations = timesteps, n_timesteps = episode.stats['n_timesteps'])
 
             self.data.merge(episode.buffer)
             self.extra_data += episode.extra_data
@@ -811,7 +775,7 @@ class DataAcquisitionWorld(RLWorld):
 
             i += 1
 
-        while self.data.size() > self.config['world']['params']['timesteps']:
+        while self.data.size() > self.iterations:
             self.data.remove(-1)
             del self.extra_data[-1]
         self.data.save(os.path.join(self.log_dir, 'data.pkl'))
@@ -826,7 +790,7 @@ class DataAcquisitionWorld(RLWorld):
             self.results_lock.acquire()
 
         self.config['results']['n_timesteps'] += n_timesteps
-        prog = self.config['results']['n_timesteps'] / self.config['world']['params']['timesteps']
+        prog = self.config['results']['n_timesteps'] / self.iterations
         super(RLWorld, self).update_results(progress=prog, thread_safe=False, write_yaml=False)
 
         if thread_safe:
@@ -837,35 +801,36 @@ class DataAcquisitionWorld(RLWorld):
             with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
                 yaml.dump(self.config, outfile, default_flow_style=False)
 
-    @classmethod
-    def from_dict(cls, config):
-        # Setup the environment
-        if len(config['env']) == 1:
-            env = gym.make(config['env']['name'] + '-v0')
-        else:
-            env = gym.make(config['env']['name'] + '-v0', params=config['env']['params'])
-        if isinstance(env.observation_space, gym.spaces.dict.Dict):
-            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
-            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+class StoreSamplesFromInitStatesWorld(RLWorld):
+    def __init__(self, agent, env, params, name=None):
+        super(StoreSamplesFromInitStatesWorld, self).__init__(agent, env, params, name)
+        self.iteration_name = 'samples'
+        self.iterations = params[self.iteration_name]
+        self.init_state_samples = []
 
-        state_dim = int(env.observation_space.shape[0])
-        if isinstance(env.action_space, gym.spaces.discrete.Discrete):
-            action_dim = env.action_space.n
-        else:
-            action_dim = int(env.action_space.shape[0])
+    def reset(self):
+        super(StoreSamplesFromInitStatesWorld, self).reset()
+        self.init_state_samples = []
 
-        # Create the world
-        self = cls(config['agent'], env, config['world']['params']['timesteps'], config['world']['params']['render'])
+    def run(self):
+        logger.info('Store samples init states, %s running on %s for %d timesteps', self.agent_name, self.env_name, self.iterations)
+        self.reset()
+        self.set_state(WorldState.RUNNING)
+        for i in range(self.iterations):
 
-        if 'trainable_params' in config['agent'] and config['agent']['trainable_params'] != '':
-            self.agent.load_trainable(config['agent']['trainable_params'])
+            self.env.reset()
+            state = self.env.get_state_dict()
+            print(state)
 
-        # Save the config
-        self.config['world'] = config['world'].copy()
-        self.config['env'] = config['env'].copy()
-        self.config['agent'] = config['agent'].copy()
+            self.init_state_samples.append(state)
+            pickle.dump(self.init_state_samples, open(os.path.join(self.log_dir, 'samples.pkl'), 'wb'))
 
-        return self
+            self.update_results(n_iterations = i + 1, n_timesteps = 0)
+
+            if self.stop_running:
+                break
+
+        self.set_state(WorldState.FINISHED)
 
 # Episode classes
 

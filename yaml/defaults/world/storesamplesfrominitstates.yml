@@ -1,0 +1,6 @@
+name: 'StoreSamplesFromInitStates'
+logging_dir: /tmp/robamine_logs/
+comments: ''
+params:
+  samples: 1000
+  render: false

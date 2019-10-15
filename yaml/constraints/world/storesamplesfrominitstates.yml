@@ -1,0 +1,6 @@
+
+samples:
+  type: int
+  range: [1, 5000]
+render:
+  type: bool
