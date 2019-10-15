@@ -284,6 +284,15 @@ def form2dict(layout):
         result[label] = widget
     return result
 
+def dict2form_read(values, layout):
+    for i in reversed(range(layout.rowCount())):
+        layout.removeRow(i)
+
+    for key, value in sorted(values.items()):
+        label = QLabel(key)
+        w = QLabel(str(value))
+        layout.addRow(label, w)
+
 def dict2form(values, constraints, layout):
     # inputs = self.env_defaults[self.env_name.currentText()]
     # constraints = self.env_constraints[self.env_name.currentText()]

@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, QFileDialog, QFormLayout,
 from PyQt5 import uic
 from PyQt5.QtCore import QThread, QObject, pyqtSignal, pyqtSlot, QUrl, Qt, QDateTime
 from PyQt5.QtGui import QIcon, QDesktopServices, QPixmap
-from robamine.utils.qt import QRange, QDoubleRange, QDoubleVector, QDoubleVectorX, dict2form, form2dict
+from robamine.utils.qt import QRange, QDoubleRange, QDoubleVector, QDoubleVectorX, dict2form, form2dict, dict2form_read
 
 # Robamine
 from robamine import rb_logging
@@ -430,14 +430,13 @@ class ProgressDetailsDialog(QDialog):
         robamine_app.update_progress.connect(self.update)
 
     def update(self, results):
-        self.episodes.setText(str(results['n_episodes']))
-        self.timesteps.setText(str(results['n_timesteps']))
-        self.started_on.setText(str(results['started_on']))
-        self.time_elapsed.setText(str(results['time_elapsed']))
-        self.time_remaining.setText(str(results['estimated_time']))
-        self.machine.setText(str(results['hostname']))
-        self.version.setText(str(results['version']))
-        self.dir_size.setText(bytes2human(results['dir_size']))
+        res = results.copy()
+        if 'dir_size' in res:
+            res['dir_size'] = bytes2human(res['dir_size'])
+
+        if 'logging_dir' in res:
+            del res['logging_dir']
+        dict2form_read(res, self.layout())
 
 class SchedulerDialog(QDialog):
     def __init__(self, init_state=None, parent=None):
