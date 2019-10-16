@@ -6,3 +6,6 @@ render:
 save_every:
   type: int
   range: [1, 5000]
+List of env init states:
+  type: str
+  help: Path to file with a list of initial states for the environment to be used instead of random initialization.

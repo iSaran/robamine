@@ -164,41 +164,58 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
         self.seed()
+        self.preloaded_init_state = None
 
     def reset_model(self):
+
         self.sim_step()
-        random_qpos, number_of_obstacles = self.generate_random_scene()
-        target_size = get_geom_size(self.sim.model, 'target')
 
-        # Set the initial position of the finger outside of the table, in order
-        # to not occlude the objects during reading observation from the camera
-        index = self.sim.model.get_joint_qpos_addr('finger')
-        random_qpos[index[0]]   = 100
-        random_qpos[index[0]+1] = 100
-        random_qpos[index[0]+2] = 100
+        if self.preloaded_init_state:
+            self.sim.model.geom_size = self.preloaded_init_state['geom_size'].copy()
+            self.sim.model.geom_type = self.preloaded_init_state['geom_type'].copy()
+            self.sim.model.geom_friction = self.preloaded_init_state['geom_friction'].copy()
+            self.sim.model.geom_condim = self.preloaded_init_state['geom_condim'].copy()
 
-        self.set_state(random_qpos, self.init_qvel)
-
-        # Move forward the simulation to be sure that the objects have landed
-        for _ in range(600):
-            self.sim_step()
-
-        for _ in range(300):
-            for i in range(1, number_of_obstacles):
-                body_id = get_body_names(self.sim.model).index("object"+str(i))
-                self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
-                self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
+            # Set the initial position of the finger outside of the table, in order
+            # to not occlude the objects during reading observation from the camera
+            index = self.sim.model.get_joint_qpos_addr('finger')
+            self.preloaded_init_state[index[0]]   = 100
+            self.preloaded_init_state[index[0]+1] = 100
+            self.preloaded_init_state[index[0]+2] = 100
+            self.set_state(self.preloaded_init_state['qpos'], self.preloaded_init_state['qvel'])
 
             self.sim_step()
+        else:
+            random_qpos, number_of_obstacles = self.generate_random_scene()
 
-        self.check_target_occlusion(number_of_obstacles)
+            # Set the initial position of the finger outside of the table, in order
+            # to not occlude the objects during reading observation from the camera
+            index = self.sim.model.get_joint_qpos_addr('finger')
+            random_qpos[index[0]]   = 100
+            random_qpos[index[0]+1] = 100
+            random_qpos[index[0]+2] = 100
 
-        for _ in range(100):
-            for i in range(1, number_of_obstacles):
-                 body_id = get_body_names(self.sim.model).index("object"+str(i))
-                 self.sim.data.xfrc_applied[body_id][0] = 0
-                 self.sim.data.xfrc_applied[body_id][1] = 0
-            self.sim_step()
+            self.set_state(random_qpos, self.init_qvel)
+
+            # Move forward the simulation to be sure that the objects have landed
+            for _ in range(600):
+                self.sim_step()
+
+            for _ in range(300):
+                for i in range(1, number_of_obstacles):
+                    body_id = get_body_names(self.sim.model).index("object"+str(i))
+                    self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
+                    self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
+                self.sim_step()
+
+            self.check_target_occlusion(number_of_obstacles)
+
+            for _ in range(100):
+                for i in range(1, number_of_obstacles):
+                     body_id = get_body_names(self.sim.model).index("object"+str(i))
+                     self.sim.data.xfrc_applied[body_id][0] = 0
+                     self.sim.data.xfrc_applied[body_id][1] = 0
+                self.sim_step()
 
         # Update state variables that need to be updated only once
         self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
@@ -231,6 +248,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.target_pos_prev_state = self.target_pos
         self.target_quat_prev_state = self.target_quat
+        self.preloaded_init_state = None
         return observation
 
     def get_obs(self):
@@ -780,20 +798,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_quat_prev_state = self.target_quat
         return displacement
 
-    def load_state_dict(self, state):
-        self.sim_step()
-        state['qpos'] = self.sim.data.qpos.copy()
-        self.sim.model.geom_size = state['geom_size'].copy()
-        self.sim.model.geom_type = state['geom_type'].copy()
-        self.sim.model.geom_friction = state['geom_friction'].copy()
-        self.sim.model.geom_condim = state['geom_condim'].copy()
-
-        self.set_state(state['qpos'], state['qvel'])
-
     def get_state_dict(self):
         state = {}
-        state['qpos'] = self.sim.data.qpos.copy()
-        state['qvel'] = self.sim.data.qvel.copy()
+        state['qpos'] = self.sim.data.qpos.ravel().copy()
+        state['qvel'] = self.sim.data.qvel.ravel().copy()
         state['geom_size'] = self.sim.model.geom_size.copy()
         state['geom_type'] = self.sim.model.geom_type.copy()
         state['geom_friction'] = self.sim.model.geom_friction.copy()

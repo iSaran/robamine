@@ -139,6 +139,12 @@ class Quaternion:
         self.y = y
         self.z = z
 
+    def __copy__(self):
+        return Quaternion(w=self.w, x=self.x, y=self.y, z=self.z)
+
+    def copy(self):
+        return self.__copy__()
+
     def as_vector(self):
         return np.array([self.w, self.x, self.y, self.z])
 

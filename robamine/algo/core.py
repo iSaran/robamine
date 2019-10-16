@@ -523,6 +523,11 @@ class RLWorld(World):
         # A list in which dictionaries for episodes stats are stored
         self.episode_stats = []
 
+        if 'List of env init states' in params and params['List of env init states'] != '':
+            self.env_init_states = pickle.load(open(self.params['List of env init states'], 'rb'))
+        else:
+            self.env_init_states = None
+
     @classmethod
     def from_dict(cls, config):
         # Setup the environment
@@ -567,7 +572,13 @@ class RLWorld(World):
     def run_episode(self, episode, i):
         # Run the episode. Assumed that the episode has been already created by
         # child classes
-        episode.run(self.render)
+
+        if self.env_init_states:
+            init_state = self.env_init_states[i]
+        else:
+            init_state = None
+
+        episode.run(render=self.render, init_state=init_state)
 
         # Update tensorboard stats
         self.stats.update(i, episode.stats)
@@ -854,7 +865,9 @@ class Episode:
         for key in self.agent.info:
             self.stats['info'][key] = []
 
-    def run(self, render):
+    def run(self, render = False, init_state = None):
+
+        self.env.preloaded_init_state = init_state
         state = self.env.reset()
 
         while True:
