@@ -6,3 +6,4 @@ params:
   episodes: 1000
   render: false
   List of env init states: ''
+  with_prediction_horizon: False

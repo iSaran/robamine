@@ -1,6 +1,6 @@
-name: 'DataAcquisition'
+name: 'SampleInitStates'
 logging_dir: /tmp/robamine_logs/
 comments: ''
 params:
-  timesteps: 3000
+  samples: 1000
   render: false

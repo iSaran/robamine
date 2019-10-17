@@ -7,7 +7,7 @@ from robamine.utils.qt import QRange, QDoubleRange, QDoubleVector, QDoubleVector
 
 # Robamine
 from robamine import rb_logging
-from robamine.algo.core import TrainWorld, EvalWorld, TrainEvalWorld, DataAcquisitionWorld, WorldState
+from robamine.algo.core import WorldState
 from robamine.utils.info import get_pc_and_version, start_tensorboard_server, bytes2human
 
 # General

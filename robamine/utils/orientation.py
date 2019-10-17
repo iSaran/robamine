@@ -132,6 +132,29 @@ def rot2angleaxis(R):
     axis = (1/(2 * np.sin(angle)) * np.array([R[2][1] - R[1][2], R[0][2] - R[2][0], R[1][0] - R[0][1]]))
     return angle, axis
 
+def angleaxis2rot(angle, axis):
+    c = math.cos(angle)
+    s = math.sin(angle)
+    v = 1 - c
+    kx = axis[0]
+    ky = axis[1]
+    kz = axis[2]
+
+    R = np.eye(3)
+    R[0, 0] = pow(kx, 2) * v + c
+    R[0, 1] = kx * ky * v - kz * s
+    R[0, 2] = kx * kz * v + ky * s
+
+    R[1, 0] = kx * ky * v + kz * s
+    R[1, 1] = pow(ky, 2) * v + c
+    R[1, 2] = ky * kz * v - kx * s
+
+    R[2, 0] = kx * kz * v - ky * s
+    R[2, 1] = ky * kz * v + kx * s
+    R[2, 2] = pow(kz, 2) * v + c
+
+    return R
+
 class Quaternion:
     def __init__(self, w=1, x=0, y=0, z=0):
         self.w = w

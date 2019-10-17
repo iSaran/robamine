@@ -31,6 +31,7 @@ class Agent:
         self.params = params.copy()
         self.info = {}
         self.rng = np.random.RandomState()
+        self.prediction_horizon = params.get('prediction_horizon', 1)
 
     def save(self, file_path):
         error = 'Agent ' + self.name + ' does not provide saving capabilities.'
@@ -524,7 +525,7 @@ class RLWorld(World):
         self.episode_stats = []
 
         if 'List of env init states' in params and params['List of env init states'] != '':
-            self.env_init_states = pickle.load(open(self.params['List of env init states'], 'rb'))
+            self.env_init_states = pickle.load(open(params['List of env init states'], 'rb'))
         else:
             self.env_init_states = None
 
@@ -682,9 +683,13 @@ class EvalWorld(RLWorld):
         self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
         self.expected_values_file.write('expected,real\n')
         self.actions_file = open(os.path.join(self.log_dir, 'actions' + '.csv'), "w+")
+        self.with_prediction_horizon = params.get('with_prediction_horizon', False)
 
     def run_episode(self, i):
-        episode = TestingEpisode(self.agent, self.env)
+        if self.with_prediction_horizon:
+            episode = TestingEpisodePredictionHorizon(self.agent, self.env)
+        else:
+            episode = TestingEpisode(self.agent, self.env)
         super(EvalWorld, self).run_episode(episode, i)
         for i in range (0, episode.stats['n_timesteps']):
             self.expected_values_file.write(str(episode.stats['q_value'][i]) + ',' + str(episode.stats['monte_carlo_return'][i]) + '\n')
@@ -747,17 +752,17 @@ class TrainEvalWorld(RLWorld):
         agent_model_file_name = os.path.join(self.log_dir, 'model' + suffix + '.pkl')
         self.agent.save(agent_model_file_name)
 
-class DataAcquisitionWorld(RLWorld):
-    def __init__(self, agent, env, params):
-        super(DataAcquisitionWorld, self).__init__(agent, env, params)
+class SampleTransitionsWorld(RLWorld):
+    def __init__(self, agent, env, params, name):
+        super().__init__(agent, env, params, name)
         self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
         self.data = ReplayBuffer(1e6)
         self.extra_data = []
-        self.iteration_name = 'timesteps'
+        self.iteration_name = 'transitions'
         self.iterations = params[self.iteration_name]
 
     def run(self):
-        logger.info('Data acquisition, %s running on %s for %d timesteps', self.agent_name, self.env_name, self.iterations)
+        logger.info('Sampling %d transitions from %s using %s.', self.iterations, self.env_name, self.agent_name)
         self.reset()
         self.set_state(WorldState.RUNNING)
         i = 0
@@ -774,7 +779,7 @@ class DataAcquisitionWorld(RLWorld):
 
             # Save the config in YAML file
             self.experience_time += episode.stats['experience_time']
-            self.update_results(n_iterations = timesteps, n_timesteps = episode.stats['n_timesteps'])
+            self.update_results(n_timesteps = episode.stats['n_timesteps'])
 
             self.data.merge(episode.buffer)
             self.extra_data += episode.extra_data
@@ -812,26 +817,25 @@ class DataAcquisitionWorld(RLWorld):
             with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
                 yaml.dump(self.config, outfile, default_flow_style=False)
 
-class StoreSamplesFromInitStatesWorld(RLWorld):
+class SampleInitStatesWorld(RLWorld):
     def __init__(self, agent, env, params, name=None):
-        super(StoreSamplesFromInitStatesWorld, self).__init__(agent, env, params, name)
+        super().__init__(agent, env, params, name)
         self.iteration_name = 'samples'
         self.iterations = params[self.iteration_name]
         self.init_state_samples = []
 
     def reset(self):
-        super(StoreSamplesFromInitStatesWorld, self).reset()
+        super().reset()
         self.init_state_samples = []
 
     def run(self):
-        logger.info('Store samples init states, %s running on %s for %d timesteps', self.agent_name, self.env_name, self.iterations)
+        logger.info('Sample %d init states from %s using %s.', self.iterations, self.agent_name, self.env_name)
         self.reset()
         self.set_state(WorldState.RUNNING)
         for i in range(self.iterations):
 
             self.env.reset()
             state = self.env.get_state_dict()
-            print(state)
 
             self.init_state_samples.append(state)
             pickle.dump(self.init_state_samples, open(os.path.join(self.log_dir, 'samples.pkl'), 'wb'))
@@ -923,9 +927,6 @@ class TrainingEpisode(Episode):
         self.agent.learn(transition)
 
 class TestingEpisode(Episode):
-    def __init__(self, agent, env):
-        super(TestingEpisode, self).__init__(agent, env)
-
     def _action_policy(self, state):
         return self.agent.predict(state)
 
@@ -948,3 +949,41 @@ class DataAcquisitionEpisode(Episode):
         super(DataAcquisitionEpisode, self)._update_stats_step(transition, info)
         if 'extra_data' in info:
             self.extra_data.append(info['extra_data'])
+
+class TestingEpisodePredictionHorizon(Episode):
+    """ Test episdoe with multiple augmented actions
+    Differences with episode:
+    - Assumes augmented action in transition
+    """
+    def run(self, render = False, init_state = None):
+
+        self.env.preloaded_init_state = init_state
+        state = self.env.reset()
+
+        while True:
+
+            action = self.agent.predict(state)
+
+            if self.agent.prediction_horizon == 1:
+                action = [action]
+
+            # Caution: This will not work with every gym env. reset_horizon()
+            # exist only in specific envs like Clutter
+            self.env.reset_horizon()
+
+            for i in range(self.agent.prediction_horizon):
+
+                if (render):
+                    self.env.render()
+
+                next_state, reward, done, info = self.env.step(action[i])
+
+                # Assumes that the agent returns augmented action (dict)
+                transition = Transition(state, action[i]['action'], reward, next_state, done)
+                self._update_stats_step(transition, info)
+
+                state = next_state.copy()
+                if done:
+                    break
+
+        self._update_states_episode(info)

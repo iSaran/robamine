@@ -1,5 +1,0 @@
-timesteps:
-  type: int
-  range: [1, 99999]
-render:
-  type: bool

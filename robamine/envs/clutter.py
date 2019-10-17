@@ -14,7 +14,7 @@ import os
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
-from robamine.utils.orientation import Quaternion, rot2angleaxis
+from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z
 from robamine.utils.math import sigmoid, rescale
 import robamine.utils.cv_tools as cv_tools
 import math
@@ -152,12 +152,17 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_width = 0.0
         self.target_pos = np.zeros(3)
         self.target_quat = Quaternion()
-        self.target_pos_prev_state = np.zeros(3)
-        self.target_quat_prev_state = Quaternion()
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
         self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
         self.success = False
         self.push_distance = 0.0
+
+        self.target_pos_prev_state = np.zeros(3)
+        self.target_quat_prev_state = Quaternion()
+        self.target_pos_horizon = np.zeros(3)
+        self.target_quat_horizon = Quaternion()
+        self.target_pos_pred = np.zeros(3)
+        self.target_quat_pred = Quaternion()
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -249,7 +254,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos_prev_state = self.target_pos
         self.target_quat_prev_state = self.target_quat
         self.preloaded_init_state = None
+        self.reset_horizon()
         return observation
+
+    def reset_horizon(self):
+        self.target_pos_horizon = self.target_pos.copy()
+        self.target_quat_horizon = self.target_quat.copy()
 
     def get_obs(self):
         """
@@ -342,18 +352,37 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         return final_feature, points_above_table, bbox
 
     def step(self, action):
+
+        # Check if we are in the special case of prective horizon actions where
+        # the action is an augmented action including the action index AND the
+        # pose of the target object
+        if isinstance(action, dict) and 'action' in action and 'pose' in action:
+            _action = action['action']
+            pos = np.array([action['pose'][0], action['pose'][1], 0])
+            self.target_pos_pred = \
+                  self.target_pos_horizon \
+                + np.matmul(self.target_quat_horizon.rotation_matrix(), pos)
+            rot = np.matmul(self.target_quat_horizon.rotation_matrix(), rot_z(action['pose'][2]))
+            self.target_quat_pred = Quaternion.from_rotation_matrix(rot)
+            pos = self.target_pos_pred
+            quat = self.target_quat_pred
+        else:
+            _action = action
+            pos = self.target_pos
+            quat = self.target_quat
+
         done = False
-        time = self.do_simulation(action)
+        time = self.do_simulation(_action, pos, quat)
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
-        reward = self.get_reward(obs, pcd, dim, action)
+        reward = self.get_reward(obs, pcd, dim, _action)
         if self.terminal_state(obs):
             done = True
 
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': self.get_target_displacement()}
 
-    def do_simulation(self, action):
+    def do_simulation(self, action, pos, quat):
         if self.params['discrete']:
             theta = action * 2 * math.pi / (self.action_space.n / self.nr_primitives)
             if action > 2 * int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
@@ -383,9 +412,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Transform pushing from target frame to world frame
         push_direction = np.array([push.direction[0], push.direction[1], 0])
-        push_direction_world = np.matmul(self.target_quat.rotation_matrix(), push_direction)
+        push_direction_world = np.matmul(quat.rotation_matrix(), push_direction)
         push_initial_pos = np.array([push.initial_pos[0], push.initial_pos[1], 0])
-        push_initial_pos_world = np.matmul(self.target_quat.rotation_matrix(), push_initial_pos) + self.target_pos
+        push_initial_pos_world = np.matmul(quat.rotation_matrix(), push_initial_pos) + pos
 
         init_z = 2 * self.target_height + 0.05
         self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
@@ -783,7 +812,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         return np.array([length, width, height])
 
     def get_target_displacement(self):
-        '''Returns [x, y, theta]: the displacement of the target between steps'''
+        '''Returns [x, y, theta]: the displacement of the target between pushing
+        steps. Used in step for returning displacements in info.'''
         displacement = np.zeros(3)
         temp = np.matmul(np.transpose(self.target_quat_prev_state.rotation_matrix()), (self.target_pos - self.target_pos_prev_state))
         displacement[0] = temp[0]
