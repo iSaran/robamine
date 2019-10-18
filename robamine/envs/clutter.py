@@ -463,7 +463,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # If the object has fallen from the table
-        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
+        if min([observation[-6], observation[-5], observation[-4], observation[-3]]) < 0:
             return True
 
         # If the object is free from obstacles around (no points around)
