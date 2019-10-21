@@ -983,5 +983,7 @@ class TestingEpisodePredictionHorizon(Episode):
                 state = next_state.copy()
                 if done:
                     break
+            if done:
+                break
 
         self._update_states_episode(info)
