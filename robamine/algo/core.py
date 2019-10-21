@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, Plotter, get_agent_handle, transform_sec_to_timestamp, Transition, EnvData
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, Plotter, get_agent_handle, transform_sec_to_timestamp, Transition, EnvData, TimestepData, EpisodeData, EpisodeListData
 from robamine.utils.info import get_pc_and_version, get_dir_size
 from robamine.utils.memory import ReplayBuffer
 from robamine import rb_logging
@@ -530,6 +530,8 @@ class RLWorld(World):
         else:
             self.env_init_states = None
 
+        self.episode_list_data = EpisodeListData()
+
     @classmethod
     def from_dict(cls, config):
         # Setup the environment
@@ -568,6 +570,7 @@ class RLWorld(World):
         super(RLWorld, self).reset()
         self.experience_time = 0
         self.episode_stats = []
+        self.episode_list_data = EpisodeListData()
         self.config['results']['n_episodes'] = 0
         self.config['results']['n_timesteps'] = 0
 
@@ -585,6 +588,7 @@ class RLWorld(World):
         # Update tensorboard stats
         self.stats.update(i, episode.stats)
         self.episode_stats.append(episode.stats)
+        self.episode_list_data.append(episode.data)
 
         # Save agent model
         self.save()
@@ -643,6 +647,7 @@ class RLWorld(World):
 
     def save(self, suffix=''):
         pickle.dump(self.episode_stats, open(os.path.join(self.log_dir, 'episode_stats.pkl'), 'wb'))
+        self.episode_list_data.save(self.log_dir)
 
     def update_results(self, n_iterations, n_timesteps, thread_safe=True, write_yaml=True):
 
@@ -702,6 +707,14 @@ class EvalWorld(RLWorld):
             self.actions_file.write(str(episode.stats['actions_performed'][i]) + ',')
         self.actions_file.write(str(episode.stats['actions_performed'][-1]) + '\n')
         self.actions_file.flush()
+
+    def run(self):
+        super().run()
+
+        # Write the evaluation results in file after evaluation
+        self.episode_list_data.calc()
+        with open(os.path.join(self.log_dir, 'eval_results.txt'), "w+") as file:
+            file.write(self.episode_list_data.__str__())
 
 class TrainEvalWorld(RLWorld):
     def __init__(self, agent, env, params, name=None):
@@ -868,6 +881,8 @@ class Episode:
         for key in self.agent.info:
             self.stats['info'][key] = []
 
+        self.data = EpisodeData()
+
     def run(self, render = False, init_state = None):
 
         self.env.load_state_dict(init_state)
@@ -908,9 +923,15 @@ class Episode:
         for i in range(0, len(self.stats['monte_carlo_return']) - 1):
             self.stats['monte_carlo_return'][i] += transition.reward
 
+        timestep = TimestepData()
+        timestep.transition = transition.copy()
+        timestep.q_value = self.agent.q_value(transition.state, transition.action)
+        self.data.append(timestep)
+
     def _update_states_episode(self, last_info):
         if 'success' in last_info:
             self.stats['success'] = last_info['success']
+            self.data.success = last_info['success']
 
         for i in range (0, self.stats['n_timesteps']):
             self.stats['monte_carlo_return'][i] = self.stats['monte_carlo_return'][i] / (self.stats['n_timesteps'] - i)
