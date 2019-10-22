@@ -383,7 +383,14 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.terminal_state(obs):
             done = True
 
-        return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': self.get_target_displacement()}
+        # Extra data for having pushing distance, theta along with displacements
+        # of the target
+        nr_substates = (self.action_space.n / self.nr_primitives)
+        j = int(action - np.floor(action / nr_substates) * nr_substates)
+        theta = j * 2 * math.pi / nr_substates
+        extra_data = [self.push_distance, theta, self.get_target_displacement()]
+
+        return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
 
     def do_simulation(self, action, pos, quat):
         if self.params['discrete']:
