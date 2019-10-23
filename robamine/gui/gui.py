@@ -358,7 +358,12 @@ class RobamineGUI(QMainWindow):
         name, _ = QFileDialog.getSaveFileName(self, 'Save File', "","YAML Files (*.yml)", options=options)
         if name != '':
             with open(name, 'w') as outfile:
-                yaml.dump(self.state, outfile, default_flow_style=False)
+                # Do not save results in the new yaml, in order to avoid moving
+                # older results to newly saved yamls.
+                state_without_results = self.state.copy()
+                if 'results' in state_without_results:
+                    del state_without_results['results']
+                yaml.dump(state_without_results, outfile, default_flow_style=False)
 
     def closeEvent(self, event):
         if self.current_mode == Mode.RUNNING or self.current_mode == Mode.STOPPING:
