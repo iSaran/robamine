@@ -112,10 +112,17 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             self.nr_primitives = 2
 
+        obs_dimm = OBSERVATION_DIM
+        if self.params['push_distance'][0] == self.params['push_distance'][1]:
+            obs_dimm -= 1
+
+        if self.params['finger_size'][0] == self.params['finger_size'][1]:
+            obs_dimm -= 1
+
         if self.params['split']:
-            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * OBSERVATION_DIM
+            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * obs_dimm
         else:
-            obs_dim = OBSERVATION_DIM
+            obs_dim = obs_dimm
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -318,6 +325,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         obstacle_height_range = self.params['obstacle_height_range']
         max_height = 2 * obstacle_height_range[1]
 
+        # If push distance is random normalize it btn min and max. Otherwise
+        # push distance in obs is zero always (actually there is not need to to
+        # have it in observation)
+        if self.params['push_distance'][0] == self.params['push_distance'][1]:
+            push_distance = None
+        else:
+            push_distance = rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1])
+
+        if self.params['finger_size'][0] == self.params['finger_size'][1]:
+            finger_size = None
+        else:
+            finger_size = rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1])
+
         if self.params['split']:
             heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / self.nr_primitives), plot=False)
             features = []
@@ -331,8 +351,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 f.append(distances[1])
                 f.append(distances[2])
                 f.append(distances[3])
-                f.append(rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1]))
-                f.append(rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1]))
+                if push_distance:
+                    f.append(push_distance)
+                if finger_size:
+                    f.append(finger_size)
                 features.append(f)
 
             final_feature = np.append(features[0], features[1], axis=0)
@@ -348,8 +370,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             features.append(distances[1])
             features.append(distances[2])
             features.append(distances[3])
-            features.append(rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1]))
-            features.append(rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1]))
+            if push_distance:
+                features.append(push_distance)
+            if finger_size:
+                features.append(finger_size)
             final_feature = np.array(features)
 
         return final_feature, points_above_table, bbox
@@ -386,7 +410,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         # Extra data for having pushing distance, theta along with displacements
         # of the target
         nr_substates = (self.action_space.n / self.nr_primitives)
-        j = int(action - np.floor(action / nr_substates) * nr_substates)
+        j = int(_action - np.floor(_action / nr_substates) * nr_substates)
         theta = j * 2 * math.pi / nr_substates
         extra_data = [self.push_distance, theta, self.get_target_displacement()]
 
