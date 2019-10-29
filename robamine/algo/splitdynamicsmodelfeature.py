@@ -50,12 +50,11 @@ class SplitDynamicsModelFeature(SplitDynamicsModel):
         features = np.split(state, self.nr_substates)
 
         for j in range(0, self.nr_substates):
-            s = torch.FloatTensor(features[j]).to(self.device)
-            next_feature = self.network[primitive](s).cpu().detach().numpy()
+            next_feature = self.dynamics_models[primitive].predict(features[j])
 
             if j == 0:
                 prediction = next_feature
             else:
                 prediction = np.concatenate((prediction, next_feature))
 
-        return predition
+        return prediction
