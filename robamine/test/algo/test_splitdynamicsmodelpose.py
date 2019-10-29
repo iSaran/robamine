@@ -27,10 +27,11 @@ class TestAgent(unittest.TestCase):
 
     def test_results(self):
         model = SplitDynamicsModelPose.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'model.pkl'))
-        state = 0.153253
+        #state = 0.153253
+        state = 0
         action = 2
         prediction = model.predict(state, action)
-        expected = np.array([0.002494, 0.115571, 0.045586])
+        expected = np.array([-0.007801,  0.09634, -0.026281])
         np_test.assert_array_almost_equal(prediction, expected)
 
 if __name__ == '__main__':

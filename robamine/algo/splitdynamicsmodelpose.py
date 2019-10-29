@@ -29,7 +29,12 @@ class SplitDynamicsModelPose(SplitDynamicsModel):
 
         for i in range(len(env_data.info['extra_data'])):
             # Extra data 0, 1 is the pushing distance and the angle of the action in rads
-            pose_input = np.array([env_data.info['extra_data'][i][0], env_data.info['extra_data'][i][1]])
+
+            j = int(env_data.transitions[i].action - np.floor(env_data.transitions[i].action / self.nr_substates) * self.nr_substates)
+            state_split = np.split(env_data.transitions[i].state, self.nr_substates)
+            push_distance = state_split[j][-2]
+            angle = j * 2 * math.pi / (self.nr_primitives * self.nr_substates / self.nr_primitives)
+            pose_input = np.array([push_distance, angle])
             primitive = int(np.floor(env_data.transitions[i].action / self.nr_substates))
 
             # Extra data in 2 has a np array with the displacement in (x, y, theta_around_z)
@@ -42,6 +47,8 @@ class SplitDynamicsModelPose(SplitDynamicsModel):
         # Assuming that state is the pushing distance and action the index of
         # the action
         primitive = int(np.floor(action / self.nr_substates))
+        if primitive == 1:
+            return np.array([0, 0, 0])
         substate_index = int(action - np.floor(action / self.nr_substates) * self.nr_substates)
         angle = substate_index * 2 * math.pi / (self.nr_primitives * self.nr_substates / self.nr_primitives)
         mystate = np.array([state, angle])
