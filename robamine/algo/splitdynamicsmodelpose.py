@@ -1,6 +1,6 @@
 """
-Spit Dynamics Model
-===================
+Spit Dynamics Model Pose
+========================
 """
 
 import torch
@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger('robamine.algo.splitdynamicsmodelpose')
 
 class SplitDynamicsModelPose(SplitDynamicsModel):
-    def __init__(self, params, inputs=2, outputs=3, name='SplitDynamicsModel'):
+    def __init__(self, params, inputs=4, outputs=3, name='SplitDynamicsModelPose'):
         super().__init__(params, inputs, outputs, name)
 
     def load_dataset(self, env_data):
@@ -33,8 +33,10 @@ class SplitDynamicsModelPose(SplitDynamicsModel):
             j = int(env_data.transitions[i].action - np.floor(env_data.transitions[i].action / self.nr_substates) * self.nr_substates)
             state_split = np.split(env_data.transitions[i].state, self.nr_substates)
             push_distance = state_split[j][-2]
+            bounding_box_1 = state_split[j][-7]
+            bounding_box_2 = state_split[j][-8]
             angle = j * 2 * math.pi / (self.nr_primitives * self.nr_substates / self.nr_primitives)
-            pose_input = np.array([push_distance, angle])
+            pose_input = np.array([push_distance, bounding_box_1, bounding_box_2, angle])
             primitive = int(np.floor(env_data.transitions[i].action / self.nr_substates))
 
             # Extra data in 2 has a np array with the displacement in (x, y, theta_around_z)
@@ -51,6 +53,6 @@ class SplitDynamicsModelPose(SplitDynamicsModel):
             return np.array([0, 0, 0])
         substate_index = int(action - np.floor(action / self.nr_substates) * self.nr_substates)
         angle = substate_index * 2 * math.pi / (self.nr_primitives * self.nr_substates / self.nr_primitives)
-        mystate = np.array([state, angle])
+        mystate = np.array([state[0], state[1], state[2], angle])
         prediction = super().predict(mystate, action)
         return prediction

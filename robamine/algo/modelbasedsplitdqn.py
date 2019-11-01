@@ -23,8 +23,6 @@ class ModelBasedSplitDQN(SplitDQN):
         u = None
         p = None
 
-        print('ModelBasedSplitDQN: ', 'Predicting:', self.params['prediction_horizon'])
-
         for t in range(self.params['prediction_horizon']):
 
             if t == 0:
@@ -39,7 +37,11 @@ class ModelBasedSplitDQN(SplitDQN):
                 j = int(u - np.floor(u / self.nr_substates) * self.nr_substates)
                 features = np.split(state, self.nr_substates)
                 push_distance = features[j][-2]
-                p_pred = self.dynamics_model_pose.predict(push_distance, u)
+                bounding_box_1 = features[j][-7]
+                bounding_box_2 = features[j][-8]
+                angle = j * 2 * math.pi / (self.nr_network * self.nr_substates / self.nr_network)
+                pose_input = np.array([push_distance, bounding_box_1, bounding_box_2, angle])
+                p_pred = self.dynamics_model_pose.predict(pose_input, u)
                 p = p + p_pred
 
             u = super().predict(x)
