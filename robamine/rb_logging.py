@@ -79,14 +79,17 @@ class Formatter(logging.Formatter):
 
         return result
 
-def init(directory='/tmp', console_level=logging.INFO, file_level=logging.DEBUG):
+def init(directory='/tmp', friendly_name='', console_level=logging.INFO, file_level=logging.DEBUG):
     global _logger, _log_path
 
     # Create the log path
     if not os.path.exists(directory):
         os.makedirs(directory)
     #log_path = os.path.join(directory, 'robamine_logger_' + agent_name.replace(" ", "_") + "_" + env_name.replace(" ", "_") + '_' + get_now_timestamp())
-    log_path = os.path.join(directory, 'robamine_logs_' + get_now_timestamp())
+    if friendly_name != '':
+        log_path = os.path.join(directory, friendly_name)
+    else:
+        log_path = os.path.join(directory, 'robamine_logs_' + get_now_timestamp())
     os.makedirs(log_path)
     _log_path = log_path
 

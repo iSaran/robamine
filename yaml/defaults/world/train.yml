@@ -1,5 +1,6 @@
 name: 'Train'
 logging_dir: /tmp/robamine_logs/
+friendly_name: ''
 comments: ''
 params:
   episodes: 1000

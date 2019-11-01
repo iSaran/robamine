@@ -21,6 +21,8 @@ import threading
 
 import importlib
 
+import shutil
+
 # Paths to yaml files
 path_to_yamls = os.path.join(os.path.dirname(__file__), '../../yaml/')
 path_to_defaults = os.path.join(path_to_yamls, 'defaults')
@@ -38,7 +40,7 @@ class RobamineApp(QObject):
     def __init__(self, params):
         super(RobamineApp, self).__init__()
         self.params = params.copy()
-        rb_logging.init(directory=params['world']['logging_dir'], file_level=logging.INFO)
+        rb_logging.init(directory=params['world']['logging_dir'], friendly_name=params['world']['friendly_name'], file_level=logging.INFO)
 
         # Load the desired world type
         module = importlib.import_module('robamine.algo.core')
@@ -180,6 +182,7 @@ class RobamineGUI(QMainWindow):
             self.start_button.setDisabled(False)
             self.stop_button.setDisabled(True)
             self.status_label.setText('CONFIGURING')
+            self.friendly_name_input.setDisabled(False)
 
         elif mode == Mode.FINISHED:
             self.progress_group.setDisabled(False)
@@ -189,11 +192,13 @@ class RobamineGUI(QMainWindow):
             self.start_button.setDisabled(True)
             self.stop_button.setDisabled(True)
             self.status_label.setText('FINISHED.')
+            self.friendly_name_input.setDisabled(True)
 
         elif mode == Mode.STOPPING:
             self.robamine_app.terminate()
             self.stop_button.setDisabled(True)
             self.status_label.setText('STOPPING...')
+            self.friendly_name_input.setDisabled(True)
 
         elif mode == Mode.STARTING:
             self.world_group.setDisabled(True)
@@ -201,11 +206,13 @@ class RobamineGUI(QMainWindow):
             self.agent_group.setDisabled(True)
             self.start_button.setDisabled(True)
             self.status_label.setText('STARTING...')
+            self.friendly_name_input.setDisabled(True)
 
         elif mode == Mode.RUNNING:
             self.progress_group.setDisabled(False)
             self.stop_button.setDisabled(False)
             self.status_label.setText('RUNNING...')
+            self.friendly_name_input.setDisabled(True)
 
         else:
             raise ValueError('Mode does not exist.')
@@ -234,6 +241,7 @@ class RobamineGUI(QMainWindow):
         world = {}
         world['name'] = self.world_name.currentText()
         world['logging_dir'] = self.logging_dir_input.text()
+        world['friendly_name'] = self.friendly_name_input.text()
         world['comments'] = self.comments.toPlainText()
         if 'params' in self.world_defaults[world['name']]:
             world['params'] = form2dict(self.world_params_layout)
@@ -265,6 +273,7 @@ class RobamineGUI(QMainWindow):
         if world['name'] not in self.available['world']:
             raise ValueError('The world name: ' + world['name'] + ' is not supported.')
         self.logging_dir_input.setText(self.state['world']['logging_dir'])
+        self.friendly_name_input.setText(self.state['world']['friendly_name'])
         self.comments.setText(self.state['world']['comments'])
 
         self.world_name.setCurrentIndex(self.world_name.findText(world['name']))
@@ -308,6 +317,24 @@ class RobamineGUI(QMainWindow):
 
     def start(self):
         self.gui2state()
+
+        path = os.path.join(self.state['world']['logging_dir'], self.state['world']['friendly_name'])
+        if self.state['world']['friendly_name'] != '' and os.path.exists(path):
+            dialog = AreYouSure("The directory name is already exists. If you start the experiment the directory will be overritten. Are you sure you want to continue?")
+            dialog.accepted.connect(self.start_for_real)
+            dialog.exec_()
+            dialog.show()
+        else:
+            self.start_for_real()
+
+
+    def start_for_real(self):
+        self.gui2state()
+
+        path = os.path.join(self.state['world']['logging_dir'], self.state['world']['friendly_name'])
+        if self.state['world']['friendly_name'] != '' and os.path.exists(path):
+            shutil.rmtree(path)
+
         self.robamine_app = RobamineApp(self.state)
         self.robamine_thread = QThread()
 
