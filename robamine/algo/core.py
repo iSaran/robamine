@@ -9,7 +9,7 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, Plotter, get_agent_handle, transform_sec_to_timestamp, Transition
+from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, Plotter, get_agent_handle, transform_sec_to_timestamp, Transition, EnvData
 from robamine.utils.info import get_pc_and_version, get_dir_size
 from robamine.utils.memory import ReplayBuffer
 from robamine import rb_logging
@@ -31,7 +31,7 @@ class Agent:
         self.params = params.copy()
         self.info = {}
         self.rng = np.random.RandomState()
-        self.prediction_horizon = params.get('prediction_horizon', 1)
+        self.prediction_horizon = params.get('prediction_horizon', None)
 
     def save(self, file_path):
         error = 'Agent ' + self.name + ' does not provide saving capabilities.'
@@ -525,7 +525,8 @@ class RLWorld(World):
         self.episode_stats = []
 
         if 'List of env init states' in params and params['List of env init states'] != '':
-            self.env_init_states = pickle.load(open(params['List of env init states'], 'rb'))
+            env_data = EnvData.load(params['List of env init states'])
+            self.env_init_states = env_data.init_states
         else:
             self.env_init_states = None
 
@@ -683,14 +684,16 @@ class EvalWorld(RLWorld):
         self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
         self.expected_values_file.write('expected,real\n')
         self.actions_file = open(os.path.join(self.log_dir, 'actions' + '.csv'), "w+")
-        self.with_prediction_horizon = params.get('with_prediction_horizon', False)
+        self.with_prediction_horizon = False
+        if self.agent.prediction_horizon:
+            self.with_prediction_horizon = True
 
     def run_episode(self, i):
         if self.with_prediction_horizon:
             episode = TestingEpisodePredictionHorizon(self.agent, self.env)
         else:
             episode = TestingEpisode(self.agent, self.env)
-        super(EvalWorld, self).run_episode(episode, i)
+        super().run_episode(episode, i)
         for i in range (0, episode.stats['n_timesteps']):
             self.expected_values_file.write(str(episode.stats['q_value'][i]) + ',' + str(episode.stats['monte_carlo_return'][i]) + '\n')
             self.expected_values_file.flush()
@@ -756,10 +759,14 @@ class SampleTransitionsWorld(RLWorld):
     def __init__(self, agent, env, params, name):
         super().__init__(agent, env, params, name)
         self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
-        self.data = ReplayBuffer(1e6)
-        self.extra_data = []
+        self.env_data = EnvData(['extra_data'])
+
         self.iteration_name = 'transitions'
         self.iterations = params[self.iteration_name]
+
+    def reset(self):
+        super().reset()
+        self.env_data.reset()
 
     def run(self):
         logger.info('Sampling %d transitions from %s using %s.', self.iterations, self.env_name, self.agent_name)
@@ -777,25 +784,21 @@ class SampleTransitionsWorld(RLWorld):
             self.stats.update(i, episode.stats)
             self.episode_stats.append(episode.stats)
 
-            # Save the config in YAML file
             self.experience_time += episode.stats['experience_time']
             self.update_results(n_timesteps = episode.stats['n_timesteps'])
 
-            self.data.merge(episode.buffer)
-            self.extra_data += episode.extra_data
-            self.data.save(os.path.join(self.log_dir, 'data.pkl'))
-            pickle.dump(self.extra_data, open(os.path.join(self.log_dir, 'extra_data.pkl'), 'wb'))
+            self.env_data += episode.env_data
+            self.env_data.save(self.log_dir)
 
             if self.stop_running:
                 break
 
             i += 1
 
-        while self.data.size() > self.iterations:
-            self.data.remove(-1)
-            del self.extra_data[-1]
-        self.data.save(os.path.join(self.log_dir, 'data.pkl'))
-        pickle.dump(self.extra_data, open(os.path.join(self.log_dir, 'extra_data.pkl'), 'wb'))
+        while len(self.env_data.transitions) > self.iterations:
+            del self.env_data.transitions[-1]
+            del self.env_data.info['extra_data'][-1]
+        self.env_data.save(self.log_dir)
 
         self.set_state(WorldState.FINISHED)
 
@@ -822,26 +825,22 @@ class SampleInitStatesWorld(RLWorld):
         super().__init__(agent, env, params, name)
         self.iteration_name = 'samples'
         self.iterations = params[self.iteration_name]
-        self.init_state_samples = []
+        self.env_data = EnvData()
 
     def reset(self):
         super().reset()
-        self.init_state_samples = []
+        self.env_data.reset()
 
     def run(self):
         logger.info('Sample %d init states from %s using %s.', self.iterations, self.agent_name, self.env_name)
         self.reset()
         self.set_state(WorldState.RUNNING)
         for i in range(self.iterations):
-
             self.env.reset()
-            state = self.env.get_state_dict()
-
-            self.init_state_samples.append(state)
-            pickle.dump(self.init_state_samples, open(os.path.join(self.log_dir, 'samples.pkl'), 'wb'))
-
+            state = self.env.state_dict()
+            self.env_data.init_states.append(state)
+            self.env_data.save(self.log_dir)
             self.update_results(n_iterations = i + 1, n_timesteps = 0)
-
             if self.stop_running:
                 break
 
@@ -871,7 +870,7 @@ class Episode:
 
     def run(self, render = False, init_state = None):
 
-        self.env.preloaded_init_state = init_state
+        self.env.load_state_dict(init_state)
         state = self.env.reset()
 
         while True:
@@ -935,20 +934,19 @@ class TestingEpisode(Episode):
 
 class DataAcquisitionEpisode(Episode):
     def __init__(self, agent, env, buffer_size=1e6):
-        super(DataAcquisitionEpisode, self).__init__(agent, env)
-        self.buffer = ReplayBuffer(buffer_size)
-        self.extra_data = []
+        super().__init__(agent, env)
+        self.env_data = EnvData(['extra_data'])
 
     def _action_policy(self, state):
         return self.agent.predict(state)
 
     def _learn(self, transition):
-        self.buffer.store(transition)
+        self.env_data.transitions.append(transition)
 
     def _update_stats_step(self, transition, info):
-        super(DataAcquisitionEpisode, self)._update_stats_step(transition, info)
+        super()._update_stats_step(transition, info)
         if 'extra_data' in info:
-            self.extra_data.append(info['extra_data'])
+            self.env_data.info['extra_data'].append(info['extra_data'])
 
 class TestingEpisodePredictionHorizon(Episode):
     """ Test episdoe with multiple augmented actions
@@ -957,7 +955,7 @@ class TestingEpisodePredictionHorizon(Episode):
     """
     def run(self, render = False, init_state = None):
 
-        self.env.preloaded_init_state = init_state
+        self.env.load_state_dict(init_state)
         state = self.env.reset()
 
         while True:

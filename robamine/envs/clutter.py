@@ -136,7 +136,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_length = 0.0
         self.finger_height = 0.0
         self.target_size = np.zeros(3)
-        self.table_size = np.zeros(2)
 
         self.no_of_prev_points_around = 0
         # State variables. Updated after each call in self.sim_step()
@@ -161,8 +160,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_quat_prev_state = Quaternion()
         self.target_pos_horizon = np.zeros(3)
         self.target_quat_horizon = Quaternion()
-        self.target_pos_pred = np.zeros(3)
-        self.target_quat_pred = Quaternion()
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -176,18 +173,23 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.sim_step()
 
         if self.preloaded_init_state:
-            self.sim.model.geom_size = self.preloaded_init_state['geom_size'].copy()
-            self.sim.model.geom_type = self.preloaded_init_state['geom_type'].copy()
-            self.sim.model.geom_friction = self.preloaded_init_state['geom_friction'].copy()
-            self.sim.model.geom_condim = self.preloaded_init_state['geom_condim'].copy()
+            for i in range(len(self.sim.model.geom_size)):
+                self.sim.model.geom_size[i] = self.preloaded_init_state['geom_size'][i]
+                self.sim.model.geom_type[i] = self.preloaded_init_state['geom_type'][i]
+                self.sim.model.geom_friction[i] = self.preloaded_init_state['geom_friction'][i]
+                self.sim.model.geom_condim[i] = self.preloaded_init_state['geom_condim'][i]
 
             # Set the initial position of the finger outside of the table, in order
             # to not occlude the objects during reading observation from the camera
             index = self.sim.model.get_joint_qpos_addr('finger')
-            self.preloaded_init_state[index[0]]   = 100
-            self.preloaded_init_state[index[0]+1] = 100
-            self.preloaded_init_state[index[0]+2] = 100
-            self.set_state(self.preloaded_init_state['qpos'], self.preloaded_init_state['qvel'])
+            qpos = self.preloaded_init_state['qpos'].copy()
+            qvel = self.preloaded_init_state['qvel'].copy()
+            qpos[index[0]]   = 100
+            qpos[index[0]+1] = 100
+            qpos[index[0]+2] = 100
+            self.set_state(qpos, qvel)
+            self.push_distance = self.preloaded_init_state['push_distance']
+            self.preloaded_init_state = None
 
             self.sim_step()
         else:
@@ -226,7 +228,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
         self.finger_height = get_geom_size(self.sim.model, 'finger')[0]  # same as length, its a sphere
         self.target_size = 2 * get_geom_size(self.sim.model, 'target')
-        self.table_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
+        self.surface_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
+
 
         features, point_cloud, dim = self.get_obs()
         gap = 0.03
@@ -359,13 +362,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if isinstance(action, dict) and 'action' in action and 'pose' in action:
             _action = action['action']
             pos = np.array([action['pose'][0], action['pose'][1], 0])
-            self.target_pos_pred = \
+            target_pos_pred = \
                   self.target_pos_horizon \
                 + np.matmul(self.target_quat_horizon.rotation_matrix(), pos)
             rot = np.matmul(self.target_quat_horizon.rotation_matrix(), rot_z(action['pose'][2]))
-            self.target_quat_pred = Quaternion.from_rotation_matrix(rot)
-            pos = self.target_pos_pred
-            quat = self.target_quat_pred
+            target_quat_pred = Quaternion.from_rotation_matrix(rot)
+            pos = target_pos_pred
+            quat = target_quat_pred
         else:
             _action = action
             pos = self.target_pos
@@ -655,7 +658,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.surface_size[1] = self.rng.uniform(surface_width_range[0], surface_width_range[1])
         geom_id = get_geom_id(self.sim.model, "table")
         self.sim.model.geom_size[geom_id][0] = self.surface_size[0]
-        self.sim.model.geom_size[geom_id][0] = self.surface_size[1]
+        self.sim.model.geom_size[geom_id][1] = self.surface_size[1]
 
 
         # Randomize target object
@@ -738,7 +741,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.model.geom_size[geom_id][1] = obstacle_height
 
             # Randomize the positions
-            index = self.sim.model.get_joint_qpos_addr("object"+str(i))
+            index = self.sim.model.get_joint_qpos_addr("object" + str(i))
             r = self.rng.exponential(0.01) + target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1])
             theta = np.random.uniform(0, 2*math.pi)
             random_qpos[index[0]] = r * math.cos(theta)
@@ -828,7 +831,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_quat_prev_state = self.target_quat
         return displacement
 
-    def get_state_dict(self):
+    def state_dict(self):
         state = {}
         state['qpos'] = self.sim.data.qpos.ravel().copy()
         state['qvel'] = self.sim.data.qvel.ravel().copy()
@@ -836,4 +839,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         state['geom_type'] = self.sim.model.geom_type.copy()
         state['geom_friction'] = self.sim.model.geom_friction.copy()
         state['geom_condim'] = self.sim.model.geom_condim.copy()
+        state['push_distance'] = self.push_distance
         return state
+
+    def load_state_dict(self, state):
+        if state:
+            self.preloaded_init_state = state.copy()
+        else:
+            state = None

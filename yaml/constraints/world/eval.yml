@@ -9,6 +9,3 @@ save_every:
 List of env init states:
   type: str
   help: Path to file with a list of initial states for the environment to be used instead of random initialization.
-with_prediction_horizon:
-  type: bool
-  help: Set true if the agent predicts multiple steps ahead
