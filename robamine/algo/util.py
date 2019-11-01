@@ -27,6 +27,8 @@ import importlib
 
 from robamine.utils.math import rescale_array
 
+import copy
+
 # Data storing primitive classes
 
 class Transition:
@@ -51,6 +53,12 @@ class Transition:
                 ', reward: ' + str(self.reward) + \
                 ', next_state: ' + str(self.next_state) + \
                 ', terminal: ' + str(self.terminal) + ']'
+
+    def __copy__(self):
+        return Transition(state=copy.copy(self.state), action=copy.copy(self.action), reward=copy.copy(self.reward), next_state=copy.copy(self.next_state), terminal=copy.copy(self.terminal))
+
+    def copy(self):
+        return self.__copy__()
 
 class Datapoint:
     def __init__(self, x, y):
@@ -114,6 +122,10 @@ class Dataset(list):
         return np.min(x, axis=0), np.min(y, axis=0)
 
 class EnvData:
+    """
+    Stores data from an environment. Useful for storing samples, such as init
+    states, transitions etc, drawn from an environment
+    """
     def __init__(self, info_names = []):
         self.init_states = []
         self.init_observations = []
@@ -161,6 +173,86 @@ class EnvData:
                 ', init_observations: ' + str(self.init_observations) + \
                 ', transitions: ' + str(self.transitions) + \
                 ', info: ' + str(self.info) + ']'
+
+class TimestepData:
+    def __init__(self):
+        self.transition = None
+        self.q_value = None
+
+class EpisodeData(list):
+    def __init__(self, *args):
+        list.__init__(self, *args)
+
+        self.success = False
+
+        self.reward = {'mean': None, 'std': None, 'max': None, 'min': None, 'sum': None}
+        self.q_value = {'mean': None, 'std': None, 'max': None, 'min': None, 'sum': None}
+        self.actions_performed = []
+        self.monte_carlo_return = []
+
+    def calc(self):
+        rewards, q_values = [], []
+
+        for timestep in self:
+            rewards.append(timestep.transition.reward)
+            q_values.append(timestep.q_value)
+            self.actions_performed.append(timestep.transition.action)
+
+        self.reward['mean'] = np.mean(np.array(rewards))
+        self.reward['std'] = np.std(np.array(rewards))
+        self.reward['max'] = np.max(np.array(rewards))
+        self.reward['min'] = np.min(np.array(rewards))
+        self.reward['sum'] = np.sum(np.array(rewards))
+
+        self.q_value['mean'] = np.mean(np.array(q_values))
+        self.q_value['std'] = np.std(np.array(q_values))
+        self.q_value['max'] = np.max(np.array(q_values))
+        self.q_value['min'] = np.min(np.array(q_values))
+        self.q_value['sum'] = np.sum(np.array(q_values))
+
+class EpisodeListData(list):
+    def __init__(self, *args):
+        list.__init__(self, *args)
+
+        self.success_rate = 0.0
+        self.reward = {'mean': 0.0, 'std': 0.0}
+        self.actions_success = {'mean': None, 'std': None}
+
+    def calc(self):
+        sums, nr_actions_success, successes = [], [], []
+        for episode in self:
+            episode.calc()
+            sums.append(episode.reward['sum'])
+            successes.append(float(episode.success))
+            if episode.success:
+                nr_actions_success.append(len(episode.actions_performed))
+
+        self.reward['mean'] = np.mean(np.array(sums))
+        self.reward['std'] = np.std(np.array(sums))
+        self.actions_success['mean'] = np.mean(np.array(nr_actions_success))
+        self.actions_success['std'] = np.std(np.array(nr_actions_success))
+        self.success_rate = np.mean(np.array(successes))
+
+    def save(self, dir, file_name='episodes'):
+        pickle.dump(self, open(os.path.join(dir, file_name), 'wb'))
+
+    @classmethod
+    def load(cls, file_path):
+        cls = pickle.load(open(file_path, 'rb'))
+        return cls
+
+    def __str__(self):
+        return 'EpisodeListData:' \
+               + '\n' + 'Success rate: ' + str(self.success_rate * 100) + '%' \
+               + '\n' + 'Mean reward: ' + str(self.reward['mean']) \
+               + '\n' + 'Std reward: ' + str(self.reward['std']) \
+               + '\n' + 'Mean actions until success: ' + str(self.actions_success['mean']) \
+               + '\n' + 'Std actions until success: ' + str(self.actions_success['std'])
+
+
+    def dict(self):
+        pass
+
 
 # Primitive classes for logging data and plotting e.g. in Tensorboard
 
