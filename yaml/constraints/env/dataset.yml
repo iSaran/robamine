@@ -1,0 +1,3 @@
+path:
+  type: str
+  help: 'The path to a pickle file that contains the dataset.'

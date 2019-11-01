@@ -284,6 +284,15 @@ def form2dict(layout):
         result[label] = widget
     return result
 
+def dict2form_read(values, layout):
+    for i in reversed(range(layout.rowCount())):
+        layout.removeRow(i)
+
+    for key, value in sorted(values.items()):
+        label = QLabel(key)
+        w = QLabel(str(value))
+        layout.addRow(label, w)
+
 def dict2form(values, constraints, layout):
     # inputs = self.env_defaults[self.env_name.currentText()]
     # constraints = self.env_constraints[self.env_name.currentText()]
@@ -294,6 +303,8 @@ def dict2form(values, constraints, layout):
     for key, value in sorted(values.items()):
         con = constraints[key]
         label = QLabel(key)
+        if 'help' in con:
+            label.setToolTip(con['help'])
 
         if con['type'] == 'int':
             w = QSpinBox()
@@ -354,6 +365,9 @@ def dict2form(values, constraints, layout):
         elif con['type'] == 'bool':
             w = QCheckBox()
             w.setChecked(value)
+        elif con['type'] == 'str':
+            w = QLineEdit()
+            w.setText(str(value))
         else:
             w = QLineEdit()
             w.setText(str(value))

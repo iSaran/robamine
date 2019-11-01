@@ -1,0 +1,8 @@
+name: 'Train'
+logging_dir: /tmp/robamine_logs/
+friendly_name: ''
+comments: ''
+params:
+  episodes: 1000
+  render: false
+  save_every: 20

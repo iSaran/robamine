@@ -1,0 +1,20 @@
+episodes:
+  type: int
+  range: [1, 5000]
+  help: The number of episodes to train for.
+render:
+  type: bool
+save_every:
+  type: int
+  range: [1, 5000]
+  help: The number of episodes that the agent's model will be saved into disc periodically.
+eval_episodes:
+  type: int
+  range: [1, 5000]
+  help: The number of testing episodes to run between training episodes.
+eval_render:
+  type: bool
+eval_every:
+  type: int
+  range: [1, 5000]
+  help: The number of training episodes to wait before running testing episodes.

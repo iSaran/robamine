@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>791</width>
-    <height>869</height>
+    <width>773</width>
+    <height>839</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,6 +18,21 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_2">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
     <item>
      <widget class="QScrollArea" name="central_scroll_area">
       <property name="sizePolicy">
@@ -35,10 +50,25 @@
          <x>0</x>
          <y>0</y>
          <width>771</width>
-         <height>802</height>
+         <height>790</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_4" stretch="3,5,1">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
         <item>
          <widget class="QWidget" name="world" native="true">
           <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="4,2">
@@ -56,7 +86,7 @@
              <property name="alignment">
               <set>Qt::AlignCenter</set>
              </property>
-             <layout class="QVBoxLayout" name="verticalLayout_3">
+             <layout class="QVBoxLayout" name="verticalLayout_3" stretch="1,1,10">
               <item>
                <widget class="QWidget" name="mode" native="true">
                 <layout class="QFormLayout" name="formLayout_7">
@@ -66,38 +96,12 @@
                     <enum>Qt::LeftToRight</enum>
                    </property>
                    <property name="text">
-                    <string>Mode:</string>
+                    <string>Name:</string>
                    </property>
                   </widget>
                  </item>
                  <item row="0" column="1">
-                  <widget class="QComboBox" name="mode_input">
-                   <item>
-                    <property name="text">
-                     <string>Train &amp; Evaluate</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
-                     <string>Train</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
-                     <string>Evaluate</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
-                     <string>Data Acquisition</string>
-                    </property>
-                   </item>
-                   <item>
-                    <property name="text">
-                     <string>Resume</string>
-                    </property>
-                   </item>
-                  </widget>
+                  <widget class="QComboBox" name="world_name"/>
                  </item>
                  <item row="1" column="0">
                   <widget class="QLabel" name="label">
@@ -124,122 +128,58 @@
                </widget>
               </item>
               <item>
-               <layout class="QHBoxLayout" name="horizontalLayout_13">
-                <item>
-                 <widget class="QGroupBox" name="options_group">
-                  <property name="title">
-                   <string>Options:</string>
+               <widget class="QLabel" name="label_8">
+                <property name="text">
+                 <string>Parameters:</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QScrollArea" name="scrollArea">
+                <property name="widgetResizable">
+                 <bool>true</bool>
+                </property>
+                <widget class="QWidget" name="scrollAreaWidgetContents">
+                 <property name="geometry">
+                  <rect>
+                   <x>0</x>
+                   <y>0</y>
+                   <width>470</width>
+                   <height>95</height>
+                  </rect>
+                 </property>
+                 <layout class="QVBoxLayout" name="verticalLayout_10" stretch="0">
+                  <property name="spacing">
+                   <number>6</number>
                   </property>
-                  <layout class="QFormLayout" name="formLayout_8">
-                   <item row="0" column="0">
-                    <widget class="QLabel" name="label_3">
-                     <property name="text">
-                      <string>Episodes:</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="0" column="1">
-                    <widget class="QSpinBox" name="episodes_input">
-                     <property name="minimum">
-                      <number>1</number>
-                     </property>
-                     <property name="maximum">
-                      <number>100000</number>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="1" column="0">
-                    <widget class="QLabel" name="label_4">
-                     <property name="text">
-                      <string>Save every:</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="1" column="1">
-                    <widget class="QSpinBox" name="save_every_input">
-                     <property name="minimum">
-                      <number>1</number>
-                     </property>
-                     <property name="maximum">
-                      <number>1000</number>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="2" column="0">
-                    <widget class="QLabel" name="label_16">
-                     <property name="text">
-                      <string>Render:</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="2" column="1">
-                    <widget class="QCheckBox" name="render_input">
-                     <property name="text">
-                      <string/>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QGroupBox" name="train_eval_group">
-                  <property name="title">
-                   <string>Train and Eval Options:</string>
+                  <property name="leftMargin">
+                   <number>9</number>
                   </property>
-                  <layout class="QFormLayout" name="formLayout_2">
-                   <item row="0" column="0">
-                    <widget class="QLabel" name="label_6">
-                     <property name="text">
-                      <string>Eval. Episodes:</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="0" column="1">
-                    <widget class="QSpinBox" name="eval_episodes_input">
-                     <property name="minimum">
-                      <number>1</number>
-                     </property>
-                     <property name="maximum">
-                      <number>100000</number>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="1" column="0">
-                    <widget class="QLabel" name="label_5">
-                     <property name="text">
-                      <string>Evaluate every:</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="1" column="1">
-                    <widget class="QSpinBox" name="eval_every_input">
-                     <property name="minimum">
-                      <number>1</number>
-                     </property>
-                     <property name="maximum">
-                      <number>1000</number>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="2" column="0">
-                    <widget class="QLabel" name="label_17">
-                     <property name="text">
-                      <string>Render Eval:</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item row="2" column="1">
-                    <widget class="QCheckBox" name="eval_render_input">
-                     <property name="text">
-                      <string/>
-                     </property>
-                    </widget>
-                   </item>
-                  </layout>
-                 </widget>
-                </item>
-               </layout>
+                  <property name="topMargin">
+                   <number>9</number>
+                  </property>
+                  <property name="rightMargin">
+                   <number>9</number>
+                  </property>
+                  <property name="bottomMargin">
+                   <number>9</number>
+                  </property>
+                  <item>
+                   <layout class="QFormLayout" name="world_params_layout">
+                    <property name="sizeConstraint">
+                     <enum>QLayout::SetNoConstraint</enum>
+                    </property>
+                    <property name="fieldGrowthPolicy">
+                     <enum>QFormLayout::FieldsStayAtSizeHint</enum>
+                    </property>
+                    <property name="labelAlignment">
+                     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                    </property>
+                   </layout>
+                  </item>
+                 </layout>
+                </widget>
+               </widget>
               </item>
              </layout>
             </widget>
@@ -247,6 +187,21 @@
            <item>
             <widget class="QWidget" name="comments_start_stop" native="true">
              <layout class="QVBoxLayout" name="verticalLayout_9">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <property name="leftMargin">
+               <number>0</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
               <item>
                <widget class="QWidget" name="widget" native="true">
                 <layout class="QHBoxLayout" name="horizontalLayout_7">
@@ -278,6 +233,40 @@
                     <string>CONFIGURING</string>
                    </property>
                   </widget>
+                 </item>
+                </layout>
+               </widget>
+              </item>
+              <item>
+               <widget class="QWidget" name="widget_4" native="true">
+                <layout class="QFormLayout" name="formLayout_2">
+                 <property name="horizontalSpacing">
+                  <number>0</number>
+                 </property>
+                 <property name="verticalSpacing">
+                  <number>0</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item row="0" column="0">
+                  <widget class="QLabel" name="label_3">
+                   <property name="text">
+                    <string>Friendly name:</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QLineEdit" name="friendly_name_input"/>
                  </item>
                 </layout>
                </widget>
@@ -322,6 +311,13 @@
                 </item>
                </layout>
               </item>
+              <item>
+               <widget class="QLabel" name="scheduled_time_label">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
              </layout>
             </widget>
            </item>
@@ -365,6 +361,12 @@
                 </property>
                 <item row="0" column="0">
                  <widget class="QLabel" name="label_14">
+                  <property name="toolTip">
+                   <string>fdas</string>
+                  </property>
+                  <property name="whatsThis">
+                   <string/>
+                  </property>
                   <property name="text">
                    <string>Name:</string>
                   </property>
@@ -398,8 +400,8 @@
                   <rect>
                    <x>0</x>
                    <y>0</y>
-                   <width>343</width>
-                   <height>270</height>
+                   <width>352</width>
+                   <height>289</height>
                   </rect>
                  </property>
                  <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -491,8 +493,8 @@
                   <rect>
                    <x>0</x>
                    <y>0</y>
-                   <width>342</width>
-                   <height>246</height>
+                   <width>351</width>
+                   <height>266</height>
                   </rect>
                  </property>
                  <layout class="QVBoxLayout" name="verticalLayout_8">
@@ -669,7 +671,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>791</width>
+     <width>773</width>
      <height>25</height>
     </rect>
    </property>
@@ -694,6 +696,8 @@
      <string>&amp;Tools</string>
     </property>
     <addaction name="action_Set_As_Default"/>
+    <addaction name="schedule_action"/>
+    <addaction name="open_tensorboard_action"/>
    </widget>
    <addaction name="menu_File"/>
    <addaction name="menuTools"/>
@@ -751,6 +755,16 @@
   <action name="action_Open_directory">
    <property name="text">
     <string>&amp;Open directory</string>
+   </property>
+  </action>
+  <action name="schedule_action">
+   <property name="text">
+    <string>Schedule Experiment</string>
+   </property>
+  </action>
+  <action name="open_tensorboard_action">
+   <property name="text">
+    <string>Open Tensorboard</string>
    </property>
   </action>
  </widget>

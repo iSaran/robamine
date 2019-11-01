@@ -21,6 +21,7 @@ import time
 import datetime
 import numpy as np
 import yaml
+from threading import Lock
 
 logger = logging.getLogger('robamine.algo.core')
 
@@ -63,7 +64,6 @@ class Agent:
         self.state_dim, self.action_dim  = state_dim, action_dim
         self.name = name
         self.params = params.copy()
-        self.sess = tf.Session()
         self.info = {}
 
     def explore(self, state):
@@ -252,8 +252,66 @@ class Network:
 
 # World classes
 
+class WorldState(Enum):
+    IDLE = 1
+    RUNNING = 2
+    FINISHED = 3
+
 class World:
+    def __init__(self, name=None):
+        self.name = name
+
+        self.stop_running = False
+        self.results_lock = Lock()
+        self.state_lock = Lock()
+        self.current_state = WorldState.IDLE
+
+        # Setup logging directory and tf writers
+        self.log_dir = rb_logging.get_logger_path()
+        if not os.path.exists(self.log_dir):
+            os.makedirs(self.log_dir)
+        self.sess = tf.Session()
+        self.tf_writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
+        self.stats = None
+
+        self.config = {}
+        self.config['results'] = {}
+        self.config['results']['logging_dir'] = self.log_dir
+        hostname, username, version = get_pc_and_version()
+        self.config['results']['hostname'] = hostname + ':' + username
+        self.config['results']['version'] = version
+        self.config['results']['started_on'] = None
+        self.config['results']['estimated_time'] = None
+        self.config['results']['time_elapsed'] = None
+        self.config['results']['dir_size'] = 0
+
+    def reset(self):
+        self.stop_running = False
+        self.set_state(WorldState.IDLE)
+
+    def set_state(self, state):
+        self.state_lock.acquire()
+        self.current_state = state
+        self.state_lock.release()
+
+    def get_state(self):
+        self.state_lock.acquire()
+        result = self.current_state
+        self.state_lock.release()
+        return result
+
+    def run(self):
+        raise NotImplementedError()
+
+    def load(self):
+        raise NotImplementedError()
+
+    def save(self):
+        raise NotImplementedError()
+
+class RLWorld(World):
     def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
+        super(RLWorld, self).__init__(name)
         # Environment setup
         if isinstance(env, gym.Env):
             self.env = env
@@ -298,8 +356,6 @@ class World:
             raise err
         self.agent_name = self.agent.name
 
-        self.name = name
-
         # Check if environment and agent are compatible
         try:
             assert self.agent.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
@@ -308,26 +364,9 @@ class World:
             logger.exception(err)
             raise err
 
-        # Setup logging directory and tf writers
-        self.log_dir = rb_logging.get_logger_path()
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
-        self.tf_writer = tf.summary.FileWriter(self.log_dir, self.agent.sess.graph)
-        self.stats = None
-
         # Setup the internal config dictionary
-        self.config = {}
-        self.config['results'] = {}
-        self.config['results']['logging_dir'] = self.log_dir
         self.config['results']['n_episodes'] = 0
         self.config['results']['n_timesteps'] = 0
-        hostname, username, version = get_pc_and_version()
-        self.config['results']['hostname'] = hostname + ':' + username
-        self.config['results']['version'] = version
-        self.config['results']['started_on'] = None
-        self.config['results']['estimated_time'] = None
-        self.config['results']['time_elapsed'] = None
-        self.config['results']['dir_size'] = 0
 
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
@@ -377,7 +416,8 @@ class World:
         self.env.seed(seed)
         self.agent.seed(seed)
 
-    def init(self):
+    def reset(self):
+        super(RLWorld, self).reset()
         self.experience_time = 0
         self.start_time = time.time()
         self.config['results']['started_on'] = str(datetime.datetime.now())
@@ -399,24 +439,32 @@ class World:
 
         # Save the config in YAML file
         self.experience_time += episode.stats['experience_time']
+        self.results_lock.acquire()
         self.config['results']['n_episodes'] = i + 1
         self.config['results']['n_timesteps'] += episode.stats['n_timesteps']
         self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - self.start_time)
         self.config['results']['experience_time'] = transform_sec_to_timestamp(self.experience_time)
         self.config['results']['estimated_time'] = transform_sec_to_timestamp((self.episodes - i + 1) * (time.time() - self.start_time) / (i + 1))
         self.config['results']['dir_size'] = get_dir_size(self.log_dir)
+        self.results_lock.release()
         with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
             yaml.dump(self.config, outfile, default_flow_style=False)
 
     def run(self):
         logger.info('%s running on %s for %d episodes', self.agent_name, self.env_name, self.episodes)
-        self.init()
+        self.reset()
+        self.set_state(WorldState.RUNNING)
         for i in range(self.episodes):
             self.run_episode(i)
 
             # Print progress
             if self.print_every and (i + 1) % self.print_every == 0:
                 print_progress(i, self.episodes, self.start_time, self.config['results']['n_timesteps'], self.experience_time)
+
+            if self.stop_running:
+                break
+
+        self.set_state(WorldState.FINISHED)
 
     def plot(self, batch_size=5):
         if self.train_stats:
@@ -455,10 +503,10 @@ class World:
     def save(self, suffix=''):
         pickle.dump(self.episode_stats, open(os.path.join(self.log_dir, 'episode_stats.pkl'), 'wb'))
 
-class TrainWorld(World):
+class TrainWorld(RLWorld):
     def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
         super(TrainWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every, name)
-        self.stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
+        self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
 
     def run_episode(self, i):
         episode = TrainingEpisode(self.agent, self.env)
@@ -469,10 +517,10 @@ class TrainWorld(World):
         agent_model_file_name = os.path.join(self.log_dir, 'model' + suffix + '.pkl')
         self.agent.save(agent_model_file_name)
 
-class EvalWorld(World):
+class EvalWorld(RLWorld):
     def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
         super(EvalWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every, name)
-        self.stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
+        self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
         self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
         self.expected_values_file.write('expected,real\n')
         self.actions_file = open(os.path.join(self.log_dir, 'actions' + '.csv'), "w+")
@@ -489,15 +537,15 @@ class EvalWorld(World):
         self.actions_file.write(str(episode.stats['actions_performed'][-1]) + '\n')
         self.actions_file.flush()
 
-class TrainEvalWorld(World):
+class TrainEvalWorld(RLWorld):
     def __init__(self, agent, env, n_episodes, render, save_every, print_every, eval_episodes, render_eval, eval_every, name=None):
         super(TrainEvalWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every, name)
         self.eval_episodes = eval_episodes
         self.render_eval = render_eval
         self.eval_every = eval_every
 
-        self.stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
-        self.eval_stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
+        self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
+        self.eval_stats = Stats(self.sess, self.log_dir, self.tf_writer, 'eval', self.agent.info)
         self.expected_values_file = open(os.path.join(self.log_dir, 'expected_values' + '.csv'), "w+")
         self.expected_values_file.write('expected,real\n')
         self.actions_file = open(os.path.join(self.log_dir, 'actions' + '.csv'), "w+")
@@ -506,8 +554,8 @@ class TrainEvalWorld(World):
 
         self.episode_stats_eval = []
 
-    def init(self):
-        super(TrainEvalWorld, self).init()
+    def reset(self):
+        super(TrainEvalWorld, self).reset()
         self.episode_stats_eval = []
         self.counter = 0
 
@@ -558,7 +606,13 @@ class TrainEvalWorld(World):
             action_dim = int(env.action_space.shape[0])
 
         # Create the world
-        self = cls(config['agent'], env, config['world']['episodes'], config['world']['render'], config['world']['save_every'], 0, config['world']['eval']['episodes'], config['world']['eval']['render'], config['world']['eval']['every'])
+        self = cls(config['agent'], env,
+                   config['world']['params']['episodes'], \
+                   config['world']['params']['render'], \
+                   config['world']['params']['save_every'], 0, \
+                   config['world']['params']['eval_episodes'], \
+                   config['world']['params']['eval_render'], \
+                   config['world']['params']['eval_every'])
 
         if 'trainable_params' in config['agent'] and config['agent']['trainable_params'] != '':
             self.agent.load_trainable(config['agent']['trainable_params'])
@@ -570,20 +624,96 @@ class TrainEvalWorld(World):
 
         return self
 
-class DataAcquisitionWorld(World):
-    def __init__(self, agent, env, n_episodes, render, save_every, print_every):
-        super(DataAcquisitionWorld, self).__init__(agent, env, n_episodes, render, save_every, print_every)
-        self.stats = Stats(self.agent.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
+class DataAcquisitionWorld(RLWorld):
+    def __init__(self, agent, env, n_timesteps, render):
+        super(DataAcquisitionWorld, self).__init__(agent, env, n_timesteps, render, save_every=0, print_every=0)
+        self.stats = Stats(self.sess, self.log_dir, self.tf_writer, 'train', self.agent.info)
         self.data = ReplayBuffer(1e6)
+        self.extra_data = []
 
-    def run_episode(self, i):
-        episode = DataAcquisitionEpisode(self.agent, self.env)
-        super(DataAcquisitionWorld, self).run_episode(episode, i)
-        self.data.merge(episode.buffer)
+    def run(self):
+        logger.info('Data acquisition, %s running on %s for %d timesteps', self.agent_name, self.env_name, self.episodes)
+        self.reset()
+        self.set_state(WorldState.RUNNING)
+        i = 0
+        while self.config['results']['progress'] < 1:
+
+            episode = DataAcquisitionEpisode(self.agent, self.env)
+            episode.run(self.render)
+
+            # Update tensorboard stats
+            self.stats.update(i, episode.stats)
+            self.episode_stats.append(episode.stats)
+
+            # Save the config in YAML file
+            self.experience_time += episode.stats['experience_time']
+            self.update_results(n_timesteps = episode.stats['n_timesteps'])
+
+            self.data.merge(episode.buffer)
+            self.extra_data += episode.extra_data
+            self.data.save(os.path.join(self.log_dir, 'data.pkl'))
+            pickle.dump(self.extra_data, open(os.path.join(self.log_dir, 'extra_data.pkl'), 'wb'))
+
+            if self.stop_running:
+                break
+
+            i += 1
+
+        while self.data.size() > self.config['world']['params']['timesteps']:
+            self.data.remove(-1)
+            del self.extra_data[-1]
         self.data.save(os.path.join(self.log_dir, 'data.pkl'))
+        pickle.dump(self.extra_data, open(os.path.join(self.log_dir, 'extra_data.pkl'), 'wb'))
 
-    def save(self, suffix=''):
-        pass
+        self.set_state(WorldState.FINISHED)
+
+    def update_results(self, n_timesteps, thread_safe=True, write_yaml=True):
+
+        # Update the results fields in config
+        if thread_safe:
+            self.results_lock.acquire()
+
+        self.config['results']['n_timesteps'] += n_timesteps
+        prog = self.config['results']['n_timesteps'] / self.config['world']['params']['timesteps']
+        super(RLWorld, self).update_results(progress=prog, thread_safe=False, write_yaml=False)
+
+        if thread_safe:
+            self.results_lock.release()
+
+        # Update YAML file
+        if write_yaml:
+            with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
+                yaml.dump(self.config, outfile, default_flow_style=False)
+
+    @classmethod
+    def from_dict(cls, config):
+        # Setup the environment
+        if len(config['env']) == 1:
+            env = gym.make(config['env']['name'] + '-v0')
+        else:
+            env = gym.make(config['env']['name'] + '-v0', params=config['env']['params'])
+        if isinstance(env.observation_space, gym.spaces.dict.Dict):
+            logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
+            env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
+
+        state_dim = int(env.observation_space.shape[0])
+        if isinstance(env.action_space, gym.spaces.discrete.Discrete):
+            action_dim = env.action_space.n
+        else:
+            action_dim = int(env.action_space.shape[0])
+
+        # Create the world
+        self = cls(config['agent'], env, config['world']['params']['timesteps'], config['world']['params']['render'])
+
+        if 'trainable_params' in config['agent'] and config['agent']['trainable_params'] != '':
+            self.agent.load_trainable(config['agent']['trainable_params'])
+
+        # Save the config
+        self.config['world'] = config['world'].copy()
+        self.config['env'] = config['env'].copy()
+        self.config['agent'] = config['agent'].copy()
+
+        return self
 
 # Episode classes
 
@@ -676,9 +806,15 @@ class DataAcquisitionEpisode(Episode):
     def __init__(self, agent, env, buffer_size=1e6):
         super(DataAcquisitionEpisode, self).__init__(agent, env)
         self.buffer = ReplayBuffer(buffer_size)
+        self.extra_data = []
 
     def _action_policy(self, state):
         return self.agent.predict(state)
 
     def _learn(self, transition):
         self.buffer.store(transition)
+
+    def _update_stats_step(self, transition, info):
+        super(DataAcquisitionEpisode, self)._update_stats_step(transition, info)
+        if 'extra_data' in info:
+            self.extra_data.append(info['extra_data'])
