@@ -27,6 +27,8 @@ import importlib
 
 from robamine.utils.math import rescale_array
 
+# Data storing primitive classes
+
 class Transition:
     def __init__(self,
                  state=None,
@@ -111,55 +113,56 @@ class Dataset(list):
         x, y = self.to_array()
         return np.min(x, axis=0), np.min(y, axis=0)
 
-def get_agent_handle(agent_name):
-    module = importlib.import_module('robamine.algo.' + agent_name.lower())
-    handle = getattr(module, agent_name)
-    return handle
+class EnvData:
+    def __init__(self, info_names = []):
+        self.init_states = []
+        self.init_observations = []
+        self.transitions = []
 
-def seed_everything(random_seed):
-    random.seed(random_seed)
-    tf.set_random_seed(random_seed)
-    np.random.seed(random_seed)
+        self.info = {}
+        for i in info_names:
+            self.info[i] = []
 
-def get_now_timestamp():
-    """
-    Returns a timestamp for the current datetime as a string for using it in
-    log file naming.
-    """
-    now_raw = datetime.now()
-    return str(now_raw.year) + '.' + \
-           '{:02d}'.format(now_raw.month) + '.' + \
-           '{:02d}'.format(now_raw.day) + '.' + \
-           '{:02d}'.format(now_raw.hour) + '.' \
-           '{:02d}'.format(now_raw.minute) + '.' \
-           '{:02d}'.format(now_raw.second) + '.' \
-           '{:02d}'.format(now_raw.microsecond)
+    def reset(self):
+        self.init_states = []
+        self.init_observations = []
+        self.transitions = []
+        for key in self.info:
+            self.info[key] = []
 
-def transform_sec_to_timestamp(seconds):
-    """
-    Transforms seconds to a timestamp string in format: hours:minutes:seconds
+    def save(self, dir, file_name='samples'):
+        pickle.dump(self, open(os.path.join(dir, file_name + '.env'), 'wb'))
 
-    Parameters
-    ----------
-    seconds : float
-        The seconds to transform
+    @classmethod
+    def load(cls, file_path):
+        cls = pickle.load(open(file_path, 'rb'))
+        return cls
 
-    Returns
-    -------
-    str
-        The timestamp
-    """
-    hours, rem = divmod(seconds, 3600)
-    minutes, seconds = divmod(rem, 60)
-    return "{:0>2}h:{:0>2}m:{:05.2f}s".format(int(hours),int(minutes),seconds)
+    def __add__(self, other):
+        new = EnvData()
+        assert set(self.keys()) == set(other.keys())
+        new.init_states = self.init_states + other.init_states
+        new.init_observations = self.init_observations + other.init_observations
+        new.transitions = self.transitions + other.transitions
+        for key in self.info:
+            new.info[key] = self.info[key] + other.info[key]
+        return new
 
-def print_progress(episode, n_episodes, start_time, steps, experience_time):
-    percent = (episode + 1) / n_episodes * 100.0
-    time_elapsed = transform_sec_to_timestamp(time.time() - start_time)
-    estimated_time = transform_sec_to_timestamp((n_episodes - episode + 1) * (time.time() - start_time) / (episode + 1))
-    experience_time = transform_sec_to_timestamp(experience_time)
-    logger.info('Progress: Episode: %s from %s (%.2f%%). Timesteps: %s. Time elapsed: %s. Estimated time: %s. Experience time: %s.', str(episode + 1), str(n_episodes), percent, steps, time_elapsed, estimated_time, experience_time)
-    # logger.info('  Experience Time: %s', transform_sec_to_timestamp(step * dt))
+    def __iadd__(self, other):
+        self.init_states += other.init_states
+        self.init_observations += other.init_observations
+        self.transitions += other.transitions
+        for key in self.info:
+            self.info[key] += other.info[key]
+        return self
+
+    def __str__(self):
+        return '[init_states: ' + str(self.init_states) + \
+                ', init_observations: ' + str(self.init_observations) + \
+                ', transitions: ' + str(self.transitions) + \
+                ', info: ' + str(self.info) + ']'
+
+# Primitive classes for logging data and plotting e.g. in Tensorboard
 
 class DataStream:
     """
@@ -211,48 +214,6 @@ class DataStream:
         summary_str = self.sess.run(self.tf_summary_ops, feed_dict=feed_dict)
         self.tf_writer.add_summary(summary_str, x)
         self.tf_writer.flush()
-
-class Noise:
-    def __init__(self):
-        self.random = np.random.RandomState()
-
-    def seed(self, seed):
-        self.random.seed(seed)
-
-# Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
-# based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
-class OrnsteinUhlenbeckActionNoise(Noise):
-    def __init__(self, mu, sigma = 0.2, theta=.15, dt=1e-2, x0=None, seed=999):
-        super().__init__()
-        self.theta = theta
-        self.mu = mu
-        self.sigma = sigma
-        self.dt = dt
-        self.x0 = x0
-        self.reset()
-
-    def __call__(self):
-        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * self.random.normal(size=self.mu.shape)
-        self.x_prev = x
-        return x
-
-    def reset(self):
-        self.x_prev = self.x0 if self.x0 is not None else np.zeros_like(self.mu)
-
-    def __repr__(self):
-        return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
-
-class NormalNoise(Noise):
-    def __init__(self, mu, sigma):
-        super().__init__()
-        self.mu = mu
-        self.sigma = sigma
-
-    def __call__(self):
-        return self.random.normal(self.mu, self.sigma)
-
-    def __repr__(self):
-        return 'NormalNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
 
 class Stats:
     """
@@ -417,3 +378,101 @@ class Plotter:
             result.to_csv(os.path.join(file_path, 'batch_' + file_name))
             logger.info('Writing batch file to: %s', os.path.join(file_path, 'batch_' + file_name))
         return result
+
+# Noises
+
+class Noise:
+    def __init__(self):
+        self.random = np.random.RandomState()
+
+    def seed(self, seed):
+        self.random.seed(seed)
+
+class OrnsteinUhlenbeckActionNoise(Noise):
+    """
+    Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
+    based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
+    """
+    def __init__(self, mu, sigma = 0.2, theta=.15, dt=1e-2, x0=None, seed=999):
+        super().__init__()
+        self.theta = theta
+        self.mu = mu
+        self.sigma = sigma
+        self.dt = dt
+        self.x0 = x0
+        self.reset()
+
+    def __call__(self):
+        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * self.random.normal(size=self.mu.shape)
+        self.x_prev = x
+        return x
+
+    def reset(self):
+        self.x_prev = self.x0 if self.x0 is not None else np.zeros_like(self.mu)
+
+    def __repr__(self):
+        return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
+
+class NormalNoise(Noise):
+    def __init__(self, mu, sigma):
+        super().__init__()
+        self.mu = mu
+        self.sigma = sigma
+
+    def __call__(self):
+        return self.random.normal(self.mu, self.sigma)
+
+    def __repr__(self):
+        return 'NormalNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
+
+# Misc functions
+
+def get_agent_handle(agent_name):
+    module = importlib.import_module('robamine.algo.' + agent_name.lower())
+    handle = getattr(module, agent_name)
+    return handle
+
+def seed_everything(random_seed):
+    random.seed(random_seed)
+    tf.set_random_seed(random_seed)
+    np.random.seed(random_seed)
+
+def get_now_timestamp():
+    """
+    Returns a timestamp for the current datetime as a string for using it in
+    log file naming.
+    """
+    now_raw = datetime.now()
+    return str(now_raw.year) + '.' + \
+           '{:02d}'.format(now_raw.month) + '.' + \
+           '{:02d}'.format(now_raw.day) + '.' + \
+           '{:02d}'.format(now_raw.hour) + '.' \
+           '{:02d}'.format(now_raw.minute) + '.' \
+           '{:02d}'.format(now_raw.second) + '.' \
+           '{:02d}'.format(now_raw.microsecond)
+
+def transform_sec_to_timestamp(seconds):
+    """
+    Transforms seconds to a timestamp string in format: hours:minutes:seconds
+
+    Parameters
+    ----------
+    seconds : float
+        The seconds to transform
+
+    Returns
+    -------
+    str
+        The timestamp
+    """
+    hours, rem = divmod(seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return "{:0>2}h:{:0>2}m:{:05.2f}s".format(int(hours),int(minutes),seconds)
+
+def print_progress(episode, n_episodes, start_time, steps, experience_time):
+    percent = (episode + 1) / n_episodes * 100.0
+    time_elapsed = transform_sec_to_timestamp(time.time() - start_time)
+    estimated_time = transform_sec_to_timestamp((n_episodes - episode + 1) * (time.time() - start_time) / (episode + 1))
+    experience_time = transform_sec_to_timestamp(experience_time)
+    logger.info('Progress: Episode: %s from %s (%.2f%%). Timesteps: %s. Time elapsed: %s. Estimated time: %s. Experience time: %s.', str(episode + 1), str(n_episodes), percent, steps, time_elapsed, estimated_time, experience_time)
+    # logger.info('  Experience Time: %s', transform_sec_to_timestamp(step * dt))
