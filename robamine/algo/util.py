@@ -21,7 +21,11 @@ import random
 import logging
 logger = logging.getLogger('robamine.algo.util')
 
+import pickle
+
 import importlib
+
+from robamine.utils.math import rescale_array
 
 class Transition:
     def __init__(self,
@@ -46,6 +50,66 @@ class Transition:
                 ', next_state: ' + str(self.next_state) + \
                 ', terminal: ' + str(self.terminal) + ']'
 
+class Datapoint:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __str__(self):
+        return 'Datapoint[x= ' + str(self.x) + \
+                ', y= ' + str(self.y) + ']'
+
+    def __repr__(self):
+        return  self.__str__()
+
+class Dataset(list):
+    def to_minibatches(self, batch_size=32):
+        temp = self.copy()
+        random.shuffle(temp)
+        for _ in range(len(self) % batch_size):
+            del temp[-1]
+        return [Dataset(temp[i:i + batch_size]) for i in range(0, len(temp), batch_size)]
+
+    def to_array(self):
+        x = np.array([_.x for _ in self])
+        y = np.array([_.y for _ in self])
+        return x, y
+
+    def save(self, path, name='robamine_dataset'):
+        pickle.dump(self, open(os.path.join(path, name) + '.pkl', 'wb'))
+
+    def split(self, train_perc = 0.8):
+        elements = int(len(self) * train_perc)
+        train = Dataset(self[0:elements])
+        test = Dataset(self[elements+1:])
+        return train, test
+
+    def normalize(self):
+        x, y = self.to_array()
+        x = (x - np.mean(x, axis=0)) / np.std(x, axis=0)
+        y = (y - np.mean(y, axis=0)) / np.std(y, axis=0)
+
+        for point in range(len(self)):
+            self[point].x = x[point]
+            self[point].y = y[point]
+
+    def rescale(self, ranges=[0, 1]):
+        assert ranges[1] > ranges[0]
+        x, y = self.to_array()
+        x_rescaled = rescale_array(x, ranges, axis=0)
+        y_rescaled = rescale_array(y, ranges, axis=0)
+
+        for i in range(len(self)):
+            self[i].x = x_rescaled[i]
+            self[i].y = y_rescaled[i]
+
+    def max(self):
+        x, y = self.to_array()
+        return np.max(x, axis=0), np.max(y, axis=0)
+
+    def min(self):
+        x, y = self.to_array()
+        return np.min(x, axis=0), np.min(y, axis=0)
 
 def get_agent_handle(agent_name):
     module = importlib.import_module('robamine.algo.' + agent_name.lower())
