@@ -4,6 +4,7 @@ import gym
 from robamine.envs.clutter import Clutter
 import pickle
 import os
+import numpy as np
 
 
 class TestClutter(unittest.TestCase):
@@ -90,6 +91,40 @@ class TestClutter(unittest.TestCase):
         self.assertEqual(state.shape[0], 265)
         self.assertEqual(state.shape[0], env.observation_space.shape[0])
 
+    def test_predict_displacement_from_forces(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_predict_displacement_from_forces.pkl'), 'rb') as file:
+            pkl = pickle.load(file)
+        env_params = pkl['env_params']
+        env_params['params']['render'] = False
+        # state_dict = pkl['state_dict']
+        env = gym.make(env_params['name'], params=env_params['params'])
+        # env.seed(0)
+
+        # # Save after env.reset()
+        # with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_predict_displacement_from_forces.pkl'), 'wb') as file:
+        #     pickle.dump({'env_params': env_params, 'state_dict': env.state_dict()}, file)
+
+        # Empty push should return zero displacement
+        action = 8
+        env.reset()
+        env.step(action)
+        np.testing.assert_array_equal(env.predicted_displacement_push_step, np.zeros(3))
+
+        # Test with actual pushes
+
+        errors = np.empty((1, 3))
+        env.seed(0)
+        for i in range(20):
+            env.reset()
+            action = 0
+            env.step(action)
+            error = np.abs(env.predicted_displacement_push_step - env.target_displacement_push_step)
+            errors = np.concatenate((errors, error[None, :]))
+        mean_error = np.mean(errors, axis=0)
+
+        self.assertTrue(mean_error[0] < 0.01)  # < 1cm
+        self.assertTrue(mean_error[1] < 0.02)  # < 1cm
+        self.assertTrue(mean_error[2] < 0.3)   # < 0.3 rads = 17 degress
 
     def test_outputs(self):
         env_params = {
