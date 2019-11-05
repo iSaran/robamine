@@ -32,3 +32,33 @@ def rescale_array(x, min=None, max=None, range=[0, 1], axis=None, reverse=False)
 def rescale(x, min, max, range=[0, 1]):
     assert range[1] > range[0]
     return range[0] + ((x - min) * (range[1] - range[0])) / (max - min)
+
+def filter_signal(signal, filter=0.9, outliers_cutoff=None):
+    ''' Filters a signal
+
+    Filters an 1-D signal using a first order filter and removes the outliers.
+
+    filter: Btn 0 to 1. The higher the value the more the filtering.
+    outliers_cutoff: How many times the std of the signal's diff away from the
+    mean of the diff is a point considered outlier, typical value: 3.5. Set to
+    None if you do not need this feature.
+    '''
+    signal_ = signal.copy()
+    assert filter <= 1 and filter > 0
+
+    if outliers_cutoff:
+        mean_diff = np.mean(np.diff(signal_))
+        std_diff = np.std(np.diff(signal_))
+        lower_limit = mean_diff - std_diff * outliers_cutoff
+        upper_limit = mean_diff + std_diff * outliers_cutoff
+
+    for i in range(1, signal_.shape[0]):
+        current_diff = signal_[i] - signal_[i-1]
+        if outliers_cutoff and (current_diff > upper_limit or current_diff < lower_limit):
+            filtering = 1
+        else:
+            filtering = filter
+
+        signal_[i] = filtering * signal_[i - 1] + (1 - filtering) * signal_[i]
+
+    return signal_
