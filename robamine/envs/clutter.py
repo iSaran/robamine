@@ -153,6 +153,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_vel = np.zeros(6)
         self.finger_acc = np.zeros(3)
         self.finger_external_force_norm = 0.0
+        self.finger_external_force = None
         self.target_height = 0.0
         self.target_length = 0.0
         self.target_width = 0.0
@@ -270,6 +271,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def reset_horizon(self):
         self.target_pos_horizon = self.target_pos.copy()
         self.target_quat_horizon = self.target_quat.copy()
+
+    def seed(self, seed=None):
+        super().seed(seed)
+        self.rng.seed(seed)
 
     def get_obs(self):
         """
@@ -659,6 +664,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         finger_geom_id = get_geom_id(self.sim.model, "finger")
         geom2body = self.sim.model.geom_bodyid[finger_geom_id]
         self.finger_external_force_norm = np.linalg.norm(self.sim.data.cfrc_ext[geom2body])
+        # functions that start with 'c' return the rotational part first, so for
+        # the force take the second triplet, w.r.t. the world.
+        self.finger_external_force = self.sim.data.cfrc_ext[geom2body][3:]
 
         # Calculate the object's length, width and height w.r.t. the surface by
         # using the orientation of the object. The height is the dimension
