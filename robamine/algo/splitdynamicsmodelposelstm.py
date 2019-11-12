@@ -4,7 +4,7 @@ Spit Dynamics Model Pose
 """
 
 import torch
-from robamine.algo.dynamicsmodel import FCSplitDynamicsModel
+from robamine.algo.dynamicsmodel import LSTMSplitDynamicsModel
 from robamine.algo.util import Datapoint, Dataset
 from robamine.utils.math import rescale_array
 import math
@@ -13,7 +13,7 @@ import numpy as np
 import logging
 logger = logging.getLogger('robamine.algo.splitdynamicsmodelpose')
 
-class SplitDynamicsModelPose(FCSplitDynamicsModel):
+class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
     def __init__(self, params, inputs=4, outputs=3, name='SplitDynamicsModelPose'):
         super().__init__(params=params, inputs=inputs, outputs=outputs, name=name)
 

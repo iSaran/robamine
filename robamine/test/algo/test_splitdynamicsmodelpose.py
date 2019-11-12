@@ -14,7 +14,7 @@ class TestAgent(unittest.TestCase):
             'hidden_units': [[20], [20]],
             'learning_rate': [0.001, 0.001],
             'loss': ['mse', 'mse'],
-            'nr_epochs': [1000, 1000]
+            'n_epochs': [1000, 1000]
         }
         model = SplitDynamicsModelPose(params)
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saved_model.pkl')

@@ -11,7 +11,7 @@ batch_size:
 loss:
   type: combovectorx
   options: ['mse', 'huber']
-nr_epochs:
+n_epochs:
   type: intvectorx
   range: [0, 1000]
 state_dim:

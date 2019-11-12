@@ -5,7 +5,7 @@ Spit Dynamics Model
 """
 
 import torch
-from robamine.algo.splitdynamicsmodel import SplitDynamicsModel
+from robamine.algo.dynamicsmodel import FCSplitDynamicsModel
 from robamine.algo.util import Datapoint, Dataset
 from robamine.utils.math import rescale_array
 import math
@@ -14,7 +14,7 @@ import numpy as np
 import logging
 logger = logging.getLogger('robamine.algo.splitdynamicsmodelfeature')
 
-class SplitDynamicsModelFeature(SplitDynamicsModel):
+class SplitDynamicsModelFeature(FCSplitDynamicsModel):
     def __init__(self,  params, inputs=None, outputs=None, name='SplitDynamicsModelFeature'):
         nr_primitives = int(len(params['hidden_units']))
         nr_substates = int(params['action_dim'] / nr_primitives)

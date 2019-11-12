@@ -4,7 +4,7 @@ params:
   learning_rate: [0.001, 0.001]
   batch_size: [128, 128]
   loss: ['mse', 'mse']  # Options: 'mse', 'huber'
-  nr_epochs: [40, 40]
+  n_epochs: [40, 40]
 
   state_dim: 2120
   action_dim: 16

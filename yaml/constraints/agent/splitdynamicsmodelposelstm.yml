@@ -1,6 +1,9 @@
 hidden_units:
-  type: intmatrixx
+  type: intvectorx
   range: [1, 500]
+n_layers:
+  type: intvectorx
+  range: [1, 10]
 learning_rate:
   type: floatvectorx
   range: [0.0, 1.0]

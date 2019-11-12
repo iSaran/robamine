@@ -14,5 +14,6 @@ agent:
   - SplitDQN
   - RandomDiscrete
   - SplitDynamicsModelPose
+  - SplitDynamicsModelPoseLSTM
   - SplitDynamicsModelFeature
   - ModelBasedSplitDQN
