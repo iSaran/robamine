@@ -215,7 +215,10 @@ class FCDynamicsModel(DynamicsModel):
         self.train_dataset, self.test_dataset = dataset.split(0.7)
 
     def predict(self, state):
-        inputs = self.min_max_scaler_x.transform(state.reshape(1, -1))
+        if self.dataset_rescaled:
+            inputs = self.min_max_scaler_x.transform(state.reshape(1, -1))
+        else:
+            inputs = state.copy()
         s = torch.FloatTensor(inputs).to(self.device)
         prediction = self.network(s).cpu().detach().numpy()
         if self.dataset_rescaled:
@@ -262,8 +265,10 @@ class LSTMDynamicsModel(DynamicsModel):
         self.train_dataset, self.test_dataset = dataset.split(0.7)
 
     def predict(self, state):
-        inputs = self.min_max_scaler_x.transform(state)
-        print(inputs.shape)
+        if self.dataset_rescaled:
+            inputs = self.min_max_scaler_x.transform(state)
+        else:
+            inputs = state.copy()
         s = torch.FloatTensor(inputs).to(self.device).unsqueeze(dim=0)
         prediction = self.network(s).cpu().detach().numpy()
         if self.dataset_rescaled:
