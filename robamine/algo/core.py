@@ -59,7 +59,7 @@ class Agent:
         logger.error(error)
         raise NotImplementedError(error)
 
-    def seed(self, seed):
+    def seed(self, seed=None):
         self.rng.seed(seed)
 
     def learn(self, state, action, reward, next_state, done):
