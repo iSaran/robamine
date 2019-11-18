@@ -6,6 +6,7 @@ import numpy.testing as np_test
 import numpy as np
 import gym
 import torch
+import pickle
 
 class TestAgent(unittest.TestCase):
     def test_init(self):
@@ -37,11 +38,56 @@ class TestAgent(unittest.TestCase):
         # Tested in the integrated test with Clutter Env
         pass
 
+    def test_clutter2array(self):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+            'splitdynamicsmodelposelstm.test_agent.test_filter_datapoint.pkl')
+        with open(path, 'rb') as file:
+            info = pickle.load(file)['info']
+        params = {
+            'action_dim': 16,
+            'state_dim': 2120,
+            'batch_size': [64, 64],
+            'device': 'cpu',
+            'hidden_units': [20, 20],
+            'learning_rate': [0.001, 0.001],
+            'loss': ['mse', 'mse'],
+            'n_epochs': [1000, 1000],
+            'n_layers': [2, 2]
+        }
+        model = SplitDynamicsModelPoseLSTM(params)
+
+        haha = model._clutter2array(info)
+        self.assertTrue(isinstance(haha, np.ndarray))
+        self.assertEqual(haha.shape, (1002, 4))
+
     def test_filter_datapoint(self):
-        # path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-        #                     'test_splitdynamicsmodelposelstm.env')
-        # env_data = EnvData.load(path)
-        pass
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+            'splitdynamicsmodelposelstm.test_agent.test_filter_datapoint.pkl')
+        with open(path, 'rb') as file:
+            temp = pickle.load(file)
+
+        info = temp['info']
+        expected_result = temp['results']
+
+        params = {
+            'action_dim': 16,
+            'state_dim': 2120,
+            'batch_size': [64, 64],
+            'device': 'cpu',
+            'hidden_units': [20, 20],
+            'learning_rate': [0.001, 0.001],
+            'loss': ['mse', 'mse'],
+            'n_epochs': [1000, 1000],
+            'n_layers': [2, 2]
+        }
+        model = SplitDynamicsModelPoseLSTM(params)
+        inputs = model._clutter2array(info)
+        result = model.filter_datapoint(inputs)
+        np.testing.assert_equal(result, expected_result)
+
+        inputs2 = np.zeros(inputs.shape)
+        result = model.filter_datapoint(inputs2)
+        np.testing.assert_equal(result, np.zeros(inputs.shape))
 
 
 class TestIntegrationWithClutterEnv(unittest.TestCase):
@@ -107,7 +153,7 @@ class TestIntegrationWithClutterEnv(unittest.TestCase):
         env.reset()
         next_state, reward, done, info = env.step(action)
         prediction = model.predict(info['extra_data']['push_forces_vel'], action)
-        np.testing.assert_equal(prediction, np.array([0.040626440197229385, 0.03152748942375183, 0.11238543689250946]))
+        np.testing.assert_equal(prediction, np.array([0.04061853885650635, 0.03152221813797951, 0.11244191974401474]))
 
         prediction = model.predict(info['extra_data']['push_forces_vel'], 8)
         np.testing.assert_equal(prediction, np.array([0.0, 0.0, 0.0]))

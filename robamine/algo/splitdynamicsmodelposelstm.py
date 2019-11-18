@@ -6,9 +6,10 @@ Spit Dynamics Model Pose LSTM
 import torch
 from robamine.algo.dynamicsmodel import LSTMSplitDynamicsModel
 from robamine.algo.util import Datapoint, Dataset
-from robamine.utils.math import rescale_array
+from robamine.utils.math import rescale_array, filter_signal
 import math
 import numpy as np
+from numpy.linalg import norm
 
 import logging
 logger = logging.getLogger('robamine.algo.splitdynamicsmodelposelstm')
@@ -18,6 +19,7 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
         super().__init__(params=params, inputs=inputs, outputs=outputs, name=name)
 
     def _clutter2array(self, extra_data):
+        # Assuming 0: pos_measurements, 1: force_measurements
         inputs = np.concatenate((extra_data[0], extra_data[1]), axis=1)
         inputs = np.delete(inputs, 2, axis=1)
         inputs = np.delete(inputs, -1, axis=1)
@@ -38,13 +40,13 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
 
             primitive = int(np.floor(env_data.transitions[i].action / self.nr_substates))
 
-            # print(env_data.info['extra_data'][i]['push_forces_vel'])
             inputs = self._clutter2array(env_data.info['extra_data'][i]['push_forces_vel'])
+
+            inputs = self.filter_datapoint(inputs)
+
             # Extra data in 2 has a np array with the displacement in (x, y, theta_around_z)
             dataset[primitive].append(Datapoint(x = inputs, y = env_data.info['extra_data'][i]['displacement'][2]))
 
-        # print('shape x:', dataset[0][0].x.shape)
-        # print('shape y:', dataset[0][0].y.shape)
         for i in range(self.nr_primitives):
             self.dynamics_models[i].load_dataset(dataset[i])
 
@@ -69,18 +71,17 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
             self.info['test']['loss_' + str(i)] = \
                 self.dynamics_models[i].info['test']['loss']
 
-    def filter_datapoint(datapoint, epsilon=1e-8, filter=0.9, outliers_cutoff=3.8, plot=False):
+    def filter_datapoint(self, datapoint, epsilon=1e-8, filter=0.9, outliers_cutoff=3.8, plot=False):
         '''Assume datapoint is output of _clutter2array'''
-        
+
         import matplotlib.pyplot as plt
-        pos_measurements = datapoint[0]
-        force_measurements = datapoint[1]
+        result = np.zeros(datapoint.shape)
 
         # Calculate force direction
         # -------------------------
-        f = force_measurements[:, :2].copy()
+        f = datapoint[:, 2:4].copy()
         f = np.nan_to_num(f / norm(f, axis=1).reshape(-1, 1))
-        f_norm = np.linalg.norm(f, axis=1)
+        f_norm = norm(f, axis=1)
 
         # Find start and end of the contacts
         first = f_norm[0]
@@ -97,7 +98,7 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
 
         # No contact with the target detected
         if start_contact > end_contact:
-            return np.zeros(2), 0.0
+            return result
 
         f = f[start_contact:end_contact, :]
 
@@ -105,7 +106,7 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
             fig, axs = plt.subplots(2,2)
             axs[0][0].plot(f)
             plt.title('Force')
-            axs[0][1].plot(np.linalg.norm(f, axis=1))
+            axs[0][1].plot(norm(f, axis=1))
             plt.title('norm')
 
         f[:,0] = filter_signal(signal=f[:,0], filter=filter, outliers_cutoff=outliers_cutoff)
@@ -115,12 +116,12 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
         if plot:
             axs[1][0].plot(f)
             plt.title('Filtered force')
-            axs[1][1].plot(np.linalg.norm(f, axis=1))
+            axs[1][1].plot(norm(f, axis=1))
             plt.title('norm')
             plt.show()
 
         # Velocity direction
-        p = pos_measurements[start_contact:end_contact, :2].copy()
+        p = datapoint[start_contact:end_contact, 0:2].copy()
         p_dot = np.concatenate((np.zeros((1, 2)), np.diff(p, axis=0)))
         p_dot_norm = norm(p_dot, axis=1).reshape(-1, 1)
         p_dot_normalized = np.nan_to_num(p_dot / p_dot_norm)
@@ -145,6 +146,11 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
             plt.title('inner product')
             plt.show()
 
-        # concat
+        result[start_contact:end_contact, 0:2] = p_dot_normalized
+        result[start_contact:end_contact, 2:4] = f
 
-        return signal
+        if plot:
+            plt.plot(result)
+            plt.show()
+
+        return result
