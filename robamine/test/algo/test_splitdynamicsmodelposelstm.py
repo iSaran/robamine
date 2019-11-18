@@ -127,6 +127,7 @@ class TestIntegrationWithClutterEnv(unittest.TestCase):
                 env_data.info['extra_data'].append(info['extra_data'])
 
 
+
         # Create model, load dataset from clutter and learn for one epoch
         # ---------------------------------------------------------------
 
@@ -157,6 +158,20 @@ class TestIntegrationWithClutterEnv(unittest.TestCase):
 
         prediction = model.predict(info['extra_data']['push_forces_vel'], 8)
         np.testing.assert_equal(prediction, np.array([0.0, 0.0, 0.0]))
+
+
+        # Add a collision in dataset and check that the dataset loads safely
+        # ------------------------------------------------------------------
+        env_params['params']['nr_of_obstacles'] = [5, 8]
+        env = gym.make(env_params['name'], params=env_params['params'])
+        env.seed(0)
+        state = env.reset()
+        next_state, reward, done, info = env.step(0)
+        env_data.transitions.append(transition)
+        if 'extra_data' in info:
+            env_data.info['extra_data'].append(info['extra_data'])
+        model.load_dataset(env_data)
+
 
 if __name__ == '__main__':
     unittest.main()

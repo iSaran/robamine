@@ -40,12 +40,14 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
 
             primitive = int(np.floor(env_data.transitions[i].action / self.nr_substates))
 
-            inputs = self._clutter2array(env_data.info['extra_data'][i]['push_forces_vel'])
-
-            inputs = self.filter_datapoint(inputs)
-
-            # Extra data in 2 has a np array with the displacement in (x, y, theta_around_z)
-            dataset[primitive].append(Datapoint(x = inputs, y = env_data.info['extra_data'][i]['displacement'][2]))
+            # If the following is none it means we had a collision in Clutter
+            # and no useful data from pushing was recorded
+            if (env_data.info['extra_data'][i]['push_forces_vel'][0] is not None) \
+                and env_data.info['extra_data'][i]['push_forces_vel'][1] is not None:
+                inputs = self._clutter2array(env_data.info['extra_data'][i]['push_forces_vel'])
+                inputs = self.filter_datapoint(inputs)
+                # Extra data in 2 has a np array with the displacement in (x, y, theta_around_z)
+                dataset[primitive].append(Datapoint(x = inputs, y = env_data.info['extra_data'][i]['displacement'][2]))
 
         for i in range(self.nr_primitives):
             self.dynamics_models[i].load_dataset(dataset[i])
