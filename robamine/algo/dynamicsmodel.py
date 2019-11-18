@@ -62,7 +62,7 @@ class LSTMNetwork(nn.Module):
         out, hidden = self.lstm(x, hidden)
         out = out[:, -1, :].squeeze(dim=1)  # Obtain the last output
         prediction = self.hidden2pose_fc(out)
-        prediction = nn.functional.relu(prediction)
+        prediction = torch.tanh(prediction)
         return prediction
 
     def init_hidden(self, x_dim):
