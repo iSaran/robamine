@@ -170,6 +170,7 @@ class TestClutter(unittest.TestCase):
         self.assertTrue(isinstance(info['extra_data']['push_forces_vel'][1], np.ndarray))
         self.assertEqual(info['extra_data']['push_forces_vel'][1].shape, (1002, 3))
 
+        # Test if split
         env_params['params']['split'] = True
         env = gym.make(env_params['name'], params=env_params['params'])
         env.seed(0)
@@ -178,6 +179,15 @@ class TestClutter(unittest.TestCase):
         action = 0
         next_state, reward, done, info = env.step(action)
         self.assertEqual(next_state.shape, (8 * 263,))
+
+        # Test if we have a collision. Info should have None
+        env_params['params']['nr_of_obstacles'] = [5, 8]
+        env = gym.make(env_params['name'], params=env_params['params'])
+        env.seed(0)
+        state = env.reset()
+        next_state, reward, done, info = env.step(0)
+        self.assertTrue(info['extra_data']['push_forces_vel'][0] is None)
+        self.assertTrue(info['extra_data']['push_forces_vel'][1] is None)
 
 if __name__ == '__main__':
     unittest.main()

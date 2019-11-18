@@ -260,7 +260,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_quat_horizon = Quaternion()
         self.target_displacement_push_step= np.zeros(3)
         self.predicted_displacement_push_step= np.zeros(3)
-        
+
         self.pos_measurements, self.force_measurements = None, None
 
         self.rng = np.random.RandomState()  # rng for the scene
@@ -900,7 +900,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             # Randomize the positions
             index = self.sim.model.get_joint_qpos_addr("object" + str(i))
             r = self.rng.exponential(0.01) + target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1])
-            theta = np.random.uniform(0, 2*math.pi)
+            theta = self.rng.uniform(0, 2*math.pi)
             random_qpos[index[0]] = r * math.cos(theta)
             random_qpos[index[0]+1] = r * math.sin(theta)
             random_qpos[index[0]+2] = self.sim.model.geom_size[geom_id][2]
