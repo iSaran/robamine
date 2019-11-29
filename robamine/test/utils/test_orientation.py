@@ -1,5 +1,5 @@
 import unittest
-from robamine.utils.orientation import Quaternion, Affine3
+from robamine.utils.orientation import Quaternion, Affine3, rot2angleaxis, rotation_is_valid
 import numpy.testing as np_test
 import numpy as np
 
@@ -70,6 +70,56 @@ class TestAffine3(unittest.TestCase):
         expected = np.array([[1, 0, 0, 5], [0, 0, 1, 1], [0, -1, 0, 0], [0, 0, 0, 1]])
         np.testing.assert_almost_equal(diff.matrix(), expected)
 
+class TestOrientation(unittest.TestCase):
+    def test_rot2angleaxis(self):
+        R = np.array([[-1,  0, 0],
+                      [ 0, -1, 0],
+                      [ 0,  0, 1]])
+        angle, axis = rot2angleaxis(R)
+        self.assertEqual(axis, None)
+
+        R = np.array([[1,  0, 0],
+                      [ 0, 1, 0],
+                      [ 0,  0, 1]])
+        angle, axis = rot2angleaxis(R)
+        self.assertEqual(axis, None)
+
+        R = np.array([[1, 0, 0],
+                      [0, -0.9903, -0.1392],
+                      [0, 0.1391, -0.9903]])
+        angle, axis = rot2angleaxis(R)
+        np.testing.assert_equal(axis, np.array([1, 0, 0]))
+
+        R = np.array([[-0.9994, -0.0349, 0],
+                      [0.0348, -0.9994, 0],
+                      [0, 0, 1]])
+        angle, axis = rot2angleaxis(R)
+        np.testing.assert_equal(axis, np.array([0, 0, 1]))
+
+    def test_rotation_is_valid(self):
+        R = np.array([[-1,  0, 0],
+                      [ 0, -1, 0],
+                      [ 0,  0, 1]])
+
+        rotation_is_valid(R)
+
+        R = np.array([[0,  0, 0],
+                      [ 2, -1, 0],
+                      [ 0,  0, 1]])
+        with self.assertRaises(ValueError):
+            rotation_is_valid(R)
+
+        R = np.array([[0,  0, 0],
+                      [ 1, -1, 0],
+                      [ 0,  0, 1]])
+        with self.assertRaises(ValueError):
+            rotation_is_valid(R)
+
+        R = np.array([[0,  -1, 0],
+                      [ -1, 0, 0],
+                      [ 0,  0, 1]])
+        with self.assertRaises(ValueError):
+            rotation_is_valid(R)
 
 
 if __name__ == '__main__':
