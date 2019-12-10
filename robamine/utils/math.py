@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from math import exp
 import numpy as np
+import matplotlib.pyplot as plt
 
 def sigmoid(x, a=1, b=1, c=0, d=0):
     return a / (1 + exp(-b * x + c)) + d;
@@ -62,3 +63,45 @@ def filter_signal(signal, filter=0.9, outliers_cutoff=None):
         signal_[i] = filtering * signal_[i - 1] + (1 - filtering) * signal_[i]
 
     return signal_
+
+class Signal:
+    def __init__(self, signal):
+        self.signal = signal.copy()
+
+    def average_filter(self, segments):
+        assert self.signal.shape[0] % segments == 0
+        splits = np.split(self.signal, segments, axis=0)
+        result = np.concatenate([np.mean(segment, axis=0).reshape(1, -1) for segment in splits], axis=0)
+        self.signal = result.copy()
+        return self
+
+    def segment_last_element(self, segments):
+        assert self.signal.shape[0] % segments == 0
+        splits = np.split(self.signal, segments, axis=0)
+        result = np.concatenate([segment[-1, :].reshape(1, -1) for segment in splits], axis=0)
+        self.signal = result.copy()
+        return self
+
+    def moving_average(self, n):
+        ret = np.cumsum(self.signal, axis=0)
+        ret[n:, :] = ret[n:, :] - ret[:-n, :]
+        ret = ret[n - 1:] / n
+        self.signal = ret.copy()
+        return self
+
+    def filter(self, a):
+        '''
+        a from 0 to 1, 1 means more filtering
+        '''
+
+        for i in range(1, self.signal.shape[0]):
+            self.signal[i, :] = a * self.signal[i - 1, :] + (1 - a) * self.signal[i, :]
+
+        return self
+
+    def plot(self):
+        plt.plot(self.signal)
+        plt.show()
+
+    def array(self):
+        return self.signal

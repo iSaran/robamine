@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from robamine.utils.math import rescale, rescale_array
+from robamine.utils.math import rescale, rescale_array, Signal
 import numpy.testing as np_test
 
 class TestRescale(unittest.TestCase):
@@ -77,6 +77,48 @@ class TestRescale(unittest.TestCase):
         np_test.assert_array_equal(rescale, result)
         reversed = rescale_array(rescale, min=np.array([0, 0, 0, 1, 0, 100]), max=np.array([5, 4, 1, 2, 100, 200]), range=[0, 1], reverse=True)
         np_test.assert_array_almost_equal(reversed, x)
+
+class TestSignal(unittest.TestCase):
+    def test_average_filter(self):
+
+        # Test that it throws assertion error
+        x = np.arange(1002)
+        y = np.sin(2 * np.pi * 0.001 * x) + 0.2 * np.random.randn(1002)
+        signal = Signal(y.reshape(-1, 1))
+        with self.assertRaises(AssertionError):
+            signal.average_filter(segments=100)
+
+        with self.assertRaises(AssertionError):
+            signal.segment_last_element(segments=100)
+
+        # Test one dimensional
+        x = np.arange(1000)
+        y = np.sin(2 * np.pi * 0.001 * x) + 0.2 * np.random.randn(1000)
+        signal = Signal(y.reshape(-1, 1))
+        signal2 = Signal(y.reshape(-1, 1))
+        # signal2.plot()
+        signal.average_filter(segments=100)
+        signal2.segment_last_element(segments=100)
+        # signal2.plot()
+
+        # Test multidimensional
+        x = np.arange(1000)
+        y = np.sin(2 * np.pi * 0.001 * x) + 0.2 * np.random.randn(1000)
+        y = y.reshape(-1, 1)
+        y2 = y + np.ones(y.shape) * 0.2
+        yy = np.concatenate((y, y2), axis=1)
+        y2 = y + np.ones(y.shape) * 0.4
+        yy = np.concatenate((yy, y2), axis=1)
+        y2 = y + np.ones(y.shape) * 0.6
+        yy = np.concatenate((yy, y2), axis=1)
+        signal = Signal(yy)
+        signal2 = Signal(yy)
+        # signal.plot()
+        # print(signal2.array()[:20, :])
+        signal.average_filter(segments=100)
+        signal2.segment_last_element(segments=100)
+        # print(signal2.array())
+        # signal.plot()
 
 if __name__ == '__main__':
     unittest.main()
