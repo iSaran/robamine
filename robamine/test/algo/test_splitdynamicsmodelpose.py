@@ -93,14 +93,15 @@ class TestIntegrationWithClutterEnv(unittest.TestCase):
         model.load_dataset(env_data)
         model.learn()
 
-
         # Test predictions of the learned model
         # -------------------------------------
-        state = [0, 0.1, 0.1]
-        action = 2
-        prediction = model.predict(state, action)
-        expected = np.array([0.04071944, 0.03123961, 0.11114269])
-        np_test.assert_array_almost_equal(prediction, expected)
+        vel = env_data.info['extra_data'][1]['push_finger_vel']
+        force = env_data.info['extra_data'][1]['push_finger_forces']
+        action = 1
+        prediction = model.predict([vel, force], action)
+
+        expected = np.array([0.04078154265880585, 0.03126578405499458, 0.11294207721948624])
+        np_test.assert_equal(prediction, expected)
 
 
 if __name__ == '__main__':
