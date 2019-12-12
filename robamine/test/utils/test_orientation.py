@@ -70,6 +70,17 @@ class TestAffine3(unittest.TestCase):
         expected = np.array([[1, 0, 0, 5], [0, 0, 1, 1], [0, -1, 0, 0], [0, 0, 0, 1]])
         np.testing.assert_almost_equal(diff.matrix(), expected)
 
+    def test_inv(self):
+        # Right now the interface is such that inv does not changes the self
+        # data, just returns the inv. Breaking this test can break code in
+        # Clutter env and other client code which makes the same assumption.
+        homog = Affine3.from_vec_quat(pos=np.array([1, 2, 3]), quat=Quaternion(x=1, y=0, z=0, w=0))
+        result = homog.inv()
+        init = np.array([[1, 0, 0, 1], [0, -1, 0, 2], [0, 0, -1, 3], [0, 0, 0, 1]])
+        inv = np.array([[1, 0, 0, -1], [0, -1, 0, 2], [0, 0, -1, 3], [0, 0, 0, 1]])
+        np.testing.assert_equal(homog.matrix(), init)
+        np.testing.assert_equal(result.matrix(), inv)
+
 class TestOrientation(unittest.TestCase):
     def test_rot2angleaxis(self):
         R = np.array([[-1,  0, 0],
