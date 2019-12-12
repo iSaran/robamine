@@ -159,19 +159,24 @@ class TestClutter(unittest.TestCase):
         self.assertTrue('extra_data' in info)
         self.assertTrue(isinstance(info['extra_data'], dict))
         self.assertTrue('displacement' in info['extra_data'])
+        self.assertTrue('predicted_displacement' in info['extra_data'])
         self.assertTrue('push_finger_forces' in info['extra_data'])
         self.assertTrue('push_finger_vel' in info['extra_data'])
         self.assertTrue('target_object_displacement' in info['extra_data'])
+        self.assertTrue('target_init_pose' in info['extra_data'])
         self.assertTrue(isinstance(info['extra_data']['displacement'], list))
         self.assertEqual(len(info['extra_data']['displacement']), 3)
 
         self.assertTrue(isinstance(info['extra_data']['push_finger_forces'], np.ndarray))
         self.assertTrue(isinstance(info['extra_data']['push_finger_vel'], np.ndarray))
         self.assertTrue(isinstance(info['extra_data']['target_object_displacement'], np.ndarray))
+        self.assertTrue(isinstance(info['extra_data']['predicted_displacement'], np.ndarray))
+        self.assertTrue(isinstance(info['extra_data']['target_init_pose'], np.ndarray))
 
         self.assertEqual(info['extra_data']['push_finger_forces'].shape, (1002, 3))
         self.assertEqual(info['extra_data']['push_finger_vel'].shape, (1002, 3))
         self.assertEqual(info['extra_data']['target_object_displacement'].shape, (1002, 3))
+        self.assertEqual(info['extra_data']['target_init_pose'].shape, (4, 4))
 
         # Test if split
         env_params['params']['split'] = True

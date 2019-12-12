@@ -275,6 +275,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos_horizon = np.zeros(3)
         self.target_quat_horizon = Quaternion()
         self.target_displacement_push_step= np.zeros(3)
+        self.target_init_pose = Affine3()
         self.predicted_displacement_push_step= np.zeros(3)
 
         self.pos_measurements, self.force_measurements, self.target_object_displacement = None, None, None
@@ -506,8 +507,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 + np.matmul(self.target_quat_horizon.rotation_matrix(), pos)
             rot = np.matmul(self.target_quat_horizon.rotation_matrix(), rot_z(action['pose'][2]))
             target_quat_pred = Quaternion.from_rotation_matrix(rot)
-            pos = target_pos_pred
-            quat = target_quat_pred
+            pos = self.target_pos.copy()
+            quat = self.target_quat.copy()
         else:
             _action = action
             pos = self.target_pos.copy()
@@ -530,9 +531,11 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         j = int(_action - np.floor(_action / nr_substates) * nr_substates)
         theta = j * 2 * math.pi / nr_substates
         extra_data = {'displacement': [self.push_distance, theta, self.target_displacement_push_step],
+                      'predicted_displacement': self.predicted_displacement_push_step.copy(),
                       'push_finger_forces': self.force_measurements,
                       'push_finger_vel': self.pos_measurements,
-                      'target_object_displacement': self.target_object_displacement}
+                      'target_object_displacement': self.target_object_displacement,
+                      'target_init_pose': self.target_init_pose.matrix()}
 
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
 
@@ -590,9 +593,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             _, self.pos_measurements, self.force_measurements, self.target_object_displacement = self.move_joint_to_target('finger', [end[0], end[1], None], duration)
             prediction_pos, prediction_theta = predict_displacement_from_forces(pos_measurements=self.pos_measurements, force_measurements=self.force_measurements)
 
-            prediction_pos = np.append(prediction_pos, 0)
-            prediction_pos_wrt_target = np.matmul(np.transpose(init_target_quat.rotation_matrix()), prediction_pos)
-            prediction = prediction_pos_wrt_target
+            prediction[0] = prediction_pos[0]
+            prediction[1] = prediction_pos[1]
             prediction[2] = prediction_theta
 
         else:
@@ -715,7 +717,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         force_measurements = np.empty((1, 3))
         pos_measurements = np.empty((1, 3))
         target_object_displacement = np.empty((1, 3))
-        target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+        self.target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
 
         trajectory = [None, None, None]
         for i in range(3):
@@ -733,10 +735,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
-            force_measurements = np.concatenate((force_measurements, self.finger_external_force[None, :]))
-            pos_measurements = np.concatenate((pos_measurements, self.finger_pos[None, :]))
+
+            # Rotate force w.r.t init object frame
+            force_wrt_target_init = np.matmul(self.target_init_pose.inv().matrix(),
+                                              np.append(self.finger_external_force, 0))[0:3]
+            force_measurements = np.concatenate((force_measurements, force_wrt_target_init[None, :]))
+
+            # Rotate and translate position w.r.t init object frame
+            pos_wrt_target_init = np.matmul(self.target_init_pose.inv().matrix(),
+                                            np.append(self.finger_pos, 1))[0:3]
+            pos_measurements = np.concatenate((pos_measurements, pos_wrt_target_init[None, :]))
+
             target_current_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
-            displacement = get_2d_displacement(target_init_pose, target_current_pose)
+            displacement = get_2d_displacement(self.target_init_pose, target_current_pose)
             displacement = displacement.reshape((1, 3))
             target_object_displacement = np.concatenate((target_object_displacement, displacement))
 
