@@ -1,0 +1,37 @@
+agent:
+  name: SplitDynamicsModelPoseLSTM
+  params:
+    action_dim: 16
+    batch_size:
+    - 64
+    - 64
+    device: cpu
+    hidden_units:
+    - 20
+    - 20
+    learning_rate:
+    - 0.001
+    - 0.001
+    loss:
+    - mse
+    - mse
+    n_epochs:
+    - 1000
+    - 1000
+    n_layers:
+    - 2
+    - 2
+    state_dim: 2120
+  trainable_params: ''
+env:
+  name: Dataset
+  params:
+    path: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/transitions_pose/samples.env
+world:
+  comments: ''
+  friendly_name: dynamics_model_pose
+  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based
+  name: SupervisedTrain
+  params:
+    epochs: 50
+    save_every: 10

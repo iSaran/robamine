@@ -1,0 +1,51 @@
+agent:
+  name: SplitDynamicsModel
+  params:
+    action_dim: 16
+    device: cpu
+    feature_batch_size:
+    - 64
+    - 64
+    feature_hidden_units:
+    - - 100
+      - 100
+    - - 100
+      - 100
+    feature_learning_rate:
+    - 0.001
+    - 0.001
+    feature_loss:
+    - mse
+    - mse
+    feature_n_epochs:
+    - 1000
+    - 1000
+    pose_batch_size:
+    - 64
+    - 64
+    pose_hidden_units:
+    - - 5
+    - - 5
+    pose_learning_rate:
+    - 0.001
+    - 0.001
+    pose_loss:
+    - mse
+    - mse
+    pose_n_epochs:
+    - 1000
+    - 1000
+    state_dim: 2120
+  trainable_params: ''
+env:
+  name: Dataset
+  params:
+    path: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/sample_transitions_no_obstacles/samples.env
+world:
+  comments: reduced input for the pose nets
+  friendly_name: dynamics_model_reduced_pose
+  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based
+  name: SupervisedTrain
+  params:
+    epochs: 1000
+    save_every: 50

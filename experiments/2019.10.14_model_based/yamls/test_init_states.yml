@@ -1,0 +1,48 @@
+agent:
+  name: RandomDiscrete
+env:
+  name: Clutter
+  params:
+    all_equal_height_prob: 0.0
+    discrete: true
+    extra_primitive: false
+    finger_size:
+    - 0.005
+    - 0.01
+    nr_of_actions: 16
+    nr_of_obstacles:
+    - 5
+    - 8
+    obstacle_height_range:
+    - 0.005
+    - 0.02
+    obstacle_probability_box: 1.0
+    push_distance:
+    - 0.1
+    - 0.15
+    render: true
+    split: true
+    target_height_range:
+    - 0.005
+    - 0.01
+    target_probability_box: 1.0
+results:
+  dir_size: 0
+  estimated_time: null
+  hostname: triss:iason
+  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/robamine_logs_2019.10.17.11.40.37.814456
+  n_episodes: 0
+  n_timesteps: 0
+  progress: 0.0
+  started_on: '2019-10-17 11:40:38.884639'
+  time_elapsed: null
+  version: v0.1-33-g6cb7e4a-dirty
+world:
+  comments: ''
+  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based
+  friendly_name: 'init_states'
+  name: Eval
+  params:
+    List of env init states: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/init_states/samples.env
+    episodes: 1000
+    render: true

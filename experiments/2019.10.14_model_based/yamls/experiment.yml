@@ -1,0 +1,9 @@
+- Parallel:
+  - Parallel:
+    - - [ ] transitions_pose
+      - [ ] dynamics_model_pose
+    - - [x] transitions_features
+      - [x] dynamics_model_feature
+  - [x] sample_init_states
+- - [ ] eval_model_based
+  - [x] eval_model_free

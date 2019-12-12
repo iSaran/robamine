@@ -1,0 +1,36 @@
+agent:
+  name: RandomDiscrete
+env:
+  name: Clutter
+  params:
+    all_equal_height_prob: 0.0
+    discrete: true
+    extra_primitive: false
+    finger_size:
+    - 0.005
+    - 0.01
+    nr_of_actions: 16
+    nr_of_obstacles:
+    - 5
+    - 8
+    obstacle_height_range:
+    - 0.005
+    - 0.02
+    obstacle_probability_box: 1.0
+    push_distance:
+    - 0.1
+    - 0.15
+    render: false
+    split: true
+    target_height_range:
+    - 0.005
+    - 0.01
+    target_probability_box: 1.0
+world:
+  comments: sample init states for using them in evaluating in the same scenes
+  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based
+  friendly_name: 'init_states'
+  name: SampleInitStates
+  params:
+    render: false
+    samples: 1000

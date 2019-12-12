@@ -1,0 +1,71 @@
+agent:
+  name: ModelBasedSplitDQN
+  params:
+    batch_size:
+    - 64
+    - 64
+    device: cpu
+    discount: 0.9
+    double_dqn: false
+    dynamics_model_pose: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/dynamics_model_pose/model.pkl
+    dynamics_model_feature: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/dynamics_model_feature/model.pkl
+    epsilon_decay: 20000
+    epsilon_end: 0.05
+    epsilon_start: 0.9
+    hidden_units:
+    - - 100
+      - 100
+    - - 100
+      - 100
+    learning_rate:
+    - 0.001
+    - 0.001
+    load_buffers: ''
+    load_buffers_max_size: 1000
+    load_nets: ''
+    loss:
+    - mse
+    - mse
+    low_level_actions: 8
+    prediction_horizon: 2
+    replay_buffer_size: 1000000
+    tau: 0.999
+    update_iter:
+    - 1
+    - 1
+  trainable_params: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.08_fingersize_pushdistance/split/model.pkl
+env:
+  name: Clutter
+  params:
+    all_equal_height_prob: 0.0
+    discrete: true
+    extra_primitive: false
+    finger_size:
+    - 0.005
+    - 0.01
+    nr_of_actions: 16
+    nr_of_obstacles:
+    - 5
+    - 8
+    obstacle_height_range:
+    - 0.005
+    - 0.02
+    obstacle_probability_box: 1.0
+    push_distance:
+    - 0.1
+    - 0.15
+    render: false
+    split: true
+    target_height_range:
+    - 0.005
+    - 0.01
+    target_probability_box: 1.0
+world:
+  comments: ''
+  friendly_name: model_based_eval
+  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based
+  name: Eval
+  params:
+    List of env init states: /home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/init_states/samples.env
+    episodes: 1000
+    render: false
