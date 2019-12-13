@@ -68,6 +68,48 @@ class LSTMNetwork(nn.Module):
         cell_state = torch.zeros(self.n_layers, x_dim, self.hidden_dim)
         hidden = (hidden_state, cell_state)
 
+class AutoEncoderFC(nn.Module):
+    def __init__(self, init_dim, latent_dim):
+        super().__init__()
+
+        self.encoder = nn.Linear(init_dim, latent_dim)
+        self.decoder = nn.Linear(latent_dim, init_dim)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        x = nn.functional.relu(x)
+        x = self.decoder(x)
+        x = nn.functional.relu(x)
+        return x
+
+    def latent(self, x):
+        return self.encoder(x)
+
+class FCAutoEncoderModel(NetworkModel):
+    def __init__(self, params, inputs, outputs=None, name='AutoEncoderFCModel'):
+        self.network = AutoEncoderFC(
+            init_dim=inputs,
+            latent_dim=params['latent_dim']).to(params['device'])
+        super().__init__(params=params, inputs=inputs, outputs=outputs, name=name)
+
+    def load_dataset(self, dataset):
+        '''Preprocesses the dataset and loads it to train and test set'''
+        assert isinstance(dataset, Dataset)
+
+        x, _ = dataset.to_array()
+        dataset = Dataset.from_array(x, x)
+
+        super().load_dataset(dataset)
+
+    def predict(self, state):
+        if self.scaler:
+            inputs = self.scaler_x.transform(state.reshape(1, -1))
+        else:
+            inputs = state.copy()
+        s = torch.FloatTensor(inputs).to(self.device)
+        prediction = self.network.latent(s).cpu().detach().numpy()
+        return prediction
+
 # Dynamics Models
 # ---------------
 

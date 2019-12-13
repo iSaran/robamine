@@ -1,5 +1,8 @@
 import unittest
-from robamine.algo.dynamicsmodel import FCDynamicsModel, LSTMDynamicsModel, LSTMNetwork, LSTMSplitDynamicsModel, FCSplitDynamicsModel
+from robamine.algo.dynamicsmodel import (FCDynamicsModel, LSTMDynamicsModel,
+                                         LSTMNetwork, LSTMSplitDynamicsModel,
+                                         FCSplitDynamicsModel,
+                                         FCAutoEncoderModel)
 from robamine.algo.util import Dataset, Datapoint
 import os
 import numpy.testing as np_test
@@ -84,6 +87,57 @@ class TestFCDynamicModel(unittest.TestCase):
         prediction = model.predict(state)
         self.assertEqual(float(model.info['train']['loss']), 0.0009492546087130904)
         np.testing.assert_equal(prediction, np.array([10.195260047912598, 10.19526195526123, 10.195259094238281]))
+
+class TestFCAutoEncoderModel(unittest.TestCase):
+    def test_init(self):
+        params = {
+            'batch_size': 64,
+            'device': 'cpu',
+            'learning_rate': 0.001,
+            'loss': 'mse',
+            'n_epochs': 100,
+            'latent_dim': 32
+        }
+        model = FCAutoEncoderModel(params, 128)
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saved_model.pkl')
+        model.save(path)
+
+        model_loaded = FCAutoEncoderModel.load(path)
+
+        self.assertEqual(model.inputs, model_loaded.inputs)
+        self.assertEqual(model.outputs, model_loaded.outputs)
+
+    def test_learn(self):
+        params = {
+            'batch_size': 64,
+            'device': 'cpu',
+            'learning_rate': 0.001,
+            'loss': 'mse',
+            'n_epochs': 100,
+            'latent_dim': 32
+        }
+
+        input_dim = 128
+        n_datapoints = 2048
+
+        dataset = Dataset()
+        for i in range(n_datapoints):
+            dataset.append(Datapoint(x=np.full((input_dim,), i), y=None))
+
+        # TODO: The order for properly seeding the learning procedure is a bit
+        # weird: The model should be seeded after loading the dataset to ensure
+        # correct seeding of minibatching. Fix this.
+        torch.manual_seed(0)
+        model = FCAutoEncoderModel(params, input_dim)
+        model.load_dataset(dataset)
+        model.seed(0)
+        for i in range(100):
+            model.learn()
+
+        state = np.full((input_dim,), 100)
+        prediction = model.predict(state)
+        self.assertEqual(float(model.info['train']['loss']), 0.7252576351165771)
+        self.assertEqual(prediction.shape, (1, 32))
 
 class TestLSTMDynamicsModel(unittest.TestCase):
     def test_init(self):
