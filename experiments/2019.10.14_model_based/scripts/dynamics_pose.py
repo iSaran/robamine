@@ -28,7 +28,7 @@ if __name__ == '__main__':
     next_state, reward, done, info = env.step(action)
     print('displacement:', info['extra_data']['displacement'][2])
     print('handcrafted predicted_displacement:', info['extra_data']['predicted_displacement'])
-    force_vel_data = [info['extra_data']['push_finger_forces'], info['extra_data']['push_finger_vel']]
+    force_vel_data = [info['extra_data']['push_finger_vel'], info['extra_data']['push_finger_forces']]
 
 
     # model = SplitDynamicsModelPoseLSTM.load('/home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/dynamics_model_pose_2/model.pkl')
