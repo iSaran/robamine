@@ -1,5 +1,6 @@
 from robamine.envs.clutter import Clutter, get_2d_displacement
 from robamine.algo.splitdynamicsmodelpose import SplitDynamicsModelPose
+from robamine.algo.splitdynamicsmodelposelstm import SplitDynamicsModelPoseLSTM
 
 import pickle
 import gym
@@ -26,7 +27,7 @@ if __name__ == '__main__':
     state = env.reset()
     action = 2
     next_state, reward, done, info = env.step(action)
-    print('displacement:', info['extra_data']['displacement'][2])
+    print('real displacement:', info['extra_data']['displacement'][2])
     print('handcrafted predicted_displacement:', info['extra_data']['predicted_displacement'])
     force_vel_data = [info['extra_data']['push_finger_vel'], info['extra_data']['push_finger_forces']]
 
@@ -37,4 +38,8 @@ if __name__ == '__main__':
 
     model = SplitDynamicsModelPose.load('/home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/dynamics_model_pose_fc_position/model.pkl')
     prediction = model.predict(force_vel_data, action)
-    print('lstm predicted_displacement with no filtering:', prediction)
+    print('fully connected learned predicted model:', prediction)
+
+    model = SplitDynamicsModelPoseLSTM.load('/home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/dynamics_model_pose/model.pkl')
+    prediction = model.predict(force_vel_data, action)
+    print('LSTM learned predicted model:', prediction)
