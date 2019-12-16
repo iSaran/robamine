@@ -102,8 +102,13 @@ class FCAutoEncoderModel(NetworkModel):
         super().load_dataset(dataset)
 
     def predict(self, state):
+        if state.ndim == 1:
+            state_ = state.reshape(1, -1)
+        else:
+            state_ = state
+
         if self.scaler:
-            inputs = self.scaler_x.transform(state.reshape(1, -1))
+            inputs = self.scaler_x.transform(state_)
         else:
             inputs = state.copy()
         s = torch.FloatTensor(inputs).to(self.device)
@@ -115,11 +120,39 @@ class FCAutoEncoderModel(NetworkModel):
 
 class FCDynamicsModel(NetworkModel):
     def __init__(self, params, inputs, outputs, name='FCDynamicsModel'):
+        ae_params = {
+            'batch_size': 64,
+            'device': 'cpu',
+            'learning_rate': 0.001,
+            'loss': 'mse',
+            'latent_dim': params['ae_latent_dim']
+        }
+        self.autoencoder = FCAutoEncoderModel(ae_params, inputs=inputs)
+
         self.network = FullyConnectedNetwork(
-            inputs=inputs,
+            inputs=params['ae_latent_dim'],
             hidden_units=params['hidden_units'],
             outputs=outputs).to(params['device'])
+
         super().__init__(params=params, inputs=inputs, outputs=outputs, name=name)
+
+    def load_dataset(self, dataset):
+        self.autoencoder.load_dataset(dataset)
+        for i in range(100):
+            self.autoencoder.learn()
+
+        transformed_dataset = dataset
+        x, y = transformed_dataset.to_array()
+        x = self.autoencoder.predict(x)
+        transformed_dataset = Dataset.from_array(x, y)
+
+        super().load_dataset(transformed_dataset)
+
+    def predict(self, state):
+        # ndim == 1 is assumed to mean 1 sample (not multiple samples of 1 feature)
+        ae_prediction = self.autoencoder.predict(state)
+        return super().predict(ae_prediction)
+
 
 class LSTMDynamicsModel(NetworkModel):
     def __init__(self, params, inputs, outputs, name='LSTMDynamicsModel'):
@@ -164,10 +197,15 @@ class LSTMDynamicsModel(NetworkModel):
         self.train_dataset, self.test_dataset = dataset.split(0.7)
 
     def predict(self, state):
-        if self.scaler:
-            inputs = self.scaler_x.transform(state)
+        if state.ndim == 1:
+            state_ = state.reshape(1, -1)
         else:
-            inputs = state.copy()
+            state_ = state
+
+        if self.scaler:
+            inputs = self.scaler_x.transform(state_)
+        else:
+            inputs = state_.copy()
         s = torch.FloatTensor(inputs).to(self.device).unsqueeze(dim=0)
         prediction = self.network(s).cpu().detach().numpy()
         prediction = prediction[:, -1, :].squeeze()  # Obtain the last output
@@ -209,7 +247,7 @@ class SplitDynamicsModel(Agent):
         for i in range(self.nr_primitives):
             params_primitive = {}
             for p in ['hidden_units', 'learning_rate', 'batch_size', 'loss',
-                      'n_epochs', 'n_layers']:
+                      'n_epochs', 'n_layers', 'ae_latent_dim']:
                 if p in self.params:
                     params_primitive[p] = self.params[p][i]
             params_primitive['device'] = self.params['device']

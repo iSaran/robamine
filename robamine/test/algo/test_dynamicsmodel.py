@@ -44,7 +44,8 @@ class TestFCDynamicModel(unittest.TestCase):
             'hidden_units': [20, 20],
             'learning_rate': 0.001,
             'loss': 'mse',
-            'n_epochs': 1000
+            'n_epochs': 1000,
+            'ae_latent_dim': 256
         }
         model = FCDynamicsModel(params, 2, 4)
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'saved_model.pkl')
@@ -62,7 +63,8 @@ class TestFCDynamicModel(unittest.TestCase):
             'learning_rate': 0.1,
             'loss': 'mse',
             'batch_size': 32,
-            'scaler': 'min_max'
+            'scaler': 'min_max',
+            'ae_latent_dim': 256
         }
 
         input_dim = 4
@@ -239,7 +241,8 @@ class TestSplitDynamicModels(unittest.TestCase):
             'learning_rate': [0.001, 0.001],
             'loss': ['mse', 'mse'],
             'batch_size': [64, 64],
-            'n_epochs': [1000, 1000]
+            'n_epochs': [1000, 1000],
+            'ae_latent_dim': [256, 256]
         }
         model = FCSplitDynamicsModel(params=params, inputs=4, outputs=3)
 
