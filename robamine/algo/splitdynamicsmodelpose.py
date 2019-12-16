@@ -13,11 +13,11 @@ import numpy as np
 import logging
 logger = logging.getLogger('robamine.algo.splitdynamicsmodelpose')
 
-SEQUENCE_LENGTH = 50
+SEQUENCE_LENGTH = 200
 
 class SplitDynamicsModelPose(FCSplitDynamicsModel):
-    def __init__(self, params, inputs=4, outputs=3, name='SplitDynamicsModelPose'):
-        super().__init__(params=params, inputs=SEQUENCE_LENGTH*4, outputs=outputs, name=name)
+    def __init__(self, params, inputs=None, outputs=None, name='SplitDynamicsModelPose'):
+        super().__init__(params=params, inputs=SEQUENCE_LENGTH*4, outputs=3, name=name)
 
     def _preprocess_input(self, inputs, sequence_length):
         '''
@@ -28,15 +28,11 @@ class SplitDynamicsModelPose(FCSplitDynamicsModel):
         '''
         result = np.concatenate((np.delete(inputs[0], 2, axis=1), np.delete(inputs[1], 2, axis=1)), axis=1)
         result = result[:-(result.shape[0] % sequence_length), :]
-        result = Signal(result).average_filter(SEQUENCE_LENGTH).array().ravel().copy()
+        result = Signal(result).average_filter(sequence_length).array().ravel().copy()
         return result
 
     def load_dataset(self, env_data):
         """ Transforms the EnvData x to a Dataset """
-
-        # Create dataset
-        # --------------
-
         dataset = []
         for i in range(self.nr_primitives):
             dataset.append(Dataset())
@@ -52,7 +48,6 @@ class SplitDynamicsModelPose(FCSplitDynamicsModel):
             # and no useful data from pushing was recorded
             if (vel is not None) and (force is not None):
                 inputs = self._preprocess_input([vel, force], SEQUENCE_LENGTH)
-                # Signal(inputs).plot()
 
                 outputs = poses[:-(poses.shape[0] % SEQUENCE_LENGTH), :][-1, :].ravel().copy()
 
