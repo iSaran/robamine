@@ -153,10 +153,11 @@ class TestIntegrationWithClutterEnv(unittest.TestCase):
         action = 2
         env.reset()
         next_state, reward, done, info = env.step(action)
-        prediction = model.predict(info['extra_data']['push_forces_vel'], action)
+        l = [info['extra_data']['push_finger_vel'], info['extra_data']['push_finger_forces']]
+        prediction = model.predict(l, action)
         np.testing.assert_equal(prediction, np.array([0.04061853885650635, 0.03152221813797951, 0.11244191974401474]))
 
-        prediction = model.predict(info['extra_data']['push_forces_vel'], 8)
+        prediction = model.predict(l, 8)
         np.testing.assert_equal(prediction, np.array([0.0, 0.0, 0.0]))
 
 
