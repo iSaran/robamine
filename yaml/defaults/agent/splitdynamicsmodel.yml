@@ -1,0 +1,18 @@
+name: 'SplitDynamicsModel'
+params:
+  feature_hidden_units: [[100, 100], [100, 100]]
+  feature_learning_rate: [0.001, 0.001]
+  feature_batch_size: [128, 128]
+  feature_loss: ['mse', 'mse']  # Options: 'mse', 'huber'
+  feature_nr_epochs: [40, 40]
+  
+  pose_hidden_units: [[50], [50]]
+  pose_learning_rate: [0.001, 0.001]
+  pose_batch_size: [128, 128]
+  pose_loss: ['mse', 'mse']  # Options: 'mse', 'huber'
+  pose_nr_epochs: [40, 40]
+
+  state_dim: 2120
+  action_dim: 16
+  device: 'cpu'  # "cuda", "cpu"
+trainable_params: ''
