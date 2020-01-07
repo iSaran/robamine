@@ -73,9 +73,16 @@ class Datapoint:
         return  self.__str__()
 
 class Dataset(list):
+    def __init__(self, *args):
+        list.__init__(self, *args)
+        self.random = np.random.RandomState()
+
+    def seed(self, seed=None):
+        self.random.seed(seed)
+
     def to_minibatches(self, batch_size=32):
         temp = self.copy()
-        random.shuffle(temp)
+        self.random.shuffle(temp)
         for _ in range(len(self) % batch_size):
             del temp[-1]
         return [Dataset(temp[i:i + batch_size]) for i in range(0, len(temp), batch_size)]
