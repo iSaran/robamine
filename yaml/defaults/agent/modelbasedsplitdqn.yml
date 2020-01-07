@@ -18,6 +18,7 @@ params:
   load_buffers: ''
   load_buffers_max_size: 1000
   update_iter: [1, 1]
-  dynamics_model: ''
+  dynamics_model_pose: ''
+  dynamics_model_feature: ''
   prediction_horizon: 1
 trainable_params: ''

@@ -1,0 +1,25 @@
+hidden_units:
+  type: intmatrixx
+  range: [1, 500]
+learning_rate:
+  type: floatvectorx
+  range: [0.0, 1.0]
+  decimals: 5
+batch_size:
+  type: intvectorx
+  range: [1, 132]
+loss:
+  type: combovectorx
+  options: ['mse', 'huber']
+nr_epochs:
+  type: intvectorx
+  range: [0, 1000]
+state_dim:
+  type: int
+  range: [1, 9999]
+action_dim:
+  type: int
+  range: [1, 512]
+device:
+  type: combo
+  options: ['cpu', 'cuda']

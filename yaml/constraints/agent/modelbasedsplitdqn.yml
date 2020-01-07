@@ -54,7 +54,9 @@ load_buffers_max_size:
 update_iter:
   type: intvectorx
   range: [1, 50]
-dynamics_model:
+dynamics_model_pose:
+  type: str
+dynamics_model_feature:
   type: str
 prediction_horizon:
   type: int
