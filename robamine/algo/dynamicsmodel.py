@@ -52,14 +52,17 @@ class LSTMNetwork(nn.Module):
         super(LSTMNetwork, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
-        self.lstm = nn.LSTM(inputs, hidden_dim, n_layers, batch_first=True)
-        self.hidden2pose = nn.Linear(hidden_dim, outputs)
+        self.lstm = nn.LSTM(input_size=inputs, hidden_size=hidden_dim, num_layers=n_layers, batch_first=True)
+        self.hidden2pose_fc = nn.Linear(hidden_dim, outputs)
+        self.hidden2pose_fc.weight.data.uniform_(-0.003, 0.003)
+        self.hidden2pose_fc.bias.data.uniform_(-0.003, 0.003)
 
     def forward(self, x):
-        hidden = self.init_hidden(x.shape[0])
+        hidden = self.init_hidden(x.shape[2])
         out, hidden = self.lstm(x, hidden)
-        out = out.squeeze()[-1, :]  # Obtain the last output
-        prediction = self.hidden2pose(out)
+        out = out[:, -1, :].squeeze(dim=1)  # Obtain the last output
+        prediction = self.hidden2pose_fc(out)
+        prediction = nn.functional.relu(prediction)
         return prediction
 
     def init_hidden(self, x_dim):
@@ -99,71 +102,48 @@ class DynamicsModel(Agent):
         self.info['train'] = {'loss': 0.0}
         self.info['test'] = {'loss': 0.0}
 
-    def load_dataset(self, dataset):
-        '''Preprocesses the dataset and loads it to train and test set'''
+        self.dataset_rescaled = False
 
-        # Check and remove NaN values
-        try:
-            dataset.check()
-        except ValueError:
-            x, y = dataset.to_array()
-            indexes = np.nonzero(np.isnan(y))
-            for i in reversed(indexes[0]):
-                del dataset[i]
-
-        # Rescale
-        data_x, data_y = dataset.to_array()
-        data_x = self.min_max_scaler_x.fit_transform(data_x)
-        data_y = self.min_max_scaler_y.fit_transform(data_y)
-        dataset = Dataset.from_array(data_x, data_y)
-
-        dataset.check()
-
-        # Split to train and test datasets
-        self.train_dataset, self.test_dataset = dataset.split(0.7)
+    def load_dataset(self, dataset, rescale=True):
+        raise NotImplementedError('DynamicsModel is an abstract class.')
 
     def predict(self, state):
-        inputs = self.min_max_scaler_x.transform(state.reshape(1, -1))
-        s = torch.FloatTensor(inputs).to(self.device)
-        prediction = self.network(s).cpu().detach().numpy()
-        prediction = self.min_max_scaler_y.inverse_transform(prediction)[0]
-        return prediction
+        raise NotImplementedError('DynamicsModel is an abstract class.')
 
     def learn(self):
         '''Run one epoch'''
         self.iterations += 1
 
-        if self.iterations < self.params['n_epochs']:
+        # Calculate loss in train dataset
+        train_x, train_y = self.train_dataset.to_array()
+        real_x = torch.FloatTensor(train_x).to(self.device)
+        prediction = self.network(real_x)
+        real_y = torch.FloatTensor(train_y).to(self.device)
+        loss = self.loss(prediction, real_y)
+        self.info['train']['loss'] = loss.detach().cpu().numpy().copy()
 
-            # Minimbatch update of network
-            minibatches = self.train_dataset.to_minibatches(
-                self.params['batch_size'])
-            for minibatch in minibatches:
-                batch_x, batch_y = minibatch.to_array()
+        # Calculate loss in test dataset
+        test_x, test_y = self.test_dataset.to_array()
+        real_x = torch.FloatTensor(test_x).to(self.device)
+        prediction = self.network(real_x)
+        real_y = torch.FloatTensor(test_y).to(self.device)
+        loss = self.loss(prediction, real_y)
+        self.info['test']['loss'] = loss.detach().cpu().numpy().copy()
 
-                real_x = torch.FloatTensor(batch_x).to(self.device)
-                prediction = self.network(real_x)
-                real_y = torch.FloatTensor(batch_y).to(self.device)
-                loss = self.loss(prediction, real_y)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
 
-            # Calculate loss in train dataset
-            train_x, train_y = self.train_dataset.to_array()
-            real_x = torch.FloatTensor(train_x).to(self.device)
+        # Minimbatch update of network
+        minibatches = self.train_dataset.to_minibatches(
+            self.params['batch_size'])
+        for minibatch in minibatches:
+            batch_x, batch_y = minibatch.to_array()
+
+            real_x = torch.FloatTensor(batch_x).to(self.device)
             prediction = self.network(real_x)
-            real_y = torch.FloatTensor(train_y).to(self.device)
+            real_y = torch.FloatTensor(batch_y).to(self.device)
             loss = self.loss(prediction, real_y)
-            self.info['train']['loss'] = loss.detach().cpu().numpy().copy()
-
-            # Calculate loss in test dataset
-            test_x, test_y = self.test_dataset.to_array()
-            real_x = torch.FloatTensor(test_x).to(self.device)
-            prediction = self.network(real_x)
-            real_y = torch.FloatTensor(test_y).to(self.device)
-            loss = self.loss(prediction, real_y)
-            self.info['test']['loss'] = loss.detach().cpu().numpy().copy()
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
     def state_dict(self):
         state_dict = super().state_dict()
@@ -196,6 +176,11 @@ class DynamicsModel(Agent):
         self.min_max_scaler_y = state_dict['min_max_scaler_y']
         return self
 
+    def seed(self, seed=None):
+        super().seed(seed)
+        self.train_dataset.seed(seed)
+        self.test_dataset.seed(seed)
+
 class FCDynamicsModel(DynamicsModel):
     def __init__(self, params, inputs, outputs, name='FCDynamicsModel'):
         self.network = FullyConnectedNetwork(
@@ -203,6 +188,41 @@ class FCDynamicsModel(DynamicsModel):
             hidden_units=params['hidden_units'],
             outputs=outputs).to(params['device'])
         super().__init__(params=params, inputs=inputs, outputs=outputs, name=name)
+
+    def load_dataset(self, dataset, rescale=True):
+        '''Preprocesses the dataset and loads it to train and test set'''
+        assert isinstance(dataset, Dataset)
+
+        # Check and remove NaN values
+        try:
+            dataset.check()
+        except ValueError:
+            x, y = dataset.to_array()
+            indexes = np.nonzero(np.isnan(y))
+            for i in reversed(indexes[0]):
+                del dataset[i]
+
+        # Rescale
+        if rescale:
+            self.dataset_rescaled = True
+            data_x, data_y = dataset.to_array()
+            data_x = self.min_max_scaler_x.fit_transform(data_x)
+            data_y = self.min_max_scaler_y.fit_transform(data_y)
+            dataset = Dataset.from_array(data_x, data_y)
+            dataset.check()
+
+        # Split to train and test datasets
+        self.train_dataset, self.test_dataset = dataset.split(0.7)
+
+    def predict(self, state):
+        inputs = self.min_max_scaler_x.transform(state.reshape(1, -1))
+        s = torch.FloatTensor(inputs).to(self.device)
+        prediction = self.network(s).cpu().detach().numpy()
+        if self.dataset_rescaled:
+            prediction = self.min_max_scaler_y.inverse_transform(prediction)[0]
+
+        return prediction
+
 
 class LSTMDynamicsModel(DynamicsModel):
     def __init__(self, params, inputs, outputs, name='LSTMDynamicsModel'):
@@ -212,6 +232,44 @@ class LSTMDynamicsModel(DynamicsModel):
             n_layers=params['n_layers'],
             outputs=outputs).to(params['device'])
         super().__init__(params=params, inputs=inputs, outputs=outputs, name=name)
+
+    def load_dataset(self, dataset, rescale=True):
+        '''Preprocesses the dataset and loads it to train and test set'''
+        assert isinstance(dataset, Dataset)
+
+        # Check and remove NaN values
+        try:
+            dataset.check()
+        except ValueError:
+            x, y = dataset.to_array()
+            indexes = np.nonzero(np.isnan(y))
+            for i in reversed(indexes[0]):
+                del dataset[i]
+
+        # Rescale
+        if rescale:
+            self.dataset_rescaled = True
+            data_x, data_y = dataset.to_array()
+            init_shape = data_x.shape
+            data_x_n = data_x.reshape((init_shape[0] * init_shape[1], init_shape[2]))
+            data_x_n = self.min_max_scaler_x.fit_transform(data_x_n)
+            data_x = data_x_n.reshape(init_shape)
+            data_y = self.min_max_scaler_y.fit_transform(data_y)
+            dataset = Dataset.from_array(data_x, data_y)
+            dataset.check()
+
+        # Split to train and test datasets
+        self.train_dataset, self.test_dataset = dataset.split(0.7)
+
+    def predict(self, state):
+        inputs = self.min_max_scaler_x.transform(state)
+        print(inputs.shape)
+        s = torch.FloatTensor(inputs).to(self.device).unsqueeze(dim=0)
+        prediction = self.network(s).cpu().detach().numpy()
+        if self.dataset_rescaled:
+            prediction = self.min_max_scaler_y.inverse_transform(prediction)[0]
+        return prediction
+
 
 # Wrappers of Dynamics Models for Split case
 # ------------------------------------------
