@@ -222,6 +222,7 @@ class SplitDynamicsModel(Agent):
         state_dim, action_dim = params['state_dim'], params['action_dim']
         self.inputs = inputs
         self.outputs = outputs
+        self.model_type = model_type
 
         # The number of networks is the number of high level actions (e.g. push
         # target, push obstacles, grasp). One network per high level action.
@@ -251,8 +252,8 @@ class SplitDynamicsModel(Agent):
                     params_primitive[p] = self.params[p][i]
             params_primitive['device'] = self.params['device']
 
-            self.dynamics_models.append(model_type(params_primitive, inputs,
-                                                      outputs))
+            self.dynamics_models.append(self.model_type(params_primitive, inputs,
+                                                        outputs))
 
             self.train_dataset.append(Dataset())
             self.test_dataset.append(Dataset())
@@ -308,7 +309,7 @@ class SplitDynamicsModel(Agent):
                    state_dict['outputs'], state_dict['name'])
 
         for i in range(self.nr_primitives):
-            self.dynamics_models[i] = DynamicsModel.load_state_dict(
+            self.dynamics_models[i] = self.model_type.load_state_dict(
                 state_dict['dynamics_models'][i])
 
         self.iterations = state_dict['iterations']

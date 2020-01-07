@@ -40,7 +40,7 @@ class SplitDynamicsModelPose(FCSplitDynamicsModel):
             primitive = int(np.floor(env_data.transitions[i].action / self.nr_substates))
 
             # Extra data in 2 has a np array with the displacement in (x, y, theta_around_z)
-            dataset[primitive].append(Datapoint(x = pose_input, y = env_data.info['extra_data'][i][2]))
+            dataset[primitive].append(Datapoint(x = pose_input, y = env_data.info['extra_data'][i]['displacement'][2]))
 
         for i in range(self.nr_primitives):
             self.dynamics_models[i].load_dataset(dataset[i])
