@@ -1,0 +1,61 @@
+replay_buffer_size:
+  type: int
+  range: [0, 2000000]
+  #whatis: The size of the replay buffer
+low_level_actions:
+  type: int
+  range: [1, 64]
+batch_size:
+  type: intvectorx
+  range: [1, 132]
+discount:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 3
+#target_net_updates: 1000
+tau:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 3
+double_dqn:
+  type: bool
+epsilon_start:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 3
+epsilon_end:
+  type: float
+  range: [0.0, 1.0]
+  decimals: 3
+epsilon_decay:
+  type: int
+  range: [0, 50000]
+  whatis: 'Number of learning steps for half epsilon, set to 0 if no decay is needed'
+learning_rate:
+  type: floatvectorx
+  range: [0.0, 1.0]
+  decimals: 5
+hidden_units:
+  type: intmatrixx
+  range: [1, 500]
+loss:
+  type: combovectorx
+  options: ['mse', 'huber']
+device:  # "cuda", "cpu"
+  type: combo
+  options: ['cpu', 'cuda']
+load_nets:
+  type: str
+load_buffers:
+  type: str
+load_buffers_max_size:
+  type: int
+  range: [1, 50000]
+update_iter:
+  type: intvectorx
+  range: [1, 50]
+dynamics_model:
+  type: str
+prediction_horizon:
+  type: int
+  range: [0, 20]
