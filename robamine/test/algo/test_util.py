@@ -49,5 +49,28 @@ class TestDataset(unittest.TestCase):
             for j in range(len(dataset[i].y)):
                 self.assertEqual(dataset[i].y[j], result[i].y[j])
 
+    def test_split(self):
+        dataset = util.Dataset()
+        for i in range(100):
+            dataset.append(util.Datapoint(x=np.array([12, 232]), y=np.array([18, 28, 21])))
+        train, test = dataset.split(0.7)
+        self.assertEqual(len(train), 70)
+        self.assertEqual(len(test), 30)
+
+        dataset = util.Dataset()
+        for i in range(213):
+            dataset.append(util.Datapoint(x=np.array([12, 232]), y=np.array([18, 28, 21])))
+        train, test = dataset.split(0.7)
+        self.assertEqual(len(train), 149)
+        self.assertEqual(len(test), 64)
+
+        dataset = util.Dataset()
+        dataset.append(util.Datapoint(x=np.array([12, 232]), y=np.array([18, 28, 21])))
+        dataset.append(util.Datapoint(x=np.array([2, -3]), y=np.array([180, -8, 0])))
+        dataset.append(util.Datapoint(x=np.array([54, -22]), y=np.array([138, 18, 451])))
+        train, test = dataset.split(0.7)
+        self.assertEqual(len(train), 2)
+        self.assertEqual(len(test), 1)
+
 if __name__ == '__main__':
     unittest.main()

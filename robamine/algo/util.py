@@ -98,7 +98,7 @@ class Dataset(list):
     def split(self, train_perc = 0.8):
         elements = int(len(self) * train_perc)
         train = Dataset(self[0:elements])
-        test = Dataset(self[elements+1:])
+        test = Dataset(self[elements:])
         return train, test
 
     def normalize(self):
