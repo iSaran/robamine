@@ -1,7 +1,8 @@
 import unittest
 import logging
 import gym
-from robamine.envs.clutter import Clutter
+from robamine.envs.clutter import Clutter, get_2d_displacement
+from robamine.utils.orientation import Affine3, Quaternion
 import pickle
 import os
 import numpy as np
@@ -28,17 +29,15 @@ class TestClutter(unittest.TestCase):
           }
         }
         env = gym.make(env_params['name'], params=env_params['params'])
-        state_dict = pickle.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_state_dict.pkl'), 'rb'))
-        env.load_state_dict(state_dict)
+        env.seed(23)
         state = env.reset()
-        #pickle.dump(env.state_dict(), open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_state_dict.pkl'), 'wb'))
         action = 0
         next_state, reward, done, info = env.step(action)
         self.assertEqual(info['extra_data']['displacement'][0], 0.25)
         self.assertEqual(info['extra_data']['displacement'][1], 0.0)
-        self.assertEqual(info['extra_data']['displacement'][2][0], 0.15021500375833308)
-        self.assertEqual(info['extra_data']['displacement'][2][1], 0.04533153404584551)
-        self.assertEqual(info['extra_data']['displacement'][2][2], 0.5600061048286464)
+        self.assertEqual(info['extra_data']['displacement'][2][0], 0.24585575810316657)
+        self.assertEqual(info['extra_data']['displacement'][2][1], 0.01013086660278517)
+        self.assertEqual(info['extra_data']['displacement'][2][2], 0.07964523899825882)
 
     def test_push_distance_finger_size(self):
         # With push distance and finger deterministic we shouldn't have them in
@@ -160,15 +159,19 @@ class TestClutter(unittest.TestCase):
         self.assertTrue('extra_data' in info)
         self.assertTrue(isinstance(info['extra_data'], dict))
         self.assertTrue('displacement' in info['extra_data'])
-        self.assertTrue('push_forces_vel' in info['extra_data'])
+        self.assertTrue('push_finger_forces' in info['extra_data'])
+        self.assertTrue('push_finger_vel' in info['extra_data'])
+        self.assertTrue('target_object_displacement' in info['extra_data'])
         self.assertTrue(isinstance(info['extra_data']['displacement'], list))
         self.assertEqual(len(info['extra_data']['displacement']), 3)
-        self.assertTrue(isinstance(info['extra_data']['push_forces_vel'], list))
-        self.assertTrue(len(info['extra_data']['push_forces_vel']) == 2)
-        self.assertTrue(isinstance(info['extra_data']['push_forces_vel'][0], np.ndarray))
-        self.assertEqual(info['extra_data']['push_forces_vel'][0].shape, (1002, 3))
-        self.assertTrue(isinstance(info['extra_data']['push_forces_vel'][1], np.ndarray))
-        self.assertEqual(info['extra_data']['push_forces_vel'][1].shape, (1002, 3))
+
+        self.assertTrue(isinstance(info['extra_data']['push_finger_forces'], np.ndarray))
+        self.assertTrue(isinstance(info['extra_data']['push_finger_vel'], np.ndarray))
+        self.assertTrue(isinstance(info['extra_data']['target_object_displacement'], np.ndarray))
+
+        self.assertEqual(info['extra_data']['push_finger_forces'].shape, (1002, 3))
+        self.assertEqual(info['extra_data']['push_finger_vel'].shape, (1002, 3))
+        self.assertEqual(info['extra_data']['target_object_displacement'].shape, (1002, 3))
 
         # Test if split
         env_params['params']['split'] = True
@@ -186,8 +189,49 @@ class TestClutter(unittest.TestCase):
         env.seed(0)
         state = env.reset()
         next_state, reward, done, info = env.step(0)
-        self.assertTrue(info['extra_data']['push_forces_vel'][0] is None)
-        self.assertTrue(info['extra_data']['push_forces_vel'][1] is None)
+        self.assertTrue(info['extra_data']['push_finger_forces'] is None)
+        self.assertTrue(info['extra_data']['push_finger_vel'] is None)
+        self.assertTrue(info['extra_data']['target_object_displacement'] is None)
+
+    def test_get_2d_displacement(self):
+        init = Affine3.from_vec_quat(np.array([0.5, 0.5, 0]), Quaternion())
+        orientation = Quaternion.from_rotation_matrix(np.array([[-1,  0, 0],
+                                                                [ 0, -1, 0],
+                                                                [ 0,  0, 1]]))
+        final = Affine3.from_vec_quat(np.array([1, 0, 0]), orientation)
+        result = get_2d_displacement(init, final)
+        np.testing.assert_equal(result, np.array([0.5, -0.5, 3.141592653589793]))
+
+        # Test on env
+        env_params = {
+        'name': 'Clutter-v0',
+        'params': {
+          'discrete': True,
+          'nr_of_actions': 16,  # u x w
+          'render': False,
+          'nr_of_obstacles': [0, 0],
+          'target_probability_box': 1.0,
+          'target_height_range': [0.01, 0.01],
+          'obstacle_probability_box': 1.0,
+          'obstacle_height_range': [0.005, 0.005],
+          'push_distance': [0.25, 0.25],
+          'split': False,
+          'extra_primitive': False,
+          'all_equal_height_prob': 0.0,
+          'finger_size': [0.005, 0.005]
+          }
+        }
+        env = gym.make(env_params['name'], params=env_params['params'])
+        env.seed(0)
+        state = env.reset()
+        init_pose = Affine3.from_vec_quat(env.target_pos, env.target_quat)
+        next_state, reward, done, info = env.step(0)
+        final_pose = Affine3.from_vec_quat(env.target_pos, env.target_quat)
+        dis = get_2d_displacement(init_pose, final_pose)
+        expected = np.array([0.13892839578462413, -0.04837501139586415, -0.8447721330440019])
+        np.testing.assert_equal(dis, expected)
+
+        self.assertEqual(info['extra_data']['target_object_displacement'].shape, (1002, 3))
 
 if __name__ == '__main__':
     unittest.main()

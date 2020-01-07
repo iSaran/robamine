@@ -16,7 +16,7 @@ import os
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
-from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z
+from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z, Affine3
 from robamine.utils.math import sigmoid, rescale, filter_signal
 import robamine.utils.cv_tools as cv_tools
 import math
@@ -115,6 +115,22 @@ def predict_displacement_from_forces(pos_measurements, force_measurements, epsil
     theta = np.sign(np.mean(inner_perpedicular[-10:])) * np.arccos(mean_last_inner)
 
     return prediction, theta
+
+def get_2d_displacement(init, current):
+    assert isinstance(init, Affine3)
+    assert isinstance(current, Affine3)
+
+    displacement = np.zeros(3)
+    diff = init.inv() * current
+    displacement[0] = diff.translation[0]
+    displacement[1] = diff.translation[1]
+    if np.linalg.norm(displacement) < 1e-3:
+        return np.zeros(3)
+    displacement[2], axis = rot2angleaxis(diff.linear)
+    if axis is None:
+        axis = np.array([0, 0, 1])
+    displacement[2] *= np.sign(axis[2])
+    return displacement
 
 class PushingPrimitiveC:
     def __init__(self, distance = 0.1, direction_theta = 0.0, surface_size = 0.30, object_height = 0.06, finger_size = 0.02):
@@ -261,7 +277,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_displacement_push_step= np.zeros(3)
         self.predicted_displacement_push_step= np.zeros(3)
 
-        self.pos_measurements, self.force_measurements = None, None
+        self.pos_measurements, self.force_measurements, self.target_object_displacement = None, None, None
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -356,8 +372,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = self.sim.data.time
         self.success = False
 
-        self.target_pos_prev_state = self.target_pos
-        self.target_quat_prev_state = self.target_quat
+        self.target_pos_prev_state = self.target_pos.copy()
+        self.target_quat_prev_state = self.target_quat.copy()
         self.preloaded_init_state = None
         self.reset_horizon()
         return observation
@@ -494,8 +510,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             quat = target_quat_pred
         else:
             _action = action
-            pos = self.target_pos
-            quat = self.target_quat
+            pos = self.target_pos.copy()
+            quat = self.target_quat.copy()
 
         time, self.predicted_displacement_push_step = self.do_simulation(_action, pos, quat)
         self.target_displacement_push_step = self.get_target_displacement()
@@ -514,7 +530,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         j = int(_action - np.floor(_action / nr_substates) * nr_substates)
         theta = j * 2 * math.pi / nr_substates
         extra_data = {'displacement': [self.push_distance, theta, self.target_displacement_push_step],
-                      'push_forces_vel': [self.pos_measurements, self.force_measurements]}
+                      'push_finger_forces': self.force_measurements,
+                      'push_finger_vel': self.pos_measurements,
+                      'target_object_displacement': self.target_object_displacement}
 
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
 
@@ -569,7 +587,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True)[0]:
             end = push_initial_pos_world[:2] + push.distance * push_direction_world[:2]
             init_pos = self.target_pos
-            _, self.pos_measurements, self.force_measurements = self.move_joint_to_target('finger', [end[0], end[1], None], duration)
+            _, self.pos_measurements, self.force_measurements, self.target_object_displacement = self.move_joint_to_target('finger', [end[0], end[1], None], duration)
             prediction_pos, prediction_theta = predict_displacement_from_forces(pos_measurements=self.pos_measurements, force_measurements=self.force_measurements)
 
             prediction_pos = np.append(prediction_pos, 0)
@@ -696,7 +714,8 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         desired_quat = Quaternion()
         force_measurements = np.empty((1, 3))
         pos_measurements = np.empty((1, 3))
-
+        target_object_displacement = np.empty((1, 3))
+        target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
 
         trajectory = [None, None, None]
         for i in range(3):
@@ -716,6 +735,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim_step()
             force_measurements = np.concatenate((force_measurements, self.finger_external_force[None, :]))
             pos_measurements = np.concatenate((pos_measurements, self.finger_pos[None, :]))
+            target_current_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+            displacement = get_2d_displacement(target_init_pose, target_current_pose)
+            displacement = displacement.reshape((1, 3))
+            target_object_displacement = np.concatenate((target_object_displacement, displacement))
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 
@@ -747,9 +770,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
                 self.sim_step()
 
-            return False, pos_measurements, force_measurements
+            return False, pos_measurements, force_measurements, target_object_displacement
 
-        return True, pos_measurements, force_measurements
+        return True, pos_measurements, force_measurements, target_object_displacement
 
     def sim_step(self):
         """
@@ -974,19 +997,13 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
     def get_target_displacement(self):
         '''Returns [x, y, theta]: the displacement of the target between pushing
         steps. Used in step for returning displacements in info.'''
-        displacement = np.zeros(3)
-        temp = np.matmul(np.transpose(self.target_quat_prev_state.rotation_matrix()), (self.target_pos - self.target_pos_prev_state))
-        displacement[0] = temp[0]
-        displacement[1] = temp[1]
-        if np.linalg.norm(displacement) < 1e-3:
-            return np.zeros(3)
-
-        rot_mat = np.matmul(np.transpose(self.target_quat_prev_state.rotation_matrix()), self.target_quat.rotation_matrix())
-        displacement[2], axis = rot2angleaxis(rot_mat)
-        displacement[2] *= np.sign(axis[2])
-        self.target_pos_prev_state = self.target_pos
-        self.target_quat_prev_state = self.target_quat
+        init = Affine3.from_vec_quat(self.target_pos_prev_state, self.target_quat_prev_state)
+        cur = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+        displacement = get_2d_displacement(init, cur)
+        self.target_pos_prev_state = self.target_pos.copy()
+        self.target_quat_prev_state = self.target_quat.copy()
         return displacement
+
 
     def state_dict(self):
         state = {}
