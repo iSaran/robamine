@@ -5,9 +5,9 @@ Dummy Agent
 A dummy agent which produces random actions. Used for testing.
 """
 
-from robamine.algo.core import Agent
+from robamine.algo.core import RLAgent
 
-class Dummy(Agent):
+class Dummy(RLAgent):
     def __init__(self, action_space, state_dim=None, action_dim=None, params={}):
         super(Dummy, self).__init__(state_dim, action_dim, 'Dummy', params)
         self.action_space = action_space

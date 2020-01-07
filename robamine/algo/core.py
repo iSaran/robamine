@@ -26,69 +26,29 @@ from threading import Lock
 logger = logging.getLogger('robamine.algo.core')
 
 class Agent:
-    """
-    Base class for creating an RL agent.
-
-    Example
-    -------
-    Assume you want to implement the Best RL Algorithm (BRLA). Create a class
-    which inherits from :class:`.Agent` and implement its member methods. Then,
-    you should be able to train this agent for 1 million episodes in the
-    ``MyRobot`` environment as simple as:
-
-    .. code-block:: python
-
-        with tf.Session as session:
-            agent = BRLA(session, 'MyRobot').train(1e6)
-
-    Then you should be able to evaluate and see what the agent learned by:
-
-    .. code-block:: python
-
-        agent.evaluate()
-
-    Parameters
-    ----------
-    sess : :class:`.tf.Session`
-    env : str
-        A string with the name of a registered Gym Environment
-    random_seed : int, optional
-        A random seed for reproducable results.
-    log_dir : str
-        A directory for storing the trained model and logged data.
-    name : str, optional
-        A name for the agent.
-    """
-
-    def __init__(self, state_dim, action_dim, name='', params={}):
-        self.state_dim, self.action_dim  = state_dim, action_dim
+    def __init__(self, name='', params={}):
         self.name = name
         self.params = params.copy()
         self.info = {}
+        self.rng = np.random.RandomState()
 
-    def explore(self, state):
-        """
-        Represents the exploration policy. It is used by :meth:`.train` to
-        produce explorative actions. In the general case the policy for
-        exploration may be different from the learned policy that we want to
-        optimize (and thus the :meth:.`explore` and the :meth:.`evaluate`
-        functions may be different). If you do not implement it it will sample
-        the action space uniformly.
-
-        Parameters
-        ----------
-
-        state : numpy array
-            The current state of the environment.
-
-        Returns
-        -------
-        numpy array
-            An action to be performed for exploration.
-        """
-        error = 'Agent ' + self.name + ' does not implement an exploration policy.'
+    def save(self, file_path):
+        error = 'Agent ' + self.name + ' does not provide saving capabilities.'
         logger.error(error)
         raise NotImplementedError(error)
+
+    def load(self):
+        error = 'Agent ' + self.name + ' does not provide loading capabilities.'
+        logger.error(error)
+        raise NotImplementedError(error)
+
+    def load_trainable(self):
+        error = 'Agent ' + self.name + ' does not provide loading capabilities.'
+        logger.error(error)
+        raise NotImplementedError(error)
+
+    def seed(self, seed):
+        self.rng.seed(seed)
 
     def learn(self, state, action, reward, next_state, done):
         """
@@ -132,28 +92,74 @@ class Agent:
         logger.error(error)
         raise NotImplementedError(error)
 
+    def load_datasets(self):
+        pass
+
+class RLAgent(Agent):
+    """
+    Base class for creating an RL agent.
+
+    Example
+    -------
+    Assume you want to implement the Best RL Algorithm (BRLA). Create a class
+    which inherits from :class:`.Agent` and implement its member methods. Then,
+    you should be able to train this agent for 1 million episodes in the
+    ``MyRobot`` environment as simple as:
+
+    .. code-block:: python
+
+        with tf.Session as session:
+            agent = BRLA(session, 'MyRobot').train(1e6)
+
+    Then you should be able to evaluate and see what the agent learned by:
+
+    .. code-block:: python
+
+        agent.evaluate()
+
+    Parameters
+    ----------
+    sess : :class:`.tf.Session`
+    env : str
+        A string with the name of a registered Gym Environment
+    random_seed : int, optional
+        A random seed for reproducable results.
+    log_dir : str
+        A directory for storing the trained model and logged data.
+    name : str, optional
+        A name for the agent.
+    """
+
+    def __init__(self, state_dim, action_dim, name='', params={}):
+        super(RLAgent, self).__init__(name, params)
+        self.state_dim, self.action_dim  = state_dim, action_dim
+
+    def explore(self, state):
+        """
+        Represents the exploration policy. It is used by :meth:`.train` to
+        produce explorative actions. In the general case the policy for
+        exploration may be different from the learned policy that we want to
+        optimize (and thus the :meth:.`explore` and the :meth:.`evaluate`
+        functions may be different). If you do not implement it it will sample
+        the action space uniformly.
+
+        Parameters
+        ----------
+
+        state : numpy array
+            The current state of the environment.
+
+        Returns
+        -------
+        numpy array
+            An action to be performed for exploration.
+        """
+        error = 'Agent ' + self.name + ' does not implement an exploration policy.'
+        logger.error(error)
+        raise NotImplementedError(error)
+
     def q_value(self, state, action):
         error = 'Agent ' + self.name + ' does not provide a Q value.'
-        logger.error(error)
-        raise NotImplementedError(error)
-
-    def save(self, file_path):
-        error = 'Agent ' + self.name + ' does not provide saving capabilities.'
-        logger.error(error)
-        raise NotImplementedError(error)
-
-    def load(self):
-        error = 'Agent ' + self.name + ' does not provide loading capabilities.'
-        logger.error(error)
-        raise NotImplementedError(error)
-
-    def load_trainable(self):
-        error = 'Agent ' + self.name + ' does not provide loading capabilities.'
-        logger.error(error)
-        raise NotImplementedError(error)
-
-    def seed(self, seed):
-        error = 'Agent ' + self.name + ' does cannot be seeded.'
         logger.error(error)
         raise NotImplementedError(error)
 
@@ -284,10 +290,13 @@ class World:
         self.config['results']['estimated_time'] = None
         self.config['results']['time_elapsed'] = None
         self.config['results']['dir_size'] = 0
+        self.config['results']['progress'] = 0.0
 
     def reset(self):
         self.stop_running = False
         self.set_state(WorldState.IDLE)
+        self.start_time = time.time()
+        self.config['results']['started_on'] = str(datetime.datetime.now())
 
     def set_state(self, state):
         self.state_lock.acquire()
@@ -308,6 +317,139 @@ class World:
 
     def save(self):
         raise NotImplementedError()
+
+    def update_results(self, progress, thread_safe=True, write_yaml=True):
+
+        # Update the results fields in config
+        if thread_safe:
+            self.results_lock.acquire()
+
+        self.config['results']['progress'] = progress
+        self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - self.start_time)
+        self.config['results']['estimated_time'] = transform_sec_to_timestamp(((1 - progress) * (time.time() - self.start_time)) / progress)
+        self.config['results']['dir_size'] = get_dir_size(self.log_dir)
+
+        if thread_safe:
+            self.results_lock.release()
+
+        # Update YAML file
+        if write_yaml:
+            with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
+                yaml.dump(self.config, outfile, default_flow_style=False)
+
+class SupervisedTrainWorld(World):
+    def __init__(self, agent, dataset, epochs, save_every, name=None):
+        super(SupervisedTrainWorld, self).__init__(name)
+        self.epochs = epochs
+        self.save_every = save_every
+        self.dataset = pickle.load(open(dataset, 'rb'))
+
+        # Agent setup
+        if isinstance(agent, str):
+            agent_name = agent
+            agent_handle = get_agent_handle(agent_name)
+        elif isinstance(agent, dict):
+            agent_name = agent['name']
+            print(agent['name'])
+            agent_handle = get_agent_handle(agent_name)
+            agent_params = agent['params'] if 'params' in agent else {}
+            self.agent = agent_handle(params = agent_params)
+        elif isinstance(agent, Agent):
+            self.agent = agent
+        else:
+            err = ValueError('Provide an Agent or a string in order to create an agent for the new world')
+            logger.exception(err)
+            raise err
+        self.agent_name = self.agent.name
+
+        self.agent.load_dataset(self.dataset)
+
+        # Create datastreams
+        self.datastream = {}
+        self.groups = list(self.agent.info.keys())
+        self.variables = {}
+        for group in self.groups:
+            self.variables[group] = list(self.agent.info[group].keys())
+            self.datastream[group] = DataStream(self.sess, self.log_dir, \
+                                                self.tf_writer, \
+                                                self.variables[group], \
+                                                group)
+
+        # Setup the internal config dictionary
+        self.config['results']['n_epochs'] = 0
+
+    def run(self):
+        logger.info('%s running for %d epochs', self.agent_name, self.epochs)
+        self.reset()
+        self.set_state(WorldState.RUNNING)
+        for i in range(self.epochs):
+            self.agent.learn()
+
+            if self.stop_running:
+                break
+
+            # Log agent's info
+            for group in self.groups:
+                row = []
+                for var in self.variables[group]:
+                    row.append(self.agent.info[group][var])
+                self.datastream[group].log(i, row)
+
+
+            # Save agent model
+            self.save()
+            if self.save_every and (i + 1) % self.save_every == 0:
+                self.save(suffix='_' + str(i+1))
+
+            # Update results
+            self.update_results(n_epochs=i+1)
+
+        self.set_state(WorldState.FINISHED)
+
+    def reset(self):
+        super(SupervisedTrainWorld, self).reset()
+        self.config['results']['n_epochs'] = 0
+
+    @classmethod
+    def from_dict(cls, config):
+        self = cls(agent=config['agent'],
+                   dataset=config['env']['params']['path'], \
+                   epochs=config['world']['params']['epochs'], \
+                   save_every=config['world']['params']['save_every'])
+
+        if 'trainable_params' in config['agent'] and config['agent']['trainable_params'] != '':
+            self.agent.load_trainable(config['agent']['trainable_params'])
+
+        # Save the config
+        self.config['world'] = config['world'].copy()
+        self.config['env'] = config['env'].copy()
+        self.config['agent'] = config['agent'].copy()
+
+        return self
+
+    def update_results(self, n_epochs, thread_safe=True, write_yaml=True):
+
+        # Update the results fields in config
+        if thread_safe:
+            self.results_lock.acquire()
+
+        self.config['results']['n_epochs'] = n_epochs
+        prog = self.config['results']['n_epochs'] / self.config['world']['params']['epochs']
+
+        super(SupervisedTrainWorld, self).update_results(progress=prog, thread_safe=False, write_yaml=False)
+
+        if thread_safe:
+            self.results_lock.release()
+
+        # Update YAML file
+        if write_yaml:
+            with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
+                yaml.dump(self.config, outfile, default_flow_style=False)
+
+    def save(self, suffix=''):
+        agent_model_file_name = os.path.join(self.log_dir, 'model' + suffix + '.pkl')
+        self.agent.save(agent_model_file_name)
+
 
 class RLWorld(World):
     def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):
@@ -400,7 +542,7 @@ class RLWorld(World):
             action_dim = int(env.action_space.shape[0])
 
         # Create the world
-        self = cls(config['agent'], env, config['world']['episodes'], config['world']['render'], config['world']['save_every'], 1)
+        self = cls(config['agent'], env, config['world']['params']['episodes'], config['world']['params']['render'], config['world']['params']['save_every'], 1)
 
         if 'trainable_params' in config['agent'] and config['agent']['trainable_params'] != '':
             self.agent.load_trainable(config['agent']['trainable_params'])
@@ -419,9 +561,9 @@ class RLWorld(World):
     def reset(self):
         super(RLWorld, self).reset()
         self.experience_time = 0
-        self.start_time = time.time()
-        self.config['results']['started_on'] = str(datetime.datetime.now())
         self.episode_stats = []
+        self.config['results']['n_episodes'] = 0
+        self.config['results']['n_timesteps'] = 0
 
     def run_episode(self, episode, i):
         # Run the episode. Assumed that the episode has been already created by
@@ -439,16 +581,7 @@ class RLWorld(World):
 
         # Save the config in YAML file
         self.experience_time += episode.stats['experience_time']
-        self.results_lock.acquire()
-        self.config['results']['n_episodes'] = i + 1
-        self.config['results']['n_timesteps'] += episode.stats['n_timesteps']
-        self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - self.start_time)
-        self.config['results']['experience_time'] = transform_sec_to_timestamp(self.experience_time)
-        self.config['results']['estimated_time'] = transform_sec_to_timestamp((self.episodes - i + 1) * (time.time() - self.start_time) / (i + 1))
-        self.config['results']['dir_size'] = get_dir_size(self.log_dir)
-        self.results_lock.release()
-        with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
-            yaml.dump(self.config, outfile, default_flow_style=False)
+        self.update_results(n_episodes = i + 1, n_timesteps = episode.stats['n_timesteps'])
 
     def run(self):
         logger.info('%s running on %s for %d episodes', self.agent_name, self.env_name, self.episodes)
@@ -502,6 +635,25 @@ class RLWorld(World):
 
     def save(self, suffix=''):
         pickle.dump(self.episode_stats, open(os.path.join(self.log_dir, 'episode_stats.pkl'), 'wb'))
+
+    def update_results(self, n_episodes, n_timesteps, thread_safe=True, write_yaml=True):
+
+        # Update the results fields in config
+        if thread_safe:
+            self.results_lock.acquire()
+
+        self.config['results']['n_episodes'] = n_episodes
+        self.config['results']['n_timesteps'] += n_timesteps
+        prog = self.config['results']['n_episodes'] / self.config['world']['params']['episodes']
+        super(RLWorld, self).update_results(progress=prog, thread_safe=False, write_yaml=False)
+
+        if thread_safe:
+            self.results_lock.release()
+
+        # Update YAML file
+        if write_yaml:
+            with open(os.path.join(self.log_dir, 'config.yml'), 'w') as outfile:
+                yaml.dump(self.config, outfile, default_flow_style=False)
 
 class TrainWorld(RLWorld):
     def __init__(self, agent, env, n_episodes, render, save_every, print_every, name=None):

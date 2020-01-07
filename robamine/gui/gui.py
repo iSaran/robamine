@@ -221,13 +221,7 @@ class RobamineGUI(QMainWindow):
 
     def update_progress(self, results):
         self.progress_logging_dir.setText(str(results['logging_dir']))
-        possible_steps = ['episodes', 'timesteps', 'epochs']
-        for step in possible_steps:
-            if step in self.state['world']['params']:
-                break;
-        progress = results['n_' + step] / self.state['world']['params'][step]
-
-        self.progressBar.setValue(progress * 100)
+        self.progressBar.setValue(results['progress'] * 100)
         self.state['results'] = results
 
     # Transformations between GUI and dictionaries

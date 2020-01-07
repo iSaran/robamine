@@ -4,3 +4,4 @@ friendly_name: ''
 comments: ''
 params:
   epochs: 1000
+  save_every: 50

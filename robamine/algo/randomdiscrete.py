@@ -5,10 +5,10 @@ Random discrete policy
 A dummy agent which produces random actions. Used for testing.
 """
 
-from robamine.algo.core import Agent
+from robamine.algo.core import RLAgent
 import numpy as np
 
-class RandomDiscrete(Agent):
+class RandomDiscrete(RLAgent):
     def __init__(self, state_dim, action_dim, params = {}):
         super(RandomDiscrete, self).__init__(state_dim, action_dim, 'RandomDiscrete')
         self.rng = np.random.RandomState()
