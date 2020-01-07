@@ -33,15 +33,26 @@ class Agent:
         self.rng = np.random.RandomState()
         self.prediction_horizon = params.get('prediction_horizon', None)
 
-    def save(self, file_path):
-        error = 'Agent ' + self.name + ' does not provide saving capabilities.'
-        logger.error(error)
-        raise NotImplementedError(error)
+    def state_dict(self):
+        state_dict = {}
+        state_dict['name'] = self.name
+        state_dict['params'] = self.params.copy()
+        return state_dict
 
-    def load(self):
-        error = 'Agent ' + self.name + ' does not provide loading capabilities.'
-        logger.error(error)
-        raise NotImplementedError(error)
+    def save(self, file_path):
+        with open(file_path, 'wb') as file:
+            pickle.dump(self.state_dict(), file)
+
+    @classmethod
+    def load(cls, file_path):
+        with open(file_path, 'rb') as file:
+            state_dict = pickle.load(file)
+        self = cls.load_state_dict(state_dict)
+        return self
+
+    @classmethod
+    def load_state_dict(cls, state_dict):
+        raise NotImplementedError()
 
     def load_trainable(self):
         error = 'Agent ' + self.name + ' does not provide loading capabilities.'
