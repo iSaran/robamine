@@ -85,6 +85,13 @@ class Dataset(list):
         y = np.array([_.y for _ in self])
         return x, y
 
+    @classmethod
+    def from_array(cls, x_array, y_array):
+        cls = Dataset()
+        for i in range(x_array.shape[0]):
+            cls.append(Datapoint(x=x_array[i], y=y_array[i]))
+        return cls
+
     def save(self, path, name='robamine_dataset'):
         pickle.dump(self, open(os.path.join(path, name) + '.pkl', 'wb'))
 
@@ -120,6 +127,17 @@ class Dataset(list):
     def min(self):
         x, y = self.to_array()
         return np.min(x, axis=0), np.min(y, axis=0)
+
+    def check(self):
+        x, y = self.to_array()
+
+        # Check x for nans
+        if np.isnan(x).any():
+            raise ValueError("Dataset: x contain NaN values")
+
+        # Check y for nans
+        if np.isnan(y).any():
+            raise ValueError("Dataset: y contain NaN values")
 
 class EnvData:
     """
