@@ -22,7 +22,7 @@ tests = [#'algo.test_core',
          'algo.test_util',
          'utils.test_math',
          'utils.test_orientation',
-         #'envs.test_clutter'
+         'envs.test_clutter'
         ]
 
 failed_tests = []
