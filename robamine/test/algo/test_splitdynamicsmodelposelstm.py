@@ -38,28 +38,6 @@ class TestAgent(unittest.TestCase):
         # Tested in the integrated test with Clutter Env
         pass
 
-    def test_clutter2array(self):
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-            'splitdynamicsmodelposelstm.test_agent.test_filter_datapoint.pkl')
-        with open(path, 'rb') as file:
-            info = pickle.load(file)['info']
-        params = {
-            'action_dim': 16,
-            'state_dim': 2120,
-            'batch_size': [64, 64],
-            'device': 'cpu',
-            'hidden_units': [20, 20],
-            'learning_rate': [0.001, 0.001],
-            'loss': ['mse', 'mse'],
-            'n_epochs': [1000, 1000],
-            'n_layers': [2, 2]
-        }
-        model = SplitDynamicsModelPoseLSTM(params)
-
-        haha = model._clutter2array(info)
-        self.assertTrue(isinstance(haha, np.ndarray))
-        self.assertEqual(haha.shape, (1002, 4))
-
     def test_filter_datapoint(self):
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
             'splitdynamicsmodelposelstm.test_agent.test_filter_datapoint.pkl')
@@ -81,14 +59,13 @@ class TestAgent(unittest.TestCase):
             'n_layers': [2, 2]
         }
         model = SplitDynamicsModelPoseLSTM(params)
-        inputs = model._clutter2array(info)
+        inputs = np.concatenate((np.delete(info[0], 2, axis=1), np.delete(info[1], 2, axis=1)), axis=1)
         result = model.filter_datapoint(inputs)
         np.testing.assert_equal(result, expected_result)
 
         inputs2 = np.zeros(inputs.shape)
         result = model.filter_datapoint(inputs2)
         np.testing.assert_equal(result, np.zeros(inputs.shape))
-
 
 class TestIntegrationWithClutterEnv(unittest.TestCase):
     def test_learn(self):
@@ -126,8 +103,6 @@ class TestIntegrationWithClutterEnv(unittest.TestCase):
             if 'extra_data' in info:
                 env_data.info['extra_data'].append(info['extra_data'])
 
-
-
         # Create model, load dataset from clutter and learn for one epoch
         # ---------------------------------------------------------------
 
@@ -155,7 +130,7 @@ class TestIntegrationWithClutterEnv(unittest.TestCase):
         next_state, reward, done, info = env.step(action)
         l = [info['extra_data']['push_finger_vel'], info['extra_data']['push_finger_forces']]
         prediction = model.predict(l, action)
-        np.testing.assert_equal(prediction, np.array([0.04061853885650635, 0.03152221813797951, 0.11244191974401474]))
+        np.testing.assert_equal(prediction, np.array([0.04062538966536522, 0.031524404883384705, 0.11242739111185074]))
 
         prediction = model.predict(l, 8)
         np.testing.assert_equal(prediction, np.array([0.0, 0.0, 0.0]))

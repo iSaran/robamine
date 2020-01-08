@@ -18,7 +18,7 @@ class TestLSTMNetwork(unittest.TestCase):
         data = torch.randn(batch_size, sequence_length, input_dim)
         self.assertEqual(data.shape, (batch_size, sequence_length, input_dim))
         out = network(data).cpu().detach().numpy()
-        self.assertEqual(out.shape, (batch_size, output_dim))
+        self.assertEqual(out.shape, (batch_size, sequence_length, output_dim))
 
         # Test nework with batch size 1
         batch_size = 1
@@ -29,7 +29,7 @@ class TestLSTMNetwork(unittest.TestCase):
         data = torch.randn(batch_size, sequence_length, input_dim)
         self.assertEqual(data.shape, (batch_size, sequence_length, input_dim))
         out = network(data).cpu().detach().numpy()
-        self.assertEqual(out.shape, (batch_size, output_dim))
+        self.assertEqual(out.shape, (batch_size, sequence_length, output_dim))
 
 class TestFCDynamicModel(unittest.TestCase):
     def test_init(self):
@@ -119,7 +119,7 @@ class TestLSTMDynamicsModel(unittest.TestCase):
 
         dataset = Dataset()
         for i in range(n_datapoints):
-            dataset.append(Datapoint(x=np.full((sequence_length, input_dim), i), y=np.full((output_dim,), sqrt(sequence_length * i))))
+            dataset.append(Datapoint(x=np.full((sequence_length, input_dim), i), y=np.full((sequence_length, output_dim), sqrt(sequence_length * i))))
 
         # TODO: The order for properly seeding the learning procedure is a bit
         # weird: The model should be seeded after loading the dataset to ensure
@@ -129,27 +129,27 @@ class TestLSTMDynamicsModel(unittest.TestCase):
         model.load_dataset(dataset, rescale=True)
         model.seed(0)
 
-        train_loss_expected = [0.168924018740654,
-                               0.010207300074398518,
-                               0.005141713190823793,
-                               0.002354690106585622,
-                               0.0040090493857860565,
-                               0.0007962704403325915,
-                               0.0008550113416276872,
-                               0.0006611660937778652,
-                               0.0005286139203235507,
-                               0.00043144053779542446]
+        train_loss_expected = [0.16893060505390167,
+                               0.025982027873396873,
+                               0.005653527099639177,
+                               0.003036701586097479,
+                               0.004060985986143351,
+                               0.001505931606516242,
+                               0.0011766261886805296,
+                               0.0012346295407041907,
+                               0.0007550095324404538,
+                               0.0006367720779962838]
 
-        test_loss_expected = [0.7156064510345459,
-                              0.127550408244133,
-                              0.046276867389678955,
-                              0.029462555423378944,
-                              0.020332880318164825,
-                              0.024569299072027206,
-                              0.025565791875123978,
-                              0.023401683196425438,
-                              0.020883828401565552,
-                              0.02272590808570385]
+        test_loss_expected = [0.7156387567520142,
+                              0.1484566330909729,
+                              0.07711506634950638,
+                              0.05929327383637428,
+                              0.03740023076534271,
+                              0.03175796940922737,
+                              0.026821406558156013,
+                              0.02212144061923027,
+                              0.02064170502126217,
+                              0.023261982947587967]
 
         for i in range(10):
             model.learn()
@@ -158,7 +158,7 @@ class TestLSTMDynamicsModel(unittest.TestCase):
 
         state = np.full((sequence_length, input_dim), 100)
         prediction = model.predict(state)
-        np.testing.assert_equal(prediction, np.array([13.625250816345215, 13.623515129089355, 13.627643585205078]))
+        np.testing.assert_equal(prediction, np.array([13.999224662780762, 14.00013256072998, 13.998896598815918]))
 
 class TestSplitDynamicModels(unittest.TestCase):
     def test_creating(self):

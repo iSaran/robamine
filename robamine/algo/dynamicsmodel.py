@@ -60,7 +60,6 @@ class LSTMNetwork(nn.Module):
     def forward(self, x):
         hidden = self.init_hidden(x.shape[2])
         out, hidden = self.lstm(x, hidden)
-        out = out[:, -1, :].squeeze(dim=1)  # Obtain the last output
         prediction = self.hidden2pose_fc(out)
         prediction = torch.tanh(prediction)
         return prediction
@@ -253,11 +252,17 @@ class LSTMDynamicsModel(DynamicsModel):
         if rescale:
             self.dataset_rescaled = True
             data_x, data_y = dataset.to_array()
+
             init_shape = data_x.shape
             data_x_n = data_x.reshape((init_shape[0] * init_shape[1], init_shape[2]))
             data_x_n = self.min_max_scaler_x.fit_transform(data_x_n)
             data_x = data_x_n.reshape(init_shape)
-            data_y = self.min_max_scaler_y.fit_transform(data_y)
+
+            init_shape = data_y.shape
+            data_y_n = data_y.reshape((init_shape[0] * init_shape[1], init_shape[2]))
+            data_y_n = self.min_max_scaler_y.fit_transform(data_y_n)
+            data_y = data_y_n.reshape(init_shape)
+
             dataset = Dataset.from_array(data_x, data_y)
             dataset.check()
 
@@ -271,8 +276,10 @@ class LSTMDynamicsModel(DynamicsModel):
             inputs = state.copy()
         s = torch.FloatTensor(inputs).to(self.device).unsqueeze(dim=0)
         prediction = self.network(s).cpu().detach().numpy()
+        prediction = prediction[:, -1, :].squeeze()  # Obtain the last output
         if self.dataset_rescaled:
-            prediction = self.min_max_scaler_y.inverse_transform(prediction)[0]
+            prediction = self.min_max_scaler_y.inverse_transform(prediction.reshape(1, -1)).squeeze()
+
         return prediction
 
 
@@ -304,8 +311,6 @@ class SplitDynamicsModel(Agent):
         # Split the hyperparams and create the primitive dynamics model
         self.info['train'] = {}
         self.info['test'] = {}
-        self.train_dataset = []
-        self.test_dataset = []
 
         for i in range(self.nr_primitives):
             params_primitive = {}
@@ -318,8 +323,6 @@ class SplitDynamicsModel(Agent):
             self.dynamics_models.append(self.model_type(params_primitive, inputs,
                                                         outputs))
 
-            self.train_dataset.append(Dataset())
-            self.test_dataset.append(Dataset())
             self.info['train']['loss_' + str(i)] = 0.0
             self.info['test']['loss_' + str(i)] = 0.0
 
@@ -377,6 +380,11 @@ class SplitDynamicsModel(Agent):
 
         self.iterations = state_dict['iterations']
         return self
+
+    def seed(self, seed=None):
+        super().seed(seed)
+        for i in range(self.nr_primitives):
+            self.dynamics_models[i].seed(seed)
 
 class FCSplitDynamicsModel(SplitDynamicsModel):
     def __init__(self, params, inputs, outputs, name='FCSplitDynamicsModel'):
