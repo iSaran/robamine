@@ -104,7 +104,7 @@ class Agent:
         logger.error(error)
         raise NotImplementedError(error)
 
-    def load_datasets(self):
+    def load_dataset(self):
         pass
 
 class RLAgent(Agent):
