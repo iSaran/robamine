@@ -9,7 +9,11 @@ algorithms. Currently, the base classes for an RL agent are defined and for Neur
 
 import gym
 import tensorflow as tf
-from robamine.algo.util import DataStream, Stats, get_now_timestamp, print_progress, Plotter, get_agent_handle, transform_sec_to_timestamp, Transition, EnvData, TimestepData, EpisodeData, EpisodeListData
+from robamine.algo.util import (DataStream, Stats, get_now_timestamp,
+                                print_progress, Plotter, get_agent_handle,
+                                transform_sec_to_timestamp, Transition, EnvData,
+                                TimestepData, EpisodeData, EpisodeListData,
+                                Dataset, Datapoint)
 from robamine.utils.info import get_pc_and_version, get_dir_size
 from robamine.utils.memory import ReplayBuffer
 from robamine import rb_logging
@@ -22,6 +26,11 @@ import datetime
 import numpy as np
 import yaml
 from threading import Lock
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 logger = logging.getLogger('robamine.algo.core')
 
@@ -267,6 +276,163 @@ class Network:
         self = cls.create(sess, input_dim, hidden_units, output_dim, name)
         sess.run([self.net_params[i].assign(trainable[i]) for i in range(len(self.net_params))])
         return self
+
+class NetworkModel(Agent):
+    '''
+    A class for train PyTorch networks. Inherit and create a self.network (which
+    inherits from torch.nn.Module) before calling super().__init__()
+    '''
+    def __init__(self, params, inputs, outputs, name='NetworkScaler'):
+        super().__init__(name=name, params=params)
+        self.inputs = inputs
+        self.outputs = outputs
+        self.device = self.params.get('device', 'cpu')
+        self.scaler = self.params.get('scaler', 'standard')
+
+        # Create the networks, optimizers and loss
+        self.optimizer = optim.Adam(self.network.parameters(),
+                                    lr=self.params['learning_rate'])
+
+        if self.params['loss'] == 'mse':
+            self.loss = nn.MSELoss()
+        elif self.params['loss'] == 'huber':
+            self.loss = nn.SmoothL1Loss()
+        else:
+            raise ValueError('DynamicsModel: Loss should be mse or huber')
+
+        # Datasets
+        self.train_dataset = Dataset()
+        self.test_dataset = Dataset()
+
+        # Set up scalers
+        if self.scaler == 'min_max':
+            self.range = [-1, 1]
+            self.scaler_x = MinMaxScaler(feature_range=self.range)
+            self.scaler_y = MinMaxScaler(feature_range=self.range)
+        elif self.scaler == 'standard':
+            self.range = [-1, 1]
+            self.scaler_x = StandardScaler()
+            self.scaler_y = StandardScaler()
+        elif self.scaler is None:
+            self.scaler_x = None
+            self.scaler_y = None
+        else:
+            raise ValueError(self.name + ': Select scaler between: None, min_max, standard.')
+
+        self.iterations = 0
+        self.info['train'] = {'loss': 0.0}
+        self.info['test'] = {'loss': 0.0}
+
+    def load_dataset(self, dataset):
+        '''Preprocesses the dataset and loads it to train and test set'''
+        assert isinstance(dataset, Dataset)
+
+        # Check and remove NaN values
+        try:
+            dataset.check()
+        except ValueError:
+            x, y = dataset.to_array()
+            indexes = np.nonzero(np.isnan(y))
+            for i in reversed(indexes[0]):
+                del dataset[i]
+
+        # Rescale
+        if self.scaler:
+            data_x, data_y = dataset.to_array()
+            data_x = self.scaler_x.fit_transform(data_x)
+            data_y = self.scaler_y.fit_transform(data_y)
+            dataset = Dataset.from_array(data_x, data_y)
+
+        # Split to train and test datasets
+        self.train_dataset, self.test_dataset = dataset.split(0.7)
+
+    def predict(self, state):
+        # ndim == 1 is assumed to mean 1 sample (not multiple samples of 1 feature)
+        if state.ndim == 1:
+            state_ = state.reshape(1, -1)
+        else:
+            state_ = state
+
+        if self.scaler:
+            inputs = self.scaler_x.transform(state_)
+        else:
+            inputs = state_.copy()
+        s = torch.FloatTensor(inputs).to(self.device)
+        prediction = self.network(s).cpu().detach().numpy()
+        if self.scaler:
+            prediction = self.scaler_y.inverse_transform(prediction)[0]
+
+        return prediction
+
+    def learn(self):
+        '''Run one epoch'''
+        self.iterations += 1
+
+        # Calculate loss in train dataset
+        train_x, train_y = self.train_dataset.to_array()
+        real_x = torch.FloatTensor(train_x).to(self.device)
+        prediction = self.network(real_x)
+        real_y = torch.FloatTensor(train_y).to(self.device)
+        loss = self.loss(prediction, real_y)
+        self.info['train']['loss'] = loss.detach().cpu().numpy().copy()
+
+        # Calculate loss in test dataset
+        test_x, test_y = self.test_dataset.to_array()
+        real_x = torch.FloatTensor(test_x).to(self.device)
+        prediction = self.network(real_x)
+        real_y = torch.FloatTensor(test_y).to(self.device)
+        loss = self.loss(prediction, real_y)
+        self.info['test']['loss'] = loss.detach().cpu().numpy().copy()
+
+        # Minimbatch update of network
+        minibatches = self.train_dataset.to_minibatches(
+            self.params['batch_size'])
+        for minibatch in minibatches:
+            batch_x, batch_y = minibatch.to_array()
+
+            real_x = torch.FloatTensor(batch_x).to(self.device)
+            prediction = self.network(real_x)
+            real_y = torch.FloatTensor(batch_y).to(self.device)
+            loss = self.loss(prediction, real_y)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+    def state_dict(self):
+        state_dict = super().state_dict()
+        state_dict['trainable'] = self.trainable_dict()
+        state_dict['iterations'] = self.iterations
+        state_dict['scaler_x'] = self.scaler_x
+        state_dict['scaler_y'] = self.scaler_y
+        state_dict['inputs'] = self.inputs
+        state_dict['outputs'] = self.outputs
+        return state_dict
+
+    def trainable_dict(self):
+        return self.network.state_dict()
+
+    def load_trainable_dict(self, trainable):
+        self.network.load_state_dict(trainable)
+
+    def load_trainable(self, file_path):
+        '''Assume that file path is a pickle with with self.state_dict() '''
+        state_dict = pickle.load(open(input, 'rb'))
+        self.load_trainable_dict(state_dict['trainable'])
+
+    @classmethod
+    def load_state_dict(cls, state_dict):
+        self = cls(state_dict['params'], state_dict['inputs'],
+                   state_dict['outputs'])
+        self.load_trainable_dict(state_dict['trainable'])
+        self.iterations = state_dict['iterations']
+        self.scaler_x = state_dict['scaler_x']
+        self.scaler_y = state_dict['scaler_y']
+        return self
+
+    def seed(self, seed=None):
+        super().seed(seed)
+        self.train_dataset.seed(seed)
+        self.test_dataset.seed(seed)
 
 # World classes
 
