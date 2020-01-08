@@ -7,6 +7,8 @@ This module contains the implementation of a cluttered environment, based on
 :cite:`kiatos19`.
 """
 import numpy as np
+from numpy.linalg import norm
+
 from mujoco_py import load_model_from_path, MjSim, MjViewer, MjRenderContextOffscreen
 from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
@@ -14,8 +16,8 @@ import os
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
-from robamine.utils.orientation import Quaternion
-from robamine.utils.math import sigmoid, rescale
+from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z, Affine3
+from robamine.utils.math import sigmoid, rescale, filter_signal
 import robamine.utils.cv_tools as cv_tools
 import math
 
@@ -25,6 +27,110 @@ import cv2
 from mujoco_py.cymj import MjRenderContext
 
 OBSERVATION_DIM = 265
+
+def predict_displacement_from_forces(pos_measurements, force_measurements, epsilon=1e-8, filter=0.9, outliers_cutoff=3.8, plot=False):
+    import matplotlib.pyplot as plt
+
+    # Calculate force direction
+    # -------------------------
+    f = force_measurements[:, :2].copy()
+    f = np.nan_to_num(f / norm(f, axis=1).reshape(-1, 1))
+    f_norm = np.linalg.norm(f, axis=1)
+
+    # Find start and end of the contacts
+    first = f_norm[0]
+    for i in range(f_norm.shape[0]):
+        if abs(f_norm[i] - first) > epsilon:
+            break
+    start_contact = i
+
+    first = f_norm[-1]
+    for i in reversed(range(f_norm.shape[0])):
+        if abs(f_norm[i] - first) > epsilon:
+            break;
+    end_contact = i
+
+    # No contact with the target detected
+    if start_contact > end_contact:
+        return np.zeros(2), 0.0
+
+    f = f[start_contact:end_contact, :]
+
+    if plot:
+        fig, axs = plt.subplots(2,2)
+        axs[0][0].plot(f)
+        plt.title('Force')
+        axs[0][1].plot(np.linalg.norm(f, axis=1))
+        plt.title('norm')
+
+    f[:,0] = filter_signal(signal=f[:,0], filter=filter, outliers_cutoff=outliers_cutoff)
+    f[:,1] = filter_signal(signal=f[:,1], filter=filter, outliers_cutoff=outliers_cutoff)
+    f = np.nan_to_num(f / norm(f, axis=1).reshape(-1, 1))
+
+    if plot:
+        axs[1][0].plot(f)
+        plt.title('Filtered force')
+        axs[1][1].plot(np.linalg.norm(f, axis=1))
+        plt.title('norm')
+        plt.show()
+
+    # Velocity direction
+    p = pos_measurements[start_contact:end_contact, :2].copy()
+    p_dot = np.concatenate((np.zeros((1, 2)), np.diff(p, axis=0)))
+    p_dot_norm = norm(p_dot, axis=1).reshape(-1, 1)
+    p_dot_normalized = np.nan_to_num(p_dot / p_dot_norm)
+
+    if plot:
+        fig, axs = plt.subplots(2)
+        axs[0].plot(p_dot_normalized)
+        axs[0].set_title('p_dot normalized')
+        axs[1].plot(p_dot)
+        axs[1].set_title('p_dot')
+        plt.legend(['x', 'y'])
+        plt.show()
+
+    perpedicular_to_p_dot_normalized = np.zeros(p_dot_normalized.shape)
+    for i in range(p_dot_normalized.shape[0]):
+        perpedicular_to_p_dot_normalized[i, :] = np.cross(np.append(p_dot_normalized[i, :], 0), np.array([0, 0, 1]))[:2]
+
+    inner = np.diag(np.matmul(-p_dot_normalized, np.transpose(f))).copy()
+    inner_perpedicular = np.diag(np.matmul(perpedicular_to_p_dot_normalized, np.transpose(f))).copy()
+    if plot:
+        plt.plot(inner)
+        plt.title('inner product')
+        plt.show()
+
+    # Predict
+    prediction = np.zeros(2)
+    theta = 0.0
+    for i in range(inner.shape[0]):
+        prediction += p_dot_norm[i] * (inner[i] * p_dot_normalized[i, :]
+                                       - inner_perpedicular[i] * perpedicular_to_p_dot_normalized[i, :])
+
+
+    mean_last_inner = np.mean(inner[-10:])
+    mean_last_inner = min(mean_last_inner, 1)
+    mean_last_inner = max(mean_last_inner, -1)
+
+    theta = np.sign(np.mean(inner_perpedicular[-10:])) * np.arccos(mean_last_inner)
+
+    return prediction, theta
+
+def get_2d_displacement(init, current):
+    assert isinstance(init, Affine3)
+    assert isinstance(current, Affine3)
+
+    displacement = np.zeros(3)
+    diff = init.inv() * current
+    displacement[0] = diff.translation[0]
+    displacement[1] = diff.translation[1]
+    if np.linalg.norm(displacement) < 1e-3:
+        return np.zeros(3)
+    displacement[2], axis = rot2angleaxis(diff.linear)
+    if axis is None:
+        axis = np.array([0, 0, 1])
+    displacement[2] *= np.sign(axis[2])
+    return displacement
 
 class PushingPrimitiveC:
     def __init__(self, distance = 0.1, direction_theta = 0.0, surface_size = 0.30, object_height = 0.06, finger_size = 0.02):
@@ -112,10 +218,17 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             self.nr_primitives = 2
 
+        obs_dimm = OBSERVATION_DIM
+        if self.params['push_distance'][0] == self.params['push_distance'][1]:
+            obs_dimm -= 1
+
+        if self.params['finger_size'][0] == self.params['finger_size'][1]:
+            obs_dimm -= 1
+
         if self.params['split']:
-            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * OBSERVATION_DIM
+            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * obs_dimm
         else:
-            obs_dim = OBSERVATION_DIM
+            obs_dim = obs_dimm
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -136,7 +249,6 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_length = 0.0
         self.finger_height = 0.0
         self.target_size = np.zeros(3)
-        self.table_size = np.zeros(2)
 
         self.no_of_prev_points_around = 0
         # State variables. Updated after each call in self.sim_step()
@@ -147,6 +259,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_vel = np.zeros(6)
         self.finger_acc = np.zeros(3)
         self.finger_external_force_norm = 0.0
+        self.finger_external_force = None
         self.target_height = 0.0
         self.target_length = 0.0
         self.target_width = 0.0
@@ -157,52 +270,85 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.success = False
         self.push_distance = 0.0
 
+        self.target_pos_prev_state = np.zeros(3)
+        self.target_quat_prev_state = Quaternion()
+        self.target_pos_horizon = np.zeros(3)
+        self.target_quat_horizon = Quaternion()
+        self.target_displacement_push_step= np.zeros(3)
+        self.target_init_pose = Affine3()
+        self.predicted_displacement_push_step= np.zeros(3)
+
+        self.pos_measurements, self.force_measurements, self.target_object_displacement = None, None, None
+
         self.rng = np.random.RandomState()  # rng for the scene
 
         # Initialize this parent class because our environment wraps Mujoco's  C/C++ code.
         utils.EzPickle.__init__(self)
         self.seed()
+        self.preloaded_init_state = None
 
     def reset_model(self):
+
         self.sim_step()
-        random_qpos, number_of_obstacles = self.generate_random_scene()
-        target_size = get_geom_size(self.sim.model, 'target')
 
-        # Set the initial position of the finger outside of the table, in order
-        # to not occlude the objects during reading observation from the camera
-        index = self.sim.model.get_joint_qpos_addr('finger')
-        random_qpos[index[0]]   = 100
-        random_qpos[index[0]+1] = 100
-        random_qpos[index[0]+2] = 100
+        if self.preloaded_init_state:
+            for i in range(len(self.sim.model.geom_size)):
+                self.sim.model.geom_size[i] = self.preloaded_init_state['geom_size'][i]
+                self.sim.model.geom_type[i] = self.preloaded_init_state['geom_type'][i]
+                self.sim.model.geom_friction[i] = self.preloaded_init_state['geom_friction'][i]
+                self.sim.model.geom_condim[i] = self.preloaded_init_state['geom_condim'][i]
 
-        self.set_state(random_qpos, self.init_qvel)
-
-        # Move forward the simulation to be sure that the objects have landed
-        for _ in range(600):
-            self.sim_step()
-
-        for _ in range(300):
-            for i in range(1, number_of_obstacles):
-                body_id = get_body_names(self.sim.model).index("object"+str(i))
-                self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
-                self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
+            # Set the initial position of the finger outside of the table, in order
+            # to not occlude the objects during reading observation from the camera
+            index = self.sim.model.get_joint_qpos_addr('finger')
+            qpos = self.preloaded_init_state['qpos'].copy()
+            qvel = self.preloaded_init_state['qvel'].copy()
+            qpos[index[0]]   = 100
+            qpos[index[0]+1] = 100
+            qpos[index[0]+2] = 100
+            self.set_state(qpos, qvel)
+            self.push_distance = self.preloaded_init_state['push_distance']
+            self.preloaded_init_state = None
 
             self.sim_step()
+        else:
+            random_qpos, number_of_obstacles = self.generate_random_scene()
 
-        self.check_target_occlusion(number_of_obstacles)
+            # Set the initial position of the finger outside of the table, in order
+            # to not occlude the objects during reading observation from the camera
+            index = self.sim.model.get_joint_qpos_addr('finger')
+            random_qpos[index[0]]   = 100
+            random_qpos[index[0]+1] = 100
+            random_qpos[index[0]+2] = 100
 
-        for _ in range(100):
-            for i in range(1, number_of_obstacles):
-                 body_id = get_body_names(self.sim.model).index("object"+str(i))
-                 self.sim.data.xfrc_applied[body_id][0] = 0
-                 self.sim.data.xfrc_applied[body_id][1] = 0
-            self.sim_step()
+            self.set_state(random_qpos, self.init_qvel)
+
+            # Move forward the simulation to be sure that the objects have landed
+            for _ in range(600):
+                self.sim_step()
+
+            for _ in range(300):
+                for i in range(1, number_of_obstacles):
+                    body_id = get_body_names(self.sim.model).index("object"+str(i))
+                    self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
+                    self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
+                self.sim_step()
+
+            self.check_target_occlusion(number_of_obstacles)
+
+            for _ in range(100):
+                for i in range(1, number_of_obstacles):
+                     body_id = get_body_names(self.sim.model).index("object"+str(i))
+                     self.sim.data.xfrc_applied[body_id][0] = 0
+                     self.sim.data.xfrc_applied[body_id][1] = 0
+                self.sim_step()
 
         # Update state variables that need to be updated only once
         self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
         self.finger_height = get_geom_size(self.sim.model, 'finger')[0]  # same as length, its a sphere
         self.target_size = 2 * get_geom_size(self.sim.model, 'target')
-        self.table_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
+        self.surface_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
+
 
         features, point_cloud, dim = self.get_obs()
         gap = 0.03
@@ -226,7 +372,20 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.last_timestamp = self.sim.data.time
         self.success = False
+
+        self.target_pos_prev_state = self.target_pos.copy()
+        self.target_quat_prev_state = self.target_quat.copy()
+        self.preloaded_init_state = None
+        self.reset_horizon()
         return observation
+
+    def reset_horizon(self):
+        self.target_pos_horizon = self.target_pos.copy()
+        self.target_quat_horizon = self.target_quat.copy()
+
+    def seed(self, seed=None):
+        super().seed(seed)
+        self.rng.seed(seed)
 
     def get_obs(self):
         """
@@ -282,6 +441,19 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         obstacle_height_range = self.params['obstacle_height_range']
         max_height = 2 * obstacle_height_range[1]
 
+        # If push distance is random normalize it btn min and max. Otherwise
+        # push distance in obs is zero always (actually there is not need to to
+        # have it in observation)
+        if self.params['push_distance'][0] == self.params['push_distance'][1]:
+            push_distance = None
+        else:
+            push_distance = rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1])
+
+        if self.params['finger_size'][0] == self.params['finger_size'][1]:
+            finger_size = None
+        else:
+            finger_size = rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1])
+
         if self.params['split']:
             heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / self.nr_primitives), plot=False)
             features = []
@@ -295,8 +467,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 f.append(distances[1])
                 f.append(distances[2])
                 f.append(distances[3])
-                f.append(rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1]))
-                f.append(rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1]))
+                if push_distance:
+                    f.append(push_distance)
+                if finger_size:
+                    f.append(finger_size)
                 features.append(f)
 
             final_feature = np.append(features[0], features[1], axis=0)
@@ -312,24 +486,60 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             features.append(distances[1])
             features.append(distances[2])
             features.append(distances[3])
-            features.append(rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1]))
-            features.append(rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1]))
+            if push_distance:
+                features.append(push_distance)
+            if finger_size:
+                features.append(finger_size)
             final_feature = np.array(features)
 
         return final_feature, points_above_table, bbox
 
     def step(self, action):
-        done = False
-        time = self.do_simulation(action)
+
+        # Check if we are in the special case of prective horizon actions where
+        # the action is an augmented action including the action index AND the
+        # pose of the target object
+        if isinstance(action, dict) and 'action' in action and 'pose' in action:
+            _action = action['action']
+            pos = np.array([action['pose'][0], action['pose'][1], 0])
+            target_pos_pred = \
+                  self.target_pos_horizon \
+                + np.matmul(self.target_quat_horizon.rotation_matrix(), pos)
+            rot = np.matmul(self.target_quat_horizon.rotation_matrix(), rot_z(action['pose'][2]))
+            target_quat_pred = Quaternion.from_rotation_matrix(rot)
+            pos = self.target_pos.copy()
+            quat = self.target_quat.copy()
+        else:
+            _action = action
+            pos = self.target_pos.copy()
+            quat = self.target_quat.copy()
+
+        time, self.predicted_displacement_push_step = self.do_simulation(_action, pos, quat)
+        self.target_displacement_push_step = self.get_target_displacement()
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
-        reward = self.get_reward(obs, pcd, dim, action)
+        reward = self.get_reward(obs, pcd, dim, _action)
+
+        done = False
         if self.terminal_state(obs):
             done = True
-        return obs, reward, done, {'experience_time': experience_time, 'success': self.success}
 
-    def do_simulation(self, action):
+        # Extra data for having pushing distance, theta along with displacements
+        # of the target
+        nr_substates = (self.action_space.n / self.nr_primitives)
+        j = int(_action - np.floor(_action / nr_substates) * nr_substates)
+        theta = j * 2 * math.pi / nr_substates
+        extra_data = {'displacement': [self.push_distance, theta, self.target_displacement_push_step],
+                      'predicted_displacement': self.predicted_displacement_push_step.copy(),
+                      'push_finger_forces': self.force_measurements,
+                      'push_finger_vel': self.pos_measurements,
+                      'target_object_displacement': self.target_object_displacement,
+                      'target_init_pose': self.target_init_pose.matrix()}
+
+        return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
+
+    def do_simulation(self, action, pos, quat):
         if self.params['discrete']:
             theta = action * 2 * math.pi / (self.action_space.n / self.nr_primitives)
             if action > 2 * int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
@@ -359,9 +569,14 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Transform pushing from target frame to world frame
         push_direction = np.array([push.direction[0], push.direction[1], 0])
-        push_direction_world = np.matmul(self.target_quat.rotation_matrix(), push_direction)
+        push_direction_world = np.matmul(quat.rotation_matrix(), push_direction)
         push_initial_pos = np.array([push.initial_pos[0], push.initial_pos[1], 0])
-        push_initial_pos_world = np.matmul(self.target_quat.rotation_matrix(), push_initial_pos) + self.target_pos
+        push_initial_pos_world = np.matmul(quat.rotation_matrix(), push_initial_pos) + pos
+
+        # Save init pose for calculating prediction of displacement w.r.t. the
+        # init target pose not world
+        init_target_pos = self.target_pos.copy()
+        init_target_quat = self.target_quat.copy()
 
         init_z = 2 * self.target_height + 0.05
         self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
@@ -369,13 +584,23 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         duration = 1
         if isinstance(push, PushingPrimitiveC):
             duration = 3
-        if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
+
+        self.pos_measurements, self.force_measurements = None, None
+        prediction = np.zeros(3)
+        if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True)[0]:
             end = push_initial_pos_world[:2] + push.distance * push_direction_world[:2]
-            self.move_joint_to_target('finger', [end[0], end[1], None], duration)
+            init_pos = self.target_pos
+            _, self.pos_measurements, self.force_measurements, self.target_object_displacement = self.move_joint_to_target('finger', [end[0], end[1], None], duration)
+            prediction_pos, prediction_theta = predict_displacement_from_forces(pos_measurements=self.pos_measurements, force_measurements=self.force_measurements)
+
+            prediction[0] = prediction_pos[0]
+            prediction[1] = prediction_pos[1]
+            prediction[2] = prediction_theta
+
         else:
             self.push_stopped_ext_forces = True
 
-        return self.sim.data.time
+        return self.sim.data.time, prediction
 
     def _move_finger_outside_the_table(self):
         # Move finger outside the table again
@@ -489,6 +714,10 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         init_time = self.time
         desired_quat = Quaternion()
+        force_measurements = np.empty((1, 3))
+        pos_measurements = np.empty((1, 3))
+        target_object_displacement = np.empty((1, 3))
+        self.target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
 
         trajectory = [None, None, None]
         for i in range(3):
@@ -506,6 +735,21 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
+
+            # Rotate force w.r.t init object frame
+            force_wrt_target_init = np.matmul(self.target_init_pose.inv().matrix(),
+                                              np.append(self.finger_external_force, 0))[0:3]
+            force_measurements = np.concatenate((force_measurements, force_wrt_target_init[None, :]))
+
+            # Rotate and translate position w.r.t init object frame
+            pos_wrt_target_init = np.matmul(self.target_init_pose.inv().matrix(),
+                                            np.append(self.finger_pos, 1))[0:3]
+            pos_measurements = np.concatenate((pos_measurements, pos_wrt_target_init[None, :]))
+
+            target_current_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+            displacement = get_2d_displacement(self.target_init_pose, target_current_pose)
+            displacement = displacement.reshape((1, 3))
+            target_object_displacement = np.concatenate((target_object_displacement, displacement))
 
             current_pos = self.sim.data.get_joint_qpos(joint_name)
 
@@ -537,9 +781,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
                 self.sim_step()
 
-            return False
+            return False, pos_measurements, force_measurements, target_object_displacement
 
-        return True
+        return True, pos_measurements, force_measurements, target_object_displacement
 
     def sim_step(self):
         """
@@ -572,6 +816,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         finger_geom_id = get_geom_id(self.sim.model, "finger")
         geom2body = self.sim.model.geom_bodyid[finger_geom_id]
         self.finger_external_force_norm = np.linalg.norm(self.sim.data.cfrc_ext[geom2body])
+        # functions that start with 'c' return the rotational part first, so for
+        # the force take the second triplet, w.r.t. the world.
+        self.finger_external_force = self.sim.data.cfrc_ext[geom2body][3:]
 
         # Calculate the object's length, width and height w.r.t. the surface by
         # using the orientation of the object. The height is the dimension
@@ -602,7 +849,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         self.surface_size[1] = self.rng.uniform(surface_width_range[0], surface_width_range[1])
         geom_id = get_geom_id(self.sim.model, "table")
         self.sim.model.geom_size[geom_id][0] = self.surface_size[0]
-        self.sim.model.geom_size[geom_id][0] = self.surface_size[1]
+        self.sim.model.geom_size[geom_id][1] = self.surface_size[1]
 
 
         # Randomize target object
@@ -685,9 +932,9 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.model.geom_size[geom_id][1] = obstacle_height
 
             # Randomize the positions
-            index = self.sim.model.get_joint_qpos_addr("object"+str(i))
+            index = self.sim.model.get_joint_qpos_addr("object" + str(i))
             r = self.rng.exponential(0.01) + target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1])
-            theta = np.random.uniform(0, 2*math.pi)
+            theta = self.rng.uniform(0, 2*math.pi)
             random_qpos[index[0]] = r * math.cos(theta)
             random_qpos[index[0]+1] = r * math.sin(theta)
             random_qpos[index[0]+2] = self.sim.model.geom_size[geom_id][2]
@@ -757,3 +1004,31 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             raise RuntimeError("Object is not neither a box or a cylinder")
 
         return np.array([length, width, height])
+
+    def get_target_displacement(self):
+        '''Returns [x, y, theta]: the displacement of the target between pushing
+        steps. Used in step for returning displacements in info.'''
+        init = Affine3.from_vec_quat(self.target_pos_prev_state, self.target_quat_prev_state)
+        cur = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+        displacement = get_2d_displacement(init, cur)
+        self.target_pos_prev_state = self.target_pos.copy()
+        self.target_quat_prev_state = self.target_quat.copy()
+        return displacement
+
+
+    def state_dict(self):
+        state = {}
+        state['qpos'] = self.sim.data.qpos.ravel().copy()
+        state['qvel'] = self.sim.data.qvel.ravel().copy()
+        state['geom_size'] = self.sim.model.geom_size.copy()
+        state['geom_type'] = self.sim.model.geom_type.copy()
+        state['geom_friction'] = self.sim.model.geom_friction.copy()
+        state['geom_condim'] = self.sim.model.geom_condim.copy()
+        state['push_distance'] = self.push_distance
+        return state
+
+    def load_state_dict(self, state):
+        if state:
+            self.preloaded_init_state = state.copy()
+        else:
+            state = None

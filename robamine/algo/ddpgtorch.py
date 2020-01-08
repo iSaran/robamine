@@ -8,7 +8,7 @@ Most of this is taken from https://github.com/sweetice/Deep-reinforcement-learni
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from robamine.algo.core import Agent
+from robamine.algo.core import RLAgent
 from collections import deque
 from random import Random
 import numpy as np
@@ -202,7 +202,7 @@ class ReplayBuffer:
     def seed(self, random_seed):
         self.random.seed(random_seed)
 
-class DDPGTorch(Agent):
+class DDPGTorch(RLAgent):
     def __init__(self, state_dim, action_dim, params = default_params):
         super().__init__(state_dim, action_dim, 'DDPGTorch', params)
 

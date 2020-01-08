@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from robamine.algo.core import Agent
+from robamine.algo.core import RLAgent
 from robamine.utils.memory import ReplayBuffer
 from collections import deque
 from random import Random
@@ -74,7 +74,7 @@ class QNetwork(nn.Module):
         action_prob = self.out(x)
         return action_prob
 
-class SplitDQN(Agent):
+class SplitDQN(RLAgent):
     def __init__(self, state_dim, action_dim, params = default_params):
         super().__init__(state_dim, action_dim, 'SplitDQN', params)
 

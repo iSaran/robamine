@@ -47,3 +47,5 @@ __pycache__
 
 # IDEs
 *.idea*
+
+robamine/test/algo/saved_model.pkl

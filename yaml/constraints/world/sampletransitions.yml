@@ -1,0 +1,6 @@
+transitions:
+  type: int
+  range: [1, 99999]
+  help: The number of transitions to sample from the environment
+render:
+  type: bool

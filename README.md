@@ -116,9 +116,10 @@ python run.py --no-gui --yml=YAML_FILE
 
 ## Run unit tests
 
+After major changes run every unit test:
+
 ```
-cd robamine/robamine/test
-python -m unittest discover -v
+python run_tests.py
 ```
 
 ## Generate documentation

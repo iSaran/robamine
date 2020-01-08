@@ -1,5 +1,5 @@
 import unittest
-from robamine.utils.orientation import Quaternion
+from robamine.utils.orientation import Quaternion, Affine3, rot2angleaxis, rotation_is_valid
 import numpy.testing as np_test
 import numpy as np
 
@@ -23,6 +23,115 @@ class TestQuaternion(unittest.TestCase):
         self.assertAlmostEqual(q.x, 0, 3)
         self.assertAlmostEqual(q.y, 0, 3)
         self.assertAlmostEqual(q.z, 1, 3)
+
+
+class TestAffine3(unittest.TestCase):
+    def test_init(self):
+        x = Affine3()
+        np.testing.assert_equal(x.matrix(), np.eye(4))
+        np.testing.assert_equal(x.translation, np.zeros(3))
+        np.testing.assert_equal(x.linear, np.eye(3))
+
+    def test_from_matrix(self):
+        y = np.array([[1, 2, 3, 10], [4, 5, 6, 20], [7, 8, 9, 30]])
+        x = Affine3.from_matrix(y)
+
+        expected = np.array([[1., 2., 3., 10.],
+                             [4., 5., 6., 20.],
+                             [7., 8., 9., 30.],
+                             [0., 0., 0.,  1.]])
+        np.testing.assert_equal(x.matrix(), expected)
+
+        np.testing.assert_equal(x.translation, np.array([10, 20, 30]))
+
+        expected = np.array([[1., 2., 3.],
+                             [4., 5., 6.],
+                             [7., 8., 9.]])
+        np.testing.assert_equal(x.linear, expected)
+
+    def test_from_pos_quat(self):
+        x = Affine3.from_vec_quat(np.array([0, 1, 2]), Quaternion(1, 0, 0, 0))
+
+        expected = np.array([[1, 0, 0, 0.],
+                             [0, 1, 0, 1.],
+                             [0, 0, 1, 2.],
+                             [0, 0, 0, 1.]])
+        np.testing.assert_equal(x.matrix(), expected)
+
+        np.testing.assert_equal(x.translation, np.array([0, 1, 2]))
+        np.testing.assert_equal(x.linear, np.eye(3))
+
+    def test_mul(self):
+        rot_a = np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]])
+        affine_a = Affine3.from_vec_quat(np.array([4, 3, 0]), Quaternion.from_rotation_matrix(rot_a))
+        rot_b = np.array([[0, 0, 1], [-1, 0, 0], [0, -1, 0]])
+        affine_b = Affine3.from_vec_quat(np.array([5, -2, 0]), Quaternion.from_rotation_matrix(rot_b))
+        diff = affine_a.inv() * affine_b
+        expected = np.array([[1, 0, 0, 5], [0, 0, 1, 1], [0, -1, 0, 0], [0, 0, 0, 1]])
+        np.testing.assert_almost_equal(diff.matrix(), expected)
+
+    def test_inv(self):
+        # Right now the interface is such that inv does not changes the self
+        # data, just returns the inv. Breaking this test can break code in
+        # Clutter env and other client code which makes the same assumption.
+        homog = Affine3.from_vec_quat(pos=np.array([1, 2, 3]), quat=Quaternion(x=1, y=0, z=0, w=0))
+        result = homog.inv()
+        init = np.array([[1, 0, 0, 1], [0, -1, 0, 2], [0, 0, -1, 3], [0, 0, 0, 1]])
+        inv = np.array([[1, 0, 0, -1], [0, -1, 0, 2], [0, 0, -1, 3], [0, 0, 0, 1]])
+        np.testing.assert_equal(homog.matrix(), init)
+        np.testing.assert_equal(result.matrix(), inv)
+
+class TestOrientation(unittest.TestCase):
+    def test_rot2angleaxis(self):
+        R = np.array([[-1,  0, 0],
+                      [ 0, -1, 0],
+                      [ 0,  0, 1]])
+        angle, axis = rot2angleaxis(R)
+        self.assertEqual(axis, None)
+
+        R = np.array([[1,  0, 0],
+                      [ 0, 1, 0],
+                      [ 0,  0, 1]])
+        angle, axis = rot2angleaxis(R)
+        self.assertEqual(axis, None)
+
+        R = np.array([[1, 0, 0],
+                      [0, -0.9903, -0.1392],
+                      [0, 0.1391, -0.9903]])
+        angle, axis = rot2angleaxis(R)
+        np.testing.assert_equal(axis, np.array([1, 0, 0]))
+
+        R = np.array([[-0.9994, -0.0349, 0],
+                      [0.0348, -0.9994, 0],
+                      [0, 0, 1]])
+        angle, axis = rot2angleaxis(R)
+        np.testing.assert_equal(axis, np.array([0, 0, 1]))
+
+    def test_rotation_is_valid(self):
+        R = np.array([[-1,  0, 0],
+                      [ 0, -1, 0],
+                      [ 0,  0, 1]])
+
+        rotation_is_valid(R)
+
+        R = np.array([[0,  0, 0],
+                      [ 2, -1, 0],
+                      [ 0,  0, 1]])
+        with self.assertRaises(ValueError):
+            rotation_is_valid(R)
+
+        R = np.array([[0,  0, 0],
+                      [ 1, -1, 0],
+                      [ 0,  0, 1]])
+        with self.assertRaises(ValueError):
+            rotation_is_valid(R)
+
+        R = np.array([[0,  -1, 0],
+                      [ -1, 0, 0],
+                      [ 0,  0, 1]])
+        with self.assertRaises(ValueError):
+            rotation_is_valid(R)
+
 
 if __name__ == '__main__':
     unittest.main()

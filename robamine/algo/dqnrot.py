@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from robamine.algo.core import Agent
+from robamine.algo.core import RLAgent
 from robamine.algo.dqn import DQN, QNetwork
 from robamine.algo.ddpgtorch import ReplayBuffer
 from collections import deque

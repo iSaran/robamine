@@ -3,7 +3,8 @@ world:
   - Train
   - Eval
   - SupervisedTrain
-  - DataAcquisition
+  - SampleTransitions
+  - SampleInitStates
 env:
   - Clutter
   - ClutterReal

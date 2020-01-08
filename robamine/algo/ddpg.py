@@ -39,7 +39,7 @@ import gym
 import pickle
 import os
 
-from robamine.algo.core import Network, Agent
+from robamine.algo.core import Network, RLAgent
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise
 import math
 
@@ -551,7 +551,7 @@ class Critic(Network):
         """
         return self.sess.run(self.grad_q_wrt_actions, feed_dict={self.state_input: state, self.action_input: action})
 
-class DDPG(Agent):
+class DDPG(RLAgent):
     """
     Implements the DDPG algorithm.
 

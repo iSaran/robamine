@@ -1,7 +1,7 @@
-name: 'SupervisedTrain'
+name: 'SampleTransitions'
 logging_dir: /tmp/robamine_logs/
 friendly_name: ''
 comments: ''
 params:
-  epochs: 1000
-  save_every: 50
+  transitions: 3000
+  render: false

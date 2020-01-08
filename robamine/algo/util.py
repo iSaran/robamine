@@ -73,9 +73,16 @@ class Datapoint:
         return  self.__str__()
 
 class Dataset(list):
+    def __init__(self, *args):
+        list.__init__(self, *args)
+        self.random = np.random.RandomState()
+
+    def seed(self, seed=None):
+        self.random.seed(seed)
+
     def to_minibatches(self, batch_size=32):
         temp = self.copy()
-        random.shuffle(temp)
+        self.random.shuffle(temp)
         for _ in range(len(self) % batch_size):
             del temp[-1]
         return [Dataset(temp[i:i + batch_size]) for i in range(0, len(temp), batch_size)]
@@ -85,13 +92,20 @@ class Dataset(list):
         y = np.array([_.y for _ in self])
         return x, y
 
+    @classmethod
+    def from_array(cls, x_array, y_array):
+        cls = Dataset()
+        for i in range(x_array.shape[0]):
+            cls.append(Datapoint(x=x_array[i], y=y_array[i]))
+        return cls
+
     def save(self, path, name='robamine_dataset'):
         pickle.dump(self, open(os.path.join(path, name) + '.pkl', 'wb'))
 
     def split(self, train_perc = 0.8):
         elements = int(len(self) * train_perc)
         train = Dataset(self[0:elements])
-        test = Dataset(self[elements+1:])
+        test = Dataset(self[elements:])
         return train, test
 
     def normalize(self):
@@ -120,6 +134,17 @@ class Dataset(list):
     def min(self):
         x, y = self.to_array()
         return np.min(x, axis=0), np.min(y, axis=0)
+
+    def check(self):
+        x, y = self.to_array()
+
+        # Check x for nans
+        if np.isnan(x).any():
+            raise ValueError("Dataset: x contain NaN values")
+
+        # Check y for nans
+        if np.isnan(y).any():
+            raise ValueError("Dataset: y contain NaN values")
 
 class EnvData:
     """

@@ -5,6 +5,9 @@ import numpy.matlib as mat
 import numpy.linalg as lin
 import math
 
+import logging
+logger = logging.getLogger('robamine.utils.orientation')
+
 def quat2rot(q, shape="wxyz"):
     """
     Transforms a quaternion to a rotation matrix.
@@ -127,12 +130,108 @@ def rotation_6x6(orientation):
     output[3:6, 3:6] = orientation
     return output
 
+def rot2angleaxis(R):
+    angle = np.arccos((np.trace(R) - 1) / 2)
+    if angle == 0:
+        logger.warn('Angle is zero (the rotation identity)')
+        axis = None
+    else:
+        axis = (1 / (2 * np.sin(angle))) * np.array([R[2][1] - R[1][2], R[0][2] - R[2][0], R[1][0] - R[0][1]])
+        if np.linalg.norm(axis) == 0:
+            logger.warn('Axis is zero (the rotation is around an axis exactly at pi)')
+            axis = None
+        else:
+            axis = axis / np.linalg.norm(axis)
+    return angle, axis
+
+def angleaxis2rot(angle, axis):
+    c = math.cos(angle)
+    s = math.sin(angle)
+    v = 1 - c
+    kx = axis[0]
+    ky = axis[1]
+    kz = axis[2]
+
+    R = np.eye(3)
+    R[0, 0] = pow(kx, 2) * v + c
+    R[0, 1] = kx * ky * v - kz * s
+    R[0, 2] = kx * kz * v + ky * s
+
+    R[1, 0] = kx * ky * v + kz * s
+    R[1, 1] = pow(ky, 2) * v + c
+    R[1, 2] = ky * kz * v - kx * s
+
+    R[2, 0] = kx * kz * v - ky * s
+    R[2, 1] = ky * kz * v + kx * s
+    R[2, 2] = pow(kz, 2) * v + c
+
+    return R
+
+class Affine3:
+    def __init__(self):
+        self.linear = np.eye(3)
+        self.translation = np.zeros(3)
+
+    @classmethod
+    def from_matrix(cls, matrix):
+        assert isinstance(matrix, np.ndarray)
+        result = cls()
+        result.translation = matrix[:3, 3]
+        result.linear = matrix[0:3, 0:3]
+        return result
+
+    @classmethod
+    def from_vec_quat(cls, pos, quat):
+        assert isinstance(pos, np.ndarray)
+        assert isinstance(quat, Quaternion)
+        result = cls()
+        result.translation = pos.copy()
+        result.linear = quat.rotation_matrix()
+        return result
+
+    def matrix(self):
+        matrix = np.eye(4)
+        matrix[0:3, 0:3] = self.linear
+        matrix[0:3, 3] = self.translation
+        return matrix
+
+    def quat(self):
+        return Quaternion.from_rotation_matrix(self.linear)
+
+    def __copy__(self):
+        result = Affine3()
+        result.linear = self.linear.copy()
+        result.translation = self.translation.copy()
+        return result
+
+    def copy(self):
+        return self.__copy__()
+
+    def inv(self):
+        return Affine3.from_matrix(np.linalg.inv(self.matrix()))
+
+    def __mul__(self, other):
+        return self.__rmul__(other)
+
+
+    def __rmul__(self, other):
+        return Affine3.from_matrix(np.matmul(self.matrix(), other.matrix()))
+
+    def __str__(self):
+        return self.matrix().__str__()
+
 class Quaternion:
     def __init__(self, w=1, x=0, y=0, z=0):
         self.w = w
         self.x = x
         self.y = y
         self.z = z
+
+    def __copy__(self):
+        return Quaternion(w=self.w, x=self.x, y=self.y, z=self.z)
+
+    def copy(self):
+        return self.__copy__()
 
     def as_vector(self):
         return np.array([self.w, self.x, self.y, self.z])
@@ -307,3 +406,28 @@ def rot_z(theta):
   rot[2, 2] = 1
 
   return rot
+
+def rotation_is_valid(R, eps=1e-8):
+    # Columns should be unit
+    for i in range(3):
+        error = abs(np.linalg.norm(R[:, i]) - 1)
+        if  error > eps:
+            raise ValueError('Column ' + str(i) + ' of rotation matrix is not unit (error = ' + str(error) + ') precision: ' + str(eps) + ')')
+
+    # Check that the columns are orthogonal
+    if abs(np.dot(R[:, 0], R[:, 1])) > eps:
+        raise ValueError('Column 0 and 1 of rotation matrix are not orthogonal (precision: ' + str(eps) + ')')
+    if abs(np.dot(R[:, 0], R[:, 2])) > eps:
+        raise ValueError('Column 0 and 2 of rotation matrix are not orthogonal (precision: ' + str(eps) + ')')
+    if abs(np.dot(R[:, 2], R[:, 1])) > eps:
+        raise ValueError('Column 2 and 1 of rotation matrix are not orthogonal (precision: ' + str(eps) + ')')
+
+    # Rotation is right handed
+    if not np.allclose(np.cross(R[:, 0], R[:, 1]), R[:, 2], rtol=0, atol=eps):
+        raise ValueError('Rotation is not right handed (cross(x, y) != z for precision: ' + str(eps) + ')')
+    if not np.allclose(np.cross(R[:, 2], R[:, 0]), R[:, 1], rtol=0, atol=eps):
+        raise ValueError('Rotation is not right handed (cross(z, x) != y for precision: ' + str(eps) + ')')
+    if not np.allclose(np.cross(R[:, 1], R[:, 2]), R[:, 0], rtol=0, atol=eps):
+        raise ValueError('Rotation is not right handed (cross(y, z) != x for precision: ' + str(eps) + ')')
+
+    return True
