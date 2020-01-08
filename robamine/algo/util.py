@@ -94,9 +94,17 @@ class Dataset(list):
 
     @classmethod
     def from_array(cls, x_array, y_array):
+        """
+        Creates the dataset from two numpy arrays for features and outputs (or
+        labels). Provide y_array=None if the dataset has no labels.
+        """
         cls = Dataset()
         for i in range(x_array.shape[0]):
-            cls.append(Datapoint(x=x_array[i], y=y_array[i]))
+            if y_array is None:
+                y_ = None
+            else:
+                y_ = y_array[i]
+            cls.append(Datapoint(x=x_array[i], y=y_))
         return cls
 
     def save(self, path, name='robamine_dataset'):
