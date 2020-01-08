@@ -282,29 +282,12 @@ class NetworkModel(Agent):
     A class for train PyTorch networks. Inherit and create a self.network (which
     inherits from torch.nn.Module) before calling super().__init__()
     '''
-    def __init__(self, params, inputs, outputs, name='NetworkScaler'):
+    def __init__(self, params, dataset, name='NetworkModel'):
         super().__init__(name=name, params=params)
-        self.inputs = inputs
-        self.outputs = outputs
         self.device = self.params.get('device', 'cpu')
-        self.scaler = self.params.get('scaler', 'standard')
-
-        # Create the networks, optimizers and loss
-        self.optimizer = optim.Adam(self.network.parameters(),
-                                    lr=self.params['learning_rate'])
-
-        if self.params['loss'] == 'mse':
-            self.loss = nn.MSELoss()
-        elif self.params['loss'] == 'huber':
-            self.loss = nn.SmoothL1Loss()
-        else:
-            raise ValueError('DynamicsModel: Loss should be mse or huber')
-
-        # Datasets
-        self.train_dataset = Dataset()
-        self.test_dataset = Dataset()
 
         # Set up scalers
+        self.scaler = self.params.get('scaler', 'standard')
         if self.scaler == 'min_max':
             self.range = [-1, 1]
             self.scaler_x = MinMaxScaler(feature_range=self.range)
@@ -319,32 +302,57 @@ class NetworkModel(Agent):
         else:
             raise ValueError(self.name + ': Select scaler between: None, min_max, standard.')
 
+        # Preprocess dataset and extract inputs and outputs
+        self.train_dataset, self.test_dataset = self._preprocess_dataset(dataset).split(0.7)
+        assert isinstance(self.train_dataset, Dataset)
+        assert isinstance(self.test_dataset, Dataset)
+        self.inputs = self.train_dataset[0].x.shape[0]
+        self.outputs = self.train_dataset[0].y.shape[0]
+
+        self._get_network()
+
+        # Create the networks, optimizers and loss
+        self.optimizer = optim.Adam(self.network.parameters(),
+                                    lr=self.params['learning_rate'])
+
+        loss = self.params.get('loss', 'mse')
+        if loss == 'mse':
+            self.loss = nn.MSELoss()
+        elif loss == 'huber':
+            self.loss = nn.SmoothL1Loss()
+        else:
+            raise ValueError('DynamicsModel: Loss should be mse or huber')
+
         self.iterations = 0
         self.info['train'] = {'loss': 0.0}
         self.info['test'] = {'loss': 0.0}
 
-    def load_dataset(self, dataset):
+    def _get_network(self):
+        "Write a nn.Module object to self.network"
+        raise NotImplementedError()
+
+    def _preprocess_dataset(self, dataset):
         '''Preprocesses the dataset and loads it to train and test set'''
         assert isinstance(dataset, Dataset)
+        data = dataset.copy()
 
         # Check and remove NaN values
         try:
-            dataset.check()
+            data.check()
         except ValueError:
-            x, y = dataset.to_array()
+            x, y = data.to_array()
             indexes = np.nonzero(np.isnan(y))
             for i in reversed(indexes[0]):
-                del dataset[i]
+                del data[i]
 
         # Rescale
         if self.scaler:
-            data_x, data_y = dataset.to_array()
+            data_x, data_y = data.to_array()
             data_x = self.scaler_x.fit_transform(data_x)
             data_y = self.scaler_y.fit_transform(data_y)
-            dataset = Dataset.from_array(data_x, data_y)
+            data = Dataset.from_array(data_x, data_y)
 
-        # Split to train and test datasets
-        self.train_dataset, self.test_dataset = dataset.split(0.7)
+        return data
 
     def predict(self, state):
         # ndim == 1 is assumed to mean 1 sample (not multiple samples of 1 feature)
