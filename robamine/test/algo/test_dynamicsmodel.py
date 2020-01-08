@@ -58,7 +58,8 @@ class TestFCDynamicModel(unittest.TestCase):
             'hidden_units': [10],
             'learning_rate': 0.1,
             'loss': 'mse',
-            'batch_size': 32
+            'batch_size': 32,
+            'scaler': 'min_max'
         }
 
         input_dim = 4
@@ -74,7 +75,7 @@ class TestFCDynamicModel(unittest.TestCase):
         # correct seeding of minibatching. Fix this.
         torch.manual_seed(0)
         model = FCDynamicsModel(params, input_dim, output_dim)
-        model.load_dataset(dataset, rescale=True)
+        model.load_dataset(dataset)
         model.seed(0)
         for i in range(100):
             model.learn()
@@ -109,7 +110,8 @@ class TestLSTMDynamicsModel(unittest.TestCase):
             'learning_rate': 0.01,
             'loss': 'mse',
             'n_layers': 2,
-            'batch_size': 32
+            'batch_size': 32,
+            'scaler': 'min_max'
         }
 
         sequence_length = 2
@@ -126,7 +128,7 @@ class TestLSTMDynamicsModel(unittest.TestCase):
         # correct seeding of minibatching. Fix this.
         torch.manual_seed(0)
         model = LSTMDynamicsModel(params, input_dim, output_dim)
-        model.load_dataset(dataset, rescale=True)
+        model.load_dataset(dataset)
         model.seed(0)
 
         train_loss_expected = [0.16893060505390167,
