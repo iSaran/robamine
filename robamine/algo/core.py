@@ -1062,7 +1062,7 @@ class Episode:
 
     def run(self, render = False, init_state = None):
 
-        self.env.load_state_dict(init_state)
+        # self.env.load_state_dict(init_state)
         state = self.env.reset()
 
         while True:
