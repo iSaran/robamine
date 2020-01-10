@@ -1,0 +1,32 @@
+agent:
+  name: DQN
+  params:
+    batch_size: 64
+    device: cpu
+    discount: 0.9
+    double_dqn: false
+    epsilon_decay: 20000
+    epsilon_end: 0.05
+    epsilon_start: 0.9
+    hidden_units:
+    - 140
+    - 140
+    learning_rate: 0.001
+    load_buffers: ''
+    load_nets: ''
+    low_level_actions: 8
+    replay_buffer_size: 1000000
+    tau: 0.999
+  trainable_params: ''
+world:
+  comments: ''
+  friendly_name: ''
+  logging_dir: /tmp/robamine_logs/
+  name: TrainEval
+  params:
+    episodes: 1000
+    eval_episodes: 10
+    eval_every: 20
+    eval_render: false
+    render: true
+    save_every: 20
