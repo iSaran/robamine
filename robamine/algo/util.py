@@ -73,6 +73,10 @@ class Datapoint:
         return  self.__str__()
 
 class Dataset(list):
+    """
+    Implemented as a list of datapoints. TODO: Consider implemented as a pair of
+    np arrays if you want to increase performances and to avoid to_array().
+    """
     def __init__(self, *args):
         list.__init__(self, *args)
         self.random = np.random.RandomState()
