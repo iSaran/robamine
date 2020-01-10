@@ -535,11 +535,12 @@ class World:
                 yaml.dump(self.config, outfile, default_flow_style=False)
 
 class SupervisedTrainWorld(World):
-    def __init__(self, agent, dataset, epochs, save_every, name=None):
+    def __init__(self, agent, dataset, params, name=None):
         super(SupervisedTrainWorld, self).__init__(name)
-        self.epochs = epochs
-        self.save_every = save_every
-        self.dataset = pickle.load(open(dataset, 'rb'))
+        self.epochs = params.get('epochs', 0)
+        self.save_every = params.get('save_every', 0)
+        if dataset:
+            self.dataset = pickle.load(open(dataset, 'rb'))
 
         # Agent setup
         if isinstance(agent, str):
@@ -559,7 +560,8 @@ class SupervisedTrainWorld(World):
             raise err
         self.agent_name = self.agent.name
 
-        self.agent.load_dataset(self.dataset)
+        if dataset:
+            self.agent.load_dataset(self.dataset)
 
         # Create datastreams
         self.datastream = {}
@@ -576,7 +578,7 @@ class SupervisedTrainWorld(World):
         self.config['results']['n_epochs'] = 0
 
     def run(self):
-        logger.info('%s running for %d epochs', self.agent_name, self.epochs)
+        logger.info('World: %s: running: %s for %d epochs', self.name, self.agent_name, self.epochs)
         self.reset()
         self.set_state(WorldState.RUNNING)
         for i in range(self.epochs):
@@ -631,7 +633,7 @@ class SupervisedTrainWorld(World):
             self.results_lock.acquire()
 
         self.config['results']['n_epochs'] = n_epochs
-        prog = self.config['results']['n_epochs'] / self.config['world']['params']['epochs']
+        prog = self.config['results']['n_epochs'] / self.epochs
 
         super(SupervisedTrainWorld, self).update_results(progress=prog, thread_safe=False, write_yaml=False)
 
