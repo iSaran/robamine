@@ -1,0 +1,44 @@
+logging_directory: "/home/mkiatos/Dropbox/clutter/training/2019.09.07_overfit_modularity/train"
+mode: Train & Evaluate  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
+train:
+  episodes: 3000
+  render: False
+eval:
+  episodes: 10
+  render: False
+eval_every: 20
+save_every: 20
+load_world:  "" # Path to load world. Empty string means new world
+env:
+  name: 'Clutter-v0'
+  discrete: True
+  nr_of_actions: 24
+  render: False
+  nr_of_obstacles: [5, 8]
+  target_probability_box: 1.0
+  target_height_range: [0.005, 0.01]
+  obstacle_probability_box: 1.0
+  obstacle_height_range: [0.005, 0.02]
+  push_distance: 0.1
+  split: True
+  extra_primitive: True
+  all_equal_height_prob: 0.1
+agent:
+  name: 'DQNSplit'
+  replay_buffer_size: 1000000
+  low_level_actions: 8  # w
+  batch_size: [64, 64, 64]
+  discount: 0.9
+  target_net_updates: 1000
+  tau: 0.999
+  double_dqn: False
+  epsilon_start: 0.9
+  epsilon_end: 0.05
+  epsilon_decay: 20000  # number of learning steps for half epsilon, set to 0 if no decay is needed
+  learning_rate: [0.001, 0.001, 0.001]
+  hidden_units: [[100, 100], [100, 100], [100, 100]]
+  loss: ['mse', 'mse', 'mse']  # Options: 'mse', 'huber'
+  device: 'cpu'  # "cuda", "cpu"
+  load_nets: ''
+  load_buffers: '/home/mkiatos/Dropbox/clutter/training/2019.09.07_overfit_modularity/buffers/split'
+  update_every_net: False

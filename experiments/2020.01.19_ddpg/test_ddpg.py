@@ -1,5 +1,5 @@
 from robamine.algo.core import TrainWorld
-from robamine.algo.dqn import DQN
+from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine import rb_logging
 import logging
 import yaml

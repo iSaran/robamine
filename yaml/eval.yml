@@ -1,0 +1,7 @@
+logging_directory: "/home/mkiatos/Dropbox/clutter/training/2019.09.09_difficult_env/eval"
+mode: Evaluate  # Options: "Train", "Evaluate", "Train & Evaluate", "Random"
+eval:
+  episodes: 1000
+  render: True
+save_every: 20
+load_world: "/home/mkiatos/Dropbox/clutter/training/2019.09.07_overfit_modularity/train/split"

@@ -1,22 +1,28 @@
 agent:
-  name: DQN
+  name: DDPG_TORCH
   params:
     batch_size: 64
     device: cpu
-    discount: 0.9
-    double_dqn: false
-    epsilon_decay: 20000
-    epsilon_end: 0.05
-    epsilon_start: 0.9
-    hidden_units:
-    - 140
-    - 140
-    learning_rate: 0.001
+    gamma: 0.9
     load_buffers: ''
     load_nets: ''
-    low_level_actions: 8
     replay_buffer_size: 1000000
     tau: 0.999
+    actor:
+      hidden_units:
+      - 400
+      - 300
+      learning_rate: 0.001
+      final_layer_init: [-0.001, 0.001]
+    critic:
+      hidden_units:
+      - 400
+      - 300
+      learning_rate: 0.001  
+      final_layer_init: [-0.001, 0.001]
+    noise:
+      name: OU
+      sigma: 0.2
   trainable_params: ''
 world:
   comments: ''
