@@ -14,7 +14,7 @@ from robamine.algo.util import (DataStream, Stats, get_now_timestamp,
                                 transform_sec_to_timestamp, Transition, EnvData,
                                 TimestepData, EpisodeData, EpisodeListData,
                                 Dataset, Datapoint)
-from robamine.utils.info import get_pc_and_version, get_dir_size
+from robamine.utils.info import get_pc_and_version, get_dir_size, get_now_timestamp
 from robamine.utils.memory import ReplayBuffer
 from robamine import rb_logging
 import logging
@@ -31,6 +31,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+import shutil
 
 logger = logging.getLogger('robamine.algo.core')
 
@@ -453,7 +454,10 @@ class WorldState(Enum):
 
 class World:
     def __init__(self, name=None):
-        self.name = name
+        if name is None:
+            self.name = 'world_' + get_now_timestamp()
+        else:
+            self.name = name
 
         self.stop_running = False
         self.results_lock = Lock()
@@ -461,9 +465,14 @@ class World:
         self.current_state = WorldState.IDLE
 
         # Setup logging directory and tf writers
-        self.log_dir = rb_logging.get_logger_path()
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
+        self.log_dir = os.path.join(rb_logging.get_logger_path(), self.name.lower())
+
+        logger.info('Created world: ' + self.name)
+
+        if os.path.exists(self.log_dir):
+            logger.warn("Removing existing world directory. This may happen if you set the same name for different worlds")
+            shutil.rmtree(self.log_dir)
+        os.makedirs(self.log_dir)
         self.sess = tf.Session()
         self.tf_writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)
         self.stats = None
