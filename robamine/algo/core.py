@@ -117,6 +117,9 @@ class Agent:
     def load_dataset(self):
         pass
 
+    def __call__(self, input):
+        return self.predict(input)
+
 class RLAgent(Agent):
     """
     Base class for creating an RL agent.
