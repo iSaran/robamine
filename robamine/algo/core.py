@@ -42,6 +42,7 @@ class Agent:
         self.info = {}
         self.rng = np.random.RandomState()
         self.prediction_horizon = params.get('prediction_horizon', None)
+        logger.debug('Agent:' + self.name + ': Created with params:' + str(params))
 
     def state_dict(self):
         state_dict = {}
@@ -470,7 +471,6 @@ class World:
         # Setup logging directory and tf writers
         self.log_dir = os.path.join(rb_logging.get_logger_path(), self.name.lower())
 
-        logger.info('Created world: ' + self.name)
 
         if os.path.exists(self.log_dir):
             logger.warn("Removing existing world directory. This may happen if you set the same name for different worlds")
@@ -491,6 +491,8 @@ class World:
         self.config['results']['time_elapsed'] = None
         self.config['results']['dir_size'] = 0
         self.config['results']['progress'] = 0.0
+
+        logger.info('World:' + self.name + ': Created.')
 
     def reset(self):
         self.stop_running = False
@@ -581,7 +583,7 @@ class SupervisedTrainWorld(World):
         self.config['results']['n_epochs'] = 0
 
     def run(self):
-        logger.info('World: %s: running: %s for %d epochs', self.name, self.agent_name, self.epochs)
+        logger.info('SupervisedTrainWorld: %s: running: %s for %d epochs', self.name, self.agent_name, self.epochs)
         self.reset()
         self.set_state(WorldState.RUNNING)
         for i in range(self.epochs):
