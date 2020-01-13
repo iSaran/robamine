@@ -560,10 +560,7 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
             for i in range(len(my_action)):
                 my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
 
-            if my_action[1] > 0.5:
-                push_target = True
-            else:
-                push_target = False
+            push_target = False
 
             push = Push(direction_theta=my_action[0], distance=self.push_distance, object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 

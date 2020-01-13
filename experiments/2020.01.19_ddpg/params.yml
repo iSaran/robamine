@@ -18,12 +18,38 @@ agent:
       hidden_units:
       - 400
       - 300
-      learning_rate: 0.001  
+      learning_rate: 0.001
       final_layer_init: [-0.001, 0.001]
     noise:
       name: OU
       sigma: 0.2
   trainable_params: ''
+env:
+  name: Clutter
+  params:
+    all_equal_height_prob: 0.0
+    discrete: false
+    extra_primitive: false
+    finger_size:
+    - 0.005
+    - 0.01
+    nr_of_actions: 16
+    nr_of_obstacles:
+    - 8
+    - 13
+    obstacle_height_range:
+    - 0.005
+    - 0.02
+    obstacle_probability_box: 1.0
+    push_distance:
+    - 0.1
+    - 0.15
+    render: false
+    split: false
+    target_height_range:
+    - 0.005
+    - 0.01
+    target_probability_box: 1.0
 world:
   comments: ''
   friendly_name: ''
