@@ -527,9 +527,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Extra data for having pushing distance, theta along with displacements
         # of the target
-        nr_substates = (self.action_space.n / self.nr_primitives)
-        j = int(_action - np.floor(_action / nr_substates) * nr_substates)
-        theta = j * 2 * math.pi / nr_substates
+        if self.params['discrete']:
+            nr_substates = (self.action_space.n / self.nr_primitives)
+            j = int(_action - np.floor(_action / nr_substates) * nr_substates)
+            theta = j * 2 * math.pi / nr_substates
+        else:
+            theta = 0.0
         extra_data = {'displacement': [self.push_distance, theta, self.target_displacement_push_step],
                       'predicted_displacement': self.predicted_displacement_push_step.copy(),
                       'push_finger_forces': self.force_measurements,
