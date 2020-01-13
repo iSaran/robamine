@@ -640,7 +640,8 @@ class RLWorld(World):
                 logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
                 self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
         elif isinstance(env, dict):
-            self.env = gym.make(env['name'], params=env)
+            env_params = env['params'] if 'params' in env else {}
+            self.env = gym.make(env['name'], params=env_params)
         else:
             err = ValueError('Provide a gym.Env or a string in order to create a new world')
             logger.exception(err)
