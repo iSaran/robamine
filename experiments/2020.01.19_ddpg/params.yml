@@ -25,7 +25,7 @@ agent:
       sigma: 0.2
   trainable_params: ''
 env:
-  name: Clutter
+  name: Clutter-v0
   params:
     all_equal_height_prob: 0.0
     discrete: false
