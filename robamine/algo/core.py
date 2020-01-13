@@ -1070,7 +1070,7 @@ class Episode:
             if (render):
                 self.env.render()
             action = self._action_policy(state)
-            next_state, reward, done, info = self.env.step([action])
+            next_state, reward, done, info = self.env.step(action)
             transition = Transition(state, action, reward, next_state, done)
             self._learn(transition)
             self._update_stats_step(transition, info)
