@@ -13,6 +13,8 @@ from robamine.algo.util import OrnsteinUhlenbeckActionNoise, Transition
 import numpy as np
 import pickle
 
+import math
+
 
 default_params = {
     'name': 'DDPG',
@@ -21,7 +23,7 @@ default_params = {
     'gamma': 0.99,
     'tau': 1e-3,
     'device': 'cpu',
-    'nr_primitives': 2,
+    'actions': [3, 2],
     'update_iter': [1, 1],
     'actor': {
         'hidden_units': [[400, 300], [400, 300]],
@@ -34,6 +36,11 @@ default_params = {
     'noise': {
         'name': 'OU',
         'sigma': 0.2
+    },
+    'epsilon' : {
+        'start' : 0.9,
+        'end' : 0.05,
+        'decay' : 10000,
     }
 }
 
@@ -90,7 +97,8 @@ class SplitDDPG(RLAgent):
 
         # The number of networks is the number of primitive actions. One network
         # per primitive action
-        self.nr_network = self.params['nr_primitives']
+        self.nr_network = len(self.params['actions'])
+        self.actions = self.params['actions']
 
         self.device = self.params['device']
 
@@ -98,43 +106,68 @@ class SplitDDPG(RLAgent):
         self.actor, self.target_actor, self.critic, self.target_critic = nn.ModuleList(), nn.ModuleList(), \
                                                                          nn.ModuleList(), nn.ModuleList()
         for i in range(self.nr_network):
-            self.actor.append(Actor(state_dim, action_dim, self.params['actor']['hidden_units'][i]))
-            self.target_actor.append(Actor(state_dim, action_dim, self.params['actor']['hidden_units'][i]))
-            self.critic.append(Critic(state_dim, action_dim, self.params['critic']['hidden_units'][i]))
-            self.target_critic.append(Critic(state_dim, action_dim, self.params['critic']['hidden_units'][i]))
+            self.actor.append(Actor(state_dim, self.actions[i], self.params['actor']['hidden_units'][i]))
+            self.target_actor.append(Actor(state_dim, self.actions[i], self.params['actor']['hidden_units'][i]))
+            self.critic.append(Critic(state_dim, self.actions[i], self.params['critic']['hidden_units'][i]))
+            self.target_critic.append(Critic(state_dim, self.actions[i], self.params['critic']['hidden_units'][i]))
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         for i in range(self.nr_network):
             self.critic_optimizer.append(optim.Adam(self.critic.parameters(), self.params['critic']['learning_rate']))
-            self.actor_optimizer.append(optim.Adam(self.critic.parameters(), self.params['actor']['learning_rate']))
+            self.actor_optimizer.append(optim.Adam(self.actor.parameters(), self.params['actor']['learning_rate']))
             self.replay_buffer.append(ReplayBuffer(self.params['replay_buffer_size']))
             self.info['critic_' + str(i) + '_loss'] = 0
             self.info['actor_' + str(i) + '_loss'] = 0
 
-        self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim), sigma=self.params['noise']['sigma'])
+        self.exploration_noise = []
+        for i in range(len(self.actions)):
+            self.exploration_noise.append(OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.actions[i]), sigma=self.params['noise']['sigma']))
         self.learn_step_counter = 0
 
     def predict(self, state):
+        output = np.zeros(max(self.actions) + 1)
         s = torch.FloatTensor(state).to(self.device)
-        max_q = 0
+        max_q = -1e10
+        i = 0
         for i in range(self.nr_network):
             a = self.actor[i](s)
             q = self.critic[i](s, a).cpu().detach().numpy()
             if q > max_q:
                 max_q = q
-                max_a = a
-        return max_a.cpu().detach().numpy()
+                max_a = a.cpu().detach().numpy()
+                max_primitive = i
+
+        output[0] = max_primitive
+        output[1:(self.actions[max_primitive] + 1)] = max_a
+        return output
 
     def explore(self, state):
-        noise = self.exploration_noise()
-        n = torch.FloatTensor(noise).to(self.device)
-        s = torch.FloatTensor(self.predict(state))
-        a =  s + n
-        return a.cpu().detach().numpy()
+        # Calculate epsilon for epsilon-greedy
+        start = self.params['epsilon']['end']
+        end = self.params['epsilon']['start']
+        decay = self.params['epsilon']['decay']
+        epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
+
+        if self.rng.uniform(0, 1) >= epsilon:
+            return self.predict(state)
+        else:
+            i = self.rng.randint(0, len(self.actions))
+            s = torch.FloatTensor(state).to(self.device)
+            noise = self.exploration_noise[i]()
+            n = torch.FloatTensor(noise).to(self.device)
+            a = self.actor[i](s) + n
+            action = a.cpu().detach().numpy()
+            output = np.zeros(max(self.actions) + 1)
+            output[0] = i
+            output[1:(self.actions[i] + 1)] = action
+            return output
+
+    def get_low_level_action(self, high_level_action):
+        i = int(high_level_action[0])
+        return i, high_level_action[1:(self.actions[i] + 1)]
 
     def learn(self, transition):
-        transition.action = [0, 0, 0.15]
-        i = transition.action[0] # first element of action defines the primitive action
+        i = int(transition.action[0]) # first element of action defines the primitive action
         self.replay_buffer[i].store(transition)
 
         for _ in range(self.params['update_iter'][i]):
@@ -153,7 +186,8 @@ class SplitDDPG(RLAgent):
         batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
 
         state = torch.FloatTensor(batch.state).to(self.device)
-        action = torch.FloatTensor(batch.action).to(self.device)
+        _, action_ = self.get_low_level_action(batch.action)
+        action = torch.FloatTensor(action_).to(self.device)
         reward = torch.FloatTensor(batch.reward).to(self.device)
         next_state = torch.FloatTensor(batch.next_state).to(self.device)
         terminal = torch.FloatTensor(batch.terminal).to(self.device)
@@ -191,12 +225,11 @@ class SplitDDPG(RLAgent):
             target_param.data.copy_(self.params['tau'] * param.data + (1 - self.params['tau']) * target_param.data)
 
         self.learn_step_counter += 1
-        print('step_counter:', self.learn_step_counter)
 
     def q_value(self, state, action):
-        i = action[0]
+        i, action_ = self.get_low_level_action(action)
         s = torch.FloatTensor(state).to(self.device)
-        a = torch.FloatTensor(action[1:]).to(self.device)
+        a = torch.FloatTensor(action_).to(self.device)
         q = self.critic[i](s, a).cpu().detach().numpy()
         return q
 
