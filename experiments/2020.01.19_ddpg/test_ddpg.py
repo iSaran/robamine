@@ -1,5 +1,6 @@
 from robamine.algo.core import TrainWorld
-from robamine.algo.ddpg_torch import DDPG_TORCH
+# from robamine.algo.ddpg_torch import DDPG_TORCH
+from robamine.algo.splitddpg import SplitDDPG
 from robamine import rb_logging
 import logging
 import yaml
@@ -9,7 +10,7 @@ def run():
         params = yaml.safe_load(stream)
 
     rb_logging.init(directory=params['world']['logging_dir'], friendly_name=params['world']['friendly_name'], file_level=logging.INFO)
-    trainer = TrainWorld(agent=params['agent'], env=params['env'], params=params['world']['params'])
+    trainer = TrainWorld(agent='SplitDDPG', env=params['env'], params=params['world']['params'])
     trainer.run()
 
 if __name__ == '__main__':

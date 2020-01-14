@@ -42,7 +42,7 @@ default_params = {
 }
 
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_units):
+    def __init__(self, state_dim, action_dim, params=default_params['critic']):
         super(Critic, self).__init__()
 
         self.l1 = nn.Linear(state_dim + action_dim, params['hidden_units'][0])
@@ -58,7 +58,7 @@ class Critic(nn.Module):
         return x
 
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_units):
+    def __init__(self, state_dim, action_dim, params=default_params['actor']):
         super(Actor, self).__init__()
 
         self.l1 = nn.Linear(state_dim, params['hidden_units'][0])
