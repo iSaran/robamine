@@ -15,6 +15,7 @@ from robamine.utils.memory import ReplayBuffer
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, Transition
 
 import numpy as np
+import pickle
 
 
 default_params = {
@@ -41,7 +42,7 @@ default_params = {
 }
 
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, params=default_params['critic']):
+    def __init__(self, state_dim, action_dim, hidden_units):
         super(Critic, self).__init__()
 
         self.l1 = nn.Linear(state_dim + action_dim, params['hidden_units'][0])
@@ -57,7 +58,7 @@ class Critic(nn.Module):
         return x
 
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, params=default_params['actor']):
+    def __init__(self, state_dim, action_dim, hidden_units):
         super(Actor, self).__init__()
 
         self.l1 = nn.Linear(state_dim, params['hidden_units'][0])
@@ -95,10 +96,10 @@ class DDPG_TORCH(RLAgent):
         self.replay_buffer = ReplayBuffer(params['replay_buffer_size'])
         self.exploration_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim), sigma=self.params['noise']['sigma'])
 
-        self.info = {}
+        self.info['critic_loss'] = 0
+        self.info['actor_loss'] = 0
 
     def explore(self, state):
-        print(state)
         s = torch.FloatTensor(state).to(self.device)
         noise = self.exploration_noise()
         n = torch.FloatTensor(noise).to(self.device)
@@ -110,6 +111,8 @@ class DDPG_TORCH(RLAgent):
         return self.actor(s).cpu().detach().numpy()
 
     def learn(self, transition):
+        self.info['critic_loss'] = 0
+        self.info['actor_loss'] = 0
         self.replay_buffer.store(transition)
 
         if self.replay_buffer.count < self.params['batch_size']:
@@ -151,24 +154,22 @@ class DDPG_TORCH(RLAgent):
         actor_loss.backward()
         self.actor_optimizer.step()
 
-        # soft updates for target actor and target critic
-        # new_target_actor_params = {}
-        # for key in self.target_actor.state_dict():
-        #     new_target_actor_params[key] = self.params['tau'] * self.target_actor.state_dict()[key] + \
-        #                                    (1 - self.params['tau']) * self.actor.state_dict()[key]
-        # self.target_actor.load_state_dict(new_target_actor_params)
-        #
-        # new_target_critic_params = {}
-        # for key in self.target_critic.state_dict():
-        #     new_target_critic_params[key] = self.params['tau'] * self.target_critic.state_dict()[key] + \
-        #                                    (1 - self.params['tau']) * self.critic.state_dict()[key]
-        # self.target_critic.load_state_dict(new_target_critic_params)
-
         for param, target_param in zip(self.critic.parameters(), self.target_critic.parameters()):
             target_param.data.copy_(self.params['tau'] * param.data + (1 - self.params['tau']) * target_param.data)
 
         for param, target_param in zip(self.actor.parameters(), self.target_actor.parameters()):
             target_param.data.copy_(self.params['tau'] * param.data + (1 - self.params['tau']) * target_param.data)
+
+    def save(self, file_path):
+        model = {}
+        model['params'] = self.params
+        model['actor'] = self.actor.state_dict()
+        model['target_actor'] = self.target_actor.state_dict()
+        model['critic'] = self.critic.state_dict()
+        model['target_critic'] = self.target_critic.state_dict()
+        model['state_dim'] = self.state_dim
+        model['action_dim'] = self.action_dim
+        pickle.dump(model, open(file_path, 'wb'))
 
     def q_value(self, state, action):
         s = torch.FloatTensor(state).to(self.device)
