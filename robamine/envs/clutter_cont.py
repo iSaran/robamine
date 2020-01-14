@@ -187,6 +187,47 @@ class Push:
                "Direction: " + str(self.direction) + "\n" + \
                "z: " + str(self.z) + "\n"
 
+class PushTarget:
+    def __init__(self, distance, theta, push_distance, object_height = 0.06, finger_size = 0.02):
+        self.distance = distance
+        self.theta = theta
+        self.push_distance = push_distance
+
+        if object_height - finger_size > 0:
+            offset = object_height - finger_size
+        else:
+            offset = 0
+        self.z = finger_size + offset + 0.001
+
+
+    def get_init_pos(self):
+        init = self.distance * np.array([math.cos(self.theta), math.sin(self.theta)])
+        return np.append(init, self.z)
+
+    def get_final_pos(self):
+        init = self.get_init_pos()
+        direction = - init / np.linalg.norm(init)
+        return self.push_distance * direction
+
+    def get_duration(self, distance_per_sec = 0.2):
+        return np.linalg.norm(self.get_init_pos() - self.get_final_pos()) / distance_per_sec
+
+class PushObstacle:
+    def __init__(self, distance = 0.1, theta = 0.0, object_height = 0.06, finger_size = 0.02):
+        self.distance = distance
+        self.theta = theta
+        self.z = 2 * object_height + finger_size + 0.001
+
+    def get_init_pos(self):
+        return np.array([0.0, 0.0, self.z])
+
+    def get_final_pos(self):
+        final_pos = self.distance * np.array([math.cos(self.theta), math.sin(self.theta)])
+        return np.append(final_pos, self.z)
+
+    def get_duration(self, distance_per_sec = 0.2):
+        return np.linalg.norm(self.get_init_pos() - self.get_final_pos()) / distance_per_sec
+
 class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     """
     The class for the Gym environment.
@@ -542,35 +583,28 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
 
     def do_simulation(self, action, pos, quat):
-        if self.params['discrete']:
-            theta = action * 2 * math.pi / (self.action_space.n / self.nr_primitives)
-            if action > 2 * int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
-                push = PushingPrimitiveC(distance=self.push_distance, direction_theta=theta, object_height=self.target_height, finger_size=self.finger_length)
-            elif action > int(self.params['nr_of_actions'] / self.nr_primitives) - 1:
-                push = Push(direction_theta=theta, distance=self.push_distance, object_height = self.target_height, target=False, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
-            else:
-                push = Push(direction_theta=theta, distance=self.push_distance, object_height = self.target_height, target=True, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
-        else:
-            my_action = action.copy()
+        primitive = int(action[0])
 
-            # agent gives actions between [-1, 1]. convert to the action ranges of
-            # the action space of the environment
-            agent_high = 1
-            agent_low = -1
-            env_low = [-math.pi, 0]
-            env_high = [math.pi, 1]
-            for i in range(len(my_action)):
-                my_action[i] = (((my_action[i] - agent_low) * (env_high[i] - env_low[i])) / (agent_high - agent_low)) + env_low[i]
+        # Push target primitive
+        if primitive == 0:
+            theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
+            r = rescale(action[2], min=-1, max=1, range=[0, 0.20])  # hardcoded read it from table limits
+            d = rescale(action[3], min=-1, max=1, range=[0, 0.20])  # hardcoded read it from min max pushing distance
+            push = PushTarget(distance=r, theta=theta, push_distance=d,
+                              object_height = self.target_height, finger_size = self.finger_length)
 
-            push_target = True
+        # Push obstacle primitive
+        elif primitive == 1:
+            direction_theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
+            distance = rescale(action[2], min=-1, max=1, range=[0, 0.15])  # hardcoded read it from min max pushing distance
+            push = PushObstacle(distance=distance, theta=direction_theta,
+                                object_height = self.target_height, finger_size = self.finger_length)
 
-            push = Push(direction_theta=my_action[0], distance=self.push_distance, object_height = self.target_height, target=push_target, object_length = self.target_length, object_width = self.target_width, finger_size = self.finger_length)
 
         # Transform pushing from target frame to world frame
-        push_direction = np.array([push.direction[0], push.direction[1], 0])
-        push_direction_world = np.matmul(quat.rotation_matrix(), push_direction)
-        push_initial_pos = np.array([push.initial_pos[0], push.initial_pos[1], 0])
-        push_initial_pos_world = np.matmul(quat.rotation_matrix(), push_initial_pos) + pos
+        push_initial_pos_world = np.matmul(quat.rotation_matrix(), push.get_init_pos()) + pos
+        push_final_pos_world = np.matmul(quat.rotation_matrix(), push.get_final_pos()) + pos
+
 
         # Save init pose for calculating prediction of displacement w.r.t. the
         # init target pose not world
@@ -580,14 +614,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         init_z = 2 * self.target_height + 0.05
         self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
         self.sim_step()
-        duration = 1
+        duration = push.get_duration()
         if isinstance(push, PushingPrimitiveC):
             duration = 3
 
         self.pos_measurements, self.force_measurements = None, None
         prediction = np.zeros(3)
         if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True)[0]:
-            end = push_initial_pos_world[:2] + push.distance * push_direction_world[:2]
+            end = push_final_pos_world[:2]
             init_pos = self.target_pos
             _, self.pos_measurements, self.force_measurements, self.target_object_displacement = self.move_joint_to_target('finger', [end[0], end[1], None], duration)
             prediction_pos, prediction_theta = predict_displacement_from_forces(pos_measurements=self.pos_measurements, force_measurements=self.force_measurements)
