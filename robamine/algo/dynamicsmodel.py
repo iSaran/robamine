@@ -15,6 +15,8 @@ import math
 import os
 
 
+from sklearn.decomposition import PCA
+
 import logging
 logger = logging.getLogger('robamine.algo.dynamicsmodel')
 
@@ -127,10 +129,12 @@ class FCDynamicsModel(NetworkModel):
             'loss': 'mse',
             'latent_dim': params['ae_latent_dim']
         }
-        self.autoencoder = FCAutoEncoderModel(ae_params, inputs=inputs)
+        # self.autoencoder = FCAutoEncoderModel(ae_params, inputs=inputs)
+
+        self.pca = PCA(n_components=3)
 
         self.network = FullyConnectedNetwork(
-            inputs=params['ae_latent_dim'],
+            inputs=32,
             hidden_units=params['hidden_units'],
             outputs=outputs).to(params['device'])
 

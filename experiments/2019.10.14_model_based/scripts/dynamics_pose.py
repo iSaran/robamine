@@ -36,9 +36,9 @@ if __name__ == '__main__':
     # prediction = model.predict(force_vel_data, action)
     # print('lstm predicted_displacement:', prediction)
 
-    model = SplitDynamicsModelPose.load('/home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/dynamics_model_pose_fc_position/model.pkl')
-    prediction = model.predict(force_vel_data, action)
-    print('fully connected learned predicted model:', prediction)
+    # model = SplitDynamicsModelPose.load('/home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/dynamics_model_pose_fc_position/model.pkl')
+    # prediction = model.predict(force_vel_data, action)
+    # print('fully connected learned predicted model:', prediction)
 
     model = SplitDynamicsModelPoseLSTM.load('/home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/dynamics_model_pose/model.pkl')
     prediction = model.predict(force_vel_data, action)

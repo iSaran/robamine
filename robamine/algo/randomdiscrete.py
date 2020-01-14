@@ -17,7 +17,7 @@ class RandomDiscrete(RLAgent):
         return self.rng.randint(self.action_dim)
 
     def predict(self, state):
-        return self.rng.randint(self.action_dim)
+        return self.rng.randint(8)
 
     def learn(self, transition):
         pass

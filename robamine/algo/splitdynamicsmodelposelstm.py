@@ -14,7 +14,7 @@ from numpy.linalg import norm
 import logging
 logger = logging.getLogger('robamine.algo.splitdynamicsmodelposelstm')
 
-SEQUENCE_LENGTH = 50
+SEQUENCE_LENGTH = 200
 
 class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
     def __init__(self, params, inputs=4, outputs=3, name='SplitDynamicsModelPose'):
@@ -29,7 +29,7 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
         '''
         result = np.concatenate((np.delete(inputs[0], 2, axis=1), np.delete(inputs[1], 2, axis=1)), axis=1)
         result = result[:-(result.shape[0] % sequence_length), :]
-        result = Signal(result).average_filter(SEQUENCE_LENGTH).array()
+        result = Signal(result).average_filter(sequence_length).array()
         return result
 
     def load_dataset(self, env_data):
@@ -53,10 +53,8 @@ class SplitDynamicsModelPoseLSTM(LSTMSplitDynamicsModel):
             # and no useful data from pushing was recorded
             if (vel is not None) and (force is not None):
                 inputs = self._preprocess_input([vel, force], SEQUENCE_LENGTH)
-                # Signal(inputs).plot()
 
                 outputs = poses[:-(poses.shape[0] % SEQUENCE_LENGTH), :]
-                # Signal(outputs).plot()
                 outputs = Signal(outputs).segment_last_element(SEQUENCE_LENGTH).array()
 
                 dataset[primitive].append(Datapoint(x = inputs, y = outputs))
