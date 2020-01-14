@@ -11,6 +11,10 @@ import torch.nn as nn
 from robamine import rb_logging
 import logging
 
+
+# Torch Networks & support models
+# -------------------------------
+
 class AutoEncoderFC(nn.Module):
     """
     An autoencoder using FC nets. Last layer is tanh which means that it assumes
@@ -38,13 +42,17 @@ class AutoEncoderFC(nn.Module):
             self.layers[-1].bias.data.uniform_(-0.003, 0.003)
 
         self.layers.append(nn.Linear(hidden_units[0], init_dim))
+        print('--------------------------------------')
+        print(self.layers)
+        print('latent layer index:', self.latent_layer_index)
+        print('--------------------------------------')
 
     def forward(self, x):
         for i in range(len(self.layers) - 1):
             x = self.layers[i](x)
-            x = nn.functional.relu(x)
+            # x = nn.functional.relu(x)
         x = self.layers[-1](x)
-        x = torch.tanh(x)
+        # x = torch.tanh(x)
         return x
 
     def latent(self, x):
@@ -80,6 +88,10 @@ class AutoEncoderFCModel(NetworkModel):
         prediction = self.network.latent(s).cpu().detach().numpy()
         return prediction
 
+
+# Models for predicting pose from forces
+# --------------------------------------
+
 class PosePredictorAE(NetworkModel):
     def __init__(self, params, dataset, name='PosePredictorAE'):
         self.autoencoder = None
@@ -111,26 +123,17 @@ class PosePredictorAE(NetworkModel):
 
         # Rescale
         data_x, data_y = data.to_array()
-        # data_x = self.standard_scaler_x.fit_transform(data_x)
-        # data_y = self.standard_scaler_y.fit_transform(data_y)
-        data_x = self.min_max_scaler_x.fit_transform(data_x)
-        data_y = self.min_max_scaler_y.fit_transform(data_y)
+        data_x = self.standard_scaler_x.fit_transform(data_x)
+        data_y = self.standard_scaler_y.fit_transform(data_y)
+        # data_x = self.min_max_scaler_x.fit_transform(data_x)
+        # data_y = self.min_max_scaler_y.fit_transform(data_y)
 
         # data_ae_x = self.min_max_scaler_x.fit_transform(data_x)
         data = Dataset.from_array(data_x, data_x)
-        self.autoencoder = \
-            AutoEncoderFCModel(params = {
-                                         'hidden_units' : [1000, 500, 100],
-                                         'learning_rate' : 0.001,
-                                         'batch_size' : 64
-                                        },
-                                        dataset = data)
+        self.autoencoder = AutoEncoderFCModel(params = self.params['ae']['net'], dataset = data)
 
         SupervisedTrainWorld(agent=self.autoencoder, dataset=None,
-                             params = {
-                                       'epochs': 25,
-                                       'save_every': 0,
-                                      },
+                             params = self.params['ae']['train'],
                              name = 'fc_ae').run()
 
         transformed_x = self.autoencoder(data_x)
@@ -144,13 +147,14 @@ class PosePredictorAE(NetworkModel):
         else:
             state_ = state
 
-        # inputs = self.standard_scaler_x.transform(state_)
-        inputs = self.min_max_scaler_x.transform(state_)
+        inputs = self.standard_scaler_x.transform(state_)
+        # inputs = self.min_max_scaler_x.transform(state_)
         transformed = self.autoencoder(inputs)
 
         s = torch.FloatTensor(transformed).to(self.device)
         prediction = self.network(s).cpu().detach().numpy()
-        prediction = self.min_max_scaler_y.inverse_transform(prediction)[0]
+        # prediction = self.min_max_scaler_y.inverse_transform(prediction)[0]
+        prediction = self.standard_scaler_y.inverse_transform(prediction)[0]
 
         return prediction
 
@@ -183,8 +187,8 @@ class PosePredictorPCA(NetworkModel):
         data_x = self.scaler_x.fit_transform(data_x)
         # data_y = self.scaler_y.fit_transform(data_y)
 
-        self.pca = PCA(.95)
-        # self.pca = PCA(n_components=30)
+        # self.pca = PCA(.95)
+        self.pca = PCA(n_components=30)
         pca_components = self.pca.fit_transform(data_x)
         data = Dataset.from_array(x_array=pca_components, y_array=data_y)
         return data
@@ -326,6 +330,10 @@ class PosePredictorHandcrafted(Agent):
 
         return output
 
+
+# General functions
+# -----------------
+
 def load_dataset(data):
     dataset = Dataset()
     for i in range(len(data.info['extra_data'])):
@@ -393,14 +401,29 @@ def evaluate(model, eval_dataset):
     from tabulate import tabulate
     print(tabulate(results, headers))
 
+
+# Pipelines for different experiments
+# -----------------------------------
+
 def run():
     print('Loading dataset...')
     env_data_path = '/home/iason/Dropbox/projects/phd/clutter/training/2019.10.14_model_based/transitions_pose/samples.env'
     env_data = EnvData.load(env_data_path)
     dataset = load_dataset(env_data)
-    dataset, eval_dataset = dataset.split(0.9) # eval dataset will be used for extracting statistics
+    dataset, eval_dataset = dataset.split(0.8) # eval dataset will be used for extracting statistics
 
     model = PosePredictorAE(params={
+                                    'ae' : {
+                                            'net': {
+                                                    'hidden_units' : [30],
+                                                    'learning_rate' : 0.001,
+                                                    'batch_size' : 64
+                                                   },
+                                            'train': {
+                                                      'epochs': 100,
+                                                      'save_every': 0,
+                                                     }
+                                           },
                                     'learning_rate' : 0.001,
                                     'batch_size' : 64,
                                     'hidden_units' : [100, 100]

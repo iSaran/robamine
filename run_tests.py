@@ -16,13 +16,13 @@ class bcolors:
 
 tests = [#'algo.test_core',
          #'algo.test_dummy',
-         'algo.test_dynamicsmodel',
-         'algo.test_splitdynamicsmodelpose',
-         'algo.test_splitdynamicsmodelposelstm',
+         # 'algo.test_dynamicsmodel',
+         # 'algo.test_splitdynamicsmodelpose',
+         # 'algo.test_splitdynamicsmodelposelstm',
          'algo.test_util',
-         'utils.test_math',
-         'utils.test_orientation',
-         'envs.test_clutter'
+         # 'utils.test_math',
+         # 'utils.test_orientation',
+         # 'envs.test_clutter'
         ]
 
 failed_tests = []
