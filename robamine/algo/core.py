@@ -398,6 +398,8 @@ class NetworkModel(Agent):
             loss.backward()
             self.optimizer.step()
 
+        return self.info['train']['loss'], self.info['test']['loss']
+
     def state_dict(self):
         state_dict = super().state_dict()
         state_dict['trainable'] = self.trainable_dict()
