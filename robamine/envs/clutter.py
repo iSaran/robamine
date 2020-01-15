@@ -447,12 +447,12 @@ class Clutter(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.params['push_distance'][0] == self.params['push_distance'][1]:
             push_distance = None
         else:
-            push_distance = rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1])
+            push_distance = rescale(self.push_distance, current_range=self.params['push_distance'], target_range=[0, 1])
 
         if self.params['finger_size'][0] == self.params['finger_size'][1]:
             finger_size = None
         else:
-            finger_size = rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1])
+            finger_size = rescale(self.finger_height, current_range=self.params['finger_size'], target_range=[0, 1])
 
         if self.params['split']:
             heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / self.nr_primitives), plot=False)

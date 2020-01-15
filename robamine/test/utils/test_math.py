@@ -5,7 +5,7 @@ import numpy.testing as np_test
 
 class TestRescale(unittest.TestCase):
     def test_rescale(self):
-        self.assertEqual(rescale(5, 0, 10), 0.5)
+        self.assertEqual(rescale(5, current_range=[0, 10], target_range=[0, 1]), 0.5)
 
     def test_rescale_array(self):
         # Test a 2D array with shape (2, 3)

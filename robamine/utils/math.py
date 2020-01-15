@@ -30,9 +30,10 @@ def rescale_array(x, min=None, max=None, range=[0, 1], axis=None, reverse=False)
     return range_0 + ((x - _min) * (range_1 - range_0)) / (_max - _min)
 
 
-def rescale(x, min, max, range=[0, 1]):
-    assert range[1] > range[0]
-    return range[0] + ((x - min) * (range[1] - range[0])) / (max - min)
+def rescale(x, current_range, target_range):
+    assert current_range[1] > current_range[0]
+    assert target_range[1] > target_range[0]
+    return target_range[0] + ((x - current_range[0]) * (target_range[1] - target_range[0])) / (current_range[1] - current_range[0])
 
 def filter_signal(signal, filter=0.9, outliers_cutoff=None):
     ''' Filters a signal
