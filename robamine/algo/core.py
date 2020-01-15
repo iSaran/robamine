@@ -553,7 +553,6 @@ class SupervisedTrainWorld(World):
             agent_handle = get_agent_handle(agent_name)
         elif isinstance(agent, dict):
             agent_name = agent['name']
-            print(agent['name'])
             agent_handle = get_agent_handle(agent_name)
             agent_params = agent['params'] if 'params' in agent else {}
             self.agent = agent_handle(params = agent_params)
@@ -666,10 +665,10 @@ class RLWorld(World):
                 logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
                 self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
             self.config['env'] = {}
-            self.config['env']['name'] = agent
+            self.config['env']['name'] = env
         elif isinstance(env, dict):
             env_params = env['params'] if 'params' in env else {}
-            self.config['env'] = env
+            self.config['env'] = env.copy()
             self.env = gym.make(env['name'], params=env_params)
         else:
             err = ValueError('Provide a gym.Env or a string in order to create a new world')
@@ -699,7 +698,7 @@ class RLWorld(World):
             agent_handle = get_agent_handle(agent_name)
             agent_params = agent['params'] if 'params' in agent else {}
             self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
-            self.config['agent'] = agent
+            self.config['agent'] = agent.copy()
         elif isinstance(agent, Agent):
             self.agent = agent
         else:
@@ -854,7 +853,9 @@ class RLWorld(World):
         agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
 
         self = cls(agent, env, config['world'])
-        self.config['env'] = config['env']
+        self.config['env'] = config['env'].copy()
+        self.config['agent'] = config['agent'].copy()
+        self.config['world'] = config['world'].copy()
         logger.info('World loaded from %s', directory)
         return self
 
