@@ -35,8 +35,8 @@ env:
     - 0.01
     nr_of_actions: 16
     nr_of_obstacles:
-    - 2
-    - 4
+    - 5
+    - 8
     obstacle_height_range:
     - 0.005
     - 0.02
