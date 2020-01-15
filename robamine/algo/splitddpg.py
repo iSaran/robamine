@@ -213,7 +213,7 @@ class SplitDDPG(RLAgent):
 
         # Critic loss
         critic_loss = nn.functional.mse_loss(q, target_q)
-        self.info['critic_' + str(i) + '_loss'] = critic_loss[i].cpu().detach().numpy().copy()
+        self.info['critic_' + str(i) + '_loss'] = critic_loss.cpu().detach().numpy().copy()
 
         # Optimize critic
         self.critic_optimizer[i].zero_grad()
