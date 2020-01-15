@@ -163,8 +163,20 @@ class SplitDDPG(RLAgent):
             return output
 
     def get_low_level_action(self, high_level_action):
-        i = int(high_level_action[0])
-        return i, high_level_action[1:(self.actions[i] + 1)]
+        # Process a single high level action
+        if len(high_level_action.shape) == 1:
+            i = int(high_level_action[0])
+            return i, high_level_action[1:(self.actions[i] + 1)]
+
+        # Process a batch of high levels actions of the same primitive
+        elif len(high_level_action.shape) == 2:
+            indeces = high_level_action[:, 0].astype('int32')
+            assert np.all(indeces == indeces[0])
+            i = indeces[0]
+            return i, high_level_action[:, 1:(self.actions[i] + 1)]
+
+        else:
+            raise ValueError(self.name + ': Dimension of a high level action should be 1 or 2.')
 
     def learn(self, transition):
         i = int(transition.action[0]) # first element of action defines the primitive action
