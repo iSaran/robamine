@@ -700,6 +700,7 @@ class RLWorld(World):
         self.iterations = params.get(self.iteration_name, 0)
         self.save_every = params.get('save_every', None)
         self.render = params.get('render', False)
+        self.config['world'] = params
 
         # Other variables for running episodes
         self.experience_time = 0.0
@@ -816,7 +817,8 @@ class RLWorld(World):
         if len(config['env']) == 1:
             env = gym.make(config['env']['name'])
         else:
-            env = gym.make(config['env']['name'], params=config['env'])
+            env_params = config['env']['params'] if 'params' in config['env'] else {}
+            env = gym.make(config['env']['name'], params=env_params)
         if isinstance(env.observation_space, gym.spaces.dict.Dict):
             logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
             env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
@@ -825,7 +827,8 @@ class RLWorld(World):
         agent_handle = get_agent_handle(agent_name)
         agent = agent_handle.load(os.path.join(directory, 'model.pkl'))
 
-        self = cls(agent, env)
+        self = cls(agent, env, config['world'])
+        self.config['env'] = config['env']
         logger.info('World loaded from %s', directory)
         return self
 
