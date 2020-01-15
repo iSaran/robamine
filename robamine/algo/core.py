@@ -639,8 +639,11 @@ class RLWorld(World):
             if isinstance(self.env.observation_space, gym.spaces.dict.Dict):
                 logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(self.env.observation_space))
                 self.env = gym.wrappers.FlattenDictWrapper(self.env, ['observation', 'desired_goal'])
+            self.config['env'] = {}
+            self.config['env']['name'] = agent
         elif isinstance(env, dict):
             env_params = env['params'] if 'params' in env else {}
+            self.config['env'] = env
             self.env = gym.make(env['name'], params=env_params)
         else:
             err = ValueError('Provide a gym.Env or a string in order to create a new world')
@@ -663,11 +666,14 @@ class RLWorld(World):
                 self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim)
             else:
                 self.agent = agent_handle(self.state_dim, self.action_dim)
+            self.config['agent'] = {}
+            self.config['agent']['name'] = agent
         elif isinstance(agent, dict):
             agent_name = agent['name']
             agent_handle = get_agent_handle(agent_name)
             agent_params = agent['params'] if 'params' in agent else {}
             self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
+            self.config['agent'] = agent
         elif isinstance(agent, Agent):
             self.agent = agent
         else:
