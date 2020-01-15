@@ -213,8 +213,8 @@ class PushTarget:
         return np.linalg.norm(self.get_init_pos() - self.get_final_pos()) / distance_per_sec
 
 class PushObstacle:
-    def __init__(self, distance = 0.1, theta = 0.0, object_height = 0.06, finger_size = 0.02):
-        self.distance = distance
+    def __init__(self, theta = 0.0, push_distance = 0.1, object_height = 0.06, finger_size = 0.02):
+        self.push_distance = push_distance
         self.theta = theta
         self.z = 2 * object_height + finger_size + 0.001
 
@@ -222,7 +222,7 @@ class PushObstacle:
         return np.array([0.0, 0.0, self.z])
 
     def get_final_pos(self):
-        final_pos = self.distance * np.array([math.cos(self.theta), math.sin(self.theta)])
+        final_pos = self.push_distance * np.array([math.cos(self.theta), math.sin(self.theta)])
         return np.append(final_pos, self.z)
 
     def get_duration(self, distance_per_sec = 0.2):
@@ -580,6 +580,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                       'target_object_displacement': self.target_object_displacement,
                       'target_init_pose': self.target_init_pose.matrix()}
 
+
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
 
     def do_simulation(self, action, pos, quat):
@@ -587,17 +588,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Push target primitive
         if primitive == 0:
+            distance = rescale(action[2], min=-1, max=1, range=[0.02, 0.1])  # hardcoded, read it from table limits
             theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-            r = rescale(action[2], min=-1, max=1, range=[0, 0.20])  # hardcoded read it from table limits
-            d = rescale(action[3], min=-1, max=1, range=[0, 0.20])  # hardcoded read it from min max pushing distance
-            push = PushTarget(distance=r, theta=theta, push_distance=d,
+            push_distance = rescale(action[3], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
+            push = PushTarget(distance=distance, theta=theta, push_distance=push_distance,
                               object_height = self.target_height, finger_size = self.finger_length)
 
         # Push obstacle primitive
         elif primitive == 1:
-            direction_theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-            distance = rescale(action[2], min=-1, max=1, range=[0, 0.15])  # hardcoded read it from min max pushing distance
-            push = PushObstacle(distance=distance, theta=direction_theta,
+            theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
+            push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
+            push = PushObstacle(theta=theta, push_distance=push_distance,
                                 object_height = self.target_height, finger_size = self.finger_length)
 
 
