@@ -8,7 +8,7 @@ import torch.optim as optim
 
 from robamine.algo.core import RLAgent
 from robamine.utils.memory import ReplayBuffer
-from robamine.algo.util import OrnsteinUhlenbeckActionNoise, Transition
+from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise, Transition
 
 import numpy as np
 import pickle
@@ -121,7 +121,12 @@ class SplitDDPG(RLAgent):
 
         self.exploration_noise = []
         for i in range(len(self.actions)):
-            self.exploration_noise.append(OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.actions[i]), sigma=self.params['noise']['sigma']))
+            if self.params['noise']['name'] == 'OU':
+                self.exploration_noise.append(OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.actions[i]), sigma=self.params['noise']['sigma']))
+            elif self.params['noise']['name'] == 'Normal':
+                self.exploration_noise.append(NormalNoise(mu=np.zeros(self.actions[i]), sigma=self.params['noise']['sigma']))
+            else:
+                raise ValueError(self.name + ': Exploration noise should be OU or Normal.')
         self.learn_step_counter = 0
 
     def predict(self, state):
