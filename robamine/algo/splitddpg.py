@@ -15,6 +15,8 @@ import pickle
 
 import math
 
+import logging
+logger = logging.getLogger('robamine.algo.splitdqn')
 
 default_params = {
     'name': 'DDPG',
@@ -253,3 +255,40 @@ class SplitDDPG(RLAgent):
     def seed(self, seed):
         self.replay_buffer.seed(seed)
         self.rng.seed(seed)
+
+    def state_dict(self):
+        state_dict = super().state_dict()
+        state_dict['actor'], state_dict['critic'], state_dict['target_actor'], state_dict['target_critic'] = [], [], [], []
+        for i in range(self.nr_network):
+            state_dict['actor'].append(self.actor[i].state_dict())
+            state_dict['critic'].append(self.critic[i].state_dict())
+            state_dict['target_actor'].append(self.target_actor[i].state_dict())
+            state_dict['target_critic'].append(self.target_critic[i].state_dict())
+        state_dict['learn_step_counter'] = self.learn_step_counter
+        state_dict['state_dim'] = self.state_dim
+        state_dict['action_dim'] = self.action_dim
+        return state_dict
+
+    @classmethod
+    def load_state_dict(cls, state_dict):
+        params = state_dict['params']
+        self = cls(state_dict['state_dim'], state_dict['action_dim'], params)
+        self.load_trainable(state_dict)
+        self.learn_step_counter = state_dict['learn_step_counter']
+        return self
+
+    def load_trainable(self, input):
+        if isinstance(input, dict):
+            trainable = input
+            logger.warn('Trainable parameters loaded from dictionary.')
+        elif isinstance(input, str):
+            trainable = pickle.load(open(input, 'rb'))
+            logger.warn('Trainable parameters loaded from: ' + input)
+        else:
+            raise ValueError('Dict or string is valid')
+
+        for i in range(self.nr_network):
+            self.actor[i].load_state_dict(trainable['actor'][i])
+            self.critic[i].load_state_dict(trainable['critic'][i])
+            self.target_actor[i].load_state_dict(trainable['target_actor'][i])
+            self.target_critic[i].load_state_dict(trainable['target_critic'][i])
