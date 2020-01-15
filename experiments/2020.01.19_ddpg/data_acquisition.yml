@@ -1,0 +1,34 @@
+env:
+  name: ClutterCont-v0
+  params:
+    all_equal_height_prob: 0.0
+    discrete: false
+    extra_primitive: false
+    finger_size:
+    - 0.005
+    - 0.01
+    nr_of_actions: 16
+    nr_of_obstacles:
+    - 5
+    - 8
+    obstacle_height_range:
+    - 0.005
+    - 0.02
+    obstacle_probability_box: 1.0
+    push_distance:
+    - 0.1
+    - 0.15
+    render: false
+    split: false
+    target_height_range:
+    - 0.005
+    - 0.01
+    target_probability_box: 1.0
+world:
+  name: 'SampleTransitions'
+  logging_dir: /tmp/robamine_logs/
+  friendly_name: ''
+  comments: ''
+  params:
+    transitions: 3000
+    render: false
