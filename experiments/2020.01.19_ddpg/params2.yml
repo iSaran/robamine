@@ -1,28 +1,28 @@
 agent:
   name: SplitDDPG
   params:
-    batch_size: 64
+    actions: [3, 2]
+    batch_size: [64, 64]
     device: cpu
-    gamma: 0.9
+    gamma: 0.99
     load_buffers: ''
     load_nets: ''
     replay_buffer_size: 1000000
-    tau: 0.999
+    tau: 0.001
+    update_itr: [1, 1]
     actor:
-      hidden_units:
-      - 400
-      - 300
+      hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
-      final_layer_init: [-0.001, 0.001]
     critic:
-      hidden_units:
-      - 400
-      - 300
+      hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
-      final_layer_init: [-0.001, 0.001]
     noise:
       name: Normal
       sigma: 0.1
+    epsilon:
+      start: 0.9
+      end: 0.05
+      decay: 10000
   trainable_params: ''
 env:
   name: ClutterCont-v0
@@ -44,12 +44,13 @@ env:
     push_distance:
     - 0.1
     - 0.15
-    render: true
+    render: false
     split: false
     target_height_range:
     - 0.005
     - 0.01
     target_probability_box: 1.0
+    push_target_init_distance: [0.02, 0.1]
 world:
   comments: ''
   friendly_name: ''
