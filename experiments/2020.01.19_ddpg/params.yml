@@ -50,6 +50,7 @@ env:
     - 0.005
     - 0.01
     target_probability_box: 1.0
+    push_target_init_distance: [0.02, 0.1]
 world:
   comments: ''
   friendly_name: ''

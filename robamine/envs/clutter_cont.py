@@ -25,7 +25,7 @@ from robamine.utils.orientation import rot2quat
 import cv2
 from mujoco_py.cymj import MjRenderContext
 
-OBSERVATION_DIM = 265
+OBSERVATION_DIM = 263
 
 def predict_displacement_from_forces(pos_measurements, force_measurements, epsilon=1e-8, filter=0.9, outliers_cutoff=3.8, plot=False):
     import matplotlib.pyplot as plt
@@ -259,12 +259,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.nr_primitives = 2
 
         obs_dimm = OBSERVATION_DIM
-        if self.params['push_distance'][0] == self.params['push_distance'][1]:
-            obs_dimm -= 1
-
-        if self.params['finger_size'][0] == self.params['finger_size'][1]:
-            obs_dimm -= 1
-
         if self.params['split']:
             obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * obs_dimm
         else:
@@ -481,19 +475,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         obstacle_height_range = self.params['obstacle_height_range']
         max_height = 2 * obstacle_height_range[1]
 
-        # If push distance is random normalize it btn min and max. Otherwise
-        # push distance in obs is zero always (actually there is not need to to
-        # have it in observation)
-        if self.params['push_distance'][0] == self.params['push_distance'][1]:
-            push_distance = None
-        else:
-            push_distance = rescale(self.push_distance, min=self.params['push_distance'][0], max=self.params['push_distance'][1])
-
-        if self.params['finger_size'][0] == self.params['finger_size'][1]:
-            finger_size = None
-        else:
-            finger_size = rescale(self.finger_height, min=self.params['finger_size'][0], max=self.params['finger_size'][1])
-
         if self.params['split']:
             heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / self.nr_primitives), plot=False)
             features = []
@@ -507,10 +488,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 f.append(distances[1])
                 f.append(distances[2])
                 f.append(distances[3])
-                if push_distance:
-                    f.append(push_distance)
-                if finger_size:
-                    f.append(finger_size)
                 features.append(f)
 
             final_feature = np.append(features[0], features[1], axis=0)
@@ -526,10 +503,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             features.append(distances[1])
             features.append(distances[2])
             features.append(distances[3])
-            if push_distance:
-                features.append(push_distance)
-            if finger_size:
-                features.append(finger_size)
             final_feature = np.array(features)
 
         return final_feature, points_above_table, bbox
@@ -588,7 +561,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Push target primitive
         if primitive == 0:
-            distance = rescale(action[2], min=-1, max=1, range=[0.02, 0.1])  # hardcoded, read it from table limits
+            distance = rescale(action[2], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
             theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
             push_distance = rescale(action[3], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
             push = PushTarget(distance=distance, theta=theta, push_distance=push_distance,
@@ -678,8 +651,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.no_of_prev_points_around = len(points_around)
 
         extra_penalty = 0
-        if self.params['extra_primitive'] and action >= self.params['nr_of_actions'] * (2/3):
-            extra_penalty = -5
+        if int(action[0]) == 0:
+            extra_penalty = - rescale(action[2], min=-1, max=1, range=[0, 5])
 
         if len(points_around) == 0:
             return +10 + extra_penalty
