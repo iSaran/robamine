@@ -164,6 +164,8 @@ class SplitDDPG(RLAgent):
             n = torch.FloatTensor(noise).to(self.device)
             a = self.actor[i](s) + n
             action = a.cpu().detach().numpy()
+            action[action > 1] = 1
+            action[action < -1] = -1
             output = np.zeros(max(self.actions) + 1)
             output[0] = i
             output[1:(self.actions[i] + 1)] = action
