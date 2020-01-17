@@ -30,7 +30,7 @@ env:
     all_equal_height_prob: 0.0
     finger_size:
     - 0.005
-    - 0.01
+    - 0.005
     nr_of_obstacles:
     - 5
     - 8
@@ -50,7 +50,7 @@ env:
 world:
   comments: ''
   friendly_name: ''
-  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_dqn
+  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg
   name: TrainEval
   params:
     episodes: 5000
