@@ -28,12 +28,9 @@ env:
   name: ClutterCont-v0
   params:
     all_equal_height_prob: 0.0
-    discrete: false
-    extra_primitive: false
     finger_size:
     - 0.005
     - 0.01
-    nr_of_actions: 16
     nr_of_obstacles:
     - 5
     - 8
@@ -45,7 +42,6 @@ env:
     - 0.1
     - 0.15
     render: false
-    split: false
     target_height_range:
     - 0.005
     - 0.01

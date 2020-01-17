@@ -246,23 +246,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
 
-        if self.params['discrete']:
-            self.action_space = spaces.Discrete(self.params['nr_of_actions'])
-        else:
-            self.action_space = spaces.Box(low=np.array([-1, -1]),
-                                           high=np.array([1, 1]),
-                                           dtype=np.float32)
+        self.action_space = spaces.Box(low=np.array([-1, -1]),
+                                       high=np.array([1, 1]),
+                                       dtype=np.float32)
 
-        if self.params['extra_primitive']:
-            self.nr_primitives = 3
-        else:
-            self.nr_primitives = 2
-
-        obs_dimm = OBSERVATION_DIM
-        if self.params['split']:
-            obs_dim = int(self.params['nr_of_actions'] / self.nr_primitives) * obs_dimm
-        else:
-            obs_dim = obs_dimm
+        obs_dim = OBSERVATION_DIM
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -475,35 +463,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         obstacle_height_range = self.params['obstacle_height_range']
         max_height = 2 * obstacle_height_range[1]
 
-        if self.params['split']:
-            heightmaps = cv_tools.generate_height_map(points_above_table, rotations=int(self.params['nr_of_actions'] / self.nr_primitives), plot=False)
-            features = []
-            rot_angle = 360 / int(self.params['nr_of_actions'] / self.nr_primitives)
-            for i in range(0, len(heightmaps)):
-                f = cv_tools.extract_features(heightmaps[i], bbox, max_height, rotation_angle=i*rot_angle, plot=False)
-                f.append(i*rot_angle)
-                f.append(bbox[0] / 0.03)
-                f.append(bbox[1] / 0.03)
-                f.append(distances[0])
-                f.append(distances[1])
-                f.append(distances[2])
-                f.append(distances[3])
-                features.append(f)
-
-            final_feature = np.append(features[0], features[1], axis=0)
-            for i in range(2, len(features)):
-                final_feature = np.append(final_feature, features[i], axis=0)
-        else:
-            heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
-            features = cv_tools.extract_features(heightmap, bbox, max_height, plot=False)
-            features.append(0)
-            features.append(bbox[0]/0.03)
-            features.append(bbox[1]/0.03)
-            features.append(distances[0])
-            features.append(distances[1])
-            features.append(distances[2])
-            features.append(distances[3])
-            final_feature = np.array(features)
+        heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
+        features = cv_tools.extract_features(heightmap, bbox, max_height, plot=False)
+        features.append(0)
+        features.append(bbox[0]/0.03)
+        features.append(bbox[1]/0.03)
+        features.append(distances[0])
+        features.append(distances[1])
+        features.append(distances[2])
+        features.append(distances[3])
+        final_feature = np.array(features)
 
         return final_feature, points_above_table, bbox
 
@@ -540,14 +509,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Extra data for having pushing distance, theta along with displacements
         # of the target
-        if self.params['discrete']:
-            nr_substates = (self.action_space.n / self.nr_primitives)
-            j = int(_action - np.floor(_action / nr_substates) * nr_substates)
-            theta = j * 2 * math.pi / nr_substates
-        else:
-            theta = 0.0
-        extra_data = {'displacement': [self.push_distance, theta, self.target_displacement_push_step],
-                      'predicted_displacement': self.predicted_displacement_push_step.copy(),
+        extra_data = {'predicted_displacement': self.predicted_displacement_push_step.copy(),
                       'push_finger_forces': self.force_measurements,
                       'push_finger_vel': self.pos_measurements,
                       'target_object_displacement': self.target_object_displacement,
