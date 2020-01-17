@@ -9,12 +9,12 @@ agent:
     load_nets: ''
     replay_buffer_size: 1000000
     tau: 0.001
-    update_itr: [1, 1]
+    update_iter: [1, 1]
     actor:
-      hidden_units: [[400, 300], [400, 300]]
+      hidden_units: [[140, 140], [140, 140]]
       learning_rate: 0.001
     critic:
-      hidden_units: [[400, 300], [400, 300]]
+      hidden_units: [[140, 140], [140, 140]]
       learning_rate: 0.001
     noise:
       name: Normal
@@ -54,12 +54,12 @@ env:
 world:
   comments: ''
   friendly_name: ''
-  logging_dir: /tmp/robamine_logs/
+  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_dqn
   name: TrainEval
   params:
-    episodes: 1000
+    episodes: 5000
     eval_episodes: 10
     eval_every: 20
     eval_render: false
     render: false
-    save_every: 20
+    save_every: 200
