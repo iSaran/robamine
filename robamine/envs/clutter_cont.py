@@ -561,9 +561,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Push target primitive
         if primitive == 0:
-            distance = rescale(action[2], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
             theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-            push_distance = rescale(action[3], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
+            push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
+            distance = rescale(action[3], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
             push = PushTarget(distance=distance, theta=theta, push_distance=push_distance,
                               object_height = self.target_height, finger_size = self.finger_length)
 
@@ -626,10 +626,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
-            return -10
+            return -20
 
         if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
-            return -10
+            return -20
 
         # for each push that frees the space around the target
         points_around = []
@@ -652,13 +652,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         extra_penalty = 0
         if int(action[0]) == 0:
-            extra_penalty = - rescale(action[2], min=-1, max=1, range=[0, 5])
+            extra_penalty = - rescale(action[3], min=-1, max=1, range=[0, 5])
+
+        extra_penalty += - rescale(action[2], min=-1, max=1, range=[0, 5])
 
         if len(points_around) == 0:
             return +10 + extra_penalty
 
         return -1 + extra_penalty
-
         # k = max(self.no_of_prev_points_around, len(points_around))
         # if k != 0:
         #     reward = (self.no_of_prev_points_around - len(points_around)) / k

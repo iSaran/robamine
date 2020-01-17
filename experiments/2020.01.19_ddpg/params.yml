@@ -32,7 +32,7 @@ env:
     extra_primitive: false
     finger_size:
     - 0.005
-    - 0.01
+    - 0.005
     nr_of_actions: 16
     nr_of_obstacles:
     - 5

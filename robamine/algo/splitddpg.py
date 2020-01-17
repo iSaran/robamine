@@ -28,11 +28,11 @@ default_params = {
     'actions': [3, 2],
     'update_iter': [1, 1],
     'actor': {
-        'hidden_units': [[400, 300], [400, 300]],
+        'hidden_units': [[140, 140], [140, 140]],
         'learning_rate': 1e-3,
         },
     'critic': {
-        'hidden_units': [[400, 300], [400, 300]],
+        'hidden_units': [[140, 140], [140, 140]],
         'learning_rate': 1e-3,
     },
     'noise': {
