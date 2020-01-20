@@ -132,11 +132,12 @@ def get_2d_displacement(init, current):
     return displacement
 
 def exp_reward(x, max_penalty, min, max):
-    a = -0.007
-    b = 1
+    a = 1
+    b = -1.2
+    c = -max_penalty
     min_exp = 0.0; max_exp = 5.0
     new_i = rescale(x, min, max, [min_exp, max_exp])
-    return max_penalty * a * math.exp(b * new_i)
+    return max_penalty * a * math.exp(b * new_i) + c
 
 class PushingPrimitiveC:
     def __init__(self, distance = 0.1, direction_theta = 0.0, surface_size = 0.30, object_height = 0.06, finger_size = 0.02):
@@ -808,7 +809,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
-    def generate_random_scene(self, target_length_range=[.01, .03], target_width_range=[.01, .03],
+    def generate_random_scene(self, target_length_range=[.0125, .02], target_width_range=[.0125, .02],
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size

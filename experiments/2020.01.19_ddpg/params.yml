@@ -39,14 +39,14 @@ env:
     - 0.02
     obstacle_probability_box: 1.0
     push_distance:
-    - 0.1
-    - 0.15
+    - 0.05
+    - 0.10
     render: false
     target_height_range:
     - 0.005
     - 0.01
     target_probability_box: 1.0
-    push_target_init_distance: [0.02, 0.1]
+    push_target_init_distance: [0.0, 0.1]
 world:
   comments: ''
   friendly_name: ''

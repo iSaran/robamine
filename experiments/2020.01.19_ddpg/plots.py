@@ -18,9 +18,9 @@ def plot_epsilon():
     plt.show()
 
 def plot_exponential_reward():
-    min_distance = 0.0
-    max_distance = 0.2
-    max_penalty = 10
+    min_distance = -1
+    max_distance = 1
+    max_penalty = 20
     x = np.arange(min_distance, max_distance, 0.001)
     y = []
     for i in x:
@@ -28,14 +28,13 @@ def plot_exponential_reward():
     plt.plot(x,y)
     plt.show()
 
-
 def exp_reward(x, max_penalty, min, max):
-    a = -0.007
-    b = 1
+    a = 1
+    b = -1.2
+    c = -max_penalty
     min_exp = 0.0; max_exp = 5.0
     new_i = rescale(x, min, max, [min_exp, max_exp])
-    return max_penalty * a * math.exp(b * new_i)
-
+    return max_penalty * a * math.exp(b * new_i) + c
 
 if __name__ == '__main__':
     plot_exponential_reward()
