@@ -25,7 +25,7 @@ default_params = {
     'gamma': 0.99,
     'tau': 1e-3,
     'device': 'cpu',
-    'actions': [3, 2],
+    'actions': [3],
     'update_iter': [1, 1],
     'actor': {
         'hidden_units': [[140, 140], [140, 140]],
