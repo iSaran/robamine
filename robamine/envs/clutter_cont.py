@@ -209,7 +209,7 @@ class PushTarget:
         direction = - init / np.linalg.norm(init)
         return self.push_distance * direction
 
-    def get_duration(self, distance_per_sec = 0.2):
+    def get_duration(self, distance_per_sec = 0.1):
         return np.linalg.norm(self.get_init_pos() - self.get_final_pos()) / distance_per_sec
 
 class PushObstacle:
@@ -225,7 +225,7 @@ class PushObstacle:
         final_pos = self.push_distance * np.array([math.cos(self.theta), math.sin(self.theta)])
         return np.append(final_pos, self.z)
 
-    def get_duration(self, distance_per_sec = 0.2):
+    def get_duration(self, distance_per_sec = 0.1):
         return np.linalg.norm(self.get_init_pos() - self.get_final_pos()) / distance_per_sec
 
 class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
