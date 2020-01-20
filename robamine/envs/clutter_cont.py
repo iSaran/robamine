@@ -131,6 +131,13 @@ def get_2d_displacement(init, current):
     displacement[2] *= np.sign(axis[2])
     return displacement
 
+def exp_reward(x, max_penalty, min, max):
+    a = -0.007
+    b = 1
+    min_exp = 0.0; max_exp = 5.0
+    new_i = rescale(x, min, max, [min_exp, max_exp])
+    return max_penalty * a * math.exp(b * new_i)
+
 class PushingPrimitiveC:
     def __init__(self, distance = 0.1, direction_theta = 0.0, surface_size = 0.30, object_height = 0.06, finger_size = 0.02):
         self.distance = surface_size + distance
@@ -615,6 +622,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         extra_penalty = 0
         if int(action[0]) == 0:
             extra_penalty = - rescale(action[3], min=-1, max=1, range=[0, 5])
+
 
         extra_penalty += - rescale(action[2], min=-1, max=1, range=[0, 5])
 
