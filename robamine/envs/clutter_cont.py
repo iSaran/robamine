@@ -621,10 +621,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         extra_penalty = 0
         if int(action[0]) == 0:
-            extra_penalty = - rescale(action[3], min=-1, max=1, range=[0, 5])
+            extra_penalty += exp_reward(action[3], max_penalty=10, min=-1, max=1)
 
-
-        extra_penalty += - rescale(action[2], min=-1, max=1, range=[0, 5])
+        extra_penalty += exp_reward(action[2], max_penalty=10, min=-1, max=1)
 
         if len(points_around) == 0:
             return +10 + extra_penalty
