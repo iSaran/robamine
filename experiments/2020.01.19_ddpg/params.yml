@@ -1,28 +1,28 @@
 agent:
   name: SplitDDPG
   params:
-    batch_size: 64
+    actions: [3]
+    batch_size: [64, 64]
     device: cpu
-    gamma: 0.9
+    gamma: 0.99
     load_buffers: ''
     load_nets: ''
     replay_buffer_size: 1000000
-    tau: 0.999
+    tau: 0.001
+    update_iter: [1, 1]
     actor:
-      hidden_units:
-      - 400
-      - 300
+      hidden_units: [[140, 140], [140, 140]]
       learning_rate: 0.001
-      final_layer_init: [-0.001, 0.001]
     critic:
-      hidden_units:
-      - 400
-      - 300
+      hidden_units: [[140, 140], [140, 140]]
       learning_rate: 0.001
-      final_layer_init: [-0.001, 0.001]
     noise:
       name: OU
       sigma: 0.2
+    epsilon:
+      start: 0.9
+      end: 0.05
+      decay: 10000
   trainable_params: ''
 env:
   name: ClutterCont-v0
@@ -53,7 +53,7 @@ world:
   logging_dir: /tmp/robamine_logs/
   name: TrainEval
   params:
-    episodes: 1000
+    episodes: 5000
     eval_episodes: 10
     eval_every: 20
     eval_render: false
