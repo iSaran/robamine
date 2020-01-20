@@ -130,6 +130,7 @@ class SplitDDPG(RLAgent):
             else:
                 raise ValueError(self.name + ': Exploration noise should be OU or Normal.')
         self.learn_step_counter = 0
+        self.preloading_finished = False
 
     def predict(self, state):
         output = np.zeros(max(self.actions) + 1)
@@ -155,7 +156,7 @@ class SplitDDPG(RLAgent):
         decay = self.params['epsilon']['decay']
         epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
 
-        if self.rng.uniform(0, 1) >= epsilon:
+        if (self.rng.uniform(0, 1) >= epsilon) and self.preloading_finished:
             return self.predict(state)
         else:
             i = self.rng.randint(0, len(self.actions))
@@ -198,8 +199,10 @@ class SplitDDPG(RLAgent):
         self.info['critic_' + str(i) + '_loss'] = 0
         self.info['actor_' + str(i) + '_loss'] = 0
 
-        if self.replay_buffer[i].size() < self.params['batch_size'][i]:
+        if self.replay_buffer[i].size() < 1000:
             return
+        else:
+            self.preloading_finished = True
 
         # Sample from replay buffer
         batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
