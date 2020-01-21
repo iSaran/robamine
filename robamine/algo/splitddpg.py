@@ -157,20 +157,22 @@ class SplitDDPG(RLAgent):
         epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
 
         if (self.rng.uniform(0, 1) >= epsilon) and self.preloading_finished:
-            return self.predict(state)
+            pred = self.predict(state)
+            i = int(pred[0])
+            action = pred[1:]
         else:
             i = self.rng.randint(0, len(self.actions))
             s = torch.FloatTensor(state).to(self.device)
-            noise = self.exploration_noise[i]()
-            n = torch.FloatTensor(noise).to(self.device)
-            a = self.actor[i](s) + n
-            action = a.cpu().detach().numpy()
-            action[action > 1] = 1
-            action[action < -1] = -1
-            output = np.zeros(max(self.actions) + 1)
-            output[0] = i
-            output[1:(self.actions[i] + 1)] = action
-            return output
+            action = self.actor[i](s).cpu().detach().numpy()
+
+        noise = self.exploration_noise[i]()
+        action += noise
+        action[action > 1] = 1
+        action[action < -1] = -1
+        output = np.zeros(max(self.actions) + 1)
+        output[0] = i
+        output[1:(self.actions[i] + 1)] = action
+        return output
 
     def get_low_level_action(self, high_level_action):
         # Process a single high level action
