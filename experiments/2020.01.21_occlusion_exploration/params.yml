@@ -1,0 +1,16 @@
+env:
+  name: ClutterOcclusion-v0
+  params:
+    render: true
+world:
+  comments: ''
+  friendly_name: ''
+  logging_dir: /tmp/robamine_logs/
+  name: TrainEval
+  params:
+    episodes: 5000
+    eval_episodes: 10
+    eval_every: 20
+    eval_render: false
+    render: false
+    save_every: 20

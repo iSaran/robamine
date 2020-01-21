@@ -82,3 +82,9 @@ register(
     entry_point='robamine.envs:ClutterCont',
     max_episode_steps=20
 )
+
+register(
+    id='ClutterOcclusion-v0',
+    entry_point='robamine.envs:ClutterOcclusion',
+    max_episode_steps=20
+)
