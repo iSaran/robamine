@@ -596,10 +596,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
-            return -20
+            return -50
 
         if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
-            return -20
+            return -50
 
         # for each push that frees the space around the target
         points_around = []
@@ -616,7 +616,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 points_around.append(p)
 
         if self.no_of_prev_points_around == len(points_around):
-            return -5
+            return -30
 
         self.no_of_prev_points_around = len(points_around)
 
