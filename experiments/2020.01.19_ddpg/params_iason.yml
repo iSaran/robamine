@@ -11,14 +11,14 @@ agent:
     tau: 0.001
     update_iter: [1, 1]
     actor:
-      hidden_units: [[140, 140], [140, 140]]
+      hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
     critic:
-      hidden_units: [[140, 140], [140, 140]]
+      hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
     noise:
       name: Normal
-      sigma: 0.1
+      sigma: 0.2
     epsilon:
       start: 0.9
       end: 0.05
