@@ -285,9 +285,9 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
         if plot:
             rgb = draw_cell(cell, rgb)
 
-        if plot:
-            cv2.imshow('rgb', rgb)
-            cv2.waitKey()
+    if plot:
+        cv2.imshow('rgb', rgb)
+        cv2.waitKey()
 
     if normalize:
         for i in range(len(features)):

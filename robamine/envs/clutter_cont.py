@@ -510,6 +510,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim, _action)
+        reward = rescale(reward, -50, 10, range=[-1, 1])
 
         done = False
         if self.terminal_state(obs):
@@ -536,7 +537,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             distance = rescale(action[3], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
             push = PushTarget(distance=distance, theta=theta, push_distance=push_distance,
                               object_height = self.target_height, finger_size = self.finger_length)
-
         # Push obstacle primitive
         elif primitive == 1:
             theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
@@ -621,11 +621,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.no_of_prev_points_around = len(points_around)
 
         extra_penalty = 0
+        # penalize pushes that start far from the target object
         if int(action[0]) == 0:
-            extra_penalty += exp_reward(action[3], max_penalty=10, min=-1, max=1)
+            extra_penalty = -rescale(action[3], -1, 1, range=[0, 10])
+            # extra_penalty += exp_reward(action[3], max_penalty=10, min=-1, max=1)
 
-        extra_penalty += exp_reward(action[2], max_penalty=10, min=-1, max=1)
-
+        # extra_penalty += exp_reward(action[2], max_penalty=10, min=-1, max=1)
+        # penalize large push distances
+        extra_penalty -= rescale(action[2], -1, 1, range=[0, 10])
         if len(points_around) == 0:
             return +10 + extra_penalty
 

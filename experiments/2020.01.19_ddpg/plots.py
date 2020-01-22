@@ -20,7 +20,7 @@ def plot_epsilon():
 def plot_exponential_reward():
     min_distance = -1
     max_distance = 1
-    max_penalty = 20
+    max_penalty = 10
     x = np.arange(min_distance, max_distance, 0.001)
     y = []
     for i in x:
