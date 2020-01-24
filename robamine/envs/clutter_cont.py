@@ -542,7 +542,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.data.set_joint_qpos('finger2', [f2_initial_pos_world[0], f2_initial_pos_world[1], init_z, 1, 0, 0, 0])
             self.sim_step()
 
-            if self.move_joint_to_target('finger', [None, None, grasp.z], stop_external_forces=True):
+            if self.move_joints_to_target([None, None, grasp.z], [None, None, grasp.z], stop_external_forces=True):
                 self.target_grasped_successfully = True
             else:
                 self.push_stopped_ext_forces = True
@@ -777,6 +777,80 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 for i in range(3):
                     self.sim.data.ctrl[i] = self.pd.get_control(new_trajectory[i].pos(self.time) - self.finger_pos[i], new_trajectory[i].vel(self.time) - self.finger_vel[i])
                     self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
+
+                self.sim_step()
+
+            return False
+
+        return True
+
+    def move_joints_to_target(self, target_position, target_position2, duration=1, duration2=1, stop_external_forces=False):
+        init_time = self.time
+        desired_quat = Quaternion()
+        self.target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+
+        trajectory = [None, None, None]
+        for i in range(3):
+            if target_position[i] is None:
+                target_position[i] = self.finger_pos[i]
+            trajectory[i] = Trajectory([self.time, self.time + duration], [self.finger_pos[i], target_position[i]])
+
+        trajectory2 = [None, None, None]
+        for i in range(3):
+            if target_position2[i] is None:
+                target_position2[i] = self.finger2_pos[i]
+            trajectory2[i] = Trajectory([self.time, self.time + duration2], [self.finger2_pos[i], target_position2[i]])
+
+        while self.time <= init_time + duration:
+            quat_error = self.finger_quat.error(desired_quat)
+            quat_error2 = self.finger2_quat.error(desired_quat)
+
+            # TODO: The indexes of the actuators are hardcoded right now
+            # assuming that 0-6 is the actuator of the given joint
+            for i in range(3):
+                self.sim.data.ctrl[i] = self.pd.get_control(trajectory[i].pos(self.time) - self.finger_pos[i], trajectory[i].vel(self.time) - self.finger_vel[i])
+                self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
+
+            for i in range(3):
+                self.sim.data.ctrl[i + 6] = self.pd.get_control(trajectory2[i].pos(self.time) - self.finger2_pos[i], trajectory2[i].vel(self.time) - self.finger2_vel[i])
+                self.sim.data.ctrl[i + 6 + 3] = self.pd_rot[i].get_control(quat_error2[i], - self.finger2_vel[i + 3])
+
+            self.sim_step()
+
+            if stop_external_forces and (self.finger_external_force_norm > 0.1 or self.finger2_external_force_norm > 0.1):
+                break
+
+        # If external force is present move away
+        if stop_external_forces and (self.finger_external_force_norm > 0.1 or self.finger2_external_force_norm > 0.1):
+            self.sim_step()
+            # Create a new trajectory for moving the finger slightly in the
+            # opposite direction to reduce the external forces
+            new_trajectory = [None, None, None]
+            duration = 0.2
+            new_trajectory2 = [None, None, None]
+            for i in range(3):
+                direction = (target_position - self.finger_pos) / np.linalg.norm(target_position - self.finger_pos)
+                new_target = self.finger_pos - 0.01 * direction  # move 1 cm backwards from your initial direction
+                new_trajectory[i] = Trajectory([self.time, self.time + duration], [self.finger_pos[i], new_target[i]], [self.finger_vel[i], 0], [self.finger_acc[i], 0])
+
+                direction2 = (target_position2 - self.finger2_pos) / np.linalg.norm(target_position2 - self.finger2_pos)
+                new_target2 = self.finger2_pos - 0.01 * direction2  # move 1 cm backwards from your initial direction
+                new_trajectory2[i] = Trajectory([self.time, self.time + duration], [self.finger2_pos[i], new_target2[i]], [self.finger2_vel[i], 0], [self.finger2_acc[i], 0])
+
+            # Perform the trajectory
+            init_time = self.time
+            while self.time <= init_time + duration:
+                quat_error = self.finger_quat.error(desired_quat)
+                quat_error2 = self.finger2_quat.error(desired_quat)
+
+                # TODO: The indexes of the actuators are hardcoded right now
+                # assuming that 0-6 is the actuator of the given joint
+                for i in range(3):
+                    self.sim.data.ctrl[i] = self.pd.get_control(new_trajectory[i].pos(self.time) - self.finger_pos[i], new_trajectory[i].vel(self.time) - self.finger_vel[i])
+                    self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
+
+                    self.sim.data.ctrl[i + 6] = self.pd.get_control(new_trajectory2[i].pos(self.time) - self.finger2_pos[i], new_trajectory2[i].vel(self.time) - self.finger2_vel[i])
+                    self.sim.data.ctrl[i + 6 + 3] = self.pd_rot[i].get_control(quat_error2[i], - self.finger2_vel[i + 3])
 
                 self.sim_step()
 
