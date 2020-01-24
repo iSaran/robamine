@@ -342,6 +342,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.last_timestamp = self.sim.data.time
         self.success = False
+        self.target_grasped_successfully = False
 
         self.target_pos_prev_state = self.target_pos.copy()
         self.target_quat_prev_state = self.target_quat.copy()
@@ -601,6 +602,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def get_reward(self, observation, point_cloud, dim, action):
         reward = 0.0
 
+        if self.target_grasped_successfully:
+            return 10
+
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
             return -10
@@ -633,9 +637,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
             # extra_penalty += exp_reward(action[3], max_penalty=10, min=-1, max=1)
 
+        if int(action[0]) == 0 or int(action[0]) == 1:
+            extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
+
         # extra_penalty += exp_reward(action[2], max_penalty=10, min=-1, max=1)
         # penalize large push distances
-        extra_penalty -= rescale(action[2], -1, 1, range=[0, 1])
         if len(points_around) == 0:
             return +10 + extra_penalty
 
@@ -664,6 +670,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def terminal_state(self, observation):
 
         if self.timesteps >= self.max_timesteps:
+            return True
+
+        # Terminal if collision is detected
+        if self.target_grasped_successfully:
+            self.target_grasped_successfully = False
+            self.success = True
             return True
 
         # Terminal if collision is detected
