@@ -25,7 +25,7 @@ from robamine.utils.orientation import rot2quat
 import cv2
 from mujoco_py.cymj import MjRenderContext
 
-OBSERVATION_DIM = 263
+OBSERVATION_DIM = 293
 
 def predict_displacement_from_forces(pos_measurements, force_measurements, epsilon=1e-8, filter=0.9, outliers_cutoff=3.8, plot=False):
     import matplotlib.pyplot as plt
@@ -427,10 +427,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Get the depth image
         self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
         rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
+        # mask = cv_tools.detect_color(rgb)
 
         z_near = 0.2 * self.sim.model.stat.extent
         z_far = 50 * self.sim.model.stat.extent
         depth = cv_tools.gl2cv(depth, z_near, z_far)
+        # cv2.imshow('depth', depth)
+        # cv2.waitKey()
+
+        # res = cv2.bitwise_and(depth, depth, mask=mask)
+        # cv2.imshow('masked_depth', res)
+        # cv2.waitKey()
 
         # Generate point cloud
         fovy = self.sim.model.vis.global_.fovy
@@ -473,9 +480,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
         features = cv_tools.extract_features(heightmap, bbox, max_height, plot=False)
-        features.append(0)
-        features.append(bbox[0]/0.03)
-        features.append(bbox[1]/0.03)
+        # features.append(0)
+        # features.append(bbox[0]/0.03)
+        # features.append(bbox[1]/0.03)
         features.append(distances[0])
         features.append(distances[1])
         features.append(distances[2])
@@ -510,7 +517,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim, _action)
-        reward = rescale(reward, -50, 10, range=[-1, 1])
+        reward = rescale(reward, -5, 10, range=[-1, 1])
 
         done = False
         if self.terminal_state(obs):
@@ -596,10 +603,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
-            return -50
+            return -5
 
         if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
-            return -50
+            return -5
 
         # for each push that frees the space around the target
         points_around = []
@@ -616,19 +623,19 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 points_around.append(p)
 
         if self.no_of_prev_points_around == len(points_around):
-            return -30
+            return -3
 
         self.no_of_prev_points_around = len(points_around)
 
         extra_penalty = 0
         # penalize pushes that start far from the target object
         if int(action[0]) == 0:
-            extra_penalty = -rescale(action[3], -1, 1, range=[0, 10])
+            extra_penalty = -rescale(action[3], -1, 1, range=[0, 1])
             # extra_penalty += exp_reward(action[3], max_penalty=10, min=-1, max=1)
 
         # extra_penalty += exp_reward(action[2], max_penalty=10, min=-1, max=1)
         # penalize large push distances
-        extra_penalty -= rescale(action[2], -1, 1, range=[0, 10])
+        extra_penalty -= rescale(action[2], -1, 1, range=[0, 1])
         if len(points_around) == 0:
             return +10 + extra_penalty
 
@@ -812,7 +819,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
-    def generate_random_scene(self, target_length_range=[.0125, .02], target_width_range=[.0125, .02],
+    def generate_random_scene(self, target_length_range=[.02, .02], target_width_range=[.03, .03],
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size

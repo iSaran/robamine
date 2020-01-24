@@ -180,7 +180,6 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
         return height_grid
 
 
-
 def extract_features(height_map, dim, max_height, normalize=True, rotation_angle=0, plot=False):
     """
     Extract features from height map(see kiatos19)
@@ -207,9 +206,12 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
     cx = int(w/2)
     cy = int(h/2)
 
+    print('bbox:', bbox)
     # Target features
     m_per_pixel = 480 #ToDo:
     side = m_per_pixel * bbox
+
+    nx, ny = [int(side[0]/4.0 + 0.5), int(side[1]/4.0 + 0.5)]
 
     cx1 = cx - int(side[0])
     cx2 = cx + int(side[0])
@@ -261,11 +263,27 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
     #             c = (corner[0] + x * 4, corner[1] + y * 4)
     #             cells.append([c, (c[0]+4, c[1]+4)])
 
-    corner = (int(cx - 32), int(cy - 32))
-    for x in range(16):
-        for y in range(16):
+    # mask = []
+    corner = (int(cx - 34), int(cy - 34))
+    # target_cells = []
+    for x in range(17):
+        for y in range(17):
             c = (corner[0] + x * 4, corner[1] + y * 4)
             cells.append([c, (c[0]+4, c[1]+4)])
+
+
+            # if 8 - nx < x < 8 + nx and 8 - ny < y < 8 + ny:
+            #     mask.append(1.0)
+            #     # target_cells.append([c, (c[0]+4, c[1]+4)])
+            # else:
+            #     mask.append(0.0)
+
+    # for i in range(len(target_cells)):
+    #     cell = target_cells[i]
+    #     rgb = draw_cell(cell, rgb)
+    #
+    # cv2.imshow('rgb', rgb)
+    # cv2.waitKey()
 
     features = []
     for i in range(len(cells)):
@@ -285,9 +303,9 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
         if plot:
             rgb = draw_cell(cell, rgb)
 
-    if plot:
-        cv2.imshow('rgb', rgb)
-        cv2.waitKey()
+        if plot:
+            cv2.imshow('rgb', rgb)
+            cv2.waitKey()
 
     if normalize:
         for i in range(len(features)):
@@ -313,3 +331,22 @@ def plot_point_cloud(point_cloud):
     pcd.points = open3d.Vector3dVector(point_cloud)
     frame = open3d.create_mesh_coordinate_frame(size=0.1)
     open3d.draw_geometries([pcd, frame])
+
+
+def detect_color(rgb, color='r'):
+    bgr = rgb2bgr(rgb)
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+
+    if color == 'r':
+        # Range for lower range
+        lower = np.array([0, 120, 70])
+        upper = np.array([10, 255, 255])
+
+    # Threshold the HSV image to get only blue colors
+    mask = cv2.inRange(hsv, lower, upper)
+
+    # Bitwise-AND mask and original image
+    # res = cv2.bitwise_and(bgr, bgr, mask=mask)
+    # cv2.imshow('mask', mask)
+    # cv2.waitKey()
+    return  mask
