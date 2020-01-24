@@ -139,6 +139,39 @@ class PushObstacle:
     def get_duration(self, distance_per_sec = 0.1):
         return np.linalg.norm(self.get_init_pos() - self.get_final_pos()) / distance_per_sec
 
+class GraspTarget:
+    def __init__(self, theta, target_bounding_box, finger_radius):
+        self.theta = theta
+
+        # Calculate the minimum initial distance from the target object which is
+        # along its sides, based on theta and its bounding box
+        theta_ = abs(theta)
+        if theta_ > math.pi / 2:
+            theta_ = math.pi - theta_
+
+        if theta_ >= math.atan2(target_bounding_box[1], target_bounding_box[0]):
+            minimum_distance = target_bounding_box[1] / math.sin(theta_)
+        else:
+            minimum_distance = target_bounding_box[0] / math.cos(theta_)
+
+        self.distance = minimum_distance + finger_radius + 0.003
+
+        object_height = target_bounding_box[2]
+        if object_height - finger_radius > 0:
+            offset = object_height - finger_radius
+        else:
+            offset = 0
+        self.z = finger_radius + offset + 0.001
+
+    def get_init_pos(self):
+        finger_1_init = self.distance * np.array([math.cos(self.theta), math.sin(self.theta)])
+        if self.theta > 0:
+            theta_ = self.theta - math.pi
+        else:
+            theta_ = self.theta + math.pi
+        finger_2_init = self.distance * np.array([math.cos(theta_), math.sin(theta_)])
+        return np.append(finger_1_init, self.z), np.append(finger_2_init, self.z)
+
 class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     """
     The class for the Gym environment.
