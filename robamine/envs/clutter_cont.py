@@ -27,94 +27,6 @@ from mujoco_py.cymj import MjRenderContext
 
 OBSERVATION_DIM = 295
 
-def predict_displacement_from_forces(pos_measurements, force_measurements, epsilon=1e-8, filter=0.9, outliers_cutoff=3.8, plot=False):
-    import matplotlib.pyplot as plt
-
-    # Calculate force direction
-    # -------------------------
-    f = force_measurements[:, :2].copy()
-    f = np.nan_to_num(f / norm(f, axis=1).reshape(-1, 1))
-    f_norm = np.linalg.norm(f, axis=1)
-
-    # Find start and end of the contacts
-    first = f_norm[0]
-    for i in range(f_norm.shape[0]):
-        if abs(f_norm[i] - first) > epsilon:
-            break
-    start_contact = i
-
-    first = f_norm[-1]
-    for i in reversed(range(f_norm.shape[0])):
-        if abs(f_norm[i] - first) > epsilon:
-            break;
-    end_contact = i
-
-    # No contact with the target detected
-    if start_contact > end_contact:
-        return np.zeros(2), 0.0
-
-    f = f[start_contact:end_contact, :]
-
-    if plot:
-        fig, axs = plt.subplots(2,2)
-        axs[0][0].plot(f)
-        plt.title('Force')
-        axs[0][1].plot(np.linalg.norm(f, axis=1))
-        plt.title('norm')
-
-    f[:,0] = filter_signal(signal=f[:,0], filter=filter, outliers_cutoff=outliers_cutoff)
-    f[:,1] = filter_signal(signal=f[:,1], filter=filter, outliers_cutoff=outliers_cutoff)
-    f = np.nan_to_num(f / norm(f, axis=1).reshape(-1, 1))
-
-    if plot:
-        axs[1][0].plot(f)
-        plt.title('Filtered force')
-        axs[1][1].plot(np.linalg.norm(f, axis=1))
-        plt.title('norm')
-        plt.show()
-
-    # Velocity direction
-    p = pos_measurements[start_contact:end_contact, :2].copy()
-    p_dot = np.concatenate((np.zeros((1, 2)), np.diff(p, axis=0)))
-    p_dot_norm = norm(p_dot, axis=1).reshape(-1, 1)
-    p_dot_normalized = np.nan_to_num(p_dot / p_dot_norm)
-
-    if plot:
-        fig, axs = plt.subplots(2)
-        axs[0].plot(p_dot_normalized)
-        axs[0].set_title('p_dot normalized')
-        axs[1].plot(p_dot)
-        axs[1].set_title('p_dot')
-        plt.legend(['x', 'y'])
-        plt.show()
-
-    perpedicular_to_p_dot_normalized = np.zeros(p_dot_normalized.shape)
-    for i in range(p_dot_normalized.shape[0]):
-        perpedicular_to_p_dot_normalized[i, :] = np.cross(np.append(p_dot_normalized[i, :], 0), np.array([0, 0, 1]))[:2]
-
-    inner = np.diag(np.matmul(-p_dot_normalized, np.transpose(f))).copy()
-    inner_perpedicular = np.diag(np.matmul(perpedicular_to_p_dot_normalized, np.transpose(f))).copy()
-    if plot:
-        plt.plot(inner)
-        plt.title('inner product')
-        plt.show()
-
-    # Predict
-    prediction = np.zeros(2)
-    theta = 0.0
-    for i in range(inner.shape[0]):
-        prediction += p_dot_norm[i] * (inner[i] * p_dot_normalized[i, :]
-                                       - inner_perpedicular[i] * perpedicular_to_p_dot_normalized[i, :])
-
-
-    mean_last_inner = np.mean(inner[-10:])
-    mean_last_inner = min(mean_last_inner, 1)
-    mean_last_inner = max(mean_last_inner, -1)
-
-    theta = np.sign(np.mean(inner_perpedicular[-10:])) * np.arccos(mean_last_inner)
-
-    return prediction, theta
-
 def get_2d_displacement(init, current):
     assert isinstance(init, Affine3)
     assert isinstance(current, Affine3)
@@ -138,27 +50,6 @@ def exp_reward(x, max_penalty, min, max):
     min_exp = 0.0; max_exp = 5.0
     new_i = rescale(x, min, max, [min_exp, max_exp])
     return max_penalty * a * math.exp(b * new_i) + c
-
-class PushingPrimitiveC:
-    def __init__(self, distance = 0.1, direction_theta = 0.0, surface_size = 0.30, object_height = 0.06, finger_size = 0.02):
-        self.distance = surface_size + distance
-        self.direction = np.array([math.cos(direction_theta), math.sin(direction_theta)])
-        self.initial_pos = - self.direction * surface_size
-
-        # Z at the center of the target object
-        # If the object is too short just put the finger right above the
-        # table
-        if object_height - finger_size > 0:
-            offset = object_height - finger_size
-        else:
-            offset = 0
-        self.z = finger_size + offset + 0.001
-
-    def __str__(self):
-        return "Initial Position: " + str(self.initial_pos) + "\n" + \
-               "Distance: " + str(self.distance) + "\n" + \
-               "Direction: " + str(self.direction) + "\n" + \
-               "z: " + str(self.z) + "\n"
 
 class Push:
     """
@@ -321,8 +212,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_displacement_push_step= np.zeros(3)
         self.target_init_pose = Affine3()
         self.predicted_displacement_push_step= np.zeros(3)
-
-        self.pos_measurements, self.force_measurements, self.target_object_displacement = None, None, None
 
         self.rng = np.random.RandomState()  # rng for the scene
 
@@ -529,7 +418,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             pos = self.target_pos.copy()
             quat = self.target_quat.copy()
 
-        time, self.predicted_displacement_push_step = self.do_simulation(_action, pos, quat)
+        time = self.do_simulation(_action)
         self.target_displacement_push_step = self.get_target_displacement()
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
@@ -543,16 +432,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Extra data for having pushing distance, theta along with displacements
         # of the target
-        extra_data = {'predicted_displacement': self.predicted_displacement_push_step.copy(),
-                      'push_finger_forces': self.force_measurements,
-                      'push_finger_vel': self.pos_measurements,
-                      'target_object_displacement': self.target_object_displacement,
-                      'target_init_pose': self.target_init_pose.matrix()}
+        extra_data = {'target_init_pose': self.target_init_pose.matrix()}
 
 
         return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
 
-    def do_simulation(self, action, pos, quat):
+    def do_simulation(self, action):
         primitive = int(action[0])
 
         # Push target primitive
@@ -569,11 +454,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             push = PushObstacle(theta=theta, push_distance=push_distance,
                                 object_height = self.target_height, finger_size = self.finger_length)
 
-
         # Transform pushing from target frame to world frame
-        push_initial_pos_world = np.matmul(quat.rotation_matrix(), push.get_init_pos()) + pos
-        push_final_pos_world = np.matmul(quat.rotation_matrix(), push.get_final_pos()) + pos
+        target_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
 
+        push_initial_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_init_pos(), 1))[:3]
+        push_final_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_final_pos(), 1))[:3]
 
         # Save init pose for calculating prediction of displacement w.r.t. the
         # init target pose not world
@@ -584,25 +469,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
         self.sim_step()
         duration = push.get_duration()
-        if isinstance(push, PushingPrimitiveC):
-            duration = 3
 
-        self.pos_measurements, self.force_measurements = None, None
-        prediction = np.zeros(3)
-        if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True)[0]:
+        if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
             end = push_final_pos_world[:2]
             init_pos = self.target_pos
-            _, self.pos_measurements, self.force_measurements, self.target_object_displacement = self.move_joint_to_target('finger', [end[0], end[1], None], duration)
-            prediction_pos, prediction_theta = predict_displacement_from_forces(pos_measurements=self.pos_measurements, force_measurements=self.force_measurements)
-
-            prediction[0] = prediction_pos[0]
-            prediction[1] = prediction_pos[1]
-            prediction[2] = prediction_theta
-
+            self.move_joint_to_target('finger', [end[0], end[1], None], duration)
         else:
             self.push_stopped_ext_forces = True
 
-        return self.sim.data.time, prediction
+        return self.sim.data.time
 
     def _move_finger_outside_the_table(self):
         # Move finger outside the table again
@@ -745,9 +620,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         init_time = self.time
         desired_quat = Quaternion()
-        force_measurements = np.empty((1, 3))
-        pos_measurements = np.empty((1, 3))
-        target_object_displacement = np.empty((1, 3))
         self.target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
 
         trajectory = [None, None, None]
@@ -766,23 +638,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
             self.sim_step()
-
-            # Rotate force w.r.t init object frame
-            force_wrt_target_init = np.matmul(self.target_init_pose.inv().matrix(),
-                                              np.append(self.finger_external_force, 0))[0:3]
-            force_measurements = np.concatenate((force_measurements, force_wrt_target_init[None, :]))
-
-            # Rotate and translate position w.r.t init object frame
-            pos_wrt_target_init = np.matmul(self.target_init_pose.inv().matrix(),
-                                            np.append(self.finger_pos, 1))[0:3]
-            pos_measurements = np.concatenate((pos_measurements, pos_wrt_target_init[None, :]))
-
-            target_current_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
-            displacement = get_2d_displacement(self.target_init_pose, target_current_pose)
-            displacement = displacement.reshape((1, 3))
-            target_object_displacement = np.concatenate((target_object_displacement, displacement))
-
-            current_pos = self.sim.data.get_joint_qpos(joint_name)
 
             if stop_external_forces and (self.finger_external_force_norm > 0.1):
                 break
@@ -812,9 +667,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
                 self.sim_step()
 
-            return False, pos_measurements, force_measurements, target_object_displacement
+            return False
 
-        return True, pos_measurements, force_measurements, target_object_displacement
+        return True
 
     def sim_step(self):
         """
