@@ -206,7 +206,6 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
     cx = int(w/2)
     cy = int(h/2)
 
-    print('bbox:', bbox)
     # Target features
     m_per_pixel = 480 #ToDo:
     side = m_per_pixel * bbox
