@@ -223,12 +223,19 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.timesteps = 0
         self.max_timesteps = self.params.get('max_timesteps', 20)
         self.finger_pos = np.zeros(3)
+        self.finger2_pos = np.zeros(3)
         self.finger_quat = Quaternion()
+        self.finger2_quat = Quaternion()
         self.finger_quat_prev = Quaternion()
+        self.finger2_quat_prev = Quaternion()
         self.finger_vel = np.zeros(6)
+        self.finger2_vel = np.zeros(6)
         self.finger_acc = np.zeros(3)
+        self.finger2_acc = np.zeros(3)
         self.finger_external_force_norm = 0.0
+        self.finger2_external_force_norm = 0.0
         self.finger_external_force = None
+        self.finger2_external_force = None
         self.target_height = 0.0
         self.target_length = 0.0
         self.target_width = 0.0
@@ -276,6 +283,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             qpos[index[0]]   = 100
             qpos[index[0]+1] = 100
             qpos[index[0]+2] = 100
+            index = self.sim.model.get_joint_qpos_addr('finger2')
+            qpos[index[0]]   = 102
+            qpos[index[0]+1] = 102
+            qpos[index[0]+2] = 102
             self.set_state(qpos, qvel)
             self.push_distance = self.preloaded_init_state['push_distance']
             self.preloaded_init_state = None
@@ -290,6 +301,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             random_qpos[index[0]]   = 100
             random_qpos[index[0]+1] = 100
             random_qpos[index[0]+2] = 100
+            index = self.sim.model.get_joint_qpos_addr('finger2')
+            random_qpos[index[0]]   = 102
+            random_qpos[index[0]+1] = 102
+            random_qpos[index[0]+2] = 102
 
             self.set_state(random_qpos, self.init_qvel)
 
@@ -541,6 +556,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Move finger outside the table again
         table_size = get_geom_size(self.sim.model, 'table')
         self.sim.data.set_joint_qpos('finger', [100, 100, 100, 1, 0, 0, 0])
+        self.sim.data.set_joint_qpos('finger2', [102, 102, 102, 1, 0, 0, 0])
         self.sim_step()
 
     def viewer_setup(self):
@@ -777,6 +793,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.render()
 
         self.finger_quat_prev = self.finger_quat
+        self.finger2_quat_prev = self.finger2_quat
 
         self.sim.step()
 
@@ -792,9 +809,23 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.finger_quat.z = - self.finger_quat.z
         self.finger_quat.normalize()
 
+        current_pos = self.sim.data.get_joint_qpos("finger2")
+        self.finger2_pos = np.array([current_pos[0], current_pos[1], current_pos[2]])
+        self.finger2_quat = Quaternion(w=current_pos[3], x=current_pos[4], y=current_pos[5], z=current_pos[6])
+        if (np.inner(self.finger2_quat.as_vector(), self.finger2_quat_prev.as_vector()) < 0):
+            self.finger2_quat.w = - self.finger2_quat.w
+            self.finger2_quat.x = - self.finger2_quat.x
+            self.finger2_quat.y = - self.finger2_quat.y
+            self.finger2_quat.z = - self.finger2_quat.z
+        self.finger2_quat.normalize()
+
         self.finger_vel = self.sim.data.get_joint_qvel('finger')
         index = self.sim.model.get_joint_qvel_addr('finger')
         self.finger_acc = np.array([self.sim.data.qacc[index[0]], self.sim.data.qacc[index[0] + 1], self.sim.data.qacc[index[0] + 2]])
+
+        self.finger2_vel = self.sim.data.get_joint_qvel('finger2')
+        index = self.sim.model.get_joint_qvel_addr('finger2')
+        self.finger2_acc = np.array([self.sim.data.qacc[index[0]], self.sim.data.qacc[index[0] + 1], self.sim.data.qacc[index[0] + 2]])
 
         finger_geom_id = get_geom_id(self.sim.model, "finger")
         geom2body = self.sim.model.geom_bodyid[finger_geom_id]
@@ -802,6 +833,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # functions that start with 'c' return the rotational part first, so for
         # the force take the second triplet, w.r.t. the world.
         self.finger_external_force = self.sim.data.cfrc_ext[geom2body][3:]
+
+        finger_geom_id = get_geom_id(self.sim.model, "finger2")
+        geom2body = self.sim.model.geom_bodyid[finger_geom_id]
+        self.finger2_external_force_norm = np.linalg.norm(self.sim.data.cfrc_ext[geom2body])
+        # functions that start with 'c' return the rotational part first, so for
+        # the force take the second triplet, w.r.t. the world.
+        self.finger2_external_force = self.sim.data.cfrc_ext[geom2body][3:]
 
         # Calculate the object's length, width and height w.r.t. the surface by
         # using the orientation of the object. The height is the dimension
