@@ -246,6 +246,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_grasped_successfully = False
         self.success = False
         self.push_distance = 0.0
+        self.grasp_spread = 0.0
+        self.grasp_height = 0.0
 
         self.target_pos_prev_state = np.zeros(3)
         self.target_quat_prev_state = Quaternion()
@@ -498,14 +500,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             # Push target primitive
             if primitive == 0:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-                push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
-                distance = rescale(action[3], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
+                push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push']['distance'][0], self.params['push']['distance'][1]])  # hardcoded read it from min max pushing distance
+                distance = rescale(action[3], min=-1, max=1, range=self.params['push']['target_init_distance'])  # hardcoded, read it from table limits
                 push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
                                   target_bounding_box= self.target_size/2, finger_size = self.finger_length)
             # Push obstacle primitive
             elif primitive == 1:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-                push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
+                push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push']['distance'][0], self.params['push']['distance'][1]])  # hardcoded read it from min max pushing distance
                 push = PushObstacle(theta=theta, push_distance=push_distance,
                                     object_height = self.target_height, finger_size = self.finger_length)
 
@@ -937,7 +939,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         random_qpos = self.init_qpos.copy()
 
         # Randomize pushing distance
-        self.push_distance = self.rng.uniform(self.params['push_distance'][0], self.params['push_distance'][1])
+        self.push_distance = self.rng.uniform(self.params['push']['distance'][0], self.params['push']['distance'][1])
+
+        self.grasp_spread = self.rng.uniform(self.params['grasp']['spread'][0], self.params['grasp']['spread'][1])
+        self.grasp_height = self.rng.uniform(self.params['grasp']['height'][0], self.params['grasp']['height'][1])
 
         # Randomize surface size
         self.surface_size[0] = self.rng.uniform(surface_length_range[0], surface_length_range[1])
