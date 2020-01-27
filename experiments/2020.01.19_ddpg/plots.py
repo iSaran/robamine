@@ -36,5 +36,19 @@ def exp_reward(x, max_penalty, min, max):
     new_i = rescale(x, min, max, [min_exp, max_exp])
     return max_penalty * a * math.exp(b * new_i) + c
 
+
+def plot_normal_noise():
+    from robamine.algo.util import NormalNoise
+    noise = NormalNoise(mu=0.0, sigma=0.2)
+    data = []
+    for i in range(10000):
+        data.append(noise())
+
+    plt.hist(data, bins = 100)
+    plt.show()
+
+    noise = NormalNoise(mu=np.array([0.0, 0.0]), sigma=0.2)
+    print(noise())
+
 if __name__ == '__main__':
     plot_exponential_reward()
