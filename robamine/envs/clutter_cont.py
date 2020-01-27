@@ -196,17 +196,29 @@ class Push:
                "z: " + str(self.z) + "\n"
 
 class PushTarget:
-    def __init__(self, distance, theta, push_distance, object_height = 0.06, finger_size = 0.02):
-        self.distance = distance
+    def __init__(self, distance, theta, push_distance, target_bounding_box, finger_size = 0.02):
         self.theta = theta
         self.push_distance = push_distance
 
+        # Calculate the minimum initial distance from the target object which is
+        # along its sides, based on theta and its bounding box
+        theta_ = abs(theta)
+        if theta_ > math.pi / 2:
+            theta_ = math.pi - theta_
+
+        if theta_ >= math.atan2(target_bounding_box[1], target_bounding_box[0]):
+            minimum_distance = target_bounding_box[1] / math.sin(theta_)
+        else:
+            minimum_distance = target_bounding_box[0] / math.cos(theta_)
+
+        self.distance = minimum_distance + finger_size + distance + 0.003
+
+        object_height = target_bounding_box[2]
         if object_height - finger_size > 0:
             offset = object_height - finger_size
         else:
             offset = 0
         self.z = finger_size + offset + 0.001
-
 
     def get_init_pos(self):
         init = self.distance * np.array([math.cos(self.theta), math.sin(self.theta)])
@@ -542,8 +554,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
             push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
             distance = rescale(action[3], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
-            push = PushTarget(distance=distance, theta=theta, push_distance=push_distance,
-                              object_height = self.target_height, finger_size = self.finger_length)
+            push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
+                              target_bounding_box= self.target_size/2, finger_size = self.finger_length)
         # Push obstacle primitive
         elif primitive == 1:
             theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
