@@ -898,7 +898,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             number_of_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
 
-        for i in range(1, number_of_obstacles):
+        for i in range(1, number_of_obstacles + 1):
             geom_id = get_geom_id(self.sim.model, "object"+str(i))
 
             # Randomize type (box or cylinder)
