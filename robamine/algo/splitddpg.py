@@ -47,6 +47,46 @@ default_params = {
 }
 
 
+class CriticCNN(nn.Module):
+    def __init__(self, action_dim):
+        super(CriticCNN, self).__init__()
+
+        self.conv1 = nn.Conv2d(2, 16, 8, 4)
+        self.conv2 = nn.Conv2d(16, 32, 4, 2)
+        self.fc1 = nn.Linear(3872 + action_dim, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.out = nn.Linear(256, 1)
+
+    def forward(self, x, u):
+        x = nn.functional.relu(self.conv1(x))
+        x = nn.functional.relu(self.conv2(x))
+        x = x.view(-1, 3872)
+        print(x.shape)
+        print(u.shape)
+        x = torch.cat([x, u], x.dim() - 1)
+        x = nn.functional.relu(self.fc1(x))
+        x = nn.functional.relu(self.fc2(x))
+        out = self.out(x)
+        return out
+
+class ActorCNN(nn.Module):
+    def __init__(self, action_dim):
+        super(ActorCNN, self).__init__()
+        self.conv1 = nn.Conv2d(2, 16, 8, 4)
+        self.conv2 = nn.Conv2d(16, 32, 4, 2)
+        self.fc1 = nn.Linear(3872, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.out = nn.Linear(256, action_dim)
+
+    def forward(self, x):
+        x = nn.functional.relu(self.conv1(x))
+        x = nn.functional.relu(self.conv2(x))
+        x = x.view(-1, 3872)
+        x = nn.functional.relu(self.fc1(x))
+        x = nn.functional.relu(self.fc2(x))
+        out = torch.tanh(self.out(x))
+        return out
+
 
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_units):
@@ -108,10 +148,14 @@ class SplitDDPG(RLAgent):
         self.actor, self.target_actor, self.critic, self.target_critic = nn.ModuleList(), nn.ModuleList(), \
                                                                          nn.ModuleList(), nn.ModuleList()
         for i in range(self.nr_network):
-            self.actor.append(Actor(state_dim, self.actions[i], self.params['actor']['hidden_units'][i]))
-            self.target_actor.append(Actor(state_dim, self.actions[i], self.params['actor']['hidden_units'][i]))
-            self.critic.append(Critic(state_dim, self.actions[i], self.params['critic']['hidden_units'][i]))
-            self.target_critic.append(Critic(state_dim, self.actions[i], self.params['critic']['hidden_units'][i]))
+            # self.actor.append(Actor(state_dim, self.actions[i], self.params['actor']['hidden_units'][i]))
+            # self.target_actor.append(Actor(state_dim, self.actions[i], self.params['actor']['hidden_units'][i]))
+            # self.critic.append(Critic(state_dim, self.actions[i], self.params['critic']['hidden_units'][i]))
+            # self.target_critic.append(Critic(state_dim, self.actions[i], self.params['critic']['hidden_units'][i]))
+            self.actor.append(ActorCNN(self.actions[i]).to(self.device))
+            self.target_actor.append(ActorCNN(self.actions[i]).to(self.device))
+            self.critic.append(CriticCNN(self.actions[i]).to(self.device))
+            self.target_critic.append(CriticCNN(self.actions[i]).to(self.device))
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         for i in range(self.nr_network):
@@ -134,7 +178,7 @@ class SplitDDPG(RLAgent):
 
     def predict(self, state):
         output = np.zeros(max(self.actions) + 1)
-        s = torch.FloatTensor(state).to(self.device)
+        s = torch.cuda.FloatTensor(state).to(self.device)
         max_q = -1e10
         i = 0
         for i in range(self.nr_network):
@@ -156,13 +200,15 @@ class SplitDDPG(RLAgent):
         decay = self.params['epsilon']['decay']
         epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
 
+        state = np.expand_dims(state, axis=0)
         if (self.rng.uniform(0, 1) >= epsilon) and self.preloading_finished:
             pred = self.predict(state)
             i = int(pred[0])
             action = pred[1:]
         else:
             i = self.rng.randint(0, len(self.actions))
-            s = torch.FloatTensor(state).to(self.device)
+            s = torch.cuda.FloatTensor(state).to(self.device)
+            self.actor[i](s)
             action = self.actor[i](s).cpu().detach().numpy()
 
         noise = self.exploration_noise[i]()
@@ -201,22 +247,24 @@ class SplitDDPG(RLAgent):
         self.info['critic_' + str(i) + '_loss'] = 0
         self.info['actor_' + str(i) + '_loss'] = 0
 
-        if self.replay_buffer[i].size() < 1000:
+        if self.replay_buffer[i].size() < 64:
             return
         else:
             self.preloading_finished = True
+
+        print('start training')
 
         # Sample from replay buffer
         batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
         batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
         batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
 
-        state = torch.FloatTensor(batch.state).to(self.device)
+        state = torch.cuda.FloatTensor(batch.state).to(self.device)
         _, action_ = self.get_low_level_action(batch.action)
-        action = torch.FloatTensor(action_).to(self.device)
-        reward = torch.FloatTensor(batch.reward).to(self.device)
-        next_state = torch.FloatTensor(batch.next_state).to(self.device)
-        terminal = torch.FloatTensor(batch.terminal).to(self.device)
+        action = torch.cuda.FloatTensor(action_).to(self.device)
+        reward = torch.cuda.FloatTensor(batch.reward).to(self.device)
+        next_state = torch.cuda.FloatTensor(batch.next_state).to(self.device)
+        terminal = torch.cuda.FloatTensor(batch.terminal).to(self.device)
 
         # Compute the target Q-value
         target_q = self.target_critic[i](next_state, self.target_actor[i](next_state))
@@ -254,8 +302,10 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        s = torch.FloatTensor(state).to(self.device)
-        a = torch.FloatTensor(action_).to(self.device)
+        action_ = np.expand_dims(action_, axis=0)
+        state = np.expand_dims(state, axis=0)
+        s = torch.cuda.FloatTensor(state).to(self.device)
+        a = torch.cuda.FloatTensor(action_).to(self.device)
         q = self.critic[i](s, a).cpu().detach().numpy()
         return q
 

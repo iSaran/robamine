@@ -3,7 +3,7 @@ agent:
   params:
     actions: [3]
     batch_size: [64, 64]
-    device: cpu
+    device: cuda
     gamma: 0.99
     load_buffers: ''
     load_nets: ''

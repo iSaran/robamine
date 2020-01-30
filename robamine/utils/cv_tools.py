@@ -209,8 +209,22 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
     # Target features
     m_per_pixel = 480 #ToDo:
     side = m_per_pixel * bbox
+    side[0], side[1] = [int(side[0]), int(side[1])]
 
-    nx, ny = [int(side[0]/4.0 + 0.5), int(side[1]/4.0 + 0.5)]
+    # extract mask
+    mask = np.zeros((100, 100))
+    for x in range(100):
+        for y in range(100):
+            if 50 - side[1] < x < 50 + side[1] and 50 - side[0] < y < 50 + side[0]:
+                mask[x, y] = 1
+
+    mask_heightmap = np.zeros((2, 100, 100))
+    mask_heightmap[0, :, :] = height_map
+    mask_heightmap[1, :, :] = mask
+    return  mask_heightmap
+
+
+    # nx, ny = [int(side[0]/4.0 + 0.5), int(side[1]/4.0 + 0.5)]
 
     cx1 = cx - int(side[0])
     cx2 = cx + int(side[0])
@@ -263,13 +277,14 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
     #             cells.append([c, (c[0]+4, c[1]+4)])
 
     # mask = []
-    corner = (int(cx - 34), int(cy - 34))
-    # target_cells = []
-    for x in range(17):
-        for y in range(17):
-            c = (corner[0] + x * 4, corner[1] + y * 4)
-            cells.append([c, (c[0]+4, c[1]+4)])
+    cell_resolution = 4
+    dw, dh = [17, 17]
 
+    corner = (int(cx - cell_resolution * dw / 2.0), int(cy - cell_resolution * dh / 2.0))
+    for x in range(dw):
+        for y in range(dh):
+            c = (corner[0] + x * cell_resolution, corner[1] + y * cell_resolution)
+            cells.append([c, (c[0] + cell_resolution, c[1] + cell_resolution)])
 
             # if 8 - nx < x < 8 + nx and 8 - ny < y < 8 + ny:
             #     mask.append(1.0)
@@ -302,9 +317,9 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
         if plot:
             rgb = draw_cell(cell, rgb)
 
-        if plot:
-            cv2.imshow('rgb', rgb)
-            cv2.waitKey()
+    if plot:
+        cv2.imshow('rgb', rgb)
+        cv2.waitKey()
 
     if normalize:
         for i in range(len(features)):

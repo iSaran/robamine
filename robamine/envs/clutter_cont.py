@@ -25,7 +25,7 @@ from robamine.utils.orientation import rot2quat
 import cv2
 from mujoco_py.cymj import MjRenderContext
 
-OBSERVATION_DIM = 293
+OBSERVATION_DIM = 295
 
 def predict_displacement_from_forces(pos_measurements, force_measurements, epsilon=1e-8, filter=0.9, outliers_cutoff=3.8, plot=False):
     import matplotlib.pyplot as plt
@@ -495,13 +495,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # features.append(0)
         # features.append(bbox[0]/0.03)
         # features.append(bbox[1]/0.03)
-        features.append(distances[0])
-        features.append(distances[1])
-        features.append(distances[2])
-        features.append(distances[3])
-        final_feature = np.array(features)
-
-        return final_feature, points_above_table, bbox
+        # features.append(distances[0])
+        # features.append(distances[1])
+        # features.append(distances[2])
+        # features.append(distances[3])
+        # final_feature = np.array(features)
+        #
+        return features, points_above_table, bbox
 
     def step(self, action):
 
@@ -617,8 +617,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.push_stopped_ext_forces:
             return -5
 
-        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
-            return -5
+        # if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
+        #     return -5
 
         # for each push that frees the space around the target
         points_around = []
@@ -642,7 +642,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         extra_penalty = 0
         # penalize pushes that start far from the target object
         if int(action[0]) == 0:
-            extra_penalty = -rescale(action[3], -1, 1, range=[0, 1])
+            extra_penalty = -rescale(action[3], -1, 1, range=[0, 3.0])
             # extra_penalty += exp_reward(action[3], max_penalty=10, min=-1, max=1)
 
         # extra_penalty += exp_reward(action[2], max_penalty=10, min=-1, max=1)
@@ -688,8 +688,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # If the object has fallen from the table
-        if min([observation[-6], observation[-5], observation[-4], observation[-3]]) < 0:
-            return True
+        # if min([observation[-6], observation[-5], observation[-4], observation[-3]]) < 0:
+        #     return True
 
         # If the object is free from obstacles around (no points around)
         if self.no_of_prev_points_around == 0:
@@ -831,7 +831,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
-    def generate_random_scene(self, target_length_range=[.03, .03], target_width_range=[.02, .02],
+    def generate_random_scene(self, target_length_range=[.01, .03], target_width_range=[.01, .03],
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
