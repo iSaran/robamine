@@ -180,7 +180,7 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
         return height_grid
 
 
-def extract_features(height_map, dim, max_height, normalize=True, rotation_angle=0, plot=False):
+def extract_features(height_map, dim, max_height, plot=False):
     """
     Extract features from height map(see kiatos19)
     :param height_map: height map aligned with the target
@@ -189,143 +189,27 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
     """
     h, w = height_map.shape
 
-    bbox = np.asarray([dim[0], dim[1]])
+    # normalize heightmap
+    for i in range(0, w):
+        for j in range(0, h):
+            height_map[i][j] /= max_height
 
-    if plot:
-        cv_height = np.zeros((h, w), dtype=np.float32)
-        min_height = np.min(height_map)
-        max_height = np.max(height_map)
-        for i in range(0, w):
-            for j in range(0, h):
-                cv_height[i][j] = ((height_map[i][j] - min_height) / (max_height - min_height))
-
-        rgb = cv2.cvtColor(cv_height, cv2.COLOR_GRAY2RGB)
-
-    cells = []
-
-    cx = int(w/2)
-    cy = int(h/2)
-
-    # Target features
     m_per_pixel = 480 #ToDo:
-    side = m_per_pixel * bbox
-    side[0], side[1] = [int(side[0]), int(side[1])]
+    side = [int(m_per_pixel * dim[0]), int(m_per_pixel * dim[1])]
 
-    # extract mask
+    # extract target mask
     mask = np.zeros((100, 100))
     for x in range(100):
         for y in range(100):
             if 50 - side[1] < x < 50 + side[1] and 50 - side[0] < y < 50 + side[0]:
                 mask[x, y] = 1
 
-    mask_heightmap = np.zeros((2, 100, 100))
-    mask_heightmap[0, :, :] = height_map
-    mask_heightmap[1, :, :] = mask
-    return  mask_heightmap
+    # zero pad the heightmap and mask (input dimensions power of 2)
+    mask_heightmap = np.zeros((2, 128, 128))
+    mask_heightmap[0, 14:114, 14:114] = height_map
+    mask_heightmap[1, 14:114, 14:114] = mask
 
-
-    # nx, ny = [int(side[0]/4.0 + 0.5), int(side[1]/4.0 + 0.5)]
-
-    cx1 = cx - int(side[0])
-    cx2 = cx + int(side[0])
-    cy1 = cy - int(side[1])
-    cy2 = cy + int(side[1])
-    # cells.append([(cx1, cy1), (cx, cy)])
-    # cells.append([(cx, cy1), (cx2, cy)])
-    # cells.append([(cx1, cy), (cx, cy2)])
-    # cells.append([(cx, cy), (cx2, cy2)])
-
-    m = cv2.getRotationMatrix2D((cx, cy), rotation_angle, scale=1)
-    (cx, cy) = np.matmul(m, np.array([cx, cy, 1])).astype(int)
-    c1 = np.matmul(m, np.array([cx1, cy1, 1])).astype(int)
-    c2 = np.matmul(m, np.array([cx2, cy1, 1])).astype(int)
-    c3 = np.matmul(m, np.array([cx2, cy2, 1])).astype(int)
-    c4 = np.matmul(m, np.array([cx1, cy2, 1])).astype(int)
-
-    cx1 = min(c1[0], c2[0], c3[0], c4[0])
-    cy1 = min(c1[1], c2[1], c3[1], c4[1])
-    cx2 = max(c1[0], c2[0], c3[0], c4[0])
-    cy2 = max(c1[1], c2[1], c3[1], c4[1])
-
-    #cells.append([(cx1, cy1), (cx, cy)])
-    #cells.append([(cx, cy1), (cx2, cy)])
-    #cells.append([(cx1, cy), (cx, cy2)])
-    #cells.append([(cx, cy), (cx2, cy2)])
-
-
-    # Features around target
-    # 1. Define the up left corners for each 32x32 region around the target
-    up_left_corners = []
-    # up_left_corners.append((int(cx - 16), int(cy - side[1] - 32)))  # f_up
-    # up_left_corners.append((int(cx + side[0]), int(cy - 16)))  # f_right
-    # up_left_corners.append((int(cx - 16), int(cy + side[1])))  # f_down
-    # up_left_corners.append((int(cx - side[0] - 32), int(cy - 16)))  # f_left
-
-    # up_left_corners.append((int(cx - 32), int(cy - side[1] - 32)))  # f_up
-    # up_left_corners.append((int(cx + side[0]), int(cy - 32)))  # f_right
-    # up_left_corners.append((int(cx - 32), int(cy + side[1])))  # f_down
-    # up_left_corners.append((int(cx - side[0] - 32), int(cy - 32)))  # f_left
-    #
-    # x_limit = [16, 8, 16, 8]
-    # y_limit = [8, 16, 8, 16]
-    #
-    # for i in range(len(up_left_corners)):
-    #     corner = up_left_corners[i]
-    #     for x in range(x_limit[i]):
-    #         for y in range(y_limit[i]):
-    #             c = (corner[0] + x * 4, corner[1] + y * 4)
-    #             cells.append([c, (c[0]+4, c[1]+4)])
-
-    # mask = []
-    cell_resolution = 4
-    dw, dh = [17, 17]
-
-    corner = (int(cx - cell_resolution * dw / 2.0), int(cy - cell_resolution * dh / 2.0))
-    for x in range(dw):
-        for y in range(dh):
-            c = (corner[0] + x * cell_resolution, corner[1] + y * cell_resolution)
-            cells.append([c, (c[0] + cell_resolution, c[1] + cell_resolution)])
-
-            # if 8 - nx < x < 8 + nx and 8 - ny < y < 8 + ny:
-            #     mask.append(1.0)
-            #     # target_cells.append([c, (c[0]+4, c[1]+4)])
-            # else:
-            #     mask.append(0.0)
-
-    # for i in range(len(target_cells)):
-    #     cell = target_cells[i]
-    #     rgb = draw_cell(cell, rgb)
-    #
-    # cv2.imshow('rgb', rgb)
-    # cv2.waitKey()
-
-    features = []
-    for i in range(len(cells)):
-        cell = cells[i]
-        x1 = cell[0][0]
-        x2 = cell[1][0]
-        y1 = cell[0][1]
-        y2 = cell[1][1]
-
-        if i < 4:
-            avg_height = np.sum(height_map[y1:y2, x1:x2]) / (side[0] * side[1])
-        else:
-            avg_height = np.sum(height_map[y1:y2, x1:x2]) / 16
-
-        features.append(avg_height)
-
-        if plot:
-            rgb = draw_cell(cell, rgb)
-
-    if plot:
-        cv2.imshow('rgb', rgb)
-        cv2.waitKey()
-
-    if normalize:
-        for i in range(len(features)):
-            features[i] /= max_height
-
-    return features
+    return mask_heightmap
 
 
 def draw_cell(cell, rgb):

@@ -53,18 +53,17 @@ class CriticCNN(nn.Module):
 
         self.conv1 = nn.Conv2d(2, 16, 8, 4)
         self.conv2 = nn.Conv2d(16, 32, 4, 2)
-        self.fc1 = nn.Linear(3872 + action_dim, 256)
-        self.fc2 = nn.Linear(256, 256)
+        self.fc1 = nn.Linear(6272, 256)
+        self.fc2 = nn.Linear(256 + action_dim, 256)
         self.out = nn.Linear(256, 1)
 
     def forward(self, x, u):
         x = nn.functional.relu(self.conv1(x))
         x = nn.functional.relu(self.conv2(x))
-        x = x.view(-1, 3872)
-        print(x.shape)
-        print(u.shape)
-        x = torch.cat([x, u], x.dim() - 1)
+        x = x.view(-1, 6272)
         x = nn.functional.relu(self.fc1(x))
+        # add action
+        x = torch.cat([x, u], x.dim() - 1)
         x = nn.functional.relu(self.fc2(x))
         out = self.out(x)
         return out
@@ -72,63 +71,19 @@ class CriticCNN(nn.Module):
 class ActorCNN(nn.Module):
     def __init__(self, action_dim):
         super(ActorCNN, self).__init__()
+
         self.conv1 = nn.Conv2d(2, 16, 8, 4)
         self.conv2 = nn.Conv2d(16, 32, 4, 2)
-        self.fc1 = nn.Linear(3872, 256)
+        self.fc1 = nn.Linear(6272, 256)
         self.fc2 = nn.Linear(256, 256)
         self.out = nn.Linear(256, action_dim)
 
     def forward(self, x):
         x = nn.functional.relu(self.conv1(x))
         x = nn.functional.relu(self.conv2(x))
-        x = x.view(-1, 3872)
+        x = x.view(-1, 6272)
         x = nn.functional.relu(self.fc1(x))
         x = nn.functional.relu(self.fc2(x))
-        out = torch.tanh(self.out(x))
-        return out
-
-
-class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_units):
-        super(Critic, self).__init__()
-
-        self.hidden_layers = nn.ModuleList()
-        self.hidden_layers.append(nn.Linear(state_dim + action_dim, hidden_units[0]))
-        for i in range(1, len(hidden_units)):
-            self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
-            self.hidden_layers[i].weight.data.uniform_(-0.003, 0.003)
-            self.hidden_layers[i].bias.data.uniform_(-0.003, 0.003)
-
-        self.out = nn.Linear(hidden_units[-1], 1)
-        self.out.weight.data.uniform_(-0.003, 0.003)
-        self.out.bias.data.uniform_(-0.003, 0.003)
-
-    def forward(self, x, u):
-        x = torch.cat([x, u], x.dim() - 1)
-        for layer in self.hidden_layers:
-            x = nn.functional.relu(layer(x))
-        out = self.out(x)
-        return out
-
-
-class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_units):
-        super(Actor, self).__init__()
-
-        self.hidden_layers = nn.ModuleList()
-        self.hidden_layers.append(nn.Linear(state_dim, hidden_units[0]))
-        for i in range(1, len(hidden_units)):
-            self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
-            self.hidden_layers[i].weight.data.uniform_(-0.003, 0.003)
-            self.hidden_layers[i].bias.data.uniform_(-0.003, 0.003)
-
-        self.out = nn.Linear(hidden_units[-1], action_dim)
-        self.out.weight.data.uniform_(-0.003, 0.003)
-        self.out.bias.data.uniform_(-0.003, 0.003)
-
-    def forward(self, x):
-        for layer in self.hidden_layers:
-            x = nn.functional.relu(layer(x))
         out = torch.tanh(self.out(x))
         return out
 
