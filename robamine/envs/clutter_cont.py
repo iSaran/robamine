@@ -14,7 +14,7 @@ from gym.envs.mujoco import mujoco_env
 import os
 
 from robamine.utils.robotics import PDController, Trajectory
-from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names
+from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names, detect_contact
 from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z, Affine3
 from robamine.utils.math import sigmoid, rescale, filter_signal
 import robamine.utils.cv_tools as cv_tools
@@ -170,6 +170,57 @@ class GraspTarget:
         else:
             theta_ = self.theta + math.pi
         finger_2_init = self.distance * np.array([math.cos(theta_), math.sin(theta_)])
+        return np.append(finger_1_init, self.z), np.append(finger_2_init, self.z)
+
+class GraspObstacle:
+    def __init__(self, theta, distance, phi, spread, height, target_bounding_box, finger_radius):
+        self.theta = theta
+        self.phi = phi
+        self.spread = spread
+        self.bb_angle = math.atan2(target_bounding_box[1], target_bounding_box[0])
+
+        theta_ = abs(theta)
+        if theta_ > math.pi / 2:
+            theta_ = math.pi - theta_
+
+        if theta_ >= self.bb_angle:
+            minimum_distance = target_bounding_box[1] / math.sin(theta_)
+        else:
+            minimum_distance = target_bounding_box[0] / math.cos(theta_)
+
+        self.distance = minimum_distance + finger_radius + distance + 0.003
+
+        object_height = target_bounding_box[2]
+        if object_height - finger_radius > 0:
+            offset = object_height - finger_radius
+        else:
+            offset = 0
+        self.z = finger_radius + offset + 0.001
+
+    def get_init_pos(self):
+        finger_1_init = self.distance * np.array([math.cos(self.theta), math.sin(self.theta)])
+
+        # Finger w.r.t. the position of finger 2
+        finger_2_init = self.spread * np.array([math.cos(self.phi), math.sin(self.phi)])
+
+
+        # Calculate local frame on f1 position in order to avoid target collision
+        if abs(self.theta) < self.bb_angle:
+            rot = np.array([[ 0, 1],
+                            [-1, 0]])
+        elif abs(self.theta) < math.pi - self.bb_angle:
+            if self.theta > 0:
+                rot = np.array([[1, 0],
+                                [0, 1]])
+            else:
+                rot = np.array([[-1,  0],
+                                [ 0, -1]])
+        else:
+            rot = np.array([[0, -1],
+                            [1,  0]])
+
+        finger_2_init = np.matmul(rot, finger_2_init) + finger_1_init
+
         return np.append(finger_1_init, self.z), np.append(finger_2_init, self.z)
 
 class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
@@ -533,9 +584,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             else:
                 self.push_stopped_ext_forces = True
 
-        elif primitive == 2:
-            theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-            grasp = GraspTarget(theta=theta, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
+        elif primitive == 2 or primitive == 3:
+            if primitive == 2:
+                theta = rescale(action[1], min=-1, max=1, range=[0, math.pi])
+                grasp = GraspTarget(theta=theta, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
+            if primitive == 3:
+                theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
+                distance = rescale(action[2], min=-1, max=1, range=self.params['grasp']['workspace'])  # hardcoded, read it from table limits
+                phi = rescale(action[3], min=-1, max=1, range=[0, math.pi])  # hardcoded, read it from table limits
+                grasp = GraspObstacle(theta=theta, distance=distance, phi=phi, spread=self.grasp_spread, height=self.grasp_height, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
+
             f1_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[0], 1))[:3]
             f2_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[1], 1))[:3]
 
@@ -544,8 +602,18 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.data.set_joint_qpos('finger2', [f2_initial_pos_world[0], f2_initial_pos_world[1], init_z, 1, 0, 0, 0])
             self.sim_step()
 
-            if self.move_joints_to_target([None, None, grasp.z], [None, None, grasp.z], stop_external_forces=True):
-                self.target_grasped_successfully = True
+            if self.move_joints_to_target([None, None, grasp.z], [None, None, grasp.z], ext_force_policy='avoid'):
+                if primitive == 2:
+                    self.target_grasped_successfully = True
+                if primitive == 3:
+                    centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
+                    f1f2_dir = (f1_initial_pos_world - f2_initial_pos_world) / np.linalg.norm(f1_initial_pos_world - f2_initial_pos_world)
+                    f1f2_dir[:2] = f1f2_dir[:2] * 1.1 * self.finger_height
+                    if not self.move_joints_to_target(centroid + f1f2_dir, centroid - f1f2_dir, ext_force_policy='stop'):
+                        contacts1 = detect_contact(self.sim, 'finger')
+                        contacts2 = detect_contact(self.sim, 'finger2')
+                        if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
+                            self._remove_obstacle_from_table(contacts1[0])
             else:
                 self.push_stopped_ext_forces = True
 
@@ -559,6 +627,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         table_size = get_geom_size(self.sim.model, 'table')
         self.sim.data.set_joint_qpos('finger', [100, 100, 100, 1, 0, 0, 0])
         self.sim.data.set_joint_qpos('finger2', [102, 102, 102, 1, 0, 0, 0])
+        self.sim_step()
+
+    def _remove_obstacle_from_table(self, obstacle_name):
+        self.sim.data.set_joint_qpos(obstacle_name, [0, 0, -0.2, 1, 0, 0, 0])
         self.sim_step()
 
     def viewer_setup(self):
@@ -786,7 +858,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return True
 
-    def move_joints_to_target(self, target_position, target_position2, duration=1, duration2=1, stop_external_forces=False):
+    def move_joints_to_target(self, target_position, target_position2, duration=1, duration2=1, ext_force_policy = 'avoid', avoid_threshold=0.1, stop_threshold=1.0):
+        assert ext_force_policy == 'avoid' or ext_force_policy == 'ignore' or ext_force_policy == 'stop'
         init_time = self.time
         desired_quat = Quaternion()
         self.target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
@@ -819,11 +892,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             self.sim_step()
 
-            if stop_external_forces and (self.finger_external_force_norm > 0.1 or self.finger2_external_force_norm > 0.1):
+            if ext_force_policy == 'avoid' and (self.finger_external_force_norm > avoid_threshold or self.finger2_external_force_norm > avoid_threshold):
                 break
 
+            if ext_force_policy == 'stop' and (self.finger_external_force_norm > stop_threshold and self.finger2_external_force_norm > stop_threshold):
+                break
+
+        if ext_force_policy == 'stop' and (self.finger_external_force_norm > stop_threshold and self.finger2_external_force_norm > stop_threshold):
+            return False
+
         # If external force is present move away
-        if stop_external_forces and (self.finger_external_force_norm > 0.1 or self.finger2_external_force_norm > 0.1):
+        if ext_force_policy == 'avoid' and (self.finger_external_force_norm > avoid_threshold or self.finger2_external_force_norm > avoid_threshold):
             self.sim_step()
             # Create a new trajectory for moving the finger slightly in the
             # opposite direction to reduce the external forces

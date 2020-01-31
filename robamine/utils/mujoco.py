@@ -115,3 +115,13 @@ def get_camera_pose(sim, name):
     camera_pose[0:3, 3] = sim.data.get_camera_xpos(name)
 
     return camera_pose
+
+def detect_contact(sim, geom_name):
+    contacts = []
+    for i in range(sim.data.ncon):
+        contact = sim.data.contact[i]
+        if geom_name == sim.model.geom_id2name(contact.geom1):
+            contacts.append(sim.model.geom_id2name(contact.geom2))
+        elif geom_name == sim.model.geom_id2name(contact.geom2):
+            contacts.append(sim.model.geom_id2name(contact.geom1))
+    return contacts
