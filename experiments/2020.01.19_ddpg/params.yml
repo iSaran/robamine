@@ -32,7 +32,7 @@ env:
     - 0.005
     - 0.005
     nr_of_obstacles:
-    - 5
+    - 1
     - 8
     obstacle_height_range:
     - 0.005
@@ -50,7 +50,7 @@ env:
 world:
   comments: ''
   friendly_name: ''
-  logging_dir: /tmp/robamine_logs/
+  logging_dir: /home/mkiatos/robamine/logs/
   name: TrainEval
   params:
     episodes: 5000

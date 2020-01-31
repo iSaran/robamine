@@ -262,27 +262,20 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
     #             c = (corner[0] + x * 4, corner[1] + y * 4)
     #             cells.append([c, (c[0]+4, c[1]+4)])
 
-    # mask = []
-    corner = (int(cx - 34), int(cy - 34))
-    # target_cells = []
-    for x in range(17):
-        for y in range(17):
-            c = (corner[0] + x * 4, corner[1] + y * 4)
-            cells.append([c, (c[0]+4, c[1]+4)])
+    cell_resolution = 4
+    dw, dh = [17, 17]
 
+    corner = (int(cx - cell_resolution * dw / 2.0), int(cy - cell_resolution * dh / 2.0))
+    for x in range(dw):
+        for y in range(dh):
+            c = (corner[0] + x * cell_resolution, corner[1] + y * cell_resolution)
+            cells.append([c, (c[0] + cell_resolution, c[1] + cell_resolution)])
 
             # if 8 - nx < x < 8 + nx and 8 - ny < y < 8 + ny:
             #     mask.append(1.0)
             #     # target_cells.append([c, (c[0]+4, c[1]+4)])
             # else:
             #     mask.append(0.0)
-
-    # for i in range(len(target_cells)):
-    #     cell = target_cells[i]
-    #     rgb = draw_cell(cell, rgb)
-    #
-    # cv2.imshow('rgb', rgb)
-    # cv2.waitKey()
 
     features = []
     for i in range(len(cells)):

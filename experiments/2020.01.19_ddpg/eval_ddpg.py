@@ -10,7 +10,7 @@ def run():
         params = yaml.safe_load(stream)
 
     rb_logging.init(directory=params['world']['logging_dir'], friendly_name=params['world']['friendly_name'], file_level=logging.INFO)
-    trainer = EvalWorld.load('/tmp/robamine_logs/robamine_logs_2020.01.27.11.20.07.712789')
+    trainer = EvalWorld.load('/home/mkiatos/robamine/logs/robamine_logs_2020.01.31.11.12.01 ')
     trainer.run()
 
 if __name__ == '__main__':
