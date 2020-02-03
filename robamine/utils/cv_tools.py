@@ -51,6 +51,7 @@ class Encoder(nn.Module):
 
         x = x.view(-1, 8192)
         x = nn.functional.relu(self.layers[-1](x))
+        return x
 
 '''
 Decoder without skip connections
@@ -67,14 +68,21 @@ class Decoder(nn.Module):
         self.layers.append(nn.Linear(latent_dim, 8192))
 
         for i in range(self.no_of_layers - 1):
-            self.layers.append(nn.ConvTranspose2d(self.filters[i], self.filters[i+1], self.kernels[i], stride=2))
+            self.layers.append(nn.ConvTranspose2d(self.filters[i], self.filters[i+1], self.kernels[i], stride=2, padding=1))
 
-        self.out = nn.ConvTranspose2d(self.filters[-1], out_dim[2], self.kernels[-1], stride=2)
+        self.out = nn.ConvTranspose2d(self.filters[-1], out_dim[2], self.kernels[-1], stride=2, padding=1)
 
     def forward(self, x):
-        for i in range(len(self.layers)):
-            x = nn.functional.relu(self.layers(x))
-        out = nn.functional.relu(self.out)
+        x = self.layers[0](x)
+        x = x.view(1, 128, 8, 8)
+        for i in range(1, len(self.layers)):
+            print(x.size())
+            x = nn.functional.relu(self.layers[i](x))
+        print(x.size())
+
+            # x = nn.functional.relu(self.layers(x))
+        out = nn.functional.relu(self.out(x))
+        print(out.size())
         return out
 
 '''
