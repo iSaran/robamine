@@ -4,10 +4,93 @@ import cv2
 import open3d
 import math
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
 '''
 Computer Vision Utils
 ============
 '''
+
+ae_params = {
+    'layers': 4,
+    'encoder': {
+        'filters': [16, 32, 64, 128],
+        'kernels': [3, 3, 3, 3],
+    },
+    'decoder': {
+        'filters': [128, 64, 32, 16],
+        'kernels': [4, 4, 4, 4],
+    },
+    'device': 'cpu'
+}
+
+class Encoder(nn.Module):
+    def __init__(self, input_dim, latent_dim, params = ae_params):
+        super(Encoder, self).__init__()
+        h, w, c = input_dim
+
+        self.filters = params['encoder']['filters']
+        self.kernels = params['encoder']['kernels']
+        self.no_of_layers = params['layers']
+
+        self.layers = nn.ModuleList()
+        self.layers.append(nn.Conv2d(c, self.filters[0], self.kernels[0]))
+        self.layers.append(nn.MaxPool2d(2, padding=1))
+
+        for i in range(1, self.no_of_layers):
+            self.layers.append(nn.Conv2d(self.filters[i-1], self.filters[i], self.kernels[i]))
+            self.layers.append(nn.MaxPool2d(2, padding=1))
+
+        self.layers.append(nn.Linear(8192, latent_dim))
+
+    def forward(self, x):
+        for i in range(len(self.layers) - 1):
+            x = nn.functional.relu(self.layers[i](x))
+            # x = nn.functional.relu(self.layers[i](x))
+
+        x = x.view(-1, 8192)
+        x = nn.functional.relu(self.layers[-1](x))
+
+'''
+Decoder without skip connections
+'''
+class Decoder(nn.Module):
+    def __init__(self, latent_dim, out_dim, params = ae_params):
+        super(Decoder, self).__init__()
+
+        self.filters = params['decoder']['filters']
+        self.kernels = params['decoder']['kernels']
+        self.no_of_layers = params['layers']
+
+        self.layers = nn.ModuleList()
+        self.layers.append(nn.Linear(latent_dim, 8192))
+
+        for i in range(self.no_of_layers - 1):
+            self.layers.append(nn.ConvTranspose2d(self.filters[i], self.filters[i+1], self.kernels[i], stride=2))
+
+        self.out = nn.ConvTranspose2d(self.filters[-1], out_dim[2], self.kernels[-1], stride=2)
+
+    def forward(self, x):
+        for i in range(len(self.layers)):
+            x = nn.functional.relu(self.layers(x))
+        out = nn.functional.relu(self.out)
+        return out
+
+'''
+  Symmetrical Autoencoder.
+'''
+class AutoEncoder(nn.Module):
+    def __init__(self, input_dim, latent_dim):
+        super().__init__()
+
+        self.encoder = Encoder(input_dim, latent_dim)
+        self.decoder = Decoder(latent_dim, input_dim)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        x = self.decoder(x)
+        return x
 
 
 def depth_to_point_cloud(depth, camera_intrinsics):
