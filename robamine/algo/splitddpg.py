@@ -159,7 +159,7 @@ class SplitDDPG(RLAgent):
         if (self.rng.uniform(0, 1) >= epsilon) and self.preloading_finished:
             pred = self.predict(state)
             i = int(pred[0])
-            action = pred[1:]
+            action = pred[1:self.actions[i] + 1]
         else:
             i = self.rng.randint(0, len(self.actions))
             s = torch.FloatTensor(state).to(self.device)
