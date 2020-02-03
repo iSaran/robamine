@@ -295,6 +295,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.no_of_prev_points_around = 0
         # State variables. Updated after each call in self.sim_step()
         self.time = 0.0
+        self.timesteps = 0
+        self.max_timesteps = self.params.get('max_timesteps', 20)
         self.finger_pos = np.zeros(3)
         self.finger_quat = Quaternion()
         self.finger_quat_prev = Quaternion()
@@ -332,6 +334,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def reset_model(self):
 
         self.sim_step()
+
+        self.timesteps = 0
 
         if self.preloaded_init_state:
             for i in range(len(self.sim.model.geom_size)):
@@ -505,6 +509,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def step(self, action):
 
+        self.timesteps += 1
+
         # Check if we are in the special case of prective horizon actions where
         # the action is an augmented action including the action index AND the
         # pose of the target object
@@ -674,6 +680,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # return reward
 
     def terminal_state(self, observation):
+
+        if self.timesteps >= self.max_timesteps:
+            return True
 
         # Terminal if collision is detected
         if self.push_stopped_ext_forces:
