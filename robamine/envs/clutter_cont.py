@@ -529,7 +529,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
         reward = self.get_reward(obs, pcd, dim, _action)
-        reward = rescale(reward, -5, 10, range=[-1, 1])
+        reward = rescale(reward, -10, 10, range=[-1, 1])
 
         done = False
         if self.terminal_state(obs):
@@ -615,7 +615,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
-            return -5
+            return -10
 
         # if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
         #     return -5
@@ -635,14 +635,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 points_around.append(p)
 
         if self.no_of_prev_points_around == len(points_around):
-            return -3
+            return -5
 
         self.no_of_prev_points_around = len(points_around)
 
         extra_penalty = 0
         # penalize pushes that start far from the target object
         if int(action[0]) == 0:
-            extra_penalty = -rescale(action[3], -1, 1, range=[0, 3.0])
+            extra_penalty = -rescale(action[3], -1, 1, range=[0, 5.0])
             # extra_penalty += exp_reward(action[3], max_penalty=10, min=-1, max=1)
 
         # extra_penalty += exp_reward(action[2], max_penalty=10, min=-1, max=1)
