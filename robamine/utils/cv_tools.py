@@ -16,11 +16,16 @@ ae_params = {
     'layers': 4,
     'encoder': {
         'filters': [16, 32, 64, 128],
-        'kernels': [3, 3, 3, 3],
+        'kernels': [4, 4, 4, 4],
+        'strides': [2, 2, 2, 2],
+        'padding': [1, 1, 1, 1],
+        'pool': [2, 2, 2, 2]
     },
     'decoder': {
         'filters': [128, 64, 32, 16],
         'kernels': [4, 4, 4, 4],
+        'stride': [2, 2, 2, 2],
+        'padding': [1, 1 ,1 , 1]
     },
     'device': 'cpu'
 }
@@ -32,25 +37,33 @@ class Encoder(nn.Module):
 
         self.filters = params['encoder']['filters']
         self.kernels = params['encoder']['kernels']
+        self.stride = params['encoder']['strides']
+        self.pad = params['encoder']['padding']
+        self.pool = params['encoder']['pool']
         self.no_of_layers = params['layers']
 
-        self.layers = nn.ModuleList()
-        self.layers.append(nn.Conv2d(c, self.filters[0], self.kernels[0]))
-        self.layers.append(nn.MaxPool2d(2, padding=1))
-
-        for i in range(1, self.no_of_layers):
-            self.layers.append(nn.Conv2d(self.filters[i-1], self.filters[i], self.kernels[i]))
-            self.layers.append(nn.MaxPool2d(2, padding=1))
-
-        self.layers.append(nn.Linear(8192, latent_dim))
+        self.conv1 = nn.Conv2d(c, self.filters[0], self.kernels[0], stride=self.stride[0], padding=self.pad[0])
+        self.maxpool1 = nn.MaxPool2d(self.pool[0])
+        self.conv2 = nn.Conv2d(self.filters[0], self.filters[1], self.kernels[1], stride=self.stride[1], padding=self.pad[1])
+        self.maxpool2 = nn.MaxPool2d(self.pool[1])
+        self.conv3 = nn.Conv2d(self.filters[1], self.filters[2], self.kernels[2], stride=self.stride[2], padding=self.pad[2])
+        self.maxpool3 = nn.MaxPool2d(self.pool[2])
+        self.conv4 = nn.Conv2d(self.filters[2], self.filters[3], self.kernels[3], stride=self.stride[3], padding=self.pad[3])
+        self.maxpool4 = nn.MaxPool2d(self.pool[3])
+        # add another cnn layer
+        self.latent = nn.Linear(8192, latent_dim)
 
     def forward(self, x):
-        for i in range(len(self.layers) - 1):
-            x = nn.functional.relu(self.layers[i](x))
-            # x = nn.functional.relu(self.layers[i](x))
-
+        x = nn.functional.relu(self.conv1(x))
+        # x = self.maxpool1(x)
+        x = nn.functional.relu(self.conv2(x))
+        # x = self.maxpool2(x)
+        x = nn.functional.relu(self.conv3(x))
+        # x = self.maxpool3(x)
+        x = nn.functional.relu(self.conv4(x))
+        # x = self.maxpool4(x)
         x = x.view(-1, 8192)
-        x = nn.functional.relu(self.layers[-1](x))
+        x = nn.functional.relu(self.latent(x))
         return x
 
 '''
@@ -62,27 +75,29 @@ class Decoder(nn.Module):
 
         self.filters = params['decoder']['filters']
         self.kernels = params['decoder']['kernels']
+        self.stride = params['decoder']['stride']
+        self.pad = params['decoder']['padding']
         self.no_of_layers = params['layers']
 
-        self.layers = nn.ModuleList()
-        self.layers.append(nn.Linear(latent_dim, 8192))
 
-        for i in range(self.no_of_layers - 1):
-            self.layers.append(nn.ConvTranspose2d(self.filters[i], self.filters[i+1], self.kernels[i], stride=2, padding=1))
+        self.latent = nn.Linear(latent_dim, 8192)
 
-        self.out = nn.ConvTranspose2d(self.filters[-1], out_dim[2], self.kernels[-1], stride=2, padding=1)
+        self.deconv1 = nn.ConvTranspose2d(self.filters[0], self.filters[1], self.kernels[0], stride=self.stride[0],
+                                          padding=self.pad[0])
+        self.deconv2 = nn.ConvTranspose2d(self.filters[1], self.filters[2], self.kernels[1], stride=self.stride[1],
+                                          padding=self.pad[1])
+        self.deconv3 = nn.ConvTranspose2d(self.filters[2], self.filters[3], self.kernels[2], stride=self.stride[2],
+                                          padding=self.pad[2])
+        self.out = nn.ConvTranspose2d(self.filters[-1], out_dim[2], self.kernels[-1], stride=self.stride[-1],
+                                          padding=self.pad[-1])
 
     def forward(self, x):
-        x = self.layers[0](x)
+        x = self.latent(x)
         x = x.view(1, 128, 8, 8)
-        for i in range(1, len(self.layers)):
-            print(x.size())
-            x = nn.functional.relu(self.layers[i](x))
-        print(x.size())
-
-            # x = nn.functional.relu(self.layers(x))
+        x = nn.functional.relu(self.deconv1(x))
+        x = nn.functional.relu(self.deconv2(x))
+        x = nn.functional.relu(self.deconv3(x))
         out = nn.functional.relu(self.out(x))
-        print(out.size())
         return out
 
 '''
@@ -99,6 +114,10 @@ class AutoEncoder(nn.Module):
         x = self.encoder(x)
         x = self.decoder(x)
         return x
+
+    # def train(self, data, n_epochs, batch_size):
+    #
+    #     for epoch in range(n_epochs):
 
 
 def depth_to_point_cloud(depth, camera_intrinsics):
