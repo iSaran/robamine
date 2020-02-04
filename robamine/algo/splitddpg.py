@@ -115,8 +115,8 @@ class SplitDDPG(RLAgent):
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         for i in range(self.nr_network):
-            self.critic_optimizer.append(optim.Adam(self.critic.parameters(), self.params['critic']['learning_rate']))
-            self.actor_optimizer.append(optim.Adam(self.actor.parameters(), self.params['actor']['learning_rate']))
+            self.critic_optimizer.append(optim.Adam(self.critic[i].parameters(), self.params['critic']['learning_rate']))
+            self.actor_optimizer.append(optim.Adam(self.actor[i].parameters(), self.params['actor']['learning_rate']))
             self.replay_buffer.append(ReplayBuffer(self.params['replay_buffer_size']))
             self.info['critic_' + str(i) + '_loss'] = 0
             self.info['actor_' + str(i) + '_loss'] = 0
