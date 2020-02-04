@@ -60,7 +60,7 @@ env:
 world:
   comments: ''
   friendly_name: ''
-  logging_dir: /home/mkiatos/robamine/logs/
+  logging_dir: /tmp/robamine_logs
   name: TrainEval
   params:
     episodes: 5000
