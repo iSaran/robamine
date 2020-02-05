@@ -27,7 +27,7 @@ ae_params = {
         'stride': [2, 2, 2, 2],
         'padding': [1, 1 ,1 , 1]
     },
-    'device': 'cpu'
+    'device': 'cuda'
 }
 
 class Encoder(nn.Module):
@@ -78,7 +78,7 @@ class Decoder(nn.Module):
         self.stride = params['decoder']['stride']
         self.pad = params['decoder']['padding']
         self.no_of_layers = params['layers']
-
+        self.device = params['device']
 
         self.latent = nn.Linear(latent_dim, 8192)
 
@@ -88,25 +88,34 @@ class Decoder(nn.Module):
                                           padding=self.pad[1])
         self.deconv3 = nn.ConvTranspose2d(self.filters[2], self.filters[3], self.kernels[2], stride=self.stride[2],
                                           padding=self.pad[2])
-        self.out = nn.ConvTranspose2d(self.filters[-1], out_dim[2], self.kernels[-1], stride=self.stride[-1],
+
+        self.out1 = nn.ConvTranspose2d(self.filters[-1], 1, self.kernels[-1], stride=self.stride[-1],
                                           padding=self.pad[-1])
+        self.out2 = nn.ConvTranspose2d(self.filters[-1], 1, self.kernels[-1], stride=self.stride[-1],
+                                        padding=self.pad[-1])
 
     def forward(self, x):
         x = self.latent(x)
-        x = x.view(1, 128, 8, 8)
+        n =  x.shape[0]
+        x = x.view(n, 128, 8, 8)
         x = nn.functional.relu(self.deconv1(x))
         x = nn.functional.relu(self.deconv2(x))
         x = nn.functional.relu(self.deconv3(x))
-        out = nn.functional.relu(self.out(x))
-        return out
 
-'''
-  Symmetrical Autoencoder.
-'''
+        out_1 = nn.functional.relu(self.out1(x)) # heightmap
+        out_2 = torch.sigmoid(self.out2(x)) # mask
+        # threshold the mask to 0-1
+        x = torch.ones(n, 1, 128, 128).to(self.device)
+        y = torch.zeros(n, 1, 128, 128).to(self.device)
+        out_2 = torch.where(out_2 > 0.5, x, y)
+        return out_1, out_2
+
+
 class AutoEncoder(nn.Module):
-    def __init__(self, input_dim, latent_dim):
+    def __init__(self, input_dim, latent_dim, params=ae_params):
         super().__init__()
 
+        self.device = params['device']
         self.encoder = Encoder(input_dim, latent_dim)
         self.decoder = Decoder(latent_dim, input_dim)
 
@@ -115,9 +124,26 @@ class AutoEncoder(nn.Module):
         x = self.decoder(x)
         return x
 
-    # def train(self, data, n_epochs, batch_size):
-    #
-    #     for epoch in range(n_epochs):
+
+class AeLoss(nn.Module):
+    def __init__(self):
+        super(AeLoss, self).__init__()
+        self.w_reg = 2
+        self.w_ce = 0.1
+        self.l_reg = nn.MSELoss()
+        self.l_ce = nn.BCELoss()
+
+    def forward(self, real, pred_1, pred_2):
+        real_1 = real[:, 0, :, :]
+        pred_1 = torch.squeeze(pred_1)
+        l_1 = self.l_reg(real_1, pred_1)
+
+        real_2 = real[:, 1, :, :]
+        pred_2 = torch.squeeze(pred_2)
+        l_2 = self.l_ce(pred_2, real_2.detach())
+        print('Lreg:', self.w_reg * l_1.detach().cpu().numpy(), 'Lce:', self.w_ce * l_2.detach().cpu().numpy())
+
+        return self.w_reg * l_1 + self.w_ce * l_2
 
 
 def depth_to_point_cloud(depth, camera_intrinsics):

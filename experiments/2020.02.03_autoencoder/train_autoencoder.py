@@ -3,8 +3,41 @@ import os
 import numpy as np
 from robamine.algo.util import EnvData, Dataset
 
-from robamine.algo.util import AutoEncoder
+from robamine.utils.cv_tools import AutoEncoder, AeLoss
+import torch
 import torch.optim as optim
+import torch.nn as nn
+
+
+def compute_loss(train_dataset, test_dataset, network):
+    # Calculate train loss
+    train_loss = 0.0
+    test_loss = 0.0
+
+    train_x, train_y = train_dataset.to_array()
+    n_samples = train_x.shape[0]
+    for i in range(n_samples):
+        real_x = torch.tensor(np.expand_dims(train_x[i], axis=0), dtype=torch.float, requires_grad=True).to(device)
+        pred_heigthmap, pred_mask = ae(real_x)
+        pred_1 = torch.tensor(pred_heigthmap, dtype=torch.float, requires_grad=True).to(device)
+        pred_2 = torch.tensor(pred_mask, dtype=torch.float, requires_grad=True).to(device)
+        loss = ae_loss(real_x, pred_1, pred_2)
+        train_loss += loss.detach().cpu().numpy().copy()
+    train_loss /= n_samples
+
+    # # Calculate loss in test dataset
+    test_x, test_y = test_dataset.to_array()
+    n_samples = test_x.shape[0]
+    for i in range(n_samples):
+        real_x = torch.tensor(np.expand_dims(test_x[i], axis=0), dtype=torch.float, requires_grad=True).to(device)
+        pred_heigthmap, pred_mask = ae(real_x)
+        pred_1 = torch.tensor(pred_heigthmap, dtype=torch.float, requires_grad=True).to(device)
+        pred_2 = torch.tensor(pred_mask, dtype=torch.float, requires_grad=True).to(device)
+        loss = ae_loss(real_x, pred_1, pred_2)
+        test_loss += loss.detach().cpu().numpy().copy()
+
+    return train_loss, test_loss
+
 
 def load_dataset(path):
     env_data = EnvData.load(os.path.join(path, 'samples.env'))
@@ -23,48 +56,34 @@ if __name__ == '__main__':
     train_dataset, test_dataset = dataset.split(0.7)
 
     n_epochs = 150
-    device = 'cpu'
+    device = 'cuda'
     batch_size = 64
     learning_rate = 0.0001
 
-    ae = AutoEncoder()
+    input_dim = [128, 128, 2]
+    latent_dim = 500
+    ae = AutoEncoder(input_dim, latent_dim).to(device)
 
     optimizer = optim.Adam(ae.parameters(), lr=learning_rate)
-    loss = nn.MSELoss()
-
+    # loss = nn.MSELoss()
+    ae_loss = AeLoss()
+    # ToDo: loss is the sum of regression and classification
 
     for epoch in range(n_epochs):
-        # Calculate train loss
-        train_x, train_y = train_dataset.to_array()
-        real_x = torch.FloatTensor(train_x).to(device)
-        prediction = ae(real_x)
-        real_y = torch.FloatTensor(train_y).to(device)
-        loss = loss(prediction, real_y)
-        train_loss = loss.detach().cpu().numpy().copy()
+        train_loss, test_loss = compute_loss(train_dataset, test_dataset, ae)
+        print('epoch:', epoch, 'train_loss:', train_loss, 'test_loss', test_loss)
 
-        # Calculate loss in test dataset
-        test_x, test_y = test_dataset.to_array()
-        real_x = torch.FloatTensor(test_x).to(device)
-        prediction = ae(real_x)
-        real_y = torch.FloatTensor(test_y).to(device)
-        loss = loss(prediction, real_y)
-        test_loss = loss.detach().cpu().numpy().copy()
-
-        print('train_loss:', train_loss, 'test_loss', test_loss)
-
-        # Minimbatch update of network
+        # # Minimbatch update of network
         minibatches = train_dataset.to_minibatches(batch_size)
         for minibatch in minibatches:
             batch_x, batch_y = minibatch.to_array()
 
             real_x = torch.FloatTensor(batch_x).to(device)
-            prediction = ae(real_x)
-            real_y = torch.FloatTensor(batch_y).to(device)
-            loss = loss(prediction, real_y)
+            real_x = torch.tensor(batch_x, dtype=torch.float, requires_grad=True).to(device)
+            pred_heigthmap, pred_mask = ae(real_x)
+            pred_1 = torch.tensor(pred_heigthmap, dtype=torch.float, requires_grad=True).to(device)
+            pred_2 = torch.tensor(pred_mask, dtype=torch.float, requires_grad=True).to(device)
+            loss = ae_loss(real_x, pred_1, pred_2)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-
-    # train with data
-    # ...
