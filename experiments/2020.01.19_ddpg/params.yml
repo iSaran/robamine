@@ -47,6 +47,7 @@ env:
     - 0.01
     target_probability_box: 1.0
     push_target_init_distance: [0.0, 0.1]
+    max_timesteps: 5
 world:
   comments: ''
   friendly_name: ''
