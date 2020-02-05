@@ -236,6 +236,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_quat = Quaternion()
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
         self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
+        self.target_grasped_successfully = False
         self.success = False
         self.push_distance = 0.0
 
@@ -475,43 +476,63 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def do_simulation(self, action):
         primitive = int(action[0])
-
-        # Push target primitive
-        if primitive == 0:
-            theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-            push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
-            distance = rescale(action[3], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
-            push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
-                              target_bounding_box= self.target_size/2, finger_size = self.finger_length)
-        # Push obstacle primitive
-        elif primitive == 1:
-            theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-            push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
-            push = PushObstacle(theta=theta, push_distance=push_distance,
-                                object_height = self.target_height, finger_size = self.finger_length)
-
-        # Transform pushing from target frame to world frame
         target_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+        if primitive == 0 or primitive == 1:
 
-        push_initial_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_init_pos(), 1))[:3]
-        push_final_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_final_pos(), 1))[:3]
+            # Push target primitive
+            if primitive == 0:
+                theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
+                push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
+                distance = rescale(action[3], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
+                push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
+                                  target_bounding_box= self.target_size/2, finger_size = self.finger_length)
+            # Push obstacle primitive
+            elif primitive == 1:
+                theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
+                push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
+                push = PushObstacle(theta=theta, push_distance=push_distance,
+                                    object_height = self.target_height, finger_size = self.finger_length)
 
-        # Save init pose for calculating prediction of displacement w.r.t. the
-        # init target pose not world
-        init_target_pos = self.target_pos.copy()
-        init_target_quat = self.target_quat.copy()
+            # Transform pushing from target frame to world frame
 
-        init_z = 2 * self.target_height + 0.05
-        self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
-        self.sim_step()
-        duration = push.get_duration()
+            push_initial_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_init_pos(), 1))[:3]
+            push_final_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_final_pos(), 1))[:3]
 
-        if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
-            end = push_final_pos_world[:2]
-            init_pos = self.target_pos
-            self.move_joint_to_target('finger', [end[0], end[1], None], duration)
+            # Save init pose for calculating prediction of displacement w.r.t. the
+            # init target pose not world
+            init_target_pos = self.target_pos.copy()
+            init_target_quat = self.target_quat.copy()
+
+            init_z = 2 * self.target_height + 0.05
+            self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
+            self.sim_step()
+            duration = push.get_duration()
+
+            if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
+                end = push_final_pos_world[:2]
+                init_pos = self.target_pos
+                self.move_joint_to_target('finger', [end[0], end[1], None], duration)
+            else:
+                self.push_stopped_ext_forces = True
+
+        elif primitive == 2:
+            theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
+            grasp = GraspTarget(theta=theta, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
+            f1_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[0], 1))[:3]
+            f2_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[1], 1))[:3]
+
+            init_z = 2 * self.target_height + 0.05
+            self.sim.data.set_joint_qpos('finger', [f1_initial_pos_world[0], f1_initial_pos_world[1], init_z, 1, 0, 0, 0])
+            self.sim.data.set_joint_qpos('finger2', [f2_initial_pos_world[0], f2_initial_pos_world[1], init_z, 1, 0, 0, 0])
+            self.sim_step()
+
+            if self.move_joint_to_target('finger', [None, None, grasp.z], stop_external_forces=True):
+                self.target_grasped_successfully = True
+            else:
+                self.push_stopped_ext_forces = True
+
         else:
-            self.push_stopped_ext_forces = True
+            raise ValueError('Clutter: Primitive ' + str(primitive) + ' does not exist.')
 
         return self.sim.data.time
 
