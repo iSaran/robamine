@@ -94,6 +94,12 @@ class Actor(nn.Module):
 
 
 class SplitDDPG(RLAgent):
+    '''
+    In info dict it saves for each primitive the loss of the critic and the loss
+    of the actor and the qvalues for each primitive. The q values are updated
+    only in predict, so during training if you call explore the q values will be
+    invalid.
+    '''
     def __init__(self, state_dim, action_dim, params=default_params):
         super().__init__(state_dim, action_dim, 'SplitDDPG', params)
 
@@ -114,12 +120,14 @@ class SplitDDPG(RLAgent):
             self.target_critic.append(Critic(state_dim, self.actions[i], self.params['critic']['hidden_units'][i]))
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
+        self.info['q_values'] = []
         for i in range(self.nr_network):
             self.critic_optimizer.append(optim.Adam(self.critic[i].parameters(), self.params['critic']['learning_rate']))
             self.actor_optimizer.append(optim.Adam(self.actor[i].parameters(), self.params['actor']['learning_rate']))
             self.replay_buffer.append(ReplayBuffer(self.params['replay_buffer_size']))
             self.info['critic_' + str(i) + '_loss'] = 0
             self.info['actor_' + str(i) + '_loss'] = 0
+            self.info['q_values'].append(0.0)
 
         self.exploration_noise = []
         for i in range(len(self.actions)):
@@ -140,6 +148,7 @@ class SplitDDPG(RLAgent):
         for i in range(self.nr_network):
             a = self.actor[i](s)
             q = self.critic[i](s, a).cpu().detach().numpy()
+            self.info['q_values'][i] = q[0]
             if q > max_q:
                 max_q = q
                 max_a = a.cpu().detach().numpy()
