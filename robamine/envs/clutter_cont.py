@@ -534,7 +534,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
-        reward = self.get_reward_obs(obs, pcd, dim)
+        reward = self.get_reward(obs, pcd, dim)
         reward = rescale(reward, -10, 10, range=[-1, 1])
 
         done = False
@@ -556,14 +556,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         primitive = int(action[0])
 
         # Push target primitive
-        # if primitive == 0:
-        #     theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-        #     push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
-        #     distance = rescale(action[3], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
-        #     push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
-        #                       target_bounding_box= self.target_size/2, finger_size = self.finger_length)
-        # Push obstacle primitive
         if primitive == 0:
+            theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
+            push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
+            distance = rescale(action[3], min=-1, max=1, range=self.params['push_target_init_distance'])  # hardcoded, read it from table limits
+            push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
+                              target_bounding_box= self.target_size/2, finger_size = self.finger_length)
+        # Push obstacle primitive
+        elif primitive == 1:
             theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
             push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push_distance'][0], self.params['push_distance'][1]])  # hardcoded read it from min max pushing distance
             push = PushObstacle(theta=theta, push_distance=push_distance,
@@ -634,6 +634,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.no_of_prev_points_around == len(points_around):
             return -10
         else:
+            self.no_of_prev_points_around = len(points_around)
             return 10
 
 
@@ -668,8 +669,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         extra_penalty = 0
         # penalize pushes that start far from the target object
-        # if int(action[0]) == 0:
-        #     extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
+        if int(action[0]) == 0:
+            extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
             # extra_penalty += exp_reward(action[3], max_penalty=10, min=-1, max=1)
 
         # extra_penalty += exp_reward(action[2], max_penalty=10, min=-1, max=1)
