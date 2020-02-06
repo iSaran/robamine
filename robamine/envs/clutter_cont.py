@@ -534,7 +534,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
-        reward = self.get_reward(obs, pcd, dim)
+        reward = self.get_reward(obs, pcd, dim, _action)
         reward = rescale(reward, -10, 10, range=[-1, 1])
 
         done = False
