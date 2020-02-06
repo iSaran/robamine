@@ -89,10 +89,13 @@ class Decoder(nn.Module):
         self.deconv3 = nn.ConvTranspose2d(self.filters[2], self.filters[3], self.kernels[2], stride=self.stride[2],
                                           padding=self.pad[2])
 
-        self.out1 = nn.ConvTranspose2d(self.filters[-1], 1, self.kernels[-1], stride=self.stride[-1],
-                                          padding=self.pad[-1])
-        self.out2 = nn.ConvTranspose2d(self.filters[-1], 1, self.kernels[-1], stride=self.stride[-1],
-                                        padding=self.pad[-1])
+        # self.out1 = nn.ConvTranspose2d(self.filters[-1], 1, self.kernels[-1], stride=self.stride[-1],
+        #                                   padding=self.pad[-1])
+        # self.out2 = nn.ConvTranspose2d(self.filters[-1], 1, self.kernels[-1], stride=self.stride[-1],
+        #                                 padding=self.pad[-1])
+
+        self.out = nn.ConvTranspose2d(self.filters[-1], 1, self.kernels[-1], stride=self.stride[-1],
+                                       padding=self.pad[-1])
 
     def forward(self, x):
         x = self.latent(x)
@@ -101,13 +104,14 @@ class Decoder(nn.Module):
         x = nn.functional.relu(self.deconv1(x))
         x = nn.functional.relu(self.deconv2(x))
         x = nn.functional.relu(self.deconv3(x))
+        # out = nn.functional.relu(self.out(x))
 
-        out_1 = nn.functional.relu(self.out1(x)) # heightmap
-        out_2 = torch.sigmoid(self.out2(x)) # mask
+        out_1 = nn.functional.relu(self.out(x)) # heightmap
+        out_2 = torch.sigmoid(self.out(x)) # mask
         # threshold the mask to 0-1
-        x = torch.ones(n, 1, 128, 128).to(self.device)
-        y = torch.zeros(n, 1, 128, 128).to(self.device)
-        out_2 = torch.where(out_2 > 0.5, x, y)
+        # x = torch.ones(n, 1, 128, 128).to(self.device)
+        # y = torch.zeros(n, 1, 128, 128).to(self.device)
+        # out_2 = torch.where(out_2 > 0.5, x, y)
         return out_1, out_2
 
 
@@ -124,25 +128,19 @@ class AutoEncoder(nn.Module):
         x = self.decoder(x)
         return x
 
-
 class AeLoss(nn.Module):
     def __init__(self):
         super(AeLoss, self).__init__()
-        self.w_reg = 2
-        self.w_ce = 0.1
+        self.w_reg = 1.0
+        self.w_ce = 0.0
         self.l_reg = nn.MSELoss()
         self.l_ce = nn.BCELoss()
 
-    def forward(self, real, pred_1, pred_2):
-        real_1 = real[:, 0, :, :]
-        pred_1 = torch.squeeze(pred_1)
+    def forward(self, real_1, pred_1, real_2, pred_2):
         l_1 = self.l_reg(real_1, pred_1)
-
-        real_2 = real[:, 1, :, :]
-        pred_2 = torch.squeeze(pred_2)
-        l_2 = self.l_ce(pred_2, real_2.detach())
-        print('Lreg:', self.w_reg * l_1.detach().cpu().numpy(), 'Lce:', self.w_ce * l_2.detach().cpu().numpy())
-
+        # l_2 = self.l_ce(pred_2, real_2.detach())
+        l_2 = self.l_reg(pred_2, real_2)
+        # print('Lreg:', self.w_reg * l_1.detach().cpu().numpy(), 'Lce:', self.w_ce * l_2.detach().cpu().numpy())
         return self.w_reg * l_1 + self.w_ce * l_2
 
 
