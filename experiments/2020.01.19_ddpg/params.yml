@@ -23,6 +23,9 @@ agent:
       start: 0.9
       end: 0.05
       decay: 10000
+    # load_actors:  # Uncomment to use pretrained actors. Comment-out for initialize actors from scratch it if want to initialize actors from scratch
+    #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
+    #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
   trainable_params: ''
 env:
   name: ClutterCont-v0

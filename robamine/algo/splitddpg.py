@@ -140,6 +140,16 @@ class SplitDDPG(RLAgent):
         self.learn_step_counter = 0
         self.preloading_finished = False
 
+        if 'load_actors' in self.params:
+            logger.warn("SplitDDPG: Overwriting the actors from the models provided in load_actors param.")
+            for i in range(self.nr_network):
+                path = self.params['load_actors'][i]
+                with open(path, 'rb') as file:
+                    pretrained_splitddpg = pickle.load(file)
+                    # Assuming that pretrained splitddpg has only one primitive so actor is in 0 index
+                    self.actor[i].load_state_dict(pretrained_splitddpg['actor'][0])
+                    self.target_actor[i].load_state_dict(pretrained_splitddpg['target_actor'][0])
+
     def predict(self, state):
         output = np.zeros(max(self.actions) + 1)
         s = torch.FloatTensor(state).to(self.device)
