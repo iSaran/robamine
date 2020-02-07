@@ -1,7 +1,7 @@
 agent:
   name: SplitDDPG
   params:
-    actions: [3]
+    actions: [2]
     batch_size: [64, 64]
     device: cpu
     gamma: 0.99
@@ -32,7 +32,7 @@ env:
     - 0.005
     - 0.005
     nr_of_obstacles:
-    - 1
+    - 8
     - 8
     obstacle_height_range:
     - 0.005

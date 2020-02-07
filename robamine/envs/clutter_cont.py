@@ -184,6 +184,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_size = np.zeros(3)
 
         self.no_of_prev_points_around = 0
+        self.prev_point_cloud = []
         # State variables. Updated after each call in self.sim_step()
         self.time = 0.0
         self.timesteps = 0
@@ -301,7 +302,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # cv_tools.plot_point_cloud(point_cloud)
         # cv_tools.plot_point_cloud(points_around)
-
+        self.prev_point_cloud = points_around
         self.no_of_prev_points_around = len(points_around)
         observation, _, _ = self.get_obs()
 
@@ -423,9 +424,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
+        # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         reward = self.get_reward_obs(obs, pcd, dim)
         reward = rescale(reward, -10, 10, range=[-1, 1])
-        print(reward)
 
         done = False
         if self.terminal_state(obs):
@@ -508,19 +509,38 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     -dim[0] < p[0] < dim[0]:
                 points_around.append(p)
 
-        # cv_tools.plot_point_cloud(points_around)
-
-        print('prev:', self.no_of_prev_points_around, 'after push:', len(points_around))
-
         if self.no_of_prev_points_around - 20 < len(points_around) < self.no_of_prev_points_around + 20:
             self.no_of_prev_points_around = len(points_around)
             return -10
         elif self.no_of_prev_points_around > len(points_around) + 20:
-            self.no_of_prev_points_around = len(points_around)
+            self.prev_point_cloud = points_around
             return 10
         else:
             self.no_of_prev_points_around = len(points_around)
+            self.prev_point_cloud = points_around
             return 0
+
+    def get_shaped_reward_obs(self, observation, point_cloud, dim):
+        # for each push that frees the space around the target
+        points_around = []
+        gap = 0.03
+        bbox_limit = 0.01
+
+        for p in point_cloud:
+            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
+                dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
+                    -dim[1] < p[1] < dim[1]:
+                points_around.append(p)
+            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
+                dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
+                    -dim[0] < p[0] < dim[0]:
+                points_around.append(p)
+
+        r = abs(len(points_around) - self.no_of_prev_points_around) / float(self.no_of_prev_points_around)
+        r = rescale(r, 0, 1, [-10, 10])
+        print('prev:', self.no_of_prev_points_around, 'after:', len(points_around), 'R:', r)
+        self.no_of_prev_points_around = len(points_around)
+        return r
 
 
     def get_reward(self, observation, point_cloud, dim, action):
