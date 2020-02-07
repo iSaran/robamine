@@ -13,10 +13,44 @@ import cv2
 from sklearn.decomposition import PCA
 
 
-def compute_loss(train_dataset, test_dataset, ae, ae_loss):
-    # Calculate train loss
+def augment_data(dataset, rotations=10):
+    n_samples = dataset.shape[0]
+    s = dataset[0, :, :, :].shape
+    w, h = [s[1], s[2]]
+    center = (w/2, h/2)
+    data = np.zeros((n_samples * rotations, s[0], s[1], s[2]))
+    step_angle = 360 / rotations
+    id = 0
+    for i in range(n_samples):
+        x = dataset[i, :, :, :]
+        for j in range(rotations):
+            angle = j * step_angle
+            m = cv2.getRotationMatrix2D(center, angle, scale=1)
+            rot_heightmap = cv2.warpAffine(x[0, :, :], m, (h, w))
+            rot_mask = cv2.warpAffine(x[1, :, :], m, (h, w))
 
-    return train_loss, test_loss
+            rot_x = np.zeros((2, 128, 128))
+            rot_x[0, :, :] = rot_heightmap
+            rot_x[1, :, :] = rot_mask
+
+            data[id, :, :, :] = rot_x
+            id += 1
+            # plot_height_map(rot_x[0, :, :])
+    return data
+
+
+# dataset is wrong h_max = 2.3
+def preprocess_data(dataset):
+    n_samples = dataset.shape[0]
+    for i in range(n_samples):
+        # dataset[i, 1, :, :] = 1 - dataset[i, 1, :, :]
+        x = dataset[i, 0, :, :]
+
+    print(np.min(dataset[:, 0, :, :]), np.max(dataset[:, 0, :, :]))
+    print(np.min(dataset[:, 1, :, :]), np.max(dataset[:, 1, :, :]))
+    input('')
+        # plot_height_map(dataset[i, 1, :, :])
+    return dataset
 
 
 def load_dataset(path):
@@ -40,19 +74,21 @@ if __name__ == '__main__':
     torch.manual_seed(0)
 
     data = load_dataset('/home/mkiatos/robamine/logs/robamine_logs_2020.02.03.18.36.16.854111/')
+    # data = preprocess_data(data)
+    # data = augment_data(data)
 
     # np array to Dataset in order to have split, minibatches functionalities
     dataset = Dataset.from_array(data, data)
     train_dataset, test_dataset = dataset.split(0.8)
     train_dataset.seed(0)
 
-    n_epochs = 50
+    n_epochs = 30
     device = 'cuda'
     batch_size = 64
     learning_rate = 0.0001
 
-    input_dim = [128, 128, 1]
-    latent_dim = 500
+    input_dim = [128, 128, 2]
+    latent_dim = 512
     ae = AutoEncoder(input_dim, latent_dim).to(device)
 
     optimizer = optim.Adam(ae.parameters(), lr=learning_rate)
@@ -64,10 +100,10 @@ if __name__ == '__main__':
     for epoch in range(n_epochs):
         train_loss = 0.0
         test_loss = 0.0
-        minib = train_dataset.to_minibatches(batch_size)
-        for minibatch in minib:
+        minibatches = train_dataset.to_minibatches(batch_size)
+        for minibatch in minibatches:
             batch_x, batch_y = minibatch.to_array()
-            real_x = torch.tensor(np.expand_dims(batch_x[:, 0, :, :], axis=1), dtype=torch.float, requires_grad=True).to(device)
+            real_x = torch.tensor(batch_x, dtype=torch.float, requires_grad=True).to(device)
             real_y_1 = torch.tensor(batch_y[:, 0, :, :], dtype=torch.float, requires_grad=True).to(device)
             real_y_2 = torch.tensor(batch_y[:, 1, :, :], dtype=torch.float, requires_grad=True).to(device)
             pred_1, pred_2 = ae(real_x)
@@ -76,25 +112,30 @@ if __name__ == '__main__':
             loss = ae_loss(real_y_1, pred_1, real_y_2, pred_2)
             train_loss += loss.detach().cpu().numpy().copy()
 
-        train_loss /= len(minib)
+        train_loss /= len(minibatches)
 
         # # # Calculate loss in test dataset
-        # test_x, test_y = test_dataset.to_array()
-        # n_samples = test_x.shape[0]
-        # for i in range(n_samples):
-        #     real_x = torch.tensor(np.expand_dims(test_x[i], axis=0), dtype=torch.float, requires_grad=True).to(device)
-        #     pred = ae(real_x)
-        #     loss = ae_loss(real_x, pred)
-        #     test_loss += loss.detach().cpu().numpy().copy()
-        # test_loss /= n_samples
+        minibatches = test_dataset.to_minibatches(batch_size)
+        for minibatch in minibatches:
+            batch_x, batch_y = minibatch.to_array()
+            real_x = torch.tensor(batch_x, dtype=torch.float,
+                                  requires_grad=True).to(device)
+            real_y_1 = torch.tensor(batch_y[:, 0, :, :], dtype=torch.float, requires_grad=True).to(device)
+            real_y_2 = torch.tensor(batch_y[:, 1, :, :], dtype=torch.float, requires_grad=True).to(device)
+            pred_1, pred_2 = ae(real_x)
+            pred_1 = torch.squeeze(pred_1)
+            pred_2 = torch.squeeze(pred_2)
+            loss = ae_loss(real_y_1, pred_1, real_y_2, pred_2)
+            test_loss += loss.detach().cpu().numpy().copy()
 
+        test_loss /= len(minibatches)
         print('epoch:', epoch, 'train_loss:', train_loss, 'test_loss', test_loss)
 
         # # Minimbatch update of network
         minibatches = train_dataset.to_minibatches(batch_size)
         for minibatch in minibatches:
             batch_x, batch_y = minibatch.to_array()
-            real_x = torch.tensor(np.expand_dims(batch_x[:, 0, :, :], axis=1), dtype=torch.float, requires_grad=True).to(device)
+            real_x = torch.tensor(batch_x, dtype=torch.float, requires_grad=True).to(device)
             real_y_1 = torch.tensor(batch_y[:, 0, :, :], dtype=torch.float, requires_grad=True).to(device)
             real_y_2 = torch.tensor(batch_y[:, 1, :, :], dtype=torch.float, requires_grad=True).to(device)
             pred_1, pred_2 = ae(real_x)
@@ -105,10 +146,10 @@ if __name__ == '__main__':
             loss.backward()
             optimizer.step()
 
-    test_x, test_y = train_dataset.to_array()
+    test_x, test_y = test_dataset.to_array()
     for i in range(10):
         x = test_x[i, :, :, :]
-        real_x = torch.tensor(np.expand_dims(np.expand_dims(x[0, :, :], axis=0), axis=0), dtype=torch.float, requires_grad=True).to(device)
+        real_x = torch.tensor(np.expand_dims(x, axis=0), dtype=torch.float, requires_grad=True).to(device)
         pred_1, pred_2 = ae(real_x)
         pred_1 = torch.squeeze(pred_1)
         pred_1 = pred_1.detach().cpu().numpy()

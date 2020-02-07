@@ -43,18 +43,24 @@ class Encoder(nn.Module):
         self.no_of_layers = params['layers']
 
         self.conv1 = nn.Conv2d(c, self.filters[0], self.kernels[0], stride=self.stride[0], padding=self.pad[0])
-        self.maxpool1 = nn.MaxPool2d(self.pool[0])
+        # self.maxpool1 = nn.MaxPool2d(self.pool[0])
         self.conv2 = nn.Conv2d(self.filters[0], self.filters[1], self.kernels[1], stride=self.stride[1], padding=self.pad[1])
-        self.maxpool2 = nn.MaxPool2d(self.pool[1])
+        # self.maxpool2 = nn.MaxPool2d(self.pool[1])
         self.conv3 = nn.Conv2d(self.filters[1], self.filters[2], self.kernels[2], stride=self.stride[2], padding=self.pad[2])
-        self.maxpool3 = nn.MaxPool2d(self.pool[2])
+        # self.maxpool3 = nn.MaxPool2d(self.pool[2])
         self.conv4 = nn.Conv2d(self.filters[2], self.filters[3], self.kernels[3], stride=self.stride[3], padding=self.pad[3])
-        self.maxpool4 = nn.MaxPool2d(self.pool[3])
+        # self.maxpool4 = nn.MaxPool2d(self.pool[3])
         # add another cnn layer
         self.latent = nn.Linear(8192, latent_dim)
 
     def forward(self, x):
         x = nn.functional.relu(self.conv1(x))
+        # img = x.detach().cpu().numpy()
+        # if img.shape[0] == 1:
+        #     for i in range(img.shape[0]):
+        #         mask_h = img[i, :, :, :]
+        #         for j in range(img.shape[1]):
+        #             plot_height_map(mask_h[j, :, :])
         # x = self.maxpool1(x)
         x = nn.functional.relu(self.conv2(x))
         # x = self.maxpool2(x)
@@ -132,7 +138,7 @@ class AeLoss(nn.Module):
     def __init__(self):
         super(AeLoss, self).__init__()
         self.w_reg = 1.0
-        self.w_ce = 0.0
+        self.w_ce = 1.0
         self.l_reg = nn.MSELoss()
         self.l_ce = nn.BCELoss()
 
