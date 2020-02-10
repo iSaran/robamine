@@ -372,18 +372,13 @@
         type="box" />
     </body>
     -->
-    <body
-      name="finger"
-      pos="-0.1 -0.2 0.2"
-      quat="1 0 0 0">
-      <joint
-        name="finger"
-        type="free"/>
-      <geom
-        name="finger"
-        rgba="0.3 0.3 0.3 1"
-        size=".005 .005 .005"
-        type="sphere"/>
+    <body name="finger" pos="0.15 0.1 -0.28" quat="1 0 0 0">
+      <joint name="finger" type="free"/>
+      <geom name="finger" rgba="0.3 0.3 0.3 1" size=".005 .025" type="cylinder" pos="0.0 0.0 .025"/>
+    </body>
+    <body name="finger2" pos="0.15 -0.15 -0.28" quat="1 0 0 0">
+      <joint name="finger2" type="free"/>
+      <geom name="finger2" rgba="0.3 0.3 0.3 1" size=".005 .025" type="cylinder" pos="0.0 0.0 .025"/>
     </body>
     <body
       name="finger2" pos="-0.1 -0.2 0.3" quat="1 0 0 0">

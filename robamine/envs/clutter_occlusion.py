@@ -61,13 +61,13 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
                                             dtype=np.float32)
 
         finger_mass = get_body_mass(self.sim.model, 'finger')
-        self.pd = PDController.from_mass(mass = finger_mass)
+        self.pd = PDController.from_mass(mass = finger_mass, step_response=0.05)
 
         moment_of_inertia = get_body_inertia(self.sim.model, 'finger')
         self.pd_rot = []
-        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[0], step_response=0.005))
-        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[1], step_response=0.005))
-        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[2], step_response=0.005))
+        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[0], step_response=0.006))
+        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[1], step_response=0.006))
+        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[2], step_response=0.006))
 
         # Parameters, updated once during reset of the model
         self.surface_normal = np.array([0, 0, 1])
