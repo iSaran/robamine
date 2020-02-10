@@ -49,3 +49,4 @@ __pycache__
 *.idea*
 
 robamine/test/algo/saved_model.pkl
+experiments/2020.01.21_occlusion_exploration/log.pkl

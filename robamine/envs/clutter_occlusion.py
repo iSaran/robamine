@@ -32,6 +32,25 @@ class Push:
     # Push x,y,z -> r,theta
     # iason
 
+class State:
+    def __init__(self):
+        self.finger_1_pd_error = np.zeros(6)
+        self.finger_1_pd_pos_error = np.zeros(6)
+        self.finger_1_pd_vel_error = np.zeros(6)
+        self.finger_1_pos = np.zeros(3)
+        self.finger_1_quat = np.zeros(4)
+        self.finger_1_vel = np.zeros(6)
+        self.finger_1_acc = np.zeros(6)
+        self.finger_1_wrench_cmd = np.zeros(6)
+
+
+        # self.finger_2_pd_error = np.zeros(6)
+        # self.finger_2_pose = np.zeros(7)
+        # self.finger_2_vel = np.zeros(6)
+        # self.finger_2_acc = np.zeros(6)
+
+        self.time = 0.0
+
 class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
     """
     The class for the Gym environment.
@@ -112,6 +131,9 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
         utils.EzPickle.__init__(self)
         self.seed()
         self.preloaded_init_state = None
+
+        self.state = State()
+        self.log = []
 
     # Basic API methods called during running the env
     # -----------------------------------------------
@@ -277,6 +299,13 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
         temp = self.sim.data.get_joint_qpos('target')
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
+
+        self.state.time = self.sim.data.time
+        self.state.finger_1_pos = self.finger_pos.copy()
+        self.state.finger_1_vel = self.finger_vel.copy()
+        self.state.finger_1_acc = self.finger_acc.copy()
+        self.log.append(self.state.__dict__.copy())
+
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
