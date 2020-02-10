@@ -173,7 +173,7 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
         return np.zeros(OBSERVATION_DIM)
 
     def step(self, action):
-        time = self.do_simulation(action)
+        self.do_simulation(action)
         obs = self.get_obs()
         reward = self.get_reward(obs, action)
         done = False
@@ -222,12 +222,23 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
         depth_feature = cv_tools.Feature(depth)
         depth_feature.translate(centroid[1], centroid[0]).plot()
 
-        return None
+        return np.zeros(OBSERVATION_DIM)
 
     def do_simulation(self, action):
         # Receive action from ddpg and create push
         # iason
-        return self.sim.data.time
+
+        start = np.array([0, 0, 0.1])
+        end = np.array([0, 0.2, 0.2])
+        self.sim.data.set_joint_qpos('finger', [start[0], start[1], start[2], 1, 0, 0, 0])
+        self.sim.data.set_joint_qvel('finger', [0, 0, 0, 0, 0, 0])
+
+        print(self.sim.data.qacc)
+        self.sim_step()
+        duration = 3
+        self.move_joint_to_target('finger', [end[0], end[1], end[2]], duration)
+
+        self.move_joint_to_target('finger', [start[0], start[1], start[2]], duration)
 
     def get_reward(self, observation, action):
             # - reward
@@ -263,6 +274,17 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
             self.render()
 
         self.finger_quat_prev = self.finger_quat
+
+        # Calculate bias forces (gravity, coriolis etc) in order to be added to
+        # the commanded force/torques for gravity compensation
+        bias = []
+        for i in range(*self.sim.model.get_joint_qvel_addr("finger")):
+            bias.append(self.sim.data.qfrc_bias[i])
+        bias = np.array(bias)
+
+
+        for i in range(6):
+            self.sim.data.ctrl[i] = self.state.finger_1_wrench_cmd[i] + bias[i]
 
         self.sim.step()
 
@@ -482,3 +504,91 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
             random_qpos[index[0]+2] = self.sim.model.geom_size[geom_id][2]
 
         return random_qpos, number_of_obstacles
+
+
+    def move_joint_to_target(self, joint_name, target_position, duration = 1, stop_external_forces=False):
+        """
+        Generates a trajectory in Cartesian space (x, y, z) from the current
+        position of a joint to a target position. If one of the x, y, z is None
+        then the joint will not move in this direction. For example:
+        target_position = [None, 1, 1] will move along a trajectory in y,z and
+        x will remain the same.
+
+        TODO: The indexes of the actuators are hardcoded right now assuming
+        that 0-6 is the actuator of the given joint
+
+        Returns whether it the motion completed or stopped due to external
+        forces
+        """
+        init_time = self.time
+        desired_quat = Quaternion()
+        self.target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+
+        trajectory = [None, None, None]
+        for i in range(3):
+            if target_position[i] is None:
+                target_position[i] = self.finger_pos[i]
+            trajectory[i] = Trajectory([self.time, self.time + duration], [self.finger_pos[i], target_position[i]])
+
+        while self.time <= init_time + duration:
+            quat_error = self.finger_quat.error(desired_quat)
+
+            # TODO: The indexes of the actuators are hardcoded right now
+            # assuming that 0-6 is the actuator of the given joint
+
+            pos_error = np.zeros(6)
+            vel_error = np.zeros(6)
+            for i in range(3):
+                pos_error[i] = trajectory[i].pos(self.time) - self.finger_pos[i]
+                pos_error[i + 3] = quat_error[i]
+                vel_error[i] = trajectory[i].vel(self.time) - self.finger_vel[i]
+                vel_error[i + 3] = - self.finger_vel[i + 3]
+
+
+            command = np.zeros(6)
+
+
+            for i in range(3):
+                command[i] = self.pd.get_control(pos_error[i], vel_error[i])
+                command[i + 3] = self.pd_rot[i].get_control(pos_error[i], vel_error[i + 3])
+            # for i in range(3):
+            #     command[i] = 0.0
+            #     command[i + 3] = 0.0
+
+            self.state.finger_1_pd_pos_error = pos_error.copy()
+            self.state.finger_1_pd_vel_error = vel_error.copy()
+            self.state.finger_1_wrench_cmd = command.copy()
+
+            self.sim_step()
+
+            if stop_external_forces and (self.finger_external_force_norm > 0.1):
+                break
+
+        # If external force is present move away
+        if stop_external_forces and (self.finger_external_force_norm > 0.1):
+            self.sim_step()
+            # Create a new trajectory for moving the finger slightly in the
+            # opposite direction to reduce the external forces
+            new_trajectory = [None, None, None]
+            duration = 0.2
+            for i in range(3):
+                direction = (target_position - self.finger_pos) / np.linalg.norm(target_position - self.finger_pos)
+                new_target = self.finger_pos - 0.01 * direction  # move 1 cm backwards from your initial direction
+                new_trajectory[i] = Trajectory([self.time, self.time + duration], [self.finger_pos[i], new_target[i]], [self.finger_vel[i], 0], [self.finger_acc[i], 0])
+
+            # Perform the trajectory
+            init_time = self.time
+            while self.time <= init_time + duration:
+                quat_error = self.finger_quat.error(desired_quat)
+
+                # TODO: The indexes of the actuators are hardcoded right now
+                # assuming that 0-6 is the actuator of the given joint
+                for i in range(3):
+                    self.sim.data.ctrl[i] = self.pd.get_control(new_trajectory[i].pos(self.time) - self.finger_pos[i], new_trajectory[i].vel(self.time) - self.finger_vel[i])
+                    self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
+
+                self.sim_step()
+
+            return False
+
+        return True
