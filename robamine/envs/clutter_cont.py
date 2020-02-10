@@ -188,7 +188,7 @@ class GraspObstacle:
         else:
             minimum_distance = target_bounding_box[0] / math.cos(theta_)
 
-        self.distance = minimum_distance + finger_radius + distance + 0.003
+        self.distance = minimum_distance + finger_radius + distance + 0.005
 
         object_height = target_bounding_box[2]
         if object_height - finger_radius > 0:
@@ -568,8 +568,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 grasp = GraspTarget(theta=theta, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
             if primitive == 3:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-                distance = rescale(action[2], min=-1, max=1, range=self.params['grasp']['workspace'])  # hardcoded, read it from table limits
-                phi = rescale(action[3], min=-1, max=1, range=[0, math.pi])  # hardcoded, read it from table limits
+                phi = rescale(action[2], min=-1, max=1, range=[0, math.pi])  # hardcoded, read it from table limits
+                distance = rescale(action[3], min=-1, max=1, range=self.params['grasp']['workspace'])  # hardcoded, read it from table limits
                 grasp = GraspObstacle(theta=theta, distance=distance, phi=phi, spread=self.grasp_spread, height=self.grasp_height, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
 
             f1_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[0], 1))[:3]
@@ -586,8 +586,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 if primitive == 3:
                     centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
                     f1f2_dir = (f1_initial_pos_world - f2_initial_pos_world) / np.linalg.norm(f1_initial_pos_world - f2_initial_pos_world)
-                    f1f2_dir[:2] = f1f2_dir[:2] * 1.1 * self.finger_height
-                    if not self.move_joints_to_target(centroid + f1f2_dir, centroid - f1f2_dir, ext_force_policy='stop'):
+                    f1f2_dir_1 = np.append(centroid[:2] + f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
+                    f1f2_dir_2 = np.append(centroid[:2] - f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
+                    if not self.move_joints_to_target(f1f2_dir_1, f1f2_dir_2, ext_force_policy='stop'):
                         contacts1 = detect_contact(self.sim, 'finger')
                         contacts2 = detect_contact(self.sim, 'finger2')
                         if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
