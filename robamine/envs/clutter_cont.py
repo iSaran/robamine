@@ -295,6 +295,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
         self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
         self.target_grasped_successfully = False
+        self.obstacle_grasped_successfully = False
         self.success = False
         self.push_distance = 0.0
         self.grasp_spread = 0.0
@@ -396,6 +397,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = self.sim.data.time
         self.success = False
         self.target_grasped_successfully = False
+        self.obstacle_grasped_successfully = False
 
         self.target_pos_prev_state = self.target_pos.copy()
         self.target_quat_prev_state = self.target_quat.copy()
@@ -524,6 +526,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         primitive = int(action[0])
         primitive = 1
         target_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+        self.target_grasped_successfully = False
+        self.obstacle_grasped_successfully = False
         if primitive == 0 or primitive == 1:
 
             # Push target primitive
@@ -593,6 +597,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                         contacts2 = detect_contact(self.sim, 'finger2')
                         if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
                             self._remove_obstacle_from_table(contacts1[0])
+                            self.obstacle_grasped_successfully = True
             else:
                 self.push_stopped_ext_forces = True
 
@@ -709,7 +714,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Terminal if collision is detected
         if self.target_grasped_successfully:
-            self.target_grasped_successfully = False
             self.success = True
             return True
 
