@@ -527,8 +527,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs, pcd, dim = self.get_obs()
-        reward = self.get_reward(obs, pcd, dim, _action)
-        # reward = self.get_shaped_reward_obs(obs, pcd, dim)
+        # reward = self.get_reward(obs, pcd, dim, _action)
+        reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
         reward = rescale(reward, -10, 10, range=[-1, 1])
 
@@ -545,6 +545,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def do_simulation(self, action):
         primitive = int(action[0])
+        primitive = 1
         target_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
         if primitive == 0 or primitive == 1:
 
@@ -659,11 +660,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.no_of_prev_points_around = len(points_around)
             return -10
         elif self.no_of_prev_points_around > len(points_around) + 20:
-            self.prev_point_cloud = points_around
+            self.no_of_prev_points_around = len(points_around)
             return 10
         else:
             self.no_of_prev_points_around = len(points_around)
-            self.prev_point_cloud = points_around
             return 0
 
     def get_shaped_reward_obs(self, observation, point_cloud, dim):
@@ -682,9 +682,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     -dim[0] < p[0] < dim[0]:
                 points_around.append(p)
 
+        if self.no_of_prev_points_around == 0:
+            return -10
+
         r = abs(len(points_around) - self.no_of_prev_points_around) / float(self.no_of_prev_points_around)
         r = rescale(r, 0, 1, [-10, 10])
-        print('prev:', self.no_of_prev_points_around, 'after:', len(points_around), 'R:', r)
+        # print('prev:', self.no_of_prev_points_around, 'after:', len(points_around), 'R:', r)
         self.no_of_prev_points_around = len(points_around)
         return r
 
