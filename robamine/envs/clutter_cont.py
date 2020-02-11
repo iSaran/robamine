@@ -245,7 +245,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                        high=np.array([1, 1]),
                                        dtype=np.float32)
 
-        obs_dim = OBSERVATION_DIM
+        self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
+
+        if self.heightmap_rotations > 0:
+            obs_dim = OBSERVATION_DIM * self.heightmap_rotations
+        else:
+            obs_dim = OBSERVATION_DIM
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -475,7 +480,27 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         heightmap, mask = self.get_heightmap()
 
         depth_feature = cv_tools.Feature(self.heightmap)
-        obs = depth_feature.mask_out(mask).crop(40, 40).pooling().flatten()
+
+        # if self.heightmap_rotations > 0:
+        #     features = []
+        #     rot_angle = 360 / self.heightmap_rotations
+        #     for i in range(0, len(heightmap)):
+        #         obs = depth_feature.mask_out(mask).rotate(rot_angle).crop(40, 40).pooling().flatten()
+        #         # obs.append(distances[0])
+        #         # obs.append(distances[1])
+        #         # obs.append(distances[2])
+        #         # obs.append(distances[3])
+        #         # features.append(obs)
+
+        #     final_feature = np.append(features[0], features[1], axis=0)
+        #     for i in range(2, len(features)):
+        #         final_feature = np.append(final_feature, features[i], axis=0)
+        # else:
+        #     obs = depth_feature.mask_out(mask).crop(40, 40).pooling().flatten()
+        #     # obs.append(distances[0])
+        #     # obs.append(distances[1])
+        #     # obs.append(distances[2])
+        #     # obs.append(distances[3])
 
         return obs
 

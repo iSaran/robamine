@@ -114,10 +114,10 @@ class SplitDDPG(RLAgent):
         self.actor, self.target_actor, self.critic, self.target_critic = nn.ModuleList(), nn.ModuleList(), \
                                                                          nn.ModuleList(), nn.ModuleList()
         for i in range(self.nr_network):
-            self.actor.append(Actor(state_dim, self.actions[i], self.params['actor']['hidden_units'][i]))
-            self.target_actor.append(Actor(state_dim, self.actions[i], self.params['actor']['hidden_units'][i]))
-            self.critic.append(Critic(state_dim, self.actions[i], self.params['critic']['hidden_units'][i]))
-            self.target_critic.append(Critic(state_dim, self.actions[i], self.params['critic']['hidden_units'][i]))
+            self.actor.append(Actor(self._state_dim(state_dim), self.actions[i], self.params['actor']['hidden_units'][i]))
+            self.target_actor.append(Actor(self._state_dim(state_dim), self.actions[i], self.params['actor']['hidden_units'][i]))
+            self.critic.append(Critic(self._state_dim(state_dim), self.actions[i], self.params['critic']['hidden_units'][i]))
+            self.target_critic.append(Critic(self._state_dim(state_dim), self.actions[i], self.params['critic']['hidden_units'][i]))
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         self.info['q_values'] = []
@@ -152,7 +152,7 @@ class SplitDDPG(RLAgent):
 
     def predict(self, state):
         output = np.zeros(max(self.actions) + 1)
-        s = torch.FloatTensor(state).to(self.device)
+        s = torch.FloatTensor(self._state(state)).to(self.device)
         max_q = -1e10
         i = 0
         for i in range(self.nr_network):
@@ -181,7 +181,7 @@ class SplitDDPG(RLAgent):
             action = pred[1:self.actions[i] + 1]
         else:
             i = self.rng.randint(0, len(self.actions))
-            s = torch.FloatTensor(state).to(self.device)
+            s = torch.FloatTensor(self._state(state)).to(self.device)
             action = self.actor[i](s).cpu().detach().numpy()
 
         noise = self.exploration_noise[i]()
@@ -211,7 +211,9 @@ class SplitDDPG(RLAgent):
 
     def learn(self, transition):
         i = int(transition.action[0]) # first element of action defines the primitive action
-        self.replay_buffer[i].store(transition)
+        transitions = self._transitions(transition)
+        for t in transitions:
+            self.replay_buffer[i].store(t)
 
         for _ in range(self.params['update_iter'][i]):
             self.update_net(i)
@@ -273,7 +275,7 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        s = torch.FloatTensor(state).to(self.device)
+        s = torch.FloatTensor(self._state(state)).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
         q = self.critic[i](s, a).cpu().detach().numpy()
         return q
@@ -318,3 +320,46 @@ class SplitDDPG(RLAgent):
             self.critic[i].load_state_dict(trainable['critic'][i])
             self.target_actor[i].load_state_dict(trainable['target_actor'][i])
             self.target_critic[i].load_state_dict(trainable['target_critic'][i])
+
+    def _state_dim(self, state_dim):
+        heightmap_rotations = self.params.get('heightmap_rotations', 0)
+        if heightmap_rotations > 0:
+            state_network = int(state_dim / heightmap_rotations)
+        else:
+            state_network = state_dim
+        return state_network
+
+    def _state(self, state):
+        heightmap_rotations = self.params.get('heightmap_rotations', 0)
+        if heightmap_rotations > 0:
+            state_split = np.split(state, heightmap_rotations)
+            s = state_split[0]
+        else:
+            s = state
+        return s
+
+    def _transitions(self, transition):
+        transitions = []
+        heightmap_rotations = self.params.get('heightmap_rotations', 0)
+        if heightmap_rotations > 0:
+            state_split = np.split(transition.state, heightmap_rotations)
+            next_state_split = np.split(transition.next_state, heightmap_rotations)
+
+            for j in range(heightmap_rotations):
+
+                # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
+                act = transition.action.copy()
+                act[1] += j * (2 / heightmap_rotations)
+                if act[1] > 1:
+                    act[1] = -1 + abs(1 - act[1])
+
+                tran = Transition(state=state_split[j].copy(),
+                                  action=act.copy(),
+                                  reward=transition.reward,
+                                  next_state=next_state_split[j].copy(),
+                                  terminal=transition.terminal)
+                transitions.append(tran)
+        else:
+            transitions.append(transition)
+
+        return transitions
