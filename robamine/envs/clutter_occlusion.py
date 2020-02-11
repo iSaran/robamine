@@ -152,8 +152,37 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
-        heightmap = cv_tools.HeightMap(depth, mask, bgr, (100, 100))
-        heightmap.max_pool()
+        # Generate point cloud
+        fovy = self.sim.model.vis.global_.fovy
+        # point_cloud = cv_tools.depth_to_point_cloud(depth, camera_intrinsics)
+        point_cloud = cv_tools.depth2pcd(depth, fovy)
+
+        # Get target pose and camera pose
+        target_pose = get_body_pose(self.sim, 'target')  # g_wo: object w.r.t. world
+        camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
+        camera_to_target = np.matmul(np.linalg.inv(target_pose), camera_pose)  # g_oc = inv(g_wo) * g_wc
+
+        # Transform point cloud w.r.t. to target
+        point_cloud = cv_tools.transform_point_cloud(point_cloud, camera_to_target)
+
+        # Keep the points above the table
+        z = point_cloud[:, 2]
+        ids = np.where((z > 0.0) & (z < 0.4))
+        points_above_table = point_cloud[ids]
+
+        dim = get_geom_size(self.sim.model, 'target')
+        dim = get_geom_size(self.sim.model, 'target')
+        geom_id = get_geom_id(self.sim.model, "target")
+        if self.sim.model.geom_type[geom_id] == 5:
+            bbox = [dim[0], dim[0], dim[1]]
+        else:
+            bbox = dim
+
+        points_above_table = np.asarray(points_above_table)
+
+        heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
+        map = cv_tools.Image2D(heightmap)
+        map.pooling(mode='AVG')
 
         return None
 

@@ -10,6 +10,27 @@ Computer Vision Utils
 '''
 
 
+def depth2pcd(depth, fovy):
+    height, width = depth.shape
+
+    # Camera intrinsics
+    f = 0.5 * height / math.tan(fovy * math.pi / 360)
+    cx = width / 2
+    cy = height / 2
+
+    rows, cols = depth.shape
+    c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
+    valid = (depth > 0)
+
+    z = np.where(valid, -depth, 0)
+    x = np.where(valid, z * (c - cx) / f, 0)
+    y = np.where(valid, z * (r - cy) / f, 0)
+    pcd = np.dstack((x, y, z))
+
+    return pcd.reshape(-1, 3)
+    return pcd
+
+
 def depth_to_point_cloud(depth, camera_intrinsics):
     """
     Converts a depth map to a point cloud(
@@ -34,52 +55,6 @@ def depth_to_point_cloud(depth, camera_intrinsics):
                 point_cloud.append([X, Y, Z])
 
     return np.asarray(point_cloud)
-
-
-def depth2pcd(depth, fovy):
-    height, width = depth.shape
-
-    # Camera intrinsics
-    f = 0.5 * height / math.tan(fovy * math.pi / 360)
-    cx = width / 2
-    cy = height / 2
-
-    rows, cols = depth.shape
-    c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
-    valid = (depth > 0)
-
-    z = np.where(valid, -depth, 0)
-    x = np.where(valid, z * (c - cx) / f, 0)
-    y = np.where(valid, z * (r - cy) / f, 0)
-    pcd = np.dstack((x, y, z))
-
-    return pcd.reshape(-1, 3)
-    return pcd
-
-
-def transform_point_cloud(point_cloud, affine_transformation):
-    """
-    Apply an affine transformation to the point cloud
-    :param point_cloud: input point cloud
-    :param affine_transformation: 4x4 matrix that describes the affine transformation [R|t]
-    :return:
-    """
-    # Convert cartesian to homogeneous coordinates
-    ones = np.ones((point_cloud.shape[0], 1), dtype=np.float32)
-    point_cloud = np.concatenate((point_cloud, ones), axis=1)
-
-    # Transform cloud
-    for i in range(point_cloud.shape[0]):
-        point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
-
-    # point_cloud = np.matmul(affine_transformation, point_cloud.T)
-    # point_cloud = point_cloud.T
-
-    # Convert homogeneous to cartesian
-    w = point_cloud[:, 3]
-    point_cloud /= w[:, np.newaxis]
-
-    return point_cloud[:, 0:3]
 
 
 def gl2cv(depth, z_near, z_far):
@@ -124,15 +99,15 @@ def rgb2bgr(rgb):
     return np.flip(bgr, axis=0)
 
 
-def plot_height_map(heightmap):
-    width, height = heightmap.shape
-    cv_height = np.zeros((height, width), dtype=np.float32)
-    min_height = np.min(heightmap)
-    max_height = np.max(heightmap)
+def plot_2d_img(img, name):
+    width, height = img.shape
+    cv_img = np.zeros((height, width), dtype=np.float32)
+    min_height = np.min(img)
+    max_height = np.max(img)
     for i in range(0, width):
         for j in range(0, height):
-            cv_height[i][j] = (heightmap[i][j] - min_height) / (max_height - min_height)
-    cv2.imshow("height_map", cv_height)
+            cv_img[i][j] = (img[i][j] - min_height) / (max_height - min_height)
+    cv2.imshow(name, cv_img)
     cv2.waitKey()
 
 
@@ -172,12 +147,12 @@ def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=Fa
             heightmaps.append(cv2.warpAffine(height_grid, m, (height, width)))
 
             if plot:
-                plot_height_map(heightmaps[i])
+                plot_2d_img(heightmaps[i], 'h')
 
         return heightmaps
     else:
         if plot:
-            plot_height_map(height_grid)
+            plot_2d_img(height_grid, 'h')
 
         return height_grid
 
@@ -308,16 +283,32 @@ def extract_features(height_map, dim, max_height, normalize=True, rotation_angle
     return features
 
 
-def draw_cell(cell, rgb):
-    p1 = cell[0]
-    p2 = (cell[1][0], cell[0][1])
-    p3 = cell[1]
-    p4 = (cell[0][0], cell[1][1])
-    cv2.line(rgb, p1, p2, (0, 255, 0), thickness=1)
-    cv2.line(rgb, p2, p3, (0, 255, 0), thickness=1)
-    cv2.line(rgb, p3, p4, (0, 255, 0), thickness=1)
-    cv2.line(rgb, p4, p1, (0, 255, 0), thickness=1)
-    return rgb
+
+
+
+def transform_point_cloud(point_cloud, affine_transformation):
+    """
+    Apply an affine transformation to the point cloud
+    :param point_cloud: input point cloud
+    :param affine_transformation: 4x4 matrix that describes the affine transformation [R|t]
+    :return:
+    """
+    # Convert cartesian to homogeneous coordinates
+    ones = np.ones((point_cloud.shape[0], 1), dtype=np.float32)
+    point_cloud = np.concatenate((point_cloud, ones), axis=1)
+
+    # Transform cloud
+    for i in range(point_cloud.shape[0]):
+        point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
+
+    # point_cloud = np.matmul(affine_transformation, point_cloud.T)
+    # point_cloud = point_cloud.T
+
+    # Convert homogeneous to cartesian
+    w = point_cloud[:, 3]
+    point_cloud /= w[:, np.newaxis]
+
+    return point_cloud[:, 0:3]
 
 
 def plot_point_cloud(point_cloud):
@@ -349,6 +340,36 @@ def detect_color(rgb, color='r'):
 class PointCloud:
     def __init__(self):
         super(PointCloud, self).__init__()
+
+    def transform_point_cloud(point_cloud, affine_transformation):
+        """
+        Apply an affine transformation to the point cloud
+        :param point_cloud: input point cloud
+        :param affine_transformation: 4x4 matrix that describes the affine transformation [R|t]
+        :return:
+        """
+        # Convert cartesian to homogeneous coordinates
+        ones = np.ones((point_cloud.shape[0], 1), dtype=np.float32)
+        point_cloud = np.concatenate((point_cloud, ones), axis=1)
+
+        # Transform cloud
+        for i in range(point_cloud.shape[0]):
+            point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
+
+        # point_cloud = np.matmul(affine_transformation, point_cloud.T)
+        # point_cloud = point_cloud.T
+
+        # Convert homogeneous to cartesian
+        w = point_cloud[:, 3]
+        point_cloud /= w[:, np.newaxis]
+
+        return point_cloud[:, 0:3]
+
+    def plot_point_cloud(point_cloud):
+        pcd = open3d.PointCloud()
+        pcd.points = open3d.Vector3dVector(point_cloud)
+        frame = open3d.create_mesh_coordinate_frame(size=0.1)
+        open3d.draw_geometries([pcd, frame])
 
 
 color_params = {
@@ -382,28 +403,66 @@ class ColorDetector:
         return mask
 
 
-class HeightMap:
-    def __init__(self, depth, mask, rgb, size, workspace=[200, 200]):
-        super(HeightMap, self).__init__()
+class Image2D:
+    """
+    A class for a 2D image with one-channel
+    """
+    def __init__(self, img):
+        super(Image2D, self).__init__()
 
-        self.depth = depth
-        self.mask = mask
-        self.rgb = rgb
+        self.img = img
+        self.size = img.shape
+        self.center = [int(self.size[0]/2), int(self.size[1]/2)]
+
+    def compute_roi(self, size, cell_res):
+        # if size is not given, compute the size from
+        # the cell resolution
+        if size is None:
+            size = [int(self.size[0]/cell_res),
+                    int(self.size[1]/cell_res)]
+            corner = [0, 0]
+        else:
+            # Compute the upper left corner
+            corner = [int(self.center[0] - cell_res * size[0] / 2.0),
+                      int(self.center[1] - cell_res * size[1] / 2.0)]
+
+        # Given the up left corner define the cells for average pooling
+        cells = []
+        for x in range(size[0]):
+            for y in range(size[1]):
+                c = (corner[0] + x * cell_res, corner[1] + y * cell_res)
+                cells.append([c, (c[0] + cell_res, c[1] + cell_res)])
+        return cells, size
+
+    def pooling(self, size=None, cell_res=4, mode='AVG'):
+        cells, size = self.compute_roi(size, cell_res)
+        # Calculate the values inside each cell
+        pool_img = np.zeros(size)
+        for x in range(size[0]):
+            for y in range(size[1]):
+                cell = cells[y + x * size[1]]
+                if mode == 'AVG':
+                    pool_img[x, y] = np.sum(self.img[cell[0][1]:cell[1][1],
+                                                     cell[0][0]:cell[1][0]]) / (cell_res * cell_res)
+                elif mode == 'MAX':
+                    pool_img[x, y] = np.max(self.img[cell[0][1]:cell[1][1],
+                                                     cell[0][0]:cell[1][0]])
+        self.img = pool_img
+
+    def flatten(self):
+        return self.img.flatten()
+
+
+class RGBDHeightmap:
+    def __init__(self, depth, mask, workspace=[200, 200]):
+        super(RGBDHeightmap, self).__init__()
 
         self.w, self.h = depth.shape
         self.center = [int(self.w / 2), int(self.h / 2)]
         self.workspace = workspace
-
-        self.mask_heightmap = np.zeros(size, dtype=np.uint8)
-        self.depth_heightmap = np.zeros(size, dtype=np.float32)
-
-    def max_pool(self):
-        cv2.imshow('rgb', self.rgb)
-        cv2.waitKey()
-        rgb = self.rgb[self.center[0] - self.workspace[0]:self.center[0] + self.workspace[0],
-                       self.center[1] - self.workspace[1]:self.center[1] + self.workspace[1]]
-
-        cv2.imshow('croped', rgb)
-        cv2.waitKey()
+        self.mask_heightmap = mask[self.center[0] - self.workspace[0]:self.center[0] + self.workspace[0],
+                                   self.center[1] - self.workspace[1]:self.center[1] + self.workspace[1]]
+        self.depth_heightmap = depth[self.center[0] - self.workspace[0]:self.center[0] + self.workspace[0],
+                                     self.center[1] - self.workspace[1]:self.center[1] + self.workspace[1]]
 
 
