@@ -35,6 +35,7 @@ def depth_to_point_cloud(depth, camera_intrinsics):
 
     return np.asarray(point_cloud)
 
+
 def depth2pcd(depth, fovy):
     height, width = depth.shape
 
@@ -54,6 +55,7 @@ def depth2pcd(depth, fovy):
 
     return pcd.reshape(-1, 3)
     return pcd
+
 
 def transform_point_cloud(point_cloud, affine_transformation):
     """
@@ -342,3 +344,66 @@ def detect_color(rgb, color='r'):
     # cv2.imshow('mask', mask)
     # cv2.waitKey()
     return  mask
+
+
+class PointCloud:
+    def __init__(self):
+        super(PointCloud, self).__init__()
+
+
+color_params = {
+    'red': ([0, 120, 70], [10, 255, 255]),
+    'blue': (),
+    'green': ()
+}
+
+
+class ColorDetector:
+    def __init__(self, color, params=color_params):
+        super(ColorDetector, self).__init__()
+
+        self.boundaries = params[color]
+
+    '''
+    Detects the given color in a bgr image
+    img: image in BGR format
+    '''
+    def detect(self, img, plot=False):
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        lower = np.array(self.boundaries[0])
+        upper = np.array(self.boundaries[1])
+
+        # find the colors within the specified boundaries and apply the mask
+        mask = cv2.inRange(hsv, lower, upper)
+        if plot:
+            cv2.imshow('mask', mask)
+            cv2.waitKey()
+
+        return mask
+
+
+class HeightMap:
+    def __init__(self, depth, mask, rgb, size, workspace=[200, 200]):
+        super(HeightMap, self).__init__()
+
+        self.depth = depth
+        self.mask = mask
+        self.rgb = rgb
+
+        self.w, self.h = depth.shape
+        self.center = [int(self.w / 2), int(self.h / 2)]
+        self.workspace = workspace
+
+        self.mask_heightmap = np.zeros(size, dtype=np.uint8)
+        self.depth_heightmap = np.zeros(size, dtype=np.float32)
+
+    def max_pool(self):
+        cv2.imshow('rgb', self.rgb)
+        cv2.waitKey()
+        rgb = self.rgb[self.center[0] - self.workspace[0]:self.center[0] + self.workspace[0],
+                       self.center[1] - self.workspace[1]:self.center[1] + self.workspace[1]]
+
+        cv2.imshow('croped', rgb)
+        cv2.waitKey()
+
+

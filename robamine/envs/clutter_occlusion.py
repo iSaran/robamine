@@ -141,6 +141,20 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
     # ---------------------------------------------------------
 
     def get_obs(self):
+        self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
+        rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
+
+        z_near = 0.2 * self.sim.model.stat.extent
+        z_far = 50 * self.sim.model.stat.extent
+        depth = cv_tools.gl2cv(depth, z_near, z_far)
+
+        bgr = cv_tools.rgb2bgr(rgb)
+        color_detector = cv_tools.ColorDetector('red')
+        mask = color_detector.detect(bgr)
+
+        heightmap = cv_tools.HeightMap(depth, mask, bgr, (100, 100))
+        heightmap.max_pool()
+
         return None
 
     def do_simulation(self, action):

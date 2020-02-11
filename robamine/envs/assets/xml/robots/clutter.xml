@@ -43,13 +43,13 @@
       dir="-1 0 -2.5"/>
     <body
       name="table"
-      pos="0 0 -0.01"
+      pos="0.0 0 -0.01"
       quat="1 0 0 0">
       <geom
         name="table"
         type="box"
         size="0.25 0.25 0.01"
-        rgba="0.4 0.2 0.03 1"/>
+        rgba="0.3 0.18 0.03 1"/>
     </body>
     <geom
       name="floor"
