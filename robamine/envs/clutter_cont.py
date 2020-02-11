@@ -1103,7 +1103,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             if all_equal_height < self.params['all_equal_height_prob']:
                 obstacle_height = target_height
             else:
-                obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
+                # obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
+                min_h = max(self.params['obstacle_height_range'][0], target_height + finger_height)
+                if min_h > self.params['obstacle_height_range'][1]:
+                    obstacle_height = self.params['obstacle_height_range'][1]
+                else:
+                    obstacle_height = self.rng.uniform(min_h, self.params['obstacle_height_range'][1])
 
             if self.sim.model.geom_type[geom_id] == 6:
                 self.sim.model.geom_size[geom_id][0] = obstacle_length
