@@ -150,7 +150,7 @@ class ColorDetector:
 
     def get_centroid(self, mask):
         indeces = np.argwhere(mask > 0)
-        centroid = np.sum(indeces, axis=0) / float(indeces.size)
+        centroid = np.sum(indeces, axis=0) / float(indeces.shape[0])
         return [int(centroid[0]), int(centroid[1])]
 
 
@@ -212,7 +212,10 @@ class Feature:
         """
         Translates the heightmap
         """
+        tx = self.center[0] - tx
+        ty = self.center[1] - ty
         t = np.float32([[1, 0, tx], [0, 1, ty]])
+        print (t)
         translated_heightmap = cv2.warpAffine(self.heightmap, t, self.size)
         return Feature(translated_heightmap)
 

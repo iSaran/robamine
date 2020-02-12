@@ -173,20 +173,13 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
         self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
         rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
 
-        bgr = cv_tools.rgb2bgr(rgb)
-        cv2.imshow('bgr', bgr)
-        cv2.waitKey()
-
         z_near = 0.2 * self.sim.model.stat.extent
         z_far = 50 * self.sim.model.stat.extent
         depth = cv_tools.gl2cv(depth, z_near, z_far)
-        cv_tools.plot_2d_img(depth, 'depth')
 
         bgr = cv_tools.rgb2bgr(rgb)
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
-        # centroid = color_detector.get_centroid(mask)
-        # print(centroid)
 
         # Pre-process rgb-d height maps
         workspace = [190, 190]
@@ -198,14 +191,14 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
         mask = mask[center[0] - workspace[0]:center[0] + workspace[0],
                     center[1] - workspace[1]:center[1] + workspace[1]]
 
+        centroid = color_detector.get_centroid(mask)
+
         cv_tools.plot_2d_img(depth, 'depth')
         cv_tools.plot_2d_img(mask, 'mask')
         # ToDo: normalize depth??
 
         depth_feature = cv_tools.Feature(depth)
-        depth_feature.crop(80, 80).plot()
-
-
+        depth_feature.translate(centroid[1], centroid[0]).plot()
 
         return None
 
