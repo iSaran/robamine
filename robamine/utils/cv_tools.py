@@ -414,6 +414,9 @@ class Image2D:
         self.size = img.shape
         self.center = [int(self.size[0]/2), int(self.size[1]/2)]
 
+    '''
+    Computes the region of interest for the pooling operation.
+    '''
     def compute_roi(self, size, cell_res):
         # if size is not given, compute the size from
         # the cell resolution
