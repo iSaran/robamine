@@ -1,7 +1,26 @@
 env:
   name: ClutterOcclusion-v0
   params:
+    all_equal_height_prob: 0.0
+    finger_size:
+    - 0.005
+    - 0.005
+    nr_of_obstacles:
+    - 5
+    - 8
+    obstacle_height_range:
+    - 0.005
+    - 0.02
+    obstacle_probability_box: 1.0
+    push_distance:
+    - 0.05
+    - 0.10
     render: true
+    target_height_range:
+    - 0.005
+    - 0.01
+    target_probability_box: 1.0
+    push_target_init_distance: [0.0, 0.1]
 world:
   comments: ''
   friendly_name: ''

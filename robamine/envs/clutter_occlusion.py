@@ -117,10 +117,37 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
     # -----------------------------------------------
 
     def reset_model(self):
-
-        # randomized generation of scene
-        # iason
         self.sim_step()
+
+        random_qpos, number_of_obstacles = self.generate_random_scene()
+
+        # Set the initial position of the finger outside of the table, in order
+        # to not occlude the objects during reading observation from the camera
+        index = self.sim.model.get_joint_qpos_addr('finger')
+        random_qpos[index[0]]   = 100
+        random_qpos[index[0]+1] = 100
+        random_qpos[index[0]+2] = 100
+
+        self.set_state(random_qpos, self.init_qvel)
+
+        # Move forward the simulation to be sure that the objects have landed
+        for _ in range(600):
+            self.sim_step()
+
+        for _ in range(300):
+            for i in range(1, number_of_obstacles):
+                body_id = get_body_names(self.sim.model).index("object"+str(i))
+                self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
+                self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
+            self.sim_step()
+
+        for _ in range(100):
+            for i in range(1, number_of_obstacles):
+                 body_id = get_body_names(self.sim.model).index("object"+str(i))
+                 self.sim.data.xfrc_applied[body_id][0] = 0
+                 self.sim.data.xfrc_applied[body_id][1] = 0
+            self.sim_step()
+
         return np.zeros(OBSERVATION_DIM)
 
     def step(self, action):
@@ -300,3 +327,113 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
             raise RuntimeError("Object is not neither a box or a cylinder")
 
         return np.array([length, width, height])
+        
+    def generate_random_scene(self, target_length_range=[.0125, .02], target_width_range=[.0125, .02],
+                                    obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
+                                    surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
+        # Randomize finger size
+        geom_id = get_geom_id(self.sim.model, "finger")
+        finger_height = self.rng.uniform(self.params['finger_size'][0], self.params['finger_size'][1])
+        self.sim.model.geom_size[geom_id][0] = finger_height
+
+        random_qpos = self.init_qpos.copy()
+
+        # Randomize pushing distance
+        self.push_distance = self.rng.uniform(self.params['push_distance'][0], self.params['push_distance'][1])
+
+        # Randomize surface size
+        self.surface_size[0] = self.rng.uniform(surface_length_range[0], surface_length_range[1])
+        self.surface_size[1] = self.rng.uniform(surface_width_range[0], surface_width_range[1])
+        geom_id = get_geom_id(self.sim.model, "table")
+        self.sim.model.geom_size[geom_id][0] = self.surface_size[0]
+        self.sim.model.geom_size[geom_id][1] = self.surface_size[1]
+
+
+        # Randomize target object
+        geom_id = get_geom_id(self.sim.model, "target")
+
+        #   Randomize type (box or cylinder)
+        temp = self.rng.uniform(0, 1)
+        if (temp < self.params['target_probability_box']):
+            self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
+        else:
+            self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
+            # Increase the friction of the cylinders to stabilize them
+            self.sim.model.geom_friction[geom_id][0] = 1.0
+            self.sim.model.geom_friction[geom_id][1] = .01
+            self.sim.model.geom_friction[geom_id][2] = .01
+            self.sim.model.geom_condim[geom_id] = 4
+            self.sim.model.geom_solref[geom_id][0] = .002
+
+        #   Randomize size
+        target_length = self.rng.uniform(target_length_range[0], target_length_range[1])
+        target_width  = self.rng.uniform(target_width_range[0], min(target_length, target_width_range[1]))
+        target_height = self.rng.uniform(max(self.params['target_height_range'][0], finger_height), self.params['target_height_range'][1])
+        if self.sim.model.geom_type[geom_id] == 6:
+            self.sim.model.geom_size[geom_id][0] = target_length
+            self.sim.model.geom_size[geom_id][1] = target_width
+            self.sim.model.geom_size[geom_id][2] = target_height
+        elif self.sim.model.geom_type[geom_id] == 5:
+            self.sim.model.geom_size[geom_id][0] = target_length
+            self.sim.model.geom_size[geom_id][1] = target_height
+
+        #   Randomize orientation
+        theta = self.rng.uniform(0, 2 * math.pi)
+        target_orientation = Quaternion()
+        target_orientation.rot_z(theta)
+        index = self.sim.model.get_joint_qpos_addr("target")
+        random_qpos[index[0] + 3] = target_orientation.w
+        random_qpos[index[0] + 4] = target_orientation.x
+        random_qpos[index[0] + 5] = target_orientation.y
+        random_qpos[index[0] + 6] = target_orientation.z
+
+        # Randomize obstacles
+        all_equal_height = self.rng.uniform(0, 1)
+
+        if all_equal_height < self.params['all_equal_height_prob']:
+            number_of_obstacles = self.params['nr_of_obstacles'][1]
+        else:
+            number_of_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
+
+        for i in range(1, number_of_obstacles):
+            geom_id = get_geom_id(self.sim.model, "object"+str(i))
+
+            # Randomize type (box or cylinder)
+            temp = self.rng.uniform(0, 1)
+            if (temp < self.params['obstacle_probability_box']):
+                self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
+            else:
+                self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
+                # Increase the friction of the cylinders to stabilize them
+                self.sim.model.geom_friction[geom_id][0] = 1.0
+                self.sim.model.geom_friction[geom_id][1] = .01
+                self.sim.model.geom_friction[geom_id][2] = .01
+                self.sim.model.geom_condim[geom_id] = 4
+
+            #   Randomize size
+            obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
+            obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
+
+
+            if all_equal_height < self.params['all_equal_height_prob']:
+                obstacle_height = target_height
+            else:
+                obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
+
+            if self.sim.model.geom_type[geom_id] == 6:
+                self.sim.model.geom_size[geom_id][0] = obstacle_length
+                self.sim.model.geom_size[geom_id][1] = obstacle_width
+                self.sim.model.geom_size[geom_id][2] = obstacle_height
+            elif self.sim.model.geom_type[geom_id] == 5:
+                self.sim.model.geom_size[geom_id][0] = obstacle_length
+                self.sim.model.geom_size[geom_id][1] = obstacle_height
+
+            # Randomize the positions
+            index = self.sim.model.get_joint_qpos_addr("object" + str(i))
+            r = self.rng.exponential(0.01) + target_length + max(self.sim.model.geom_size[geom_id][0], self.sim.model.geom_size[geom_id][1])
+            theta = self.rng.uniform(0, 2*math.pi)
+            random_qpos[index[0]] = r * math.cos(theta)
+            random_qpos[index[0]+1] = r * math.sin(theta)
+            random_qpos[index[0]+2] = self.sim.model.geom_size[geom_id][2]
+
+        return random_qpos, number_of_obstacles
