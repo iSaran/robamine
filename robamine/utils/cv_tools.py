@@ -78,7 +78,7 @@ def gl2cv(depth, z_near, z_far):
     valid = np.where(depth!=1.0)
     linear_depth[valid] = 2 * z_far * z_near / (z_far + z_near - (z_far - z_near) * (2 * depth[valid] - 1))
     linear_depth = np.flip(linear_depth, axis=1)
-    return np.flip(linear_depth, axis=0)
+    return np.flip(linear_depth)
 
 
 def rgb2bgr(rgb):
@@ -116,6 +116,123 @@ def plot_point_cloud(point_cloud):
     pcd.points = open3d.Vector3dVector(point_cloud)
     frame = open3d.create_mesh_coordinate_frame(size=0.1)
     open3d.draw_geometries([pcd, frame])
+
+
+color_params = {
+    'red': ([0, 120, 70], [10, 255, 255]),
+    'blue': (),
+    'green': ()
+}
+
+
+class ColorDetector:
+    def __init__(self, color, params=color_params):
+        super(ColorDetector, self).__init__()
+
+        self.boundaries = params[color]
+
+    '''
+    Detects the given color in a bgr image
+    img: image in BGR format
+    '''
+    def detect(self, img, plot=False):
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        lower = np.array(self.boundaries[0])
+        upper = np.array(self.boundaries[1])
+
+        # find the colors within the specified boundaries and apply the mask
+        mask = cv2.inRange(hsv, lower, upper)
+        if plot:
+            cv2.imshow('mask', mask)
+            cv2.waitKey()
+
+        return mask
+
+    def get_centroid(self, mask):
+        indeces = np.argwhere(mask > 0)
+        centroid = np.sum(indeces, axis=0) / float(indeces.size)
+        return [int(centroid[0]), int(centroid[1])]
+
+
+class Feature:
+    """
+    heightmap: 2d array representing the topography of the scene
+    """
+    def __init__(self, heightmap):
+        super(Feature, self).__init__()
+
+        self.heightmap = heightmap
+        self.size = heightmap.shape
+        self.center = [int(self.size[0] / 2), int(self.size[1] / 2)]
+
+    def crop(self, x, y):
+        """
+        Crop the height map around the center with the given size
+        """
+        cropped_heightmap = self.heightmap[self.center[0] - x:self.center[0] + x,
+                                           self.center[1] - y:self.center[1] + y]
+        return Feature(cropped_heightmap)
+
+    def mask_in(self, mask):
+        """
+        Remove from height map the pixels that do not belong to the mask
+        """
+        maskin_heightmap = cv2.bitwise_and(self.heightmap, self.heightmap, mask=mask)
+        return Feature(maskin_heightmap)
+
+    def mask_out(self, mask):
+        """
+        Remove from height map the pixels that belong to the mask
+        """
+        maskout_heightmap = cv2.bitwise_not(self.heightmap, self.heightmap, mask=mask)
+        return Feature(maskout_heightmap)
+
+    def pooling(self, kernel=[4, 4], stride=4, mode='AVG'):
+        """
+        Pooling operations on the depth and mask
+        """
+        out_width = int((self.size[0] - kernel[0]) / stride + 1)
+        out_height = int((self.size[1] - kernel[1]) / stride + 1)
+
+        # Perform max/avg pooling based on the mode
+        pool_heightmap = np.zeros((out_width, out_height))
+        for x in range(out_width):
+            for y in range(out_height):
+                corner = (x * stride + kernel[0], y * stride + kernel[1])
+                region = [(corner[0] - kernel[0], corner[1] - kernel[1]), corner]
+                if mode == 'AVG':
+                    pool_heightmap[y, x] = np.sum(self.heightmap[region[0][1]:region[1][1],
+                                                                 region[0][0]:region[1][0]]) / (stride * stride)
+                elif mode == 'MAX':
+                    pool_heightmap[y, x] = np.max(self.heightmap[region[0][1]:region[1][1],
+                                                                 region[0][0]:region[1][0]])
+        return Feature(pool_heightmap)
+
+    def translate(self, tx, ty):
+        """
+        Translates the heightmap
+        """
+        t = np.float32([[1, 0, tx], [0, 1, ty]])
+        translated_heightmap = cv2.warpAffine(self.heightmap, t, self.size)
+        return Feature(translated_heightmap)
+
+    def array(self):
+        """
+        Return 2d array
+        """
+        return self.heightmap
+
+    def flatten(self):
+        """
+        Flatten to 1 dim and return to use as 1dim vector
+        """
+        return self.heightmap.flatten()
+
+    def plot(self, name='height_map'):
+        """
+        Plot the heightmap
+        """
+        plot_2d_img(self.heightmap, name)
 
 
 class PointCloud:
@@ -196,167 +313,3 @@ class PointCloud:
                 plot_2d_img(height_grid, 'h')
 
         return height_grid
-
-
-color_params = {
-    'red': ([0, 120, 70], [10, 255, 255]),
-    'blue': (),
-    'green': ()
-}
-
-
-class ColorDetector:
-    def __init__(self, color, params=color_params):
-        super(ColorDetector, self).__init__()
-
-        self.boundaries = params[color]
-
-    '''
-    Detects the given color in a bgr image
-    img: image in BGR format
-    '''
-    def detect(self, img, plot=False):
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        lower = np.array(self.boundaries[0])
-        upper = np.array(self.boundaries[1])
-
-        # find the colors within the specified boundaries and apply the mask
-        mask = cv2.inRange(hsv, lower, upper)
-        if plot:
-            cv2.imshow('mask', mask)
-            cv2.waitKey()
-
-        return mask
-
-
-class RGBDHeightMap:
-    def __init__(self, depth, mask, workspace=[190, 190]):
-        super(RGBDHeightMap, self).__init__()
-
-        self.size = depth.shape
-        self.center = [int(self.size[0]/2), int(self.size[1]/2)]
-
-        self.depth = depth[self.center[0] - workspace[0]:self.center[0] + workspace[0],
-                           self.center[1] - workspace[1]:self.center[1] + workspace[1]]
-        max_depth = np.max(self.depth)
-        self.depth = max_depth - self.depth
-
-        self.mask = mask[self.center[0] - workspace[0]:self.center[0] + workspace[0],
-                         self.center[1] - workspace[1]:self.center[1] + workspace[1]]
-
-    def compute_roi(self, size, cell_size):
-        """
-        Computes the region of interest for the pooling operation.
-        """
-        # if size is not given, compute the size from
-        # the cell resolution
-        if size is None:
-            size = [int(self.size[0]/cell_size),
-                    int(self.size[1]/cell_size)]
-            corner = [0, 0]
-        else:
-            # Compute the upper left corner
-            corner = [int(self.center[0] - cell_size * size[0] / 2.0),
-                      int(self.center[1] - cell_size * size[1] / 2.0)]
-
-        # Given the up left corner define the cells for average pooling
-        cells = []
-        for x in range(size[0]):
-            for y in range(size[1]):
-                c = (corner[0] + x * cell_size, corner[1] + y * cell_size)
-                cells.append([c, (c[0] + cell_size, c[1] + cell_size)])
-        return cells, size
-
-    def pooling(self, size=None, cell_size=4, mode='AVG'):
-        """
-        Pooling operations on the depth and mask
-        """
-        cells, size = self.compute_roi(size, cell_size)
-
-        # Calculate the values inside each cell
-        pool_depth = np.zeros(size)
-        pool_mask = np.zeros(size)
-        for x in range(size[0]):
-            for y in range(size[1]):
-                cell = cells[y + x * size[1]]
-                if mode == 'AVG':
-                    pool_depth[x, y] = np.sum(self.depth[cell[0][1]:cell[1][1],
-                                                         cell[0][0]:cell[1][0]]) / (cell_size * cell_size)
-                    pool_mask[x, y] = np.sum(self.mask[cell[0][1]:cell[1][1],
-                                                       cell[0][0]:cell[1][0]]) / (cell_size * cell_size)
-                elif mode == 'MAX':
-                    pool_depth[x, y] = np.max(self.depth[cell[0][1]:cell[1][1], cell[0][0]:cell[1][0]])
-                    pool_mask[x, y] = np.max(self.mask[cell[0][1]:cell[1][1], cell[0][0]:cell[1][0]])
-
-        return RGBDHeightMap(pool_depth, pool_mask)
-
-    def plot(self, mode='depth'):
-        """
-        Plot the depth and mask height maps
-        """
-        if mode == 'depth':
-            plot_2d_img(self.depth, 'depth')
-        elif mode == 'mask':
-            plot_2d_img(self.mask, 'mask')
-        else:
-            plot_2d_img(self.depth, 'depth')
-            plot_2d_img(self.mask, 'mask')
-
-
-class Feature:
-    """
-    heightmap: 2d array representing the topography of the scene
-    mask: 2d binary array, with ones for the target and zero for
-          rest of the scene
-    """
-    def __init__(self, heightmap):
-        super(Feature, self).__init__()
-
-        self.heightmap = heightmap
-        self.size = heightmap.shape
-        self.center = [int(self.size[0] / 2), int(self.size[1] / 2)]
-
-    def crop(self, x, y):
-        """
-        Crop the height map around the center with the given size
-        """
-        cropped_heightmap = self.heightmap[self.center[0] - x:self.center[0] + x,
-                                           self.center[1] - y:self.center[1] + y]
-        return Feature(cropped_heightmap)
-
-    def mask_in(self, mask):
-        """
-        Remove from height map the pixels that do not belong to the mask
-        """
-        maskin_heightmap = cv2.bitwise_and(self.heightmap, self.heightmap, mask=mask)
-        return Feature(maskin_heightmap)
-
-    def mask_out(self, mask):
-        """
-        Remove from height map the pixels that belong to the mask
-        """
-        maskout_heightmap = cv2.bitwise_not(self.heightmap, self.heightmap, mask=mask)
-        return Feature(maskout_heightmap)
-
-    def array(self):
-        """
-        Return 2d array
-        """
-        return self.heightmap
-
-    def flatten(self):
-        """
-        Flatten to 1 dim and return to use as 1dim vector
-        """
-        return self.heightmap.flatten()
-
-    def plot(self, name):
-        """
-        Plot the heightmap
-        """
-        plot_2d_img(self.heightmap, name)
-
-
-
-
-
