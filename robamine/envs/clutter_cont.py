@@ -252,13 +252,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                             dtype=np.float32)
 
         finger_mass = get_body_mass(self.sim.model, 'finger')
-        self.pd = PDController.from_mass(mass = finger_mass)
+        self.pd = PDController.from_mass(mass = finger_mass, step_response=0.05)
 
         moment_of_inertia = get_body_inertia(self.sim.model, 'finger')
         self.pd_rot = []
-        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[0], step_response=0.005))
-        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[1], step_response=0.005))
-        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[2], step_response=0.005))
+        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[0], step_response=0.006))
+        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[1], step_response=0.006))
+        self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[2], step_response=0.006))
 
         # Parameters, updated once during reset of the model
         self.surface_normal = np.array([0, 0, 1])
@@ -545,7 +545,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def do_simulation(self, action):
         primitive = int(action[0])
-        primitive = 1
         target_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
         if primitive == 0 or primitive == 1:
 
