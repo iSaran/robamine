@@ -415,6 +415,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def get_heightmap(self):
         self._move_finger_outside_the_table()
 
+        fovy = self.sim.model.vis.global_.fovy
+        f = 0.5 * 480 / math.tan(fovy * math.pi / 360)
+        camera_matrix = np.array(((f, 0, 640 / 2), (0, f, 480 / 2), (0, 0, 1)))
+        print(camera_matrix)
+
         self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
         rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
 
@@ -439,10 +444,19 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         height = self.color_detector.get_height(depth, mask)
         homog, bb = self.color_detector.get_bounding_box(mask)
-        self.targt_pos = [int(homog[0][2]), int(homog[1][2])]
+        tx, ty = [int(homog[0][2]), int(homog[1][2])]
         self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
         self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
         self.target_size = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
+
+        inv_k = np.linalg.inv(camera_matrix)
+        print(inv_k)
+        camera_p = inv_k.dot(np.array([0, 0, 1]))
+        # plane_p = np.matmul(camera_matrix, np.array([0, 0, 0]))
+        # camera_p[2] = 0
+        camera_pose = get_camera_pose(self.sim, 'xtion')
+        w_p = np.matmul(camera_pose, np.array([camera_p[0], camera_p[1], camera_p[2], 1.0]))
+        print(w_p)
 
         cv_tools.plot_2d_img(self.heightmap, 'depth')
 
