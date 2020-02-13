@@ -190,6 +190,17 @@ class ColorDetector:
 
         return homog, bb
 
+    def get_height(self, depth, mask):
+        """
+        Returns the average value of the masked region
+        """
+        indices = np.argwhere(mask > 0)
+        height = 0
+        for id in indices:
+            height += depth[id[0]][id[1]]
+        return height / indices.shape[0]
+
+
 class Feature:
     """
     heightmap: 2d array representing the topography of the scene
@@ -220,7 +231,8 @@ class Feature:
         """
         Remove from height map the pixels that belong to the mask
         """
-        maskout_heightmap = cv2.bitwise_not(self.heightmap, self.heightmap, mask=mask)
+        mask = 255 - mask
+        maskout_heightmap = cv2.bitwise_and(self.heightmap, self.heightmap, mask=mask)
         return Feature(maskout_heightmap)
 
     def pooling(self, kernel=[4, 4], stride=4, mode='AVG'):
@@ -250,10 +262,12 @@ class Feature:
         """
         tx = self.center[0] - tx
         ty = self.center[1] - ty
-        t = np.float32([[1, 0, tx], [0, 1, ty]])
-        print (t)
+        t = np.float32([[1, 0, ty], [0, 1, tx]])
         translated_heightmap = cv2.warpAffine(self.heightmap, t, self.size)
         return Feature(translated_heightmap)
+
+    def non_zero_pixels(self):
+        return np.argwhere(self.heightmap > 0).shape[0]
 
     def array(self):
         """

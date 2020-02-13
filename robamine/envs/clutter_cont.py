@@ -25,7 +25,7 @@ from robamine.utils.orientation import rot2quat
 import cv2
 from mujoco_py.cymj import MjRenderContext
 
-OBSERVATION_DIM = 295
+OBSERVATION_DIM = 400
 
 def get_2d_displacement(init, current):
     assert isinstance(init, Affine3)
@@ -315,6 +315,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.seed()
         self.preloaded_init_state = None
 
+        self.pixels_to_m = 0.0012
+        self.color_detector = cv_tools.ColorDetector('red')
+
     def reset_model(self):
 
         self.sim_step()
@@ -384,29 +387,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Update state variables that need to be updated only once
         self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
         self.finger_height = get_geom_size(self.sim.model, 'finger')[0]  # same as length, its a sphere
-        self.target_size = 2 * get_geom_size(self.sim.model, 'target')
         self.surface_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
 
-
-        features, point_cloud, dim = self.get_obs()
-        gap = 0.03
-        points_around = []
-        bbox_limit = 0.01
-        for p in point_cloud:
-            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
-                    dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
-                    -dim[1]  < p[1] < dim[1]:
-                points_around.append(p)
-            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
-                    dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
-                    -dim[0]  < p[0] < dim[0]:
-                points_around.append(p)
-
-        # cv_tools.plot_point_cloud(point_cloud)
-        # cv_tools.plot_point_cloud(points_around)
-        self.prev_point_cloud = points_around
-        self.no_of_prev_points_around = len(points_around)
-        observation, _, _ = self.get_obs()
+        heightmap, mask = self.get_heightmap()
+        self.heightmap_prev = heightmap.copy()
+        self.mask_prev = mask.copy()
 
         self.last_timestamp = self.sim.data.time
         self.success = False
@@ -416,7 +401,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_quat_prev_state = self.target_quat.copy()
         self.preloaded_init_state = None
         self.reset_horizon()
-        return observation
+        return self.get_obs()
 
     def reset_horizon(self):
         self.target_pos_horizon = self.target_pos.copy()
@@ -426,79 +411,57 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         super().seed(seed)
         self.rng.seed(seed)
 
+
+    def get_heightmap(self):
+        self._move_finger_outside_the_table()
+
+        self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
+        rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
+
+        z_near = 0.2 * self.sim.model.stat.extent
+        z_far = 50 * self.sim.model.stat.extent
+        depth = cv_tools.gl2cv(depth, z_near, z_far)
+
+        bgr = cv_tools.rgb2bgr(rgb)
+        color_detector = cv_tools.ColorDetector('red')
+        mask = color_detector.detect(bgr)
+
+        # Pre-process rgb-d height maps
+        workspace = [193, 193]
+        center = [240, 320]
+        depth = depth[center[0] - workspace[0]:center[0] + workspace[0],
+                center[1] - workspace[1]:center[1] + workspace[1]]
+        max_depth = np.max(depth)
+        depth = max_depth - depth
+        mask = mask[center[0] - workspace[0]:center[0] + workspace[0],
+               center[1] - workspace[1]:center[1] + workspace[1]]
+
+
+        height = self.color_detector.get_height(depth, mask)
+        homog, bb = self.color_detector.get_bounding_box(mask)
+        self.targt_pos = [int(homog[0][2]), int(homog[1][2])]
+        self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
+        self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
+        self.target_size = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
+
+        cv_tools.plot_2d_img(self.heightmap, 'depth')
+
+        # ToDo: How to normalize depth??
+
+        return self.heightmap, self.mask
+
+
     def get_obs(self):
         """
         Read depth and extract height map as observation
         :return:
         """
-        self._move_finger_outside_the_table()
+        heightmap, mask = self.get_heightmap()
 
-        # Get the depth image
-        self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
-        rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
-        # mask = cv_tools.detect_color(rgb)
+        depth_feature = cv_tools.Feature(self.heightmap)
+        obs = depth_feature.mask_out(mask).crop(40, 40).pooling().flatten()
 
-        z_near = 0.2 * self.sim.model.stat.extent
-        z_far = 50 * self.sim.model.stat.extent
-        depth = cv_tools.gl2cv(depth, z_near, z_far)
-        # cv2.imshow('depth', depth)
-        # cv2.waitKey()
-
-        # res = cv2.bitwise_and(depth, depth, mask=mask)
-        # cv2.imshow('masked_depth', res)
-        # cv2.waitKey()
-
-        # Generate point cloud
-        fovy = self.sim.model.vis.global_.fovy
-        # point_cloud = cv_tools.depth_to_point_cloud(depth, camera_intrinsics)
-        point_cloud = cv_tools.depth2pcd(depth, fovy)
-
-        # Get target pose and camera pose
-        target_pose = get_body_pose(self.sim, 'target')  # g_wo: object w.r.t. world
-        camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
-        camera_to_target = np.matmul(np.linalg.inv(target_pose), camera_pose)  # g_oc = inv(g_wo) * g_wc
-
-        # Transform point cloud w.r.t. to target
-        point_cloud = cv_tools.transform_point_cloud(point_cloud, camera_to_target)
-
-        # Keep the points above the table
-        z = point_cloud[:, 2]
-        ids = np.where((z > 0.0) & (z < 0.4))
-        points_above_table = point_cloud[ids]
-
-        dim = get_geom_size(self.sim.model, 'target')
-        dim = get_geom_size(self.sim.model, 'target')
-        geom_id = get_geom_id(self.sim.model, "target")
-        if self.sim.model.geom_type[geom_id] == 5:
-            bbox = [dim[0], dim[0], dim[1]]
-        else:
-            bbox = dim
-
-        points_above_table = np.asarray(points_above_table)
-
-        # Add the distance of the object from the edge
-        distances = [self.surface_size[0] - self.target_pos[0], \
-                     self.surface_size[0] + self.target_pos[0], \
-                     self.surface_size[1] - self.target_pos[1], \
-                     self.surface_size[1] + self.target_pos[1]]
-
-        distances = [x / 0.5 for x in distances]
-
-        obstacle_height_range = self.params['obstacle_height_range']
-        max_height = 2 * obstacle_height_range[1]
-
-        heightmap = cv_tools.generate_height_map(points_above_table, plot=False)
-        features = cv_tools.extract_features(heightmap, bbox, max_height, plot=False)
-        # features.append(0)
-        features.append(bbox[0] / 0.03)
-        features.append(bbox[1] / 0.03)
-        features.append(distances[0])
-        features.append(distances[1])
-        features.append(distances[2])
-        features.append(distances[3])
-        final_feature = np.array(features)
-
-        return final_feature, points_above_table, bbox
+        return obs
 
     def step(self, action):
 
@@ -526,9 +489,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_displacement_push_step = self.get_target_displacement()
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
-        obs, pcd, dim = self.get_obs()
-        # reward = self.get_reward(obs, pcd, dim, _action)
-        reward = self.get_shaped_reward_obs(obs, pcd, dim)
+        obs = self.get_obs()
+        reward = self.get_reward(obs, _action)
+        # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
         reward = rescale(reward, -10, 10, range=[-1, 1])
 
@@ -692,7 +655,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return r
 
 
-    def get_reward(self, observation, point_cloud, dim, action):
+    def get_reward(self, observation, action):
         reward = 0.0
 
         if self.target_grasped_successfully:
@@ -705,60 +668,24 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
             return -10
 
-        # for each push that frees the space around the target
-        points_around = []
-        gap = 0.03
-        bbox_limit = 0.01
-        for p in point_cloud:
-            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
-             dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
-             -dim[1]  < p[1] < dim[1]:
-                points_around.append(p)
-            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
-            dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
-            -dim[0]  < p[0] < dim[0]:
-                points_around.append(p)
-
-        if self.no_of_prev_points_around == len(points_around):
-            return -5
-
-        self.no_of_prev_points_around = len(points_around)
+        points_prev = cv_tools.Feature(self.heightmap_prev).mask_out(self.mask_prev).crop(40, 40).non_zero_pixels()
+        points_cur = cv_tools.Feature(self.heightmap).mask_out(self.mask).crop(40, 40).non_zero_pixels()
+        points_diff = np.abs(points_prev - points_cur)
 
         extra_penalty = 0
         # penalize pushes that start far from the target object
         if int(action[0]) == 0:
             extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
-            # extra_penalty += exp_reward(action[3], max_penalty=10, min=-1, max=1)
 
         if int(action[0]) == 0 or int(action[0]) == 1:
             extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
 
-        # extra_penalty += exp_reward(action[2], max_penalty=10, min=-1, max=1)
-        # penalize large push distances
-        if len(points_around) == 0:
-            return +10 + extra_penalty
-
-        return -1 + extra_penalty
-        # k = max(self.no_of_prev_points_around, len(points_around))
-        # if k != 0:
-        #     reward = (self.no_of_prev_points_around - len(points_around)) / k
-        # else:
-        #     reward = 0.0
-        # reward *= 10.0
-        # self.no_of_prev_points_around = len(points_around)
-
-        # cv_tools.plot_point_cloud(point_cloud)
-        # cv_tools.plot_point_cloud(points_around)
-
-        # Penalize the agent as it gets the target object closer to the edge
-        # max_cost = -5
-        # reward += sigmoid(observation[-1], a=max_cost, b=-15/max(self.surface_size), c=-4)
-        # if observation[-1] < 0:
-        #     reward = -10
-
-        # For each object push
-        # reward += -1
-        # return reward
+        if points_cur < 20:
+            return 10 + extra_penalty
+        elif points_diff > 20:
+            return -5
+        else:
+            return -1 + extra_penalty
 
     def terminal_state(self, observation):
 
@@ -1063,14 +990,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.model.geom_size[geom_id][1] = target_height
 
         #   Randomize orientation
-        theta = self.rng.uniform(0, 2 * math.pi)
-        target_orientation = Quaternion()
-        target_orientation.rot_z(theta)
-        index = self.sim.model.get_joint_qpos_addr("target")
-        random_qpos[index[0] + 3] = target_orientation.w
-        random_qpos[index[0] + 4] = target_orientation.x
-        random_qpos[index[0] + 5] = target_orientation.y
-        random_qpos[index[0] + 6] = target_orientation.z
+        # theta = self.rng.uniform(0, 2 * math.pi)
+        # target_orientation = Quaternion()
+        # target_orientation.rot_z(theta)
+        # index = self.sim.model.get_joint_qpos_addr("target")
+        # random_qpos[index[0] + 3] = target_orientation.w
+        # random_qpos[index[0] + 4] = target_orientation.x
+        # random_qpos[index[0] + 5] = target_orientation.y
+        # random_qpos[index[0] + 6] = target_orientation.z
 
         # Randomize obstacles
         all_equal_height = self.rng.uniform(0, 1)
