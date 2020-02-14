@@ -31,5 +31,5 @@ world:
     eval_episodes: 10
     eval_every: 20
     eval_render: false
-    render: false
+    render: true
     save_every: 20

@@ -11,72 +11,18 @@ Computer Vision Utils
 '''
 
 
-def depth2pcd(depth, fovy):
-    height, width = depth.shape
-
-    # Camera intrinsics
-    f = 0.5 * height / math.tan(fovy * math.pi / 360)
-    cx = width / 2
-    cy = height / 2
-
-    rows, cols = depth.shape
-    c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
-    valid = (depth > 0)
-
-    z = np.where(valid, -depth, 0)
-    x = np.where(valid, z * (c - cx) / f, 0)
-    y = np.where(valid, z * (r - cy) / f, 0)
-    pcd = np.dstack((x, y, z))
-
-    return pcd.reshape(-1, 3)
-    return pcd
-
-
-def depth_to_point_cloud(depth, camera_intrinsics):
-    """
-    Converts a depth map to a point cloud(
-    :param depth: depth image
-    :param camera_intrinsics: focal length and center point
-    :return: nx3 numpy array
-    """
-    fx = camera_intrinsics[0]
-    fy = camera_intrinsics[1]
-    cx = camera_intrinsics[2]
-    cy = camera_intrinsics[3]
-
-    point_cloud = []
-
-    h, w = depth.shape
-    for x in range(0, w):
-        for y in range(0, h):
-            if depth[y][x] != 0:
-                Z = -depth[y][x]  # z is negative because Z axis is inward
-                X = (x - cx) * Z / fx
-                Y = (y - cy) * Z / fy
-                point_cloud.append([X, Y, Z])
-
-    return np.asarray(point_cloud)
-
-
 def gl2cv(depth, z_near, z_far):
     """
     Converts the depth from OpenGl to OpenCv
-    :param depth: the depth in OpenGl format
-    :param z_near: near clipping plane
-    :param z_far: far clipping plane
-    :return: a depth image
+
+    depth: the depth in OpenGl format
+    z_near: near clipping plane
+    z_far: far clipping plane
+    return: a depth image
     """
     h, w = depth.shape
     linear_depth = np.zeros((h, w), dtype=np.float32)
-
-    # for x in range(0, w):
-    #     for y in range(0, h):
-    #         if depth[y][x] != 1:
-    #             linear_depth[y][x] = 2 * z_far * z_near / (z_far + z_near - (z_far - z_near) * (2 * depth[y][x] - 1))
-    #
-    # linear_depth = np.flip(linear_depth, axis=1)
-    # return np.flip(linear_depth, axis=0)
-    valid = np.where(depth!=1.0)
+    valid = np.where(depth != 1.0)
     linear_depth[valid] = 2 * z_far * z_near / (z_far + z_near - (z_far - z_near) * (2 * depth[valid] - 1))
     linear_depth = np.flip(linear_depth, axis=1)
     return np.flip(linear_depth)
@@ -86,10 +32,9 @@ def rgb2bgr(rgb):
     """
     Converts a rgb image to bgr
     (Vertical flipping of the image)
-    :param rgb: the image in bgr format
+    rgb: the image in bgr format
     """
     h, w, c = rgb.shape
-
     bgr = np.zeros((h, w, c), dtype=np.uint8)
     r = rgb[:, :, 0]
     g = rgb[:, :, 1]
@@ -117,6 +62,28 @@ def plot_point_cloud(point_cloud):
     pcd.points = open3d.Vector3dVector(point_cloud)
     frame = open3d.create_mesh_coordinate_frame(size=0.1)
     open3d.draw_geometries([pcd, frame])
+
+
+class PinholeCamera:
+    def __init__(self, fovy, size):
+        super(PinholeCamera, self).__init__()
+
+        self.width, self.height = size
+        self.f = 0.5 * self.height / math.tan(fovy * math.pi / 360)
+        self.cx = self.width / 2
+        self.cy = self.height / 2
+
+    def get_camera_matrix(self):
+        camera_matrix = np.array(((self.f, 0, self.cx),
+                                  (0, self.f, self.cy),
+                                  (0, 0, 1)))
+        return camera_matrix
+
+    def back_project(self, p, z):
+        # z /= 1000.0
+        x = (p[0] - self.cx) * z / self.f
+        y = (p[1] - self.cy) * z / self.f
+        return np.array([x, y, z])
 
 
 color_params = {
@@ -149,11 +116,13 @@ class ColorDetector:
 
         return mask
 
+    @staticmethod
     def get_centroid(self, mask):
         indeces = np.argwhere(mask > 0)
         centroid = np.sum(indeces, axis=0) / float(indeces.shape[0])
         return [int(centroid[0]), int(centroid[1])]
 
+    @staticmethod
     def get_bounding_box(self, mask):
         """
         Returns the oriented bounding box of the given mask. Returns the
@@ -190,6 +159,7 @@ class ColorDetector:
 
         return homog, bb
 
+    @staticmethod
     def get_height(self, depth, mask):
         """
         Returns the average value of the masked region
@@ -266,6 +236,17 @@ class Feature:
         translated_heightmap = cv2.warpAffine(self.heightmap, t, self.size)
         return Feature(translated_heightmap)
 
+    def rotate(self, theta):
+        """
+        Rotate the heightmap around its center
+
+        theta: Rotation angle in degrees. Positive values mean counter-clockwise rotation .
+        """
+        scale = 1.0
+        rot = cv2.getRotationMatrix2D(self.center, theta, scale)
+        rotated_heightmap = cv2.warpAffine(self.heightmap, rot, self.size)
+        return Feature(rotated_heightmap)
+
     def non_zero_pixels(self):
         return np.argwhere(self.heightmap > 0).shape[0]
 
@@ -289,57 +270,61 @@ class Feature:
 
 
 class PointCloud:
-    def __init__(self):
+    def __init__(self, depth, camera):
         super(PointCloud, self).__init__()
 
-    def transform_point_cloud(point_cloud, affine_transformation):
+        self.depth = depth
+        self.point_cloud = self.depth2pcd(depth, camera)
+
+    @staticmethod
+    def depth2pcd(self, depth, camera):
+        width, height = depth.shape
+
+        c, r = np.meshgrid(np.arange(width), np.arange(height), sparse=True)
+        valid = (depth > 0)
+
+        z = np.where(valid, depth, 0)
+        x = np.where(valid, z * (c - camera.cx) / camera.f, 0)
+        y = np.where(valid, z * (r - camera.cy) / camera.f, 0)
+        pcd = np.dstack((x, y, z))
+
+        return pcd.reshape(-1, 3)
+
+    def transform(self, tr_matrix):
         """
         Apply an affine transformation to the point cloud
-        :param point_cloud: input point cloud
-        :param affine_transformation: 4x4 matrix that describes the affine transformation [R|t]
-        :return:
+        tr_matrix: 4x4 matrix that describes the affine transformation [R|t]
         """
         # Convert cartesian to homogeneous coordinates
-        ones = np.ones((point_cloud.shape[0], 1), dtype=np.float32)
-        point_cloud = np.concatenate((point_cloud, ones), axis=1)
+        ones = np.ones((self.point_cloud.shape[0], 1), dtype=np.float32)
+        self.point_cloud = np.concatenate((self.point_cloud, ones), axis=1)
 
         # Transform cloud
-        for i in range(point_cloud.shape[0]):
-            point_cloud[i] = np.matmul(affine_transformation, point_cloud[i])
-
-        # point_cloud = np.matmul(affine_transformation, point_cloud.T)
-        # point_cloud = point_cloud.T
+        for i in range(self.point_cloud.shape[0]):
+            self.point_cloud[i] = np.matmul(tr_matrix, self.point_cloud[i])
 
         # Convert homogeneous to cartesian
-        w = point_cloud[:, 3]
-        point_cloud /= w[:, np.newaxis]
+        w = self.point_cloud[:, 3]
+        self.point_cloud /= w[:, np.newaxis]
+        self.point_cloud = self.point_cloud[:, 0:3]
 
-        return point_cloud[:, 0:3]
-
-    def plot_point_cloud(point_cloud):
-        pcd = open3d.PointCloud()
-        pcd.points = open3d.Vector3dVector(point_cloud)
-        frame = open3d.create_mesh_coordinate_frame(size=0.1)
-        open3d.draw_geometries([pcd, frame])
-
-    def generate_height_map(point_cloud, shape=(100, 100), grid_step=0.0025, plot=False, rotations=0):
+    def generate_height_map(self, size=(100, 100), grid_step=0.0025, rotations=0, plot=False):
         """
         see kiatos19
-        :param point_cloud: point cloud aligned with the target object
-        :param plot: if True, plot the generated height map
-        :param shape: the shape of the height map
-        :param grid_step: the side of each cell in the generated height map
+        Point_cloud must be point cloud aligned with the target object
+        plot: if True, plot the generated height map
+        size: the shape of the height map
+        grid_step: the side of each cell in the generated height map
         :return: the height map
         """
-        width = shape[0]
-        height = shape[1]
+        width, height = size
 
         height_grid = np.zeros((height, width), dtype=np.float32)
 
-        for i in range(point_cloud.shape[0]):
-            x = point_cloud[i][0]
-            y = point_cloud[i][1]
-            z = point_cloud[i][2]
+        for i in range(self.point_cloud.shape[0]):
+            x = self.point_cloud[i][0]
+            y = self.point_cloud[i][1]
+            z = self.point_cloud[i][2]
 
             idx_x = int(np.floor(x / grid_step)) + int(width / 2)
             idx_y = int(np.floor(y / grid_step)) + int(height / 2)
@@ -356,13 +341,17 @@ class PointCloud:
                 angle = i * step_angle
                 m = cv2.getRotationMatrix2D(center, angle, scale=1)
                 heightmaps.append(cv2.warpAffine(height_grid, m, (height, width)))
-
                 if plot:
-                    plot_2d_img(heightmaps[i], 'h')
-
+                    plot_2d_img(heightmaps[i], 'height_map' + str(i))
             return heightmaps
         else:
             if plot:
-                plot_2d_img(height_grid, 'h')
+                plot_2d_img(height_grid, 'height_map')
 
         return height_grid
+
+    def plot(self):
+        pcd = open3d.PointCloud()
+        pcd.points = open3d.Vector3dVector(self.point_cloud)
+        frame = open3d.create_mesh_coordinate_frame(size=0.1)
+        open3d.draw_geometries([pcd, frame])

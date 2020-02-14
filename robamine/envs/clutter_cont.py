@@ -317,6 +317,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.pixels_to_m = 0.0012
         self.color_detector = cv_tools.ColorDetector('red')
+        fovy = self.sim.model.vis.global_.fovy
+        self.size = [640, 480]
+        self.camera = cv_tools.PinholeCamera(fovy, self.size)
 
     def reset_model(self):
 
@@ -415,10 +418,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def get_heightmap(self):
         self._move_finger_outside_the_table()
 
-        fovy = self.sim.model.vis.global_.fovy
-        f = 0.5 * 480 / math.tan(fovy * math.pi / 360)
-        camera_matrix = np.array(((f, 0, 640 / 2), (0, f, 480 / 2), (0, 0, 1)))
-        print(camera_matrix)
+
 
         self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
         rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
@@ -430,6 +430,25 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         bgr = cv_tools.rgb2bgr(rgb)
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
+
+        cv2.imshow('bgr', bgr)
+        cv2.waitKey()
+
+        depth_to_rgb_optical_frame = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
+
+        homog, bb = self.color_detector.get_bounding_box(mask)
+        centroid = [int(homog[1][2]), int(homog[0][2])]
+        print(centroid)
+        z = depth[centroid[1], centroid[0]]
+        p_camera = self.camera.back_project(centroid, z)
+        print('p_camera:', p_camera)
+
+        p_rgb = np.matmul(depth_to_rgb_optical_frame, p_camera)
+        print('p_rgb:', p_rgb)
+
+        camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
+        p_world = np.matmul(camera_pose, np.array([p_rgb[0], p_rgb[1], p_rgb[2], 1.0]))
+        print('p_world:', p_world)
 
         # Pre-process rgb-d height maps
         workspace = [193, 193]
@@ -448,15 +467,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
         self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
         self.target_size = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
-
-        inv_k = np.linalg.inv(camera_matrix)
-        print(inv_k)
-        camera_p = inv_k.dot(np.array([0, 0, 1]))
-        # plane_p = np.matmul(camera_matrix, np.array([0, 0, 0]))
-        # camera_p[2] = 0
-        camera_pose = get_camera_pose(self.sim, 'xtion')
-        w_p = np.matmul(camera_pose, np.array([camera_p[0], camera_p[1], camera_p[2], 1.0]))
-        print(w_p)
 
         cv_tools.plot_2d_img(self.heightmap, 'depth')
 
