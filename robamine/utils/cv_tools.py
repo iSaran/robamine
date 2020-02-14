@@ -116,13 +116,11 @@ class ColorDetector:
 
         return mask
 
-    @staticmethod
     def get_centroid(self, mask):
         indeces = np.argwhere(mask > 0)
         centroid = np.sum(indeces, axis=0) / float(indeces.shape[0])
         return [int(centroid[0]), int(centroid[1])]
 
-    @staticmethod
     def get_bounding_box(self, mask):
         """
         Returns the oriented bounding box of the given mask. Returns the
@@ -152,7 +150,6 @@ class ColorDetector:
         homog[:2, 2] = np.matmul(homog[:2, :2], centroid)
         return homog, bb
 
-    @staticmethod
     def get_height(self, depth, mask):
         """
         Returns the average value of the masked region
@@ -225,7 +222,7 @@ class Feature:
         """
         tx = self.center[0] - tx
         ty = self.center[1] - ty
-        t = np.float32([[1, 0, ty], [0, 1, tx]])
+        t = np.float32([[1, 0, tx], [0, 1, ty]])
         translated_heightmap = cv2.warpAffine(self.heightmap, t, self.size)
         return Feature(translated_heightmap)
 

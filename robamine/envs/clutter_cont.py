@@ -326,6 +326,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         fovy = self.sim.model.vis.global_.fovy
         self.size = [640, 480]
         self.camera = cv_tools.PinholeCamera(fovy, self.size)
+        self.rgb_to_camera_frame = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
+
 
     def reset_model(self):
 
@@ -441,18 +443,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         cv2.imshow('bgr', bgr)
         cv2.waitKey()
 
-        depth_to_rgb_optical_frame = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
-
         homog, bb = self.color_detector.get_bounding_box(mask)
-        centroid = [int(homog[1][2]), int(homog[0][2])]
+        centroid = [int(homog[0][2]), int(homog[1][2])]
         print(centroid)
         z = depth[centroid[1], centroid[0]]
         p_camera = self.camera.back_project(centroid, z)
-        print('p_camera:', p_camera)
-
-        p_rgb = np.matmul(depth_to_rgb_optical_frame, p_camera)
-        print('p_rgb:', p_rgb)
-
+        p_rgb = np.matmul(self.rgb_to_camera_frame, p_camera)
         camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
         p_world = np.matmul(camera_pose, np.array([p_rgb[0], p_rgb[1], p_rgb[2], 1.0]))
         print('p_world:', p_world)
