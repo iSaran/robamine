@@ -129,34 +129,27 @@ class ColorDetector:
         homogeneous transformation SE(2), w.r.t. the image frame along with the
         size of the bounding box.
         """
-        # Perform PCA
-        indeces = np.argwhere(mask > 0)
+        ij = np.argwhere(mask > 0)
+        xy = np.zeros(ij.shape)
+        xy[:, 0] = ij[:, 1]
+        xy[:, 1] = ij[:, 0]
+
         pca = PCA(n_components=2)
-        pca.fit_transform(indeces)
-        component_1 = np.append(pca.components_[0, :], 0)
-        component_2 = np.append(pca.components_[1, :], 0)
-
+        transformed = pca.fit_transform(xy)
         homog = np.eye(3)
+        homog[:2, 0] = pca.components_[0, :]
+        homog[:2, 1] = pca.components_[1, :]
+        if np.cross(homog[:, 0], homog[:, 1])[2] < 0:
+            temp = homog[:, 0].copy()
+            homog[:, 0] = homog[:, 1]
+            homog[:, 1] = temp
 
-        # Make sure the rotation matrix of the homogeneous is right handed
-        cross = np.cross(component_1, component_2)
-        if cross[2] > 0:
-            homog[:2, 0] = component_1[:2]
-            homog[:2, 1] = component_2[:2]
-        else:
-            homog[:2, 0] = component_2[:2]
-            homog[:2, 1] = component_1[:2]
-
-        # Find centroid and bounding box given the mask w.r.t. the object's frame
-        indeces_transformed = np.transpose(np.matmul(np.transpose(homog[:2, :2]), np.transpose(indeces)))
-        max_ = np.array([np.max(indeces_transformed[:, 0]), np.max(indeces_transformed[:, 1])])
-        min_ = np.array([np.min(indeces_transformed[:, 0]), np.min(indeces_transformed[:, 1])])
+        xy_transformed = np.transpose(np.matmul(np.transpose(homog[:2, :2]), np.transpose(xy)))
+        max_ = np.array([np.max(xy_transformed[:, 0]), np.max(xy_transformed[:, 1])])
+        min_ = np.array([np.min(xy_transformed[:, 0]), np.min(xy_transformed[:, 1])])
         centroid = np.array([int((max_[0] + min_[0]) / 2), int((max_[1] + min_[1]) / 2)])
         bb = np.array([max_[0] - centroid[0], max_[1] - centroid[1]])
-
-        # Transform the centroid in image frame for the final output
         homog[:2, 2] = np.matmul(homog[:2, :2], centroid)
-
         return homog, bb
 
     @staticmethod
