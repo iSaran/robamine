@@ -215,12 +215,12 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
 
         centroid = color_detector.get_centroid(mask)
 
-        cv_tools.plot_2d_img(depth, 'depth')
-        cv_tools.plot_2d_img(mask, 'mask')
+        # cv_tools.plot_2d_img(depth, 'depth')
+        # cv_tools.plot_2d_img(mask, 'mask')
         # ToDo: normalize depth??
 
         depth_feature = cv_tools.Feature(depth)
-        depth_feature.translate(centroid[1], centroid[0]).plot()
+        depth_feature.translate(centroid[1], centroid[0])
 
         return np.zeros(OBSERVATION_DIM)
 
@@ -394,7 +394,7 @@ class ClutterOcclusion(mujoco_env.MujocoEnv, utils.EzPickle):
             raise RuntimeError("Object is not neither a box or a cylinder")
 
         return np.array([length, width, height])
-        
+
     def generate_random_scene(self, target_length_range=[.0125, .02], target_width_range=[.0125, .02],
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):

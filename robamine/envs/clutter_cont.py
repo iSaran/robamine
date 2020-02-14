@@ -51,6 +51,25 @@ def exp_reward(x, max_penalty, min, max):
     new_i = rescale(x, min, max, [min_exp, max_exp])
     return max_penalty * a * math.exp(b * new_i) + c
 
+class State:
+    def __init__(self):
+        self.finger_1_pd_error = np.zeros(6)
+        self.finger_1_pd_pos_error = np.zeros(6)
+        self.finger_1_pd_vel_error = np.zeros(6)
+        self.finger_1_pos = np.zeros(3)
+        self.finger_1_quat = np.zeros(4)
+        self.finger_1_vel = np.zeros(6)
+        self.finger_1_acc = np.zeros(6)
+        self.finger_1_wrench_cmd = np.zeros(6)
+
+
+        # self.finger_2_pd_error = np.zeros(6)
+        # self.finger_2_pose = np.zeros(7)
+        # self.finger_2_vel = np.zeros(6)
+        # self.finger_2_acc = np.zeros(6)
+
+        self.time = 0.0
+
 class Push:
     """
     Defines a push primitive action as defined in kiatos19, with the difference
@@ -314,6 +333,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         utils.EzPickle.__init__(self)
         self.seed()
         self.preloaded_init_state = None
+
+        self.state = State()
+        self.log = []
 
     def reset_model(self):
 
@@ -610,6 +632,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     f1f2_dir = (f1_initial_pos_world - f2_initial_pos_world) / np.linalg.norm(f1_initial_pos_world - f2_initial_pos_world)
                     f1f2_dir[:2] = f1f2_dir[:2] * 1.1 * self.finger_height
                     if not self.move_joints_to_target(centroid + f1f2_dir, centroid - f1f2_dir, ext_force_policy='stop'):
+                        print('STOPPED MOVE JOINTS')
                         contacts1 = detect_contact(self.sim, 'finger')
                         contacts2 = detect_contact(self.sim, 'finger2')
                         if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
@@ -879,7 +902,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             trajectory2[i] = Trajectory([self.time, self.time + duration2], [self.finger2_pos[i], target_position2[i]])
 
         while self.time <= init_time + duration:
+            print('trajectory running with target_pos', target_position)
             quat_error = self.finger_quat.error(desired_quat)
+            print('quat_error', quat_error)
             quat_error2 = self.finger2_quat.error(desired_quat)
 
             # TODO: The indexes of the actuators are hardcoded right now
@@ -887,6 +912,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             for i in range(3):
                 self.sim.data.ctrl[i] = self.pd.get_control(trajectory[i].pos(self.time) - self.finger_pos[i], trajectory[i].vel(self.time) - self.finger_vel[i])
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
+            print('ctrl', self.sim.data.ctrl)
 
             for i in range(3):
                 self.sim.data.ctrl[i + 6] = self.pd.get_control(trajectory2[i].pos(self.time) - self.finger2_pos[i], trajectory2[i].vel(self.time) - self.finger2_vel[i])
@@ -951,6 +977,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.finger_quat_prev = self.finger_quat
         self.finger2_quat_prev = self.finger2_quat
+
+        # Calculate bias forces (gravity, coriolis etc) in order to be added to
+        # the commanded force/torques for gravity compensation
+        bias = []
+        for i in range(*self.sim.model.get_joint_qvel_addr("finger")):
+            bias.append(self.sim.data.qfrc_bias[i])
+        bias = np.array(bias)
+
+        for i in range(6):
+            self.sim.data.ctrl[i] = self.state.finger_1_wrench_cmd[i] + bias[i]
 
         self.sim.step()
 

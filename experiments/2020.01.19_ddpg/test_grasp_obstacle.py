@@ -11,8 +11,8 @@ params:
   - 0.005
   - 0.005
   nr_of_obstacles:
-  - 7
-  - 7
+  - 0
+  - 0
   obstacle_height_range:
   - 0.005
   - 0.02
