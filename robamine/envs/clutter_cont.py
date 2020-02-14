@@ -784,7 +784,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # If the object is free from obstacles around (no points around)
-        if self.no_of_prev_points_around == 0:
+        if cv_tools.Feature(self.heightmap).mask_out(self.mask).crop(40, 40).non_zero_pixels() < 20:
             self.success = True
             return True
 
