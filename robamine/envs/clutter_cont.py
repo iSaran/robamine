@@ -188,7 +188,7 @@ class GraspObstacle:
         else:
             minimum_distance = target_bounding_box[0] / math.cos(theta_)
 
-        self.distance = minimum_distance + finger_radius + distance + 0.003
+        self.distance = minimum_distance + finger_radius + distance + 0.005
 
         object_height = target_bounding_box[2]
         if object_height - finger_radius > 0:
@@ -245,7 +245,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                        high=np.array([1, 1]),
                                        dtype=np.float32)
 
-        obs_dim = OBSERVATION_DIM
+        self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
+
+        if self.heightmap_rotations > 0:
+            obs_dim = OBSERVATION_DIM * self.heightmap_rotations
+        else:
+            obs_dim = OBSERVATION_DIM
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -295,6 +300,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
         self.last_timestamp = 0.0  # The last time stamp, used for calculating durations of time between timesteps representing experience time
         self.target_grasped_successfully = False
+        self.obstacle_grasped_successfully = False
         self.success = False
         self.push_distance = 0.0
         self.grasp_spread = 0.0
@@ -399,6 +405,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = self.sim.data.time
         self.success = False
         self.target_grasped_successfully = False
+        self.obstacle_grasped_successfully = False
 
         self.target_pos_prev_state = self.target_pos.copy()
         self.target_quat_prev_state = self.target_quat.copy()
@@ -483,7 +490,27 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         heightmap, mask = self.get_heightmap()
 
         depth_feature = cv_tools.Feature(self.heightmap)
-        obs = depth_feature.mask_out(mask).crop(40, 40).pooling().flatten()
+
+        # if self.heightmap_rotations > 0:
+        #     features = []
+        #     rot_angle = 360 / self.heightmap_rotations
+        #     for i in range(0, len(heightmap)):
+        #         obs = depth_feature.mask_out(mask).rotate(rot_angle).crop(40, 40).pooling().flatten()
+        #         # obs.append(distances[0])
+        #         # obs.append(distances[1])
+        #         # obs.append(distances[2])
+        #         # obs.append(distances[3])
+        #         # features.append(obs)
+
+        #     final_feature = np.append(features[0], features[1], axis=0)
+        #     for i in range(2, len(features)):
+        #         final_feature = np.append(final_feature, features[i], axis=0)
+        # else:
+        #     obs = depth_feature.mask_out(mask).crop(40, 40).pooling().flatten()
+        #     # obs.append(distances[0])
+        #     # obs.append(distances[1])
+        #     # obs.append(distances[2])
+        #     # obs.append(distances[3])
 
         return obs
 
@@ -534,6 +561,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         primitive = int(action[0])
         primitive = 1
         target_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+        self.target_grasped_successfully = False
+        self.obstacle_grasped_successfully = False
         if primitive == 0 or primitive == 1:
 
             # Push target primitive
@@ -578,8 +607,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 grasp = GraspTarget(theta=theta, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
             if primitive == 3:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-                distance = rescale(action[2], min=-1, max=1, range=self.params['grasp']['workspace'])  # hardcoded, read it from table limits
-                phi = rescale(action[3], min=-1, max=1, range=[0, math.pi])  # hardcoded, read it from table limits
+                phi = rescale(action[2], min=-1, max=1, range=[0, math.pi])  # hardcoded, read it from table limits
+                distance = rescale(action[3], min=-1, max=1, range=self.params['grasp']['workspace'])  # hardcoded, read it from table limits
                 grasp = GraspObstacle(theta=theta, distance=distance, phi=phi, spread=self.grasp_spread, height=self.grasp_height, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
 
             f1_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[0], 1))[:3]
@@ -596,12 +625,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 if primitive == 3:
                     centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
                     f1f2_dir = (f1_initial_pos_world - f2_initial_pos_world) / np.linalg.norm(f1_initial_pos_world - f2_initial_pos_world)
-                    f1f2_dir[:2] = f1f2_dir[:2] * 1.1 * self.finger_height
-                    if not self.move_joints_to_target(centroid + f1f2_dir, centroid - f1f2_dir, ext_force_policy='stop'):
+                    f1f2_dir_1 = np.append(centroid[:2] + f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
+                    f1f2_dir_2 = np.append(centroid[:2] - f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
+                    if not self.move_joints_to_target(f1f2_dir_1, f1f2_dir_2, ext_force_policy='stop'):
                         contacts1 = detect_contact(self.sim, 'finger')
                         contacts2 = detect_contact(self.sim, 'finger2')
                         if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
                             self._remove_obstacle_from_table(contacts1[0])
+                            self.obstacle_grasped_successfully = True
             else:
                 self.push_stopped_ext_forces = True
 
@@ -718,7 +749,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Terminal if collision is detected
         if self.target_grasped_successfully:
-            self.target_grasped_successfully = False
             self.success = True
             return True
 

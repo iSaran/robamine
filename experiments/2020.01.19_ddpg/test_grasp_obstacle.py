@@ -43,7 +43,7 @@ def run():
     angle_wrt_target = 0.4
     distance_from_target = -1  # distance from target
     angle_second_finger_wrt_first = 0.85
-    action = np.array([3, angle_wrt_target, distance_from_target, angle_second_finger_wrt_first])
+    action = np.array([3, angle_wrt_target, angle_second_finger_wrt_first, distance_from_target])
     env.reset()
     env.step(action)
 
@@ -51,14 +51,14 @@ def run():
     angle_wrt_target = 0.4
     distance_from_target = -1  # distance from target
     angle_second_finger_wrt_first = 0.85
-    action = np.array([3, angle_wrt_target, distance_from_target, angle_second_finger_wrt_first])
+    action = np.array([3, angle_wrt_target, angle_second_finger_wrt_first, distance_from_target])
     env.step(action)
 
     # Collision grasp
     angle_wrt_target = 0.4
     distance_from_target = -1  # distance from target
     angle_second_finger_wrt_first = 0.6
-    action = np.array([3, angle_wrt_target, distance_from_target, angle_second_finger_wrt_first])
+    action = np.array([3, angle_wrt_target, angle_second_finger_wrt_first, distance_from_target])
     env.step(action)
 
     # Failed grasp
@@ -66,7 +66,7 @@ def run():
     angle_wrt_target = 0.4
     distance_from_target = -1  # distance from target
     angle_second_finger_wrt_first = 0.7
-    action = np.array([3, angle_wrt_target, distance_from_target, angle_second_finger_wrt_first])
+    action = np.array([3, angle_wrt_target, angle_second_finger_wrt_first, distance_from_target])
     env.reset()
     env.step(action)
 
