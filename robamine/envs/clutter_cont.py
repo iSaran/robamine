@@ -25,7 +25,7 @@ from robamine.utils.orientation import rot2quat
 import cv2
 from mujoco_py.cymj import MjRenderContext
 
-OBSERVATION_DIM = 400
+OBSERVATION_DIM = 404
 
 def get_2d_displacement(init, current):
     assert isinstance(init, Affine3)
@@ -127,7 +127,7 @@ class PushObstacle:
     def __init__(self, theta = 0.0, push_distance = 0.1, object_height = 0.06, finger_size = 0.02):
         self.push_distance = push_distance
         self.theta = theta
-        self.z = 2 * object_height + finger_size + 0.001
+        self.z = 2 * object_height + finger_size + 0.004
 
     def get_init_pos(self):
         return np.array([0.0, 0.0, self.z])
@@ -332,6 +332,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def reset_model(self):
 
         self.sim_step()
+        dims = self.get_object_dimensions('target', self.surface_normal)
+        self.target_length, self.target_width, self.target_height = dims[0], dims[1], dims[2]
 
         self.timesteps = 0
 
@@ -440,18 +442,22 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
-        cv2.imshow('bgr', bgr)
-        cv2.waitKey()
+        # cv2.imshow('bgr', bgr)
+        # cv2.waitKey()
 
-        homog, bb = self.color_detector.get_bounding_box(mask)
-        centroid = [int(homog[0][2]), int(homog[1][2])]
-        print(centroid)
+        homog, bb = self.color_detector.get_bounding_box(mask, plot=False)
+        centroid = [int(homog[0][3]), int(homog[1][3])]
+        # print(centroid)
         z = depth[centroid[1], centroid[0]]
         p_camera = self.camera.back_project(centroid, z)
         p_rgb = np.matmul(self.rgb_to_camera_frame, p_camera)
         camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
-        p_world = np.matmul(camera_pose, np.array([p_rgb[0], p_rgb[1], p_rgb[2], 1.0]))
-        print('p_world:', p_world)
+        self.target_pos = np.matmul(camera_pose, np.array([p_rgb[0], p_rgb[1], p_rgb[2], 1.0]))[:3]
+
+        rot_mat = homog[:3, :3]
+        obj_to_camera = np.matmul(np.linalg.inv(self.rgb_to_camera_frame[:3, :3]), rot_mat)
+        obj_to_world = np.matmul(camera_pose[:3, :3], obj_to_camera)
+        self.target_quat = Quaternion.from_rotation_matrix(obj_to_world)
 
         # Pre-process rgb-d height maps
         workspace = [193, 193]
@@ -466,12 +472,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         height = self.color_detector.get_height(depth, mask)
         homog, bb = self.color_detector.get_bounding_box(mask)
-        tx, ty = [int(homog[0][2]), int(homog[1][2])]
+        tx, ty = [int(homog[0][3]), int(homog[1][3])]
         self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
         self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
-        self.target_size = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
+        self.target_size = 2 * np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
+        self.target_length, self.target_width, self.target_height = self.target_size[0]/2, self.target_size[1]/2, self.target_size[2]/2
 
-        cv_tools.plot_2d_img(self.heightmap, 'depth')
+        # cv_tools.plot_2d_img(self.heightmap, 'depth')
+        # cv_tools.plot_2d_img(self.mask, 'depth')
 
         # ToDo: How to normalize depth??
 
@@ -485,7 +493,18 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         heightmap, mask = self.get_heightmap()
 
-        depth_feature = cv_tools.Feature(self.heightmap)
+        depth_feature = cv_tools.Feature(self.heightmap).crop(40, 40).pooling().normalize(0.04).flatten()
+
+        # Add the distance of the object from the edge
+        distances = [self.surface_size[0] - self.target_pos[0], \
+                     self.surface_size[0] + self.target_pos[0], \
+                     self.surface_size[1] - self.target_pos[1], \
+                     self.surface_size[1] + self.target_pos[1]]
+
+        for d in distances:
+            depth_feature = np.append(depth_feature, d)
+
+        distances = [x / 0.5 for x in distances]
 
         # if self.heightmap_rotations > 0:
         #     features = []
@@ -508,7 +527,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         #     # obs.append(distances[2])
         #     # obs.append(distances[3])
 
-        return obs
+        return depth_feature
 
     def step(self, action):
 
@@ -725,15 +744,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         extra_penalty = 0
         # penalize pushes that start far from the target object
-        if int(action[0]) == 0:
-            extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
+        # if int(action[0]) == 0:
+        #     extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
 
-        if int(action[0]) == 0 or int(action[0]) == 1:
-            extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
+        # if int(action[0]) == 0 or int(action[0]) == 1:
+        extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
 
         if points_cur < 20:
             return 10 + extra_penalty
-        elif points_diff > 20:
+        elif points_diff < 20:
             return -5
         else:
             return -1 + extra_penalty
@@ -981,11 +1000,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # along the the surface normal. The length is the maximum dimensions
         # between the remaining two.
         dims = self.get_object_dimensions('target', self.surface_normal)
-        self.target_length, self.target_width, self.target_height = dims[0], dims[1], dims[2]
 
         temp = self.sim.data.get_joint_qpos('target')
-        self.target_pos = np.array([temp[0], temp[1], temp[2]])
-        self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
+        # self.target_pos = np.array([temp[0], temp[1], temp[2]])
+        # self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
     def generate_random_scene(self, target_length_range=[.01, .03], target_width_range=[.01, .03],
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],

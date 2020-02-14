@@ -121,7 +121,7 @@ class ColorDetector:
         centroid = np.sum(indeces, axis=0) / float(indeces.shape[0])
         return [int(centroid[0]), int(centroid[1])]
 
-    def get_bounding_box(self, mask):
+    def get_bounding_box(self, mask, plot=False):
         """
         Returns the oriented bounding box of the given mask. Returns the
         homogeneous transformation SE(2), w.r.t. the image frame along with the
@@ -134,21 +134,59 @@ class ColorDetector:
 
         pca = PCA(n_components=2)
         transformed = pca.fit_transform(xy)
-        homog = np.eye(3)
+        homog = np.eye(4)
         homog[:2, 0] = pca.components_[0, :]
         homog[:2, 1] = pca.components_[1, :]
-        if np.cross(homog[:, 0], homog[:, 1])[2] < 0:
+        if np.cross(homog[:3, 0], homog[:3, 1])[2] > 0:
             temp = homog[:, 0].copy()
             homog[:, 0] = homog[:, 1]
             homog[:, 1] = temp
+        homog[2, 2] = -1
 
         xy_transformed = np.transpose(np.matmul(np.transpose(homog[:2, :2]), np.transpose(xy)))
         max_ = np.array([np.max(xy_transformed[:, 0]), np.max(xy_transformed[:, 1])])
         min_ = np.array([np.min(xy_transformed[:, 0]), np.min(xy_transformed[:, 1])])
         centroid = np.array([int((max_[0] + min_[0]) / 2), int((max_[1] + min_[1]) / 2)])
         bb = np.array([max_[0] - centroid[0], max_[1] - centroid[1]])
-        homog[:2, 2] = np.matmul(homog[:2, :2], centroid)
+        homog[:2, 3] = np.matmul(homog[:2, :2], centroid)
+
+        if plot:
+            self.plot_image(mask, homog, bb)
+
         return homog, bb
+
+    def plot_image(self, fig, matrix, bb):
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+        from math import acos, pi
+        _, ax = plt.subplots(1)
+        ax.imshow(fig, cmap='gray', vmin=0, vmax=np.max(fig))
+
+        # Plot image ref frame
+        ax.arrow(0, 0, 25, 0, color='red', linewidth=2)
+        ax.arrow(0, 0, 0, 25, color='green', linewidth=2)
+
+        ax.arrow(matrix[0, 3], matrix[1, 3], int(matrix[0, 0] * 25), int(matrix[1, 0] * 25), color='red', linewidth=2)
+        ax.arrow(matrix[0, 3], matrix[1, 3], int(matrix[0, 1] * 25), int(matrix[1, 1] * 25), color='green', linewidth=2)
+
+        center = np.array([-bb[0], -bb[1], 0, 1])
+        center_wrt_image = np.matmul(matrix, center)
+
+        if np.inner(matrix[:2, 0], np.array([0, 1])) > 0:
+            angle = acos(matrix[0, 0])
+        else:
+            angle = - acos(matrix[0, 0])
+
+
+        rect = patches.Rectangle((center_wrt_image[0], center_wrt_image[1]), 2*bb[0], 2*bb[1], angle=(180/pi)*angle, linewidth=1,edgecolor='r',facecolor='none')
+
+        ax.add_patch(rect)
+        plt.show()
+
+
+
+
+
 
     def get_height(self, depth, mask):
         """
@@ -257,6 +295,13 @@ class Feature:
         Plot the heightmap
         """
         plot_2d_img(self.heightmap, name)
+
+    def normalize(self, max_height):
+        normalized = self.heightmap / max_height
+        normalized[normalized > 1] = 1
+        normalized[normalized < 0] = 0
+        return normalized
+
 
 
 class PointCloud:

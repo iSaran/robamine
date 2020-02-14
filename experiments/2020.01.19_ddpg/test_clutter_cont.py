@@ -8,10 +8,11 @@ def run():
         params = yaml.safe_load(stream)
 
     env = gym.make(params['env']['name'], params=params['env']['params'])
+    env.seed(0)
 
     # Push target
     # -----------
-    action = np.array([0, 1, 0, 0.2])
+    action = np.array([0, -0, 0, 0.2])
     env.reset()
     env.step(action)
 
