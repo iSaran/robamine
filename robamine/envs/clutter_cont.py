@@ -27,22 +27,6 @@ from mujoco_py.cymj import MjRenderContext
 
 OBSERVATION_DIM = 404
 
-def get_2d_displacement(init, current):
-    assert isinstance(init, Affine3)
-    assert isinstance(current, Affine3)
-
-    displacement = np.zeros(3)
-    diff = init.inv() * current
-    displacement[0] = diff.translation[0]
-    displacement[1] = diff.translation[1]
-    if np.linalg.norm(displacement) < 1e-3:
-        return np.zeros(3)
-    displacement[2], axis = rot2angleaxis(diff.linear)
-    if axis is None:
-        axis = np.array([0, 0, 1])
-    displacement[2] *= np.sign(axis[2])
-    return displacement
-
 def exp_reward(x, max_penalty, min, max):
     a = 1
     b = -1.2
@@ -306,11 +290,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.grasp_spread = 0.0
         self.grasp_height = 0.0
 
-        self.target_pos_prev_state = np.zeros(3)
-        self.target_quat_prev_state = Quaternion()
         self.target_pos_horizon = np.zeros(3)
         self.target_quat_horizon = Quaternion()
-        self.target_displacement_push_step= np.zeros(3)
         self.target_init_pose = Affine3()
         self.predicted_displacement_push_step= np.zeros(3)
 
@@ -411,8 +392,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
 
-        self.target_pos_prev_state = self.target_pos.copy()
-        self.target_quat_prev_state = self.target_quat.copy()
         self.preloaded_init_state = None
         self.reset_horizon()
         return self.get_obs()
@@ -554,7 +533,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             quat = self.target_quat.copy()
 
         time = self.do_simulation(_action)
-        self.target_displacement_push_step = self.get_target_displacement()
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs = self.get_obs()
@@ -1190,17 +1168,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             raise RuntimeError("Object is not neither a box or a cylinder")
 
         return np.array([length, width, height])
-
-    def get_target_displacement(self):
-        '''Returns [x, y, theta]: the displacement of the target between pushing
-        steps. Used in step for returning displacements in info.'''
-        init = Affine3.from_vec_quat(self.target_pos_prev_state, self.target_quat_prev_state)
-        cur = Affine3.from_vec_quat(self.target_pos, self.target_quat)
-        displacement = get_2d_displacement(init, cur)
-        self.target_pos_prev_state = self.target_pos.copy()
-        self.target_quat_prev_state = self.target_quat.copy()
-        return displacement
-
 
     def state_dict(self):
         state = {}
