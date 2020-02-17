@@ -254,6 +254,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.surface_size = np.zeros(2)  # half size of the table in x, y
         self.finger_length = 0.0
         self.finger_height = 0.0
+
         self.target_size = np.zeros(3)
 
         self.no_of_prev_points_around = 0
@@ -276,9 +277,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger2_external_force_norm = 0.0
         self.finger_external_force = None
         self.finger2_external_force = None
-        self.target_height = 0.0
-        self.target_length = 0.0
-        self.target_width = 0.0
         self.target_pos = np.zeros(3)
         self.target_quat = Quaternion()
         self.push_stopped_ext_forces = False  # Flag if a push stopped due to external forces. This is read by the reward function and penalize the action
@@ -307,12 +305,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.camera = cv_tools.PinholeCamera(fovy, self.size)
         self.rgb_to_camera_frame = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
 
+        # Target state from vision
+        self.target_size_vision = np.zeros(3)
+        self.target_bounding_box = np.zeros(3)
+        self.target_pos_vision = np.zeros(3)
+        self.target_quat_vision = Quaternion()
 
     def reset_model(self):
 
         self.sim_step()
         dims = self.get_object_dimensions('target', self.surface_normal)
-        self.target_length, self.target_width, self.target_height = dims[0], dims[1], dims[2]
 
         self.timesteps = 0
 
@@ -379,6 +381,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Update state variables that need to be updated only once
         self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
         self.finger_height = get_geom_size(self.sim.model, 'finger')[0]  # same as length, its a sphere
+        self.target_bounding_box = get_geom_size(self.sim.model, 'target')
         self.surface_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
 
         heightmap, mask = self.get_heightmap()
@@ -424,12 +427,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         p_camera = self.camera.back_project(centroid, z)
         p_rgb = np.matmul(self.rgb_to_camera_frame, p_camera)
         camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
-        self.target_pos = np.matmul(camera_pose, np.array([p_rgb[0], p_rgb[1], p_rgb[2], 1.0]))[:3]
+        self.target_pos_vision = np.matmul(camera_pose, np.array([p_rgb[0], p_rgb[1], p_rgb[2], 1.0]))[:3]
 
         rot_mat = homog[:3, :3]
         obj_to_camera = np.matmul(np.linalg.inv(self.rgb_to_camera_frame[:3, :3]), rot_mat)
         obj_to_world = np.matmul(camera_pose[:3, :3], obj_to_camera)
-        self.target_quat = Quaternion.from_rotation_matrix(obj_to_world)
+        self.target_quat_vision = Quaternion.from_rotation_matrix(obj_to_world)
 
         # Pre-process rgb-d height maps
         workspace = [193, 193]
@@ -447,8 +450,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         tx, ty = [int(homog[0][3]), int(homog[1][3])]
         self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
         self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
-        self.target_size = 2 * np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
-        self.target_length, self.target_width, self.target_height = self.target_size[0]/2, self.target_size[1]/2, self.target_size[2]/2
+        self.target_bounding_box_vision = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
 
         # cv_tools.plot_2d_img(self.heightmap, 'depth')
         # cv_tools.plot_2d_img(self.mask, 'depth')
@@ -471,10 +473,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                                         .normalize(0.04).flatten()
 
         # Add the distance of the object from the edge
-        distances = [self.surface_size[0] - self.target_pos[0], \
-                     self.surface_size[0] + self.target_pos[0], \
-                     self.surface_size[1] - self.target_pos[1], \
-                     self.surface_size[1] + self.target_pos[1]]
+        distances = [self.surface_size[0] - self.target_pos_vision[0], \
+                     self.surface_size[0] + self.target_pos_vision[0], \
+                     self.surface_size[1] - self.target_pos_vision[1], \
+                     self.surface_size[1] + self.target_pos_vision[1]]
 
         distances = [x / 0.5 for x in distances]
         for d in distances:
@@ -530,7 +532,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def do_simulation(self, action):
         primitive = int(action[0])
         primitive = 1
-        target_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+        target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
         if primitive == 0 or primitive == 1:
@@ -541,32 +543,26 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push']['distance'][0], self.params['push']['distance'][1]])  # hardcoded read it from min max pushing distance
                 distance = rescale(action[3], min=-1, max=1, range=self.params['push']['target_init_distance'])  # hardcoded, read it from table limits
                 push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
-                                  target_bounding_box= self.target_size/2, finger_size = self.finger_length)
+                                  target_bounding_box= self.target_bounding_box_vision, finger_size = self.finger_length)
             # Push obstacle primitive
             elif primitive == 1:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
                 push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push']['distance'][0], self.params['push']['distance'][1]])  # hardcoded read it from min max pushing distance
                 push = PushObstacle(theta=theta, push_distance=push_distance,
-                                    object_height = self.target_height, finger_size = self.finger_length)
+                                    object_height = self.target_bounding_box_vision[2], finger_size = self.finger_length)
 
             # Transform pushing from target frame to world frame
 
             push_initial_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_init_pos(), 1))[:3]
             push_final_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_final_pos(), 1))[:3]
 
-            # Save init pose for calculating prediction of displacement w.r.t. the
-            # init target pose not world
-            init_target_pos = self.target_pos.copy()
-            init_target_quat = self.target_quat.copy()
-
-            init_z = 2 * self.target_height + 0.05
+            init_z = 2 * self.target_bounding_box[2] + 0.05
             self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
             self.sim_step()
             duration = push.get_duration()
 
             if self.move_joint_to_target('finger', [None, None, push.z], stop_external_forces=True):
                 end = push_final_pos_world[:2]
-                init_pos = self.target_pos
                 self.move_joint_to_target('finger', [end[0], end[1], None], duration)
             else:
                 self.push_stopped_ext_forces = True
@@ -574,17 +570,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         elif primitive == 2 or primitive == 3:
             if primitive == 2:
                 theta = rescale(action[1], min=-1, max=1, range=[0, math.pi])
-                grasp = GraspTarget(theta=theta, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
+                grasp = GraspTarget(theta=theta, target_bounding_box = self.target_bounding_box_vision, finger_radius = self.finger_length)
             if primitive == 3:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
                 phi = rescale(action[2], min=-1, max=1, range=[0, math.pi])  # hardcoded, read it from table limits
                 distance = rescale(action[3], min=-1, max=1, range=self.params['grasp']['workspace'])  # hardcoded, read it from table limits
-                grasp = GraspObstacle(theta=theta, distance=distance, phi=phi, spread=self.grasp_spread, height=self.grasp_height, target_bounding_box = self.target_size/2, finger_radius = self.finger_length)
+                grasp = GraspObstacle(theta=theta, distance=distance, phi=phi, spread=self.grasp_spread, height=self.grasp_height, target_bounding_box = self.target_bounding_box_vision, finger_radius = self.finger_length)
 
             f1_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[0], 1))[:3]
             f2_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[1], 1))[:3]
 
-            init_z = 2 * self.target_height + 0.05
+            init_z = 2 * self.target_bounding_box[2] + 0.05
             self.sim.data.set_joint_qpos('finger', [f1_initial_pos_world[0], f1_initial_pos_world[1], init_z, 1, 0, 0, 0])
             self.sim.data.set_joint_qpos('finger2', [f2_initial_pos_world[0], f2_initial_pos_world[1], init_z, 1, 0, 0, 0])
             self.sim_step()
@@ -762,7 +758,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         init_time = self.time
         desired_quat = Quaternion()
-        self.target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+        self.target_init_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
 
         trajectory = [None, None, None]
         for i in range(3):
@@ -817,7 +813,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         assert ext_force_policy == 'avoid' or ext_force_policy == 'ignore' or ext_force_policy == 'stop'
         init_time = self.time
         desired_quat = Quaternion()
-        self.target_init_pose = Affine3.from_vec_quat(self.target_pos, self.target_quat)
+        self.target_init_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
 
         trajectory = [None, None, None]
         for i in range(3):
@@ -958,8 +954,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         dims = self.get_object_dimensions('target', self.surface_normal)
 
         temp = self.sim.data.get_joint_qpos('target')
-        # self.target_pos = np.array([temp[0], temp[1], temp[2]])
-        # self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
+        self.target_pos = np.array([temp[0], temp[1], temp[2]])
+        self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
     def generate_random_scene(self, target_length_range=[.01, .03], target_width_range=[.01, .03],
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
