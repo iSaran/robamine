@@ -271,7 +271,7 @@ class Feature:
         theta: Rotation angle in degrees. Positive values mean counter-clockwise rotation .
         """
         scale = 1.0
-        rot = cv2.getRotationMatrix2D(self.center, theta, scale)
+        rot = cv2.getRotationMatrix2D((self.center[0], self.center[1]), theta, scale)
         rotated_heightmap = cv2.warpAffine(self.heightmap, rot, self.size)
         return Feature(rotated_heightmap)
 
@@ -300,7 +300,7 @@ class Feature:
         normalized = self.heightmap / max_height
         normalized[normalized > 1] = 1
         normalized[normalized < 0] = 0
-        return normalized
+        return Feature(normalized)
 
 
 

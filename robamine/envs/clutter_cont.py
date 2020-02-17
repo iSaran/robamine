@@ -400,7 +400,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         super().seed(seed)
         self.rng.seed(seed)
 
-
     def get_heightmap(self):
         self._move_finger_outside_the_table()
 
@@ -459,49 +458,48 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return self.heightmap, self.mask
 
-
     def get_obs(self):
         """
         Read depth and extract height map as observation
         :return:
         """
-        heightmap, mask = self.get_heightmap()
-
-        depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                                        .crop(40, 40)\
-                                                        .pooling()\
-                                                        .normalize(0.04).flatten()
-
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos_vision[0], \
                      self.surface_size[0] + self.target_pos_vision[0], \
                      self.surface_size[1] - self.target_pos_vision[1], \
                      self.surface_size[1] + self.target_pos_vision[1]]
-
         distances = [x / 0.5 for x in distances]
-        for d in distances:
-            depth_feature = np.append(depth_feature, d)
 
-        # if self.heightmap_rotations > 0:
-        #     features = []
-        #     rot_angle = 360 / self.heightmap_rotations
-        #     for i in range(0, len(heightmap)):
-        #         obs = depth_feature.mask_out(mask).rotate(rot_angle).crop(40, 40).pooling().flatten()
-        #         # obs.append(distances[0])
-        #         # obs.append(distances[1])
-        #         # obs.append(distances[2])
-        #         # obs.append(distances[3])
-        #         # features.append(obs)
+        heightmap, mask = self.get_heightmap()
 
-        #     final_feature = np.append(features[0], features[1], axis=0)
-        #     for i in range(2, len(features)):
-        #         final_feature = np.append(final_feature, features[i], axis=0)
-        # else:
-        #     obs = depth_feature.mask_out(mask).crop(40, 40).pooling().flatten()
-        #     # obs.append(distances[0])
-        #     # obs.append(distances[1])
-        #     # obs.append(distances[2])
-        #     # obs.append(distances[3])
+        # Use rotated features
+        if self.heightmap_rotations > 0:
+            features = []
+            rot_angle = 360 / self.heightmap_rotations
+            for i in range(0, self.heightmap_rotations):
+                depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
+                                                                .rotate(rot_angle * i)\
+                                                                .crop(40, 40)\
+                                                                .pooling()\
+                                                                .normalize(0.04)\
+                                                                .flatten()
+                for d in distances:
+                    depth_feature = np.append(depth_feature, d)
+
+                features.append(depth_feature)
+
+            depth_feature = np.append(features[0], features[1], axis=0)
+            for i in range(2, len(features)):
+                depth_feature = np.append(depth_feature, features[i], axis=0)
+
+        # Use single feature (one rotation)
+        else:
+            depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
+                                                            .crop(40, 40)\
+                                                            .pooling()\
+                                                            .normalize(0.04).flatten()
+            for d in distances:
+                depth_feature = np.append(depth_feature, d)
 
         return depth_feature
 
