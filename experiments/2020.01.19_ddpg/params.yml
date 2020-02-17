@@ -17,7 +17,7 @@ agent:
       hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
     noise:
-      name: OU
+      name: Normal
       sigma: 0.2
     epsilon:
       start: 0.9
@@ -42,7 +42,7 @@ env:
     - 0.005
     - 0.02
     obstacle_probability_box: 1.0
-    render: false
+    render: true
     target_height_range:
     - 0.005
     - 0.01
@@ -66,5 +66,5 @@ world:
     eval_episodes: 10
     eval_every: 20
     eval_render: false
-    render: false
+    render: true
     save_every: 20

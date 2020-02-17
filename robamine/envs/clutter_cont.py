@@ -493,7 +493,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         heightmap, mask = self.get_heightmap()
 
-        depth_feature = cv_tools.Feature(self.heightmap).crop(40, 40).pooling().normalize(0.04).flatten()
+        depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
+                                                        .crop(40, 40)\
+                                                        .pooling()\
+                                                        .normalize(0.04).flatten()
 
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos[0], \
@@ -501,10 +504,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[1] - self.target_pos[1], \
                      self.surface_size[1] + self.target_pos[1]]
 
+        distances = [x / 0.5 for x in distances]
         for d in distances:
             depth_feature = np.append(depth_feature, d)
-
-        distances = [x / 0.5 for x in distances]
 
         # if self.heightmap_rotations > 0:
         #     features = []
@@ -559,7 +561,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         reward = self.get_reward(obs, _action)
         # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
+        print(reward)
         reward = rescale(reward, -10, 10, range=[-1, 1])
+
 
         done = False
         if self.terminal_state(obs):
@@ -739,6 +743,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return -10
 
         points_prev = cv_tools.Feature(self.heightmap_prev).mask_out(self.mask_prev).crop(40, 40).non_zero_pixels()
+        self.heightmap_prev = self.heightmap.copy()
         points_cur = cv_tools.Feature(self.heightmap).mask_out(self.mask).crop(40, 40).non_zero_pixels()
         points_diff = np.abs(points_prev - points_cur)
 
@@ -1005,7 +1010,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # self.target_pos = np.array([temp[0], temp[1], temp[2]])
         # self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
-    def generate_random_scene(self, target_length_range=[.01, .03], target_width_range=[.01, .03],
+    def generate_random_scene(self, target_length_range=[.03, .03], target_width_range=[.03, .03],
                                     obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
                                     surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
