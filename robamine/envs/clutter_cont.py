@@ -290,8 +290,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.grasp_spread = 0.0
         self.grasp_height = 0.0
 
-        self.target_pos_horizon = np.zeros(3)
-        self.target_quat_horizon = Quaternion()
         self.target_init_pose = Affine3()
         self.predicted_displacement_push_step= np.zeros(3)
 
@@ -393,12 +391,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.obstacle_grasped_successfully = False
 
         self.preloaded_init_state = None
-        self.reset_horizon()
         return self.get_obs()
-
-    def reset_horizon(self):
-        self.target_pos_horizon = self.target_pos.copy()
-        self.target_quat_horizon = self.target_quat.copy()
 
     def seed(self, seed=None):
         super().seed(seed)
@@ -513,30 +506,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def step(self, action):
 
         self.timesteps += 1
-
-        # Check if we are in the special case of prective horizon actions where
-        # the action is an augmented action including the action index AND the
-        # pose of the target object
-        if isinstance(action, dict) and 'action' in action and 'pose' in action:
-            _action = action['action']
-            pos = np.array([action['pose'][0], action['pose'][1], 0])
-            target_pos_pred = \
-                  self.target_pos_horizon \
-                + np.matmul(self.target_quat_horizon.rotation_matrix(), pos)
-            rot = np.matmul(self.target_quat_horizon.rotation_matrix(), rot_z(action['pose'][2]))
-            target_quat_pred = Quaternion.from_rotation_matrix(rot)
-            pos = self.target_pos.copy()
-            quat = self.target_quat.copy()
-        else:
-            _action = action
-            pos = self.target_pos.copy()
-            quat = self.target_quat.copy()
-
-        time = self.do_simulation(_action)
+        time = self.do_simulation(action)
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs = self.get_obs()
-        reward = self.get_reward(obs, _action)
+        reward = self.get_reward(obs, action)
         # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
         reward = rescale(reward, -10, 10, range=[-1, 1])
