@@ -38,15 +38,15 @@ env:
     nr_of_obstacles:
     - 1
     - 8
-    obstacle_height_range:
-    - 0.005
-    - 0.02
-    obstacle_probability_box: 1.0
     render: false
-    target_height_range:
-    - 0.005
-    - 0.01
-    target_probability_box: 1.0
+    target:
+      min_bounding_box: [.01, .01, .005]
+      max_bounding_box: [.03, .03, .010]
+      probability_box: 1.0
+    obstacle:
+      min_bounding_box: [.01, .01, .005]
+      max_bounding_box: [.03, .03, .020]
+      probability_box: 1.0
     push:
       distance: [0.05, 0.10]
       target_init_distance: [0.0, 0.1]
@@ -54,6 +54,7 @@ env:
       spread: [0.05, 0.05]
       height: [0.01, 0.01]
       workspace: [0.0, 0.1]
+    feature_normalization_per: 'session'  # available: 'session', 'episode'
     heightmap_rotations: 0
 env_eval:
   name: ClutterCont-v0
@@ -65,15 +66,15 @@ env_eval:
     nr_of_obstacles:
     - 6
     - 8
-    obstacle_height_range:
-    - 0.005
-    - 0.02
-    obstacle_probability_box: 1.0
     render: false
-    target_height_range:
-    - 0.005
-    - 0.01
-    target_probability_box: 1.0
+    target:
+      min_bounding_box: [.01, .01, .005]
+      max_bounding_box: [.03, .03, .010]
+      probability_box: 1.0
+    obstacle:
+      min_bounding_box: [.01, .01, .005]
+      max_bounding_box: [.03, .03, .020]
+      probability_box: 1.0
     push:
       distance: [0.05, 0.10]
       target_init_distance: [0.0, 0.1]
@@ -81,6 +82,7 @@ env_eval:
       spread: [0.05, 0.05]
       height: [0.01, 0.01]
       workspace: [0.0, 0.1]
+    feature_normalization_per: 'session'  # available: 'session', 'episode'
     heightmap_rotations: 0
 world:
   comments: ''

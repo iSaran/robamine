@@ -311,6 +311,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos_vision = np.zeros(3)
         self.target_quat_vision = Quaternion()
 
+        self.feature_normalization_per = self.params.get('feature_normalization_per', 'session')
+        self.max_object_height = 10
+        if self.feature_normalization_per == 'session':
+            self.max_object_height = 2 * max(max(self.params['target']['max_bounding_box']),
+                                             max(self.params['obstacle']['max_bounding_box']))
+
     def reset_model(self):
 
         self.sim_step()
@@ -394,6 +400,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.obstacle_grasped_successfully = False
 
         self.preloaded_init_state = None
+
+        if self.feature_normalization_per == 'episode':
+            self.max_object_height = np.max(self.heightmap)
+
         return self.get_obs()
 
     def seed(self, seed=None):
@@ -477,11 +487,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             features = []
             rot_angle = 360 / self.heightmap_rotations
             for i in range(0, self.heightmap_rotations):
+
                 depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
                                                                 .rotate(rot_angle * i)\
                                                                 .crop(40, 40)\
                                                                 .pooling()\
-                                                                .normalize(0.04)\
+                                                                .normalize(self.max_object_height)\
                                                                 .flatten()
                 for d in distances:
                     depth_feature = np.append(depth_feature, d)
@@ -500,7 +511,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
                                                             .crop(40, 40)\
                                                             .pooling()\
-                                                            .normalize(0.04).flatten()
+                                                            .normalize(self.max_object_height)
+            # depth_feature.plot()
+            depth_feature = depth_feature.flatten()
             for d in distances:
                 depth_feature = np.append(depth_feature, d)
 
@@ -961,9 +974,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
-    def generate_random_scene(self, target_length_range=[.01, .03], target_width_range=[.01, .03],
-                                    obstacle_length_range=[.01, .02], obstacle_width_range=[.01, .02],
-                                    surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
+    def generate_random_scene(self, surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
         # Randomize finger size
         geom_id = get_geom_id(self.sim.model, "finger")
         finger_height = self.rng.uniform(self.params['finger_size'][0], self.params['finger_size'][1])
@@ -990,7 +1001,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         #   Randomize type (box or cylinder)
         temp = self.rng.uniform(0, 1)
-        if (temp < self.params['target_probability_box']):
+        if (temp < self.params['target']['probability_box']):
             self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
         else:
             self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
@@ -1002,9 +1013,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.model.geom_solref[geom_id][0] = .002
 
         #   Randomize size
-        target_length = self.rng.uniform(target_length_range[0], target_length_range[1])
-        target_width  = self.rng.uniform(target_width_range[0], min(target_length, target_width_range[1]))
-        target_height = self.rng.uniform(max(self.params['target_height_range'][0], finger_height), self.params['target_height_range'][1])
+        target_length = self.rng.uniform(self.params['target']['min_bounding_box'][0], self.params['target']['max_bounding_box'][0])
+        target_width  = self.rng.uniform(self.params['target']['min_bounding_box'][1], min(target_length, self.params['target']['max_bounding_box'][1]))
+        target_height = self.rng.uniform(max(self.params['target']['min_bounding_box'][2], finger_height), self.params['target']['max_bounding_box'][2])
         if self.sim.model.geom_type[geom_id] == 6:
             self.sim.model.geom_size[geom_id][0] = target_length
             self.sim.model.geom_size[geom_id][1] = target_width
@@ -1036,7 +1047,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             # Randomize type (box or cylinder)
             temp = self.rng.uniform(0, 1)
-            if (temp < self.params['obstacle_probability_box']):
+            if (temp < self.params['obstacle']['probability_box']):
                 self.sim.model.geom_type[geom_id] = 6 # id 6 is for box in mujoco
             else:
                 self.sim.model.geom_type[geom_id] = 5 # id 5 is for cylinder
@@ -1047,19 +1058,19 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.model.geom_condim[geom_id] = 4
 
             #   Randomize size
-            obstacle_length = self.rng.uniform(obstacle_length_range[0], obstacle_length_range[1])
-            obstacle_width  = self.rng.uniform(obstacle_width_range[0], min(obstacle_length, obstacle_width_range[1]))
+            obstacle_length = self.rng.uniform(self.params['obstacle']['min_bounding_box'][0], self.params['obstacle']['max_bounding_box'][0])
+            obstacle_width  = self.rng.uniform(self.params['obstacle']['min_bounding_box'][1], min(obstacle_length, self.params['obstacle']['max_bounding_box'][1]))
 
 
             if all_equal_height < self.params['all_equal_height_prob']:
                 obstacle_height = target_height
             else:
-                # obstacle_height = self.rng.uniform(max(self.params['obstacle_height_range'][0], finger_height), self.params['obstacle_height_range'][1])
-                min_h = max(self.params['obstacle_height_range'][0], target_height + finger_height)
-                if min_h > self.params['obstacle_height_range'][1]:
-                    obstacle_height = self.params['obstacle_height_range'][1]
+                # obstacle_height = self.rng.uniform(max(self.params['obstacle']['min_bounding_box'][2], finger_height), self.params['obstacle']['max_bounding_box'][2])
+                min_h = max(self.params['obstacle']['min_bounding_box'][2], target_height + finger_height)
+                if min_h > self.params['obstacle']['max_bounding_box'][2]:
+                    obstacle_height = self.params['obstacle']['max_bounding_box'][2]
                 else:
-                    obstacle_height = self.rng.uniform(min_h, self.params['obstacle_height_range'][1])
+                    obstacle_height = self.rng.uniform(min_h, self.params['obstacle']['max_bounding_box'][2])
 
             if self.sim.model.geom_type[geom_id] == 6:
                 self.sim.model.geom_size[geom_id][0] = obstacle_length
