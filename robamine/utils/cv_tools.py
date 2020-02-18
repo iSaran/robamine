@@ -4,6 +4,8 @@ import cv2
 import open3d
 import math
 from sklearn.decomposition import PCA
+from robamine.utils.orientation import rot_z, rot_x, rot2angleaxis
+from math import pi
 
 '''
 Computer Vision Utils
@@ -150,6 +152,13 @@ class ColorDetector:
         bb = np.array([max_[0] - centroid[0], max_[1] - centroid[1]])
         homog[:2, 3] = np.matmul(homog[:2, :2], centroid)
 
+        # X axis is the longer dimension of the object
+        if bb[0] < bb[1]:
+            homog[:3, :3] = np.matmul(rot_z(pi / 2), homog[:3, :3])
+            temp = bb[0]
+            bb[0] = bb[1]
+            bb[1] = temp
+
         if plot:
             self.plot_image(mask, homog, bb)
 
@@ -170,23 +179,14 @@ class ColorDetector:
         ax.arrow(matrix[0, 3], matrix[1, 3], int(matrix[0, 1] * 25), int(matrix[1, 1] * 25), color='green', linewidth=2)
 
         center = np.array([-bb[0], -bb[1], 0, 1])
+        matrix[:3, :3] = np.matmul(matrix[:3, :3], rot_x(pi))
         center_wrt_image = np.matmul(matrix, center)
-
-        if np.inner(matrix[:2, 0], np.array([0, 1])) > 0:
-            angle = acos(matrix[0, 0])
-        else:
-            angle = - acos(matrix[0, 0])
-
-
-        rect = patches.Rectangle((center_wrt_image[0], center_wrt_image[1]), 2*bb[0], 2*bb[1], angle=(180/pi)*angle, linewidth=1,edgecolor='r',facecolor='none')
-
+        angle, axis = rot2angleaxis(matrix[:3, :3])
+        if axis is None:
+            axis = np.array([0, 0, -1])
+        rect = patches.Rectangle((center_wrt_image[0], center_wrt_image[1]), 2*bb[0], 2*bb[1], angle=axis[2] * (180/pi)*angle, linewidth=1,edgecolor='r',facecolor='none')
         ax.add_patch(rect)
         plt.show()
-
-
-
-
-
 
     def get_height(self, depth, mask):
         """
