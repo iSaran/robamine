@@ -56,6 +56,7 @@ env:
       workspace: [0.0, 0.1]
     feature_normalization_per: 'session'  # available: 'session', 'episode'
     heightmap_rotations: 0
+    max_timesteps: 5
 env_eval:
   name: ClutterCont-v0
   params:
@@ -84,6 +85,7 @@ env_eval:
       workspace: [0.0, 0.1]
     feature_normalization_per: 'session'  # available: 'session', 'episode'
     heightmap_rotations: 0
+    max_timesteps: 5
 world:
   comments: ''
   friendly_name: ''
