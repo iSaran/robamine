@@ -705,10 +705,18 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
             return -10
 
-        points_prev = cv_tools.Feature(self.heightmap_prev).mask_out(self.mask_prev).crop(self.singulation_area[0], self.singulation_area[1]).non_zero_pixels()
-        points_cur = cv_tools.Feature(self.heightmap).mask_out(self.mask).crop(self.singulation_area[0], self.singulation_area[1]).non_zero_pixels()
+        points_prev = cv_tools.Feature(self.heightmap_prev).mask_out(self.mask_prev)\
+                                                           .crop(self.singulation_area[0], self.singulation_area[1])\
+                                                           .non_zero_pixels()
+        points_cur = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
+                                                     .crop(self.singulation_area[0], self.singulation_area[1])\
+                                                     .non_zero_pixels()
         points_diff = np.abs(points_prev - points_cur)
 
+        if points_prev == 0:
+            points_prev = 1
+            
+        # Compute the percentage of the aera that was freed
         free_area = points_diff / points_prev
         reward = rescale(free_area, 0, 1, range=[0, 10])
 
@@ -758,7 +766,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # If the object is free from obstacles around (no points around)
-        if cv_tools.Feature(self.heightmap).mask_out(self.mask).crop(40, 40).non_zero_pixels() < 20:
+        if cv_tools.Feature(self.heightmap).mask_out(self.mask)\
+                                           .crop(self.singulation_area[0], self.singulation_area[1])\
+                                           .non_zero_pixels() < 20:
             self.success = True
             return True
 
