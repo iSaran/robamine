@@ -45,7 +45,7 @@ env:
       probability_box: 1.0
     obstacle:
       min_bounding_box: [.01, .01, .005]
-      max_bounding_box: [.03, .03, .020]
+      max_bounding_box: [.02, .02, .020]
       probability_box: 1.0
     max_timesteps: 5
     push:
