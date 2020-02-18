@@ -36,7 +36,7 @@ env:
     - 0.005
     - 0.005
     nr_of_obstacles:
-    - 1
+    - 5
     - 8
     render: true
     target:

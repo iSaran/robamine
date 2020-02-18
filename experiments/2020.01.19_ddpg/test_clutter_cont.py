@@ -12,7 +12,7 @@ def run():
 
     # Push target
     # -----------
-    action = np.array([0, -0, 0, 0.2])
+    action = np.array([0, 0.5, 0, 0.2])
     env.reset()
     env.step(action)
 

@@ -306,7 +306,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.rgb_to_camera_frame = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
 
         # Target state from vision
-        self.target_size_vision = np.zeros(3)
+        self.target_bounding_box_vision = np.zeros(3)
         self.target_bounding_box = np.zeros(3)
         self.target_pos_vision = np.zeros(3)
         self.target_quat_vision = Quaternion()
@@ -316,6 +316,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.feature_normalization_per == 'session':
             self.max_object_height = 2 * max(max(self.params['target']['max_bounding_box']),
                                              max(self.params['obstacle']['max_bounding_box']))
+
+        self.max_singulation_area = [40, 40]
+
 
     def reset_model(self):
 
@@ -413,8 +416,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def get_heightmap(self):
         self._move_finger_outside_the_table()
 
-
-
         self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
         rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
 
@@ -460,10 +461,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
         self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
         self.target_bounding_box_vision = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
+        self.singulation_area = (np.array([self.target_bounding_box_vision[1] + 0.01,
+                                           self.target_bounding_box_vision[0] + 0.01]) / self.pixels_to_m).astype(np.int32)
+
+        if self.singulation_area[0] > self.max_singulation_area[0]:
+            self.singulation_area[0] = self.max_singulation_area[0]
+
+        if self.singulation_area[1] > self.max_singulation_area[1]:
+            self.singulation_area[1] = self.max_singulation_area[1]
 
         # cv_tools.plot_2d_img(self.heightmap, 'depth')
         # cv_tools.plot_2d_img(self.mask, 'depth')
-
         # ToDo: How to normalize depth??
 
         return self.heightmap, self.mask
@@ -490,7 +498,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
                 depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
                                                                 .rotate(rot_angle * i)\
-                                                                .crop(40, 40)\
+                                                                .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
                                                                 .pooling()\
                                                                 .normalize(self.max_object_height)\
                                                                 .flatten()
@@ -505,11 +513,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Use single feature (one rotation)
         else:
-            cv_tools.Feature(self.heightmap).mask_out(self.mask) \
-                                            .crop(40, 40) \
-                                            .pooling().plot()
             depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                                            .crop(40, 40)\
+                                                            .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
                                                             .pooling()\
                                                             .normalize(self.max_object_height)
             # depth_feature.plot()
@@ -700,8 +705,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
             return -10
 
-        points_prev = cv_tools.Feature(self.heightmap_prev).mask_out(self.mask_prev).crop(40, 40).non_zero_pixels()
-        points_cur = cv_tools.Feature(self.heightmap).mask_out(self.mask).crop(40, 40).non_zero_pixels()
+        points_prev = cv_tools.Feature(self.heightmap_prev).mask_out(self.mask_prev).crop(self.singulation_area[0], self.singulation_area[1]).non_zero_pixels()
+        points_cur = cv_tools.Feature(self.heightmap).mask_out(self.mask).crop(self.singulation_area[0], self.singulation_area[1]).non_zero_pixels()
         points_diff = np.abs(points_prev - points_cur)
 
         free_area = points_diff / points_prev
