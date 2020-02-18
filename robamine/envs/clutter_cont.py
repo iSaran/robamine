@@ -851,12 +851,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             rot_angle = 360 / self.heightmap_rotations
             for i in range(0, self.heightmap_rotations):
 
-                depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                                                .rotate(rot_angle * i)\
-                                                                .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
-                                                                .pooling()\
-                                                                .normalize(self.max_object_height)\
-                                                                .flatten()
+                depth_feature = self.get_obs_push_obstacle(angle=rot_angle * i).flatten()
+
                 for d in distances:
                     depth_feature = np.append(depth_feature, d)
 
@@ -868,12 +864,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Use single feature (one rotation)
         else:
-            depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                                            .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
-                                                            .pooling()\
-                                                            .normalize(self.max_object_height)
-            # depth_feature.plot()
-            depth_feature = depth_feature.flatten()
+            depth_feature = self.get_obs_push_obstacle().flatten()
             for d in distances:
                 depth_feature = np.append(depth_feature, d)
 
@@ -1406,3 +1397,23 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.preloaded_init_state = state.copy()
         else:
             state = None
+
+    # Different rewards
+    # -----------------
+
+    # Different features
+    # ------------------
+
+    def get_obs_push_obstacle(self, angle = 0):
+
+        feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)
+        feature = feature.rotate(angle)
+
+        heightmap_push_obstacle = np.zeros(feature.array().shape)
+        heightmap_push_obstacle[feature.array() > (2 * self.target_bounding_box_vision[2] + 1.5 * self.finger_height)] = 1
+
+        feature = cv_tools.Feature(heightmap_push_obstacle).mask_out(self.mask)
+        feature = feature.crop(self.max_singulation_area[0], self.max_singulation_area[1])\
+                         .pooling()\
+                         .normalize(self.max_object_height)
+        return feature
