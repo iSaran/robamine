@@ -365,6 +365,12 @@ class ClutterXMLGenerator(XMLGenerator):
         xml = ET.tostring(self.root, encoding="utf-8", method="xml").decode("utf-8")
         return xml
 
+class ObjectsStillMovingError(Exception):
+   pass
+
+class EmptyMaskError(Exception):
+    pass
+
 class ClutterContWrapper(gym.Env):
     def __init__(self, params):
         self.params = params
@@ -373,8 +379,19 @@ class ClutterContWrapper(gym.Env):
 
     def reset(self, seed=None):
         self.params['seed'] = seed
-        self.env = gym.make('ClutterCont-v0', params=self.params)
-        return self.env.reset()
+        reset_not_valid = True
+        while reset_not_valid:
+            reset_not_valid = False
+            self.env = gym.make('ClutterCont-v0', params=self.params)
+            try:
+                obs = self.env.reset()
+            except ObjectsStillMovingError as e:
+                print("WARN: {0}. A new environment will be spawn.".format(e))
+                reset_not_valid = True
+            except EmptyMaskError:
+                print('WARN: Empty mask during resetting environment. A new environment will be spawned')
+                reset_not_valid = True
+        return obs
 
     def step(self, action):
         return self.env.step(action)
@@ -577,6 +594,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.surface_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
 
         heightmap, mask = self.get_heightmap()
+        if len(np.argwhere(mask > 0)) == 0:
+            raise EmptyMaskError
         self.heightmap_prev = heightmap.copy()
         self.mask_prev = mask.copy()
 
@@ -612,7 +631,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim.data.xfrc_applied[body_id][1] = 0
 
         all_objects_still = False
+        steps = 0
         while not all_objects_still:
+            steps += 1
             all_objects_still = True
             for name in names:
                 index = self.sim.model.get_joint_qpos_addr(name)
@@ -623,6 +644,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                         all_objects_still = False
                         break
             self.sim_step()
+            wait_steps = 1000
+            if steps > wait_steps:
+                raise ObjectsStillMovingError('Objects still moving after waiting for ' + str(wait_steps) + ' steps.')
 
 
     def seed(self, seed=None):
