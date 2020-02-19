@@ -540,12 +540,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             for _ in range(600):
                 self.sim_step()
 
-            for _ in range(300):
-                for i in range(1, number_of_obstacles):
-                    body_id = get_body_names(self.sim.model).index("object"+str(i))
-                    self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
-                    self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
-                self.sim_step()
+            self._hug_target(number_of_obstacles)
 
             self.check_target_occlusion(number_of_obstacles)
 
@@ -577,6 +572,39 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.max_object_height = np.max(self.heightmap)
 
         return self.get_obs()
+
+    def _hug_target(self, number_of_obstacles):
+        gain = 150
+
+        names = ["target"]
+        for i in range(1, number_of_obstacles + 1):
+            names.append("object" + str(i))
+
+        for _ in range(300):
+            for name in names:
+                body_id = get_body_names(self.sim.model).index(name)
+                self.sim.data.xfrc_applied[body_id][0] = - gain * self.sim.data.body_xpos[body_id][0]
+                self.sim.data.xfrc_applied[body_id][1] = - gain * self.sim.data.body_xpos[body_id][1]
+            self.sim_step()
+
+        for name in names:
+            body_id = get_body_names(self.sim.model).index(name)
+            self.sim.data.xfrc_applied[body_id][0] = 0
+            self.sim.data.xfrc_applied[body_id][1] = 0
+
+        all_objects_still = False
+        while not all_objects_still:
+            all_objects_still = True
+            for name in names:
+                index = self.sim.model.get_joint_qpos_addr(name)
+                # if object is above the table
+                if self.sim.data.qpos[index[0] + 2] > 0:
+                    index = self.sim.model.get_joint_qvel_addr(name)
+                    if np.linalg.norm(self.sim.data.qvel[index[0]:index[0]+6]) > 1e-3:
+                        all_objects_still = False
+                        break
+            self.sim_step()
+
 
     def seed(self, seed=None):
         super().seed(seed)
