@@ -12,6 +12,7 @@ from mujoco_py import load_model_from_xml, MjSim, MjViewer, MjRenderContextOffsc
 from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
+import gym
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names, detect_contact, XMLGenerator
@@ -363,6 +364,24 @@ class ClutterXMLGenerator(XMLGenerator):
 
         xml = ET.tostring(self.root, encoding="utf-8", method="xml").decode("utf-8")
         return xml
+
+class ClutterContWrapper(gym.Env):
+    def __init__(self, params):
+        self.params = params
+        self.params['seed'] = self.params.get('seed', None)
+        self.env = None
+
+    def reset(self, seed=None):
+        self.params['seed'] = seed
+        self.env = gym.make('ClutterCont-v0', params=self.params)
+        return self.env.reset()
+
+    def step(self, action):
+        return self.env.step(action)
+
+    def seed(self, seed):
+        self.env.seed(seed)
+
 
 class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     """

@@ -78,6 +78,12 @@ register(
 )
 
 register(
+    id='ClutterContWrapper-v0',
+    entry_point='robamine.envs:ClutterContWrapper',
+    max_episode_steps=20
+)
+
+register(
     id='ClutterCont-v0',
     entry_point='robamine.envs:ClutterCont',
     max_episode_steps=20
