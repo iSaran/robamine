@@ -421,6 +421,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     """
     def __init__(self, params):
         self.params = params
+        self.log_dir = self.params.get('log_dir', '/tmp')
         path = os.path.join(os.path.dirname(__file__), "assets/xml/robots/clutter.xml")
         self.xml_generator = ClutterXMLGenerator(path, params)
         self.rng = np.random.RandomState()  # rng for the scene
@@ -683,8 +684,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
-        cv2.imwrite('/home/mkiatos/robamine/logs/bgr.png', bgr)
-        cv2.imwrite('/home/mkiatos/robamine/logs/mask.png', mask)
+        cv2.imwrite(os.path.join(self.log_dir, 'bgr.png'), bgr)
+        cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
 
         # cv2.imshow('bgr', bgr)
         # cv2.waitKey()

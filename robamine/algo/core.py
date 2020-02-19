@@ -644,6 +644,7 @@ class RLWorld(World):
         elif isinstance(env, dict):
             env_params = env['params'] if 'params' in env else {}
             self.config['env'] = env
+            env_params['log_dir'] = self.log_dir
             self.env = gym.make(env['name'], params=env_params)
         else:
             err = ValueError('Provide a gym.Env or a string in order to create a new world')
