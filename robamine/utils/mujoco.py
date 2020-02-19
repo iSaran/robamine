@@ -5,6 +5,8 @@ from mujoco_py.generated import const
 import numpy as np
 from robamine.utils.orientation import quat2rot
 
+import xml.etree.ElementTree as ET
+
 '''
 Mujoco Utils
 ============
@@ -125,3 +127,40 @@ def detect_contact(sim, geom_name):
         elif geom_name == sim.model.geom_id2name(contact.geom2):
             contacts.append(sim.model.geom_id2name(contact.geom1))
     return contacts
+
+class XMLGenerator:
+    def __init__(self, path):
+        self.root = None
+
+    # General API
+    # -----------
+
+    def get_geom(self, name, type='sphere', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], size=[0, 0, 0], rgba=[0.5, 0.5, 0.5, 1]):
+        element = ET.Element('geom')
+        attributes = {'name': name,
+                      'type': type,
+                      'pos': self.list_to_string(pos),
+                      'quat': self.list_to_string(quat),
+                      'size': self.list_to_string(size),
+                      'rgba': self.list_to_string(rgba)}
+        element.attrib = attributes.copy()
+        return element
+
+    def get_body(self, name, pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0]):
+        element = ET.Element('body')
+        attributes = {'name': name,
+                      'pos': self.list_to_string(pos),
+                      'quat': self.list_to_string(quat)}
+        element.attrib = attributes.copy()
+        return element
+
+    def get_joint(self, name, type='hinge', pos=[0.0, 0.0, 0.0]):
+        element = ET.Element('joint')
+        attributes = {'name': name,
+                      'type': type,
+                      'pos': self.list_to_string(pos)}
+        element.attrib = attributes.copy()
+        return element
+
+    def list_to_string(self, l):
+        return np.array_str(np.array(l))[1:-1]
