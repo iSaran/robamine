@@ -79,7 +79,7 @@
         type="free"/>
       <geom
         name="object1"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -91,7 +91,7 @@
         type="free"/>
       <geom
         name="object2"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -103,7 +103,7 @@
         type="free"/>
       <geom
         name="object3"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -115,7 +115,7 @@
         type="free"/>
       <geom
         name="object4"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -127,7 +127,7 @@
         type="free"/>
       <geom
         name="object5"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -139,7 +139,7 @@
         type="free"/>
       <geom
         name="object6"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -151,7 +151,7 @@
         type="free"/>
       <geom
         name="object7"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -163,7 +163,7 @@
         type="free"/>
       <geom
         name="object8"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -175,7 +175,7 @@
         type="free"/>
       <geom
         name="object9"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -187,7 +187,7 @@
         type="free"/>
       <geom
         name="object10"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -199,7 +199,7 @@
         type="free"/>
       <geom
         name="object11"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -211,7 +211,7 @@
         type="free"/>
       <geom
         name="object12"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <body
@@ -223,7 +223,7 @@
         type="free"/>
       <geom
         name="object13"
-        size=".01 .01 .01"
+        size=".01 .01 .02"
         type="box" />
     </body>
     <!--

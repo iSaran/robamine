@@ -427,6 +427,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
+        cv2.imwrite('/home/mkiatos/robamine/logs/bgr.png', bgr)
+        cv2.imwrite('/home/mkiatos/robamine/logs/mask.png', mask)
+
         # cv2.imshow('bgr', bgr)
         # cv2.waitKey()
 
@@ -719,6 +722,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Compute the percentage of the aera that was freed
         free_area = points_diff / points_prev
         reward = rescale(free_area, 0, 1, range=[0, 10])
+        # print('r:', reward)
 
         extra_penalty = 0
         # penalize pushes that start far from the target object

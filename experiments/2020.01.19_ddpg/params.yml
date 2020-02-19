@@ -44,8 +44,8 @@ env:
       max_bounding_box: [.03, .03, .010]
       probability_box: 1.0
     obstacle:
-      min_bounding_box: [.01, .01, .005]
-      max_bounding_box: [.02, .02, .020]
+      min_bounding_box: [.01, .01, .020]
+      max_bounding_box: [.01, .01, .020]
       probability_box: 1.0
     max_timesteps: 5
     push:
@@ -55,7 +55,7 @@ env:
       spread: [0.05, 0.05]
       height: [0.01, 0.01]
       workspace: [0, 0.1]
-    feature_normalization_per: 'session'  # available: 'session', 'episode'
+    feature_normalization_per: 'episode'  # available: 'session', 'episode'
     heightmap_rotations: 0
 world:
   comments: ''
