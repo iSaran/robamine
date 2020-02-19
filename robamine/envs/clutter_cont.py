@@ -377,6 +377,21 @@ class ClutterContWrapper(gym.Env):
         self.params['seed'] = self.params.get('seed', None)
         self.env = None
 
+        self.action_space = spaces.Box(low=np.array([-1, -1]),
+                                       high=np.array([1, 1]),
+                                       dtype=np.float32)
+
+        self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
+
+        if self.heightmap_rotations > 0:
+            obs_dim = OBSERVATION_DIM * self.heightmap_rotations
+        else:
+            obs_dim = OBSERVATION_DIM
+
+        self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
+                                            high=np.full((obs_dim,), 0.3),
+                                            dtype=np.float32)
+
     def reset(self, seed=None):
         self.params['seed'] = seed
         reset_not_valid = True
