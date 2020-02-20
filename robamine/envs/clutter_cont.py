@@ -20,6 +20,7 @@ from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z, Affine3
 from robamine.utils.math import sigmoid, rescale, filter_signal
 import robamine.utils.cv_tools as cv_tools
 import math
+from math import sqrt
 
 import xml.etree.ElementTree as ET
 from robamine.utils.orientation import rot2quat
@@ -826,7 +827,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             # Push obstacle primitive
             elif primitive == 1:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-                push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push']['distance'][0], self.params['push']['distance'][1]])  # hardcoded read it from min max pushing distance
+                push_distance = sqrt(pow(self.target_bounding_box_vision[0] + 0.01, 2) + pow(self.target_bounding_box_vision[1] + 0.01, 2))
                 push = PushObstacle(theta=theta, push_distance=push_distance,
                                     object_height = self.target_bounding_box_vision[2], finger_size = self.finger_length)
 
@@ -987,10 +988,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         #     extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
 
         # if int(action[0]) == 0 or int(action[0]) == 1:
-        extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
+        # extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
 
-        reward += extra_penalty
-        reward = rescale(reward, -1, 11, range=[-10, 10])
+        reward = rescale(reward, 0, 10, range=[-10, 10])
         return reward
 
         # if points_cur < 20:

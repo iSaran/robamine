@@ -1,7 +1,7 @@
 agent:
   name: SplitDDPG
   params:
-    actions: [2]
+    actions: [1]
     batch_size: [64, 64]
     device: cpu
     gamma: 0.99
