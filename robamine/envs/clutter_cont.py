@@ -21,12 +21,15 @@ from robamine.utils.math import sigmoid, rescale, filter_signal
 import robamine.utils.cv_tools as cv_tools
 import math
 from math import sqrt
+import glfw
 
 import xml.etree.ElementTree as ET
 from robamine.utils.orientation import rot2quat
 
 import cv2
 from mujoco_py.cymj import MjRenderContext
+
+from time import sleep
 
 OBSERVATION_DIM = 404
 
@@ -366,10 +369,7 @@ class ClutterXMLGenerator(XMLGenerator):
         xml = ET.tostring(self.root, encoding="utf-8", method="xml").decode("utf-8")
         return xml
 
-class ObjectsStillMovingError(Exception):
-   pass
-
-class EmptyMaskError(Exception):
+class InvalidEnvError(Exception):
     pass
 
 class ClutterContWrapper(gym.Env):
@@ -394,6 +394,8 @@ class ClutterContWrapper(gym.Env):
                                             dtype=np.float32)
 
     def reset(self, seed=None):
+        if self.env is not None:
+            del self.env
         self.params['seed'] = seed
         reset_not_valid = True
         while reset_not_valid:
@@ -401,16 +403,19 @@ class ClutterContWrapper(gym.Env):
             self.env = gym.make('ClutterCont-v0', params=self.params)
             try:
                 obs = self.env.reset()
-            except ObjectsStillMovingError as e:
-                print("WARN: {0}. A new environment will be spawn.".format(e))
-                reset_not_valid = True
-            except EmptyMaskError:
-                print('WARN: Empty mask during resetting environment. A new environment will be spawned')
+            except InvalidEnvError as e:
+                print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
                 reset_not_valid = True
         return obs
 
     def step(self, action):
-        return self.env.step(action)
+        try:
+            result = self.env.step(action)
+        except InvalidEnvError as e:
+            print("WARN: {0}. Invalid environment during step. A new environment will be spawn.".format(e))
+            self.reset()
+            result = self.env.step(action)
+        return result
 
     def seed(self, seed):
         self.env.seed(seed)
@@ -434,8 +439,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.model = load_model_from_xml(xml)
         self.sim = MjSim(self.model)
         self._viewers = {}
+        self.viewer = None
+
         self.offscreen = MjRenderContextOffscreen(self.sim, 0)
-        self.viewer = MjViewer(self.sim)
+        glfw.iconify_window(self.offscreen.opengl_context.window)
 
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
@@ -532,9 +539,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.max_singulation_area = [40, 40]
 
+    def __del__(self):
+        if self.viewer is not None:
+            glfw.make_context_current(self.viewer.window)
+            glfw.destroy_window(self.viewer.window)
+        glfw.make_context_current(self.offscreen.opengl_context.window)
+        glfw.destroy_window(self.offscreen.opengl_context.window)
 
     def reset_model(self):
-
         self.sim_step()
         dims = self.get_object_dimensions('target', self.surface_normal)
 
@@ -611,8 +623,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.surface_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
 
         heightmap, mask = self.get_heightmap()
-        if len(np.argwhere(mask > 0)) == 0:
-            raise EmptyMaskError
         self.heightmap_prev = heightmap.copy()
         self.mask_prev = mask.copy()
 
@@ -663,7 +673,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim_step()
             wait_steps = 1000
             if steps > wait_steps:
-                raise ObjectsStillMovingError('Objects still moving after waiting for ' + str(wait_steps) + ' steps.')
+                raise InvalidEnvError('Objects still moving after waiting for ' + str(wait_steps) + ' steps.')
 
 
     def seed(self, seed=None):
@@ -673,20 +683,35 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_heightmap(self):
         self._move_finger_outside_the_table()
-
-        self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
-        rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
+        empty_rgb = True
+        counter = 0
+        # This delay seems to avoid the screen to come back in front, so it allows to run trainings in the same
+        # computer you work
+        sleep(0.1)
+        glfw.restore_window(self.offscreen.opengl_context.window)
+        while empty_rgb:
+            self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
+            rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
+            bgr = cv_tools.rgb2bgr(rgb)
+            cv2.imwrite(os.path.join(self.log_dir, 'bgr.png'), bgr)
+            if len(np.argwhere(rgb > 0)) > 0:
+                empty_rgb = False
+            counter += 1
+            if counter > 20:
+                raise InvalidEnvError('Failed to grab a non-empty RGB image from offscreen after 20 attempts.')
+        glfw.iconify_window(self.offscreen.opengl_context.window)
 
         z_near = 0.2 * self.sim.model.stat.extent
         z_far = 50 * self.sim.model.stat.extent
         depth = cv_tools.gl2cv(depth, z_near, z_far)
 
-        bgr = cv_tools.rgb2bgr(rgb)
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
-        cv2.imwrite(os.path.join(self.log_dir, 'bgr.png'), bgr)
         cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
+
+        if len(np.argwhere(mask > 0)) == 0:
+            raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
         # cv2.imshow('bgr', bgr)
         # cv2.waitKey()
@@ -742,6 +767,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         Read depth and extract height map as observation
         :return:
         """
+
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos_vision[0], \
                      self.surface_size[0] + self.target_pos_vision[0], \
