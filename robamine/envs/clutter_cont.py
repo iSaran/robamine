@@ -575,8 +575,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             # Transform pushing from target frame to world frame
 
-            push_initial_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_init_pos(), 1))[:3]
-            push_final_pos_world = np.matmul(target_pose.matrix(), np.append(push.get_final_pos(), 1))[:3]
+            push_initial_pos_world = push.get_init_pos() + self.target_pos_vision
+            push_final_pos_world = push.get_final_pos() + self.target_pos_vision
 
             init_z = 2 * self.target_bounding_box[2] + 0.05
             self.sim.data.set_joint_qpos('finger', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
