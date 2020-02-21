@@ -93,6 +93,7 @@ class PushTarget:
             minimum_distance = target_bounding_box[0] / math.cos(theta_)
 
         self.distance = minimum_distance + finger_size + distance + 0.003
+        self.distance = distance
 
         object_height = target_bounding_box[2]
         if object_height - finger_size > 0:
