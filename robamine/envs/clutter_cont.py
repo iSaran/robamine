@@ -33,7 +33,7 @@ from mujoco_py.cymj import MjRenderContext
 
 from time import sleep
 
-OBSERVATION_DIM = 1254
+OBSERVATION_DIM = 404
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -642,7 +642,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.feature_normalization_per == 'episode':
             self.max_object_height = np.max(self.heightmap)
 
-        return self.get_obs_push_target()
+        return self.get_obs()
 
     def _hug_target(self, number_of_obstacles):
         gain = 150
@@ -876,7 +876,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         time = self.do_simulation(action)
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
-        obs = self.get_obs_push_target()
+        obs = self.get_obs()
         reward = self.get_reward(obs, action)
         # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
@@ -989,7 +989,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation, action):
-        reward = self.get_reward_push_target(observation, action)
+        reward = self.get_reward_push_obstacle(observation, action)
         reward = rescale(reward, -10, 10, range=[-1, 1])
         return reward
 
@@ -1041,7 +1041,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Compute the percentage of the aera that was freed
         free_area = points_diff / points_prev
         reward = rescale(free_area, 0, 1, range=[0, 10])
-        print('r:', reward)
 
         extra_penalty = 0
         # penalize pushes that start far from the target object
