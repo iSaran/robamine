@@ -714,9 +714,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
 
-        if len(np.argwhere(mask > 0)) == 0:
-            raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
-
         # cv2.imshow('bgr', bgr)
         # cv2.waitKey()
 
@@ -747,6 +744,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         mask_obstacles = mask_obstacles[center[0] - workspace[0]:center[0] + workspace[0],
                                         center[1] - workspace[1]:center[1] + workspace[1]]
 
+        if len(np.argwhere(mask > 0)) == 0:
+            raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
         height = self.color_detector.get_height(depth, mask)
         homog, bb = self.color_detector.get_bounding_box(mask)

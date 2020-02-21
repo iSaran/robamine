@@ -38,7 +38,7 @@ env:
     nr_of_obstacles:
     - 1
     - 8
-    render: true
+    render: false
     target:
       min_bounding_box: [.01, .01, .005]
       max_bounding_box: [.03, .03, .010]
