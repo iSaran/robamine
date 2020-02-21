@@ -887,7 +887,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs = self.get_obs()
-        reward = self.get_reward(obs, action)
+        reward = self.get_reward_grasp_target()
         # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
 
@@ -1411,6 +1411,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     # Different rewards
     # -----------------
 
+    def get_reward_grasp_target(self):
+        if self.target_grasped_successfully:
+            return 10
+        return -10
+
     # Different features
     # ------------------
 
@@ -1426,6 +1431,18 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         feature = feature.crop(self.max_singulation_area[0], self.max_singulation_area[1])\
                          .pooling()\
                          .normalize(self.max_object_height)
+        return feature
+
+    def get_obs_grasp_target(self, angle = 0):
+
+        feature = cv_tools.Feature(self.heightmap)
+        feature = feature.rotate(angle)
+
+        heightmap_ = np.zeros(feature.array().shape)
+        heightmap_[feature.array() > 0] = 1
+
+        feature = cv_tools.Feature(heightmap_)
+        feature = feature.crop(self.max_singulation_area[0], self.max_singulation_area[1]).pooling().normalize(self.max_object_height)
         return feature
 
 class ClutterContToTestBBFromMask(ClutterCont):
@@ -1539,3 +1556,4 @@ class ClutterContToTestBBFromMask(ClutterCont):
 
         self.preloaded_init_state = None
         return self.get_obs()
+
