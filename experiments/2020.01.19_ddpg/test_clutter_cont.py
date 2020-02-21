@@ -11,14 +11,18 @@ def run():
 
     # Push target
     # -----------
-    action = np.array([0, 0.5, 0, 0.2])
+    action = np.array([0, 0.5, 0, -1])
     env.reset(seed=0)
+    # env.reset(seed=0)
+    env.step(action)
+
+    action = np.array([0, 0.5, -1, 0.2])
     # env.reset(seed=0)
     env.step(action)
 
     # Push obstacle
     # -------------
-    action = np.array([1, 1, 0, 0.2])
+    action = np.array([1, 1, 0, 1])
     env.reset()
     env.step(action)
 

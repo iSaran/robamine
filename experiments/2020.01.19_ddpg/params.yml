@@ -1,7 +1,7 @@
 agent:
   name: SplitDDPG
   params:
-    actions: [1]
+    actions: [3]
     batch_size: [64, 64]
     device: cpu
     gamma: 0.99
@@ -38,7 +38,7 @@ env:
     nr_of_obstacles:
     - 1
     - 8
-    render: false
+    render: true
     target:
       min_bounding_box: [.01, .01, .005]
       max_bounding_box: [.03, .03, .010]
@@ -50,7 +50,7 @@ env:
     max_timesteps: 5
     push:
       distance: [0.05, 0.10]
-      target_init_distance: [0.0, 0.1]
+      target_init_distance: [0.0, 0.06]
     grasp:
       spread: [0.05, 0.05]
       height: [0.01, 0.01]

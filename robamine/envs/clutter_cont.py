@@ -31,7 +31,7 @@ from mujoco_py.cymj import MjRenderContext
 
 from time import sleep
 
-OBSERVATION_DIM = 404
+OBSERVATION_DIM = 1254
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -241,7 +241,7 @@ class ClutterXMLGenerator(XMLGenerator):
     def get_target(self, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[1.0, 0.0, 0.0, 1.0], size=[0.01, 0.01, 0.01]):
         return self.get_object(name='target', type=type, pos=pos, quat=quat, rgba=rgba, size=size)
 
-    def get_obstacle(self, index, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.4, 0.6, 1.0], size=[0.01, 0.01, 0.01]):
+    def get_obstacle(self, index, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.0, 1.0, 1.0], size=[0.01, 0.01, 0.01]):
         return self.get_object(name='object' + str(index), type=type, pos=pos, quat=quat, rgba=rgba, size=size)
 
     def get_finger(self, index, type='sphere', rgba=[0.3, 0.3, 0.3, 1.0], size=[0.005, 0.005, 0.005]):
@@ -637,7 +637,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.feature_normalization_per == 'episode':
             self.max_object_height = np.max(self.heightmap)
 
-        return self.get_obs()
+        return self.get_obs_push_target()
 
     def _hug_target(self, number_of_obstacles):
         gain = 150
@@ -709,6 +709,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
+        obstacle_detector = cv_tools.ColorDetector('blue')
+        mask_obstacles = obstacle_detector.detect(bgr)
+
         cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
 
         if len(np.argwhere(mask > 0)) == 0:
@@ -741,12 +744,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         mask = mask[center[0] - workspace[0]:center[0] + workspace[0],
                center[1] - workspace[1]:center[1] + workspace[1]]
 
+        mask_obstacles = mask_obstacles[center[0] - workspace[0]:center[0] + workspace[0],
+                                        center[1] - workspace[1]:center[1] + workspace[1]]
+
 
         height = self.color_detector.get_height(depth, mask)
         homog, bb = self.color_detector.get_bounding_box(mask)
         tx, ty = [int(homog[0][3]), int(homog[1][3])]
         self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
         self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
+        self.mask_obstacles = cv_tools.Feature(mask_obstacles).translate(tx, ty).array()
         self.target_bounding_box_vision = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
         self.singulation_area = (np.array([self.target_bounding_box_vision[1] + 0.01,
                                            self.target_bounding_box_vision[0] + 0.01]) / self.pixels_to_m).astype(np.int32)
@@ -762,6 +769,62 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # ToDo: How to normalize depth??
 
         return self.heightmap, self.mask
+
+    def get_obs_push_target(self):
+        """
+        Read depth and extract height map as observation
+        :return:
+        """
+
+        # Add the distance of the object from the edge
+        distances = [self.surface_size[0] - self.target_pos_vision[0], \
+                     self.surface_size[0] + self.target_pos_vision[0], \
+                     self.surface_size[1] - self.target_pos_vision[1], \
+                     self.surface_size[1] + self.target_pos_vision[1]]
+        distances = [x / 0.5 for x in distances]
+
+        heightmap, mask = self.get_heightmap()
+
+        # Use rotated features
+        if self.heightmap_rotations > 0:
+            features = []
+            rot_angle = 360 / self.heightmap_rotations
+            for i in range(0, self.heightmap_rotations):
+
+                depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
+                                                                .rotate(rot_angle * i)\
+                                                                .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
+                                                                .pooling()\
+                                                                .normalize(self.max_object_height)\
+                                                                .flatten()
+                for d in distances:
+                    depth_feature = np.append(depth_feature, d)
+
+                features.append(depth_feature)
+
+            depth_feature = np.append(features[0], features[1], axis=0)
+            for i in range(2, len(features)):
+                depth_feature = np.append(depth_feature, features[i], axis=0)
+
+        # Use single feature (one rotation)
+        else:
+            depth_feature = cv_tools.Feature(self.heightmap) \
+                                    .crop(50, 50) \
+                                    .pooling().normalize(self.max_object_height)
+
+            mask_feature = cv_tools.Feature(self.mask) \
+                                   .crop(50, 50) \
+                                   .pooling().normalize(255)
+
+            # depth_feature.plot()
+            depth_feature = depth_feature.flatten()
+            mask_feature = mask_feature.flatten()
+            depth_feature = np.append(depth_feature, mask_feature)
+            for d in distances:
+                depth_feature = np.append(depth_feature, d)
+
+        return depth_feature
+
 
     def get_obs(self):
         """
@@ -818,11 +881,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         time = self.do_simulation(action)
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
-        obs = self.get_obs()
+        obs = self.get_obs_push_target()
         reward = self.get_reward(obs, action)
         # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
-        reward = rescale(reward, -10, 10, range=[-1, 1])
 
         done = False
         if self.terminal_state(obs):
@@ -838,7 +900,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def do_simulation(self, action):
         primitive = int(action[0])
-        primitive = 1
+        primitive = 0
         target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
@@ -931,58 +993,35 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
-    def get_reward_obs(self, observation, point_cloud, dim):
-        # for each push that frees the space around the target
-        points_around = []
-        gap = 0.03
-        bbox_limit = 0.01
-
-        for p in point_cloud:
-            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
-                dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
-                    -dim[1] < p[1] < dim[1]:
-                points_around.append(p)
-            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
-                dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
-                    -dim[0] < p[0] < dim[0]:
-                points_around.append(p)
-
-        if self.no_of_prev_points_around - 20 < len(points_around) < self.no_of_prev_points_around + 20:
-            self.no_of_prev_points_around = len(points_around)
-            return -10
-        elif self.no_of_prev_points_around > len(points_around) + 20:
-            self.no_of_prev_points_around = len(points_around)
-            return 10
-        else:
-            self.no_of_prev_points_around = len(points_around)
-            return 0
-
-    def get_shaped_reward_obs(self, observation, point_cloud, dim):
-        # for each push that frees the space around the target
-        points_around = []
-        gap = 0.03
-        bbox_limit = 0.01
-
-        for p in point_cloud:
-            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
-                dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
-                    -dim[1] < p[1] < dim[1]:
-                points_around.append(p)
-            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
-                dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
-                    -dim[0] < p[0] < dim[0]:
-                points_around.append(p)
-
-        if self.no_of_prev_points_around == 0:
-            return -10
-
-        r = abs(len(points_around) - self.no_of_prev_points_around) / float(self.no_of_prev_points_around)
-        r = rescale(r, 0, 1, [-10, 10])
-        self.no_of_prev_points_around = len(points_around)
-        return r
-
-
     def get_reward(self, observation, action):
+        reward = self.get_reward_push_target(observation, action)
+        reward = rescale(reward, -10, 10, range=[-1, 1])
+        return reward
+
+    def get_reward_push_target(self, observation, action):
+        # Penalize external forces during going downwards
+        if self.push_stopped_ext_forces:
+            return -10
+
+        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
+            return -10
+
+        points_around = cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
+                                                             .non_zero_pixels()
+
+        extra_penalty = 0
+        if int(action[0]) == 0:
+            extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
+
+        extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
+
+        if points_around < 20:
+            return +10 + extra_penalty
+
+        return -1 + extra_penalty
+
+
+    def get_reward_push_obstacle(self, observation, action):
         if self.target_grasped_successfully:
             return 10
 
@@ -1007,7 +1046,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Compute the percentage of the aera that was freed
         free_area = points_diff / points_prev
         reward = rescale(free_area, 0, 1, range=[0, 10])
-        # print('r:', reward)
+        print('r:', reward)
 
         extra_penalty = 0
         # penalize pushes that start far from the target object
@@ -1053,12 +1092,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if min([observation[-6], observation[-5], observation[-4], observation[-3]]) < 0:
             return True
 
-        # If the object is free from obstacles around (no points around)
-        if cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                           .crop(self.singulation_area[0], self.singulation_area[1])\
-                                           .non_zero_pixels() < 20:
+        if cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
+                                                .non_zero_pixels() < 20:
             self.success = True
             return True
+
+        # If the object is free from obstacles around (no points around)
+        # if cv_tools.Feature(self.heightmap).mask_out(self.mask)\
+        #                                    .crop(self.singulation_area[0], self.singulation_area[1])\
+        #                                    .non_zero_pixels() < 20:
+        #     self.success = True
+        #     return True
 
         return False
 
