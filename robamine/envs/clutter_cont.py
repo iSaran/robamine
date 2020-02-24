@@ -421,6 +421,9 @@ class ClutterContWrapper(gym.Env):
     def seed(self, seed):
         self.env.seed(seed)
 
+    def render(self, mode='human'):
+        self.env.render(mode)
+
 
 class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     """
@@ -716,6 +719,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # cv2.imshow('bgr', bgr)
         # cv2.waitKey()
+        if len(np.argwhere(mask > 0)) == 0:
+            raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
         homog, bb = self.color_detector.get_bounding_box(mask, plot=False)
         centroid = [int(homog[0][3]), int(homog[1][3])]
