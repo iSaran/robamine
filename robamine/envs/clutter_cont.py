@@ -23,6 +23,8 @@ import math
 from math import sqrt
 import glfw
 
+from robamine.envs.clutter_utils import TargetObjectConvexHull
+
 import xml.etree.ElementTree as ET
 from robamine.utils.orientation import rot2quat
 
@@ -722,29 +724,26 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if len(np.argwhere(mask > 0)) == 0:
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
-        homog, bb = self.color_detector.get_bounding_box(mask, plot=False)
-        centroid = [int(homog[0][3]), int(homog[1][3])]
-        # print(centroid)
+        # Calculate the centroid and the target pos w.r.t. world
+        target_object = TargetObjectConvexHull(mask)
+        centroid = target_object.centroid.astype(np.int32)
         z = depth[centroid[1], centroid[0]]
         p_camera = self.camera.back_project(centroid, z)
         p_rgb = np.matmul(self.rgb_to_camera_frame, p_camera)
         camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
         self.target_pos_vision = np.matmul(camera_pose, np.array([p_rgb[0], p_rgb[1], p_rgb[2], 1.0]))[:3]
 
-        rot_mat = homog[:3, :3]
-        obj_to_camera = np.matmul(np.linalg.inv(self.rgb_to_camera_frame[:3, :3]), rot_mat)
-        obj_to_world = np.matmul(camera_pose[:3, :3], obj_to_camera)
-        self.target_quat_vision = Quaternion.from_rotation_matrix(obj_to_world)
+        self.target_quat_vision = Quaternion.from_rotation_matrix(np.eye(3))
 
         # Pre-process rgb-d height maps
         workspace = [193, 193]
         center = [240, 320]
         depth = depth[center[0] - workspace[0]:center[0] + workspace[0],
-                center[1] - workspace[1]:center[1] + workspace[1]]
+                      center[1] - workspace[1]:center[1] + workspace[1]]
         max_depth = np.max(depth)
         depth = max_depth - depth
         mask = mask[center[0] - workspace[0]:center[0] + workspace[0],
-               center[1] - workspace[1]:center[1] + workspace[1]]
+                    center[1] - workspace[1]:center[1] + workspace[1]]
 
         mask_obstacles = mask_obstacles[center[0] - workspace[0]:center[0] + workspace[0],
                                         center[1] - workspace[1]:center[1] + workspace[1]]
@@ -752,13 +751,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if len(np.argwhere(mask > 0)) == 0:
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
-        height = self.color_detector.get_height(depth, mask)
-        homog, bb = self.color_detector.get_bounding_box(mask)
-        tx, ty = [int(homog[0][3]), int(homog[1][3])]
+        target_object = TargetObjectConvexHull(cv_tools.Feature(depth).mask_in(mask).array())
+        tx, ty = [int(target_object.centroid[0]), int(target_object.centroid[1])]
+        self.target_bounding_box_vision = target_object.image2world(self.pixels_to_m).get_bounding_box()
+        # self.target_bounding_box_vision = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
+
         self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
         self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
         self.mask_obstacles = cv_tools.Feature(mask_obstacles).translate(tx, ty).array()
-        self.target_bounding_box_vision = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
         self.singulation_area = (np.array([self.target_bounding_box_vision[1] + 0.01,
                                            self.target_bounding_box_vision[0] + 0.01]) / self.pixels_to_m).astype(np.int32)
 
