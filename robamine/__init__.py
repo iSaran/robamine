@@ -94,3 +94,10 @@ register(
     entry_point='robamine.envs:ClutterOcclusion',
     max_episode_steps=20
 )
+
+
+register(
+    id='ClutterContToTestBBFromMask-v0',
+    entry_point='robamine.envs:ClutterContToTestBBFromMask',
+    max_episode_steps=20
+)

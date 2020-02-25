@@ -1048,7 +1048,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         if points_prev == 0:
             points_prev = 1
-            
+
         # Compute the percentage of the aera that was freed
         free_area = points_diff / points_prev
         reward = rescale(free_area, 0, 1, range=[0, 10])
@@ -1427,3 +1427,115 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                          .pooling()\
                          .normalize(self.max_object_height)
         return feature
+
+class ClutterContToTestBBFromMask(ClutterCont):
+    def get_obs(self):
+        """
+        Read depth and extract height map as observation
+        :return:
+        """
+        heightmap, mask = self.get_heightmap()
+
+        # Use rotated features
+        if self.heightmap_rotations > 0:
+            features = []
+            rot_angle = 360 / self.heightmap_rotations
+            for i in range(0, self.heightmap_rotations):
+                depth_feature = cv_tools.Feature(self.heightmap).rotate(rot_angle * i)\
+                                                                .crop(100, 100)\
+                                                                .normalize(0.04)
+                depth_feature = depth_feature.array()
+                # depth_feature = depth_feature.plot()
+                features.append(depth_feature)
+
+        # Use single feature (one rotation)
+        else:
+            features = cv_tools.Feature(self.heightmap).crop(40, 40)\
+                                                       .normalize(0.04)
+
+        return features
+
+    def reset_model(self):
+
+        self.sim_step()
+        dims = self.get_object_dimensions('target', self.surface_normal)
+
+        self.timesteps = 0
+
+        if self.preloaded_init_state:
+            for i in range(len(self.sim.model.geom_size)):
+                self.sim.model.geom_size[i] = self.preloaded_init_state['geom_size'][i]
+                self.sim.model.geom_type[i] = self.preloaded_init_state['geom_type'][i]
+                self.sim.model.geom_friction[i] = self.preloaded_init_state['geom_friction'][i]
+                self.sim.model.geom_condim[i] = self.preloaded_init_state['geom_condim'][i]
+
+            # Set the initial position of the finger outside of the table, in order
+            # to not occlude the objects during reading observation from the camera
+            index = self.sim.model.get_joint_qpos_addr('finger')
+            qpos = self.preloaded_init_state['qpos'].copy()
+            qvel = self.preloaded_init_state['qvel'].copy()
+            qpos[index[0]]   = 100
+            qpos[index[0]+1] = 100
+            qpos[index[0]+2] = 100
+            index = self.sim.model.get_joint_qpos_addr('finger2')
+            qpos[index[0]]   = 102
+            qpos[index[0]+1] = 102
+            qpos[index[0]+2] = 102
+            self.set_state(qpos, qvel)
+            self.push_distance = self.preloaded_init_state['push_distance']
+            self.preloaded_init_state = None
+
+            self.sim_step()
+        else:
+            random_qpos, number_of_obstacles = self.generate_random_scene(target_length_range=[.03, .03], target_width_range=[.01, .01])
+
+            # Set the initial position of the finger outside of the table, in order
+            # to not occlude the objects during reading observation from the camera
+            index = self.sim.model.get_joint_qpos_addr('finger')
+            random_qpos[index[0]]   = 100
+            random_qpos[index[0]+1] = 100
+            random_qpos[index[0]+2] = 100
+            index = self.sim.model.get_joint_qpos_addr('finger2')
+            random_qpos[index[0]]   = 102
+            random_qpos[index[0]+1] = 102
+            random_qpos[index[0]+2] = 102
+
+            self.set_state(random_qpos, self.init_qvel)
+
+            # Move forward the simulation to be sure that the objects have landed
+            for _ in range(600):
+                self.sim_step()
+
+            for _ in range(300):
+                for i in range(1, number_of_obstacles):
+                    body_id = get_body_names(self.sim.model).index("object"+str(i))
+                    self.sim.data.xfrc_applied[body_id][0] = - 3 * self.sim.data.body_xpos[body_id][0]
+                    self.sim.data.xfrc_applied[body_id][1] = - 3 * self.sim.data.body_xpos[body_id][1]
+                self.sim_step()
+
+            self.check_target_occlusion(number_of_obstacles)
+
+            for _ in range(100):
+                for i in range(1, number_of_obstacles):
+                     body_id = get_body_names(self.sim.model).index("object"+str(i))
+                     self.sim.data.xfrc_applied[body_id][0] = 0
+                     self.sim.data.xfrc_applied[body_id][1] = 0
+                self.sim_step()
+
+        # Update state variables that need to be updated only once
+        self.finger_length = get_geom_size(self.sim.model, 'finger')[0]
+        self.finger_height = get_geom_size(self.sim.model, 'finger')[0]  # same as length, its a sphere
+        self.target_bounding_box = get_geom_size(self.sim.model, 'target')
+        self.surface_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
+
+        heightmap, mask = self.get_heightmap()
+        self.heightmap_prev = heightmap.copy()
+        self.mask_prev = mask.copy()
+
+        self.last_timestamp = self.sim.data.time
+        self.success = False
+        self.target_grasped_successfully = False
+        self.obstacle_grasped_successfully = False
+
+        self.preloaded_init_state = None
+        return self.get_obs()

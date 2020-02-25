@@ -10,3 +10,4 @@ from robamine.envs.sphere_reacher_incremental import SphereReacherIncremental
 from robamine.envs.clutter import Clutter
 from robamine.envs.clutter_cont import ClutterCont, ClutterContWrapper
 from robamine.envs.clutter_occlusion import ClutterOcclusion
+from robamine.envs.clutter_cont import ClutterContToTestBBFromMask
