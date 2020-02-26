@@ -689,6 +689,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_heightmap(self):
         self._move_finger_outside_the_table()
+
+        # Grab RGB and depth
         empty_rgb = True
         counter = 0
         # This delay seems to avoid the screen to come back in front, so it allows to run trainings in the same
@@ -706,11 +708,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             if counter > 20:
                 raise InvalidEnvError('Failed to grab a non-empty RGB image from offscreen after 20 attempts.')
         glfw.iconify_window(self.offscreen.opengl_context.window)
-
         z_near = 0.2 * self.sim.model.stat.extent
         z_far = 50 * self.sim.model.stat.extent
         depth = cv_tools.gl2cv(depth, z_near, z_far)
 
+        # Calculate masks
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
@@ -718,47 +720,34 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         mask_obstacles = obstacle_detector.detect(bgr)
 
         cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
-
-        # cv2.imshow('bgr', bgr)
-        # cv2.waitKey()
         if len(np.argwhere(mask > 0)) == 0:
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
+
+        # Calculate the centroid w.r.t. initial image (640x480) in pixels
+        target_object = TargetObjectConvexHull(mask)
+        centroid_pxl = target_object.centroid.astype(np.int32)
 
         # Calculate the centroid and the target pos w.r.t. world
-        target_object = TargetObjectConvexHull(mask)
-        centroid = target_object.centroid.astype(np.int32)
-        z = depth[centroid[1], centroid[0]]
-        p_camera = self.camera.back_project(centroid, z)
-        p_rgb = np.matmul(self.rgb_to_camera_frame, p_camera)
+        z = depth[centroid_pxl[1], centroid_pxl[0]]
+        centroid_image = self.camera.back_project(centroid_pxl, z)
+        centroid_camera = np.matmul(self.rgb_to_camera_frame, centroid_image)
         camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
-        self.target_pos_vision = np.matmul(camera_pose, np.array([p_rgb[0], p_rgb[1], p_rgb[2], 1.0]))[:3]
+        self.target_pos_vision = np.matmul(camera_pose, np.array([centroid_camera[0], centroid_camera[1], centroid_camera[2], 1.0]))[:3]
 
-        self.target_quat_vision = Quaternion.from_rotation_matrix(np.eye(3))
-
-        # Pre-process rgb-d height maps
-        workspace = [193, 193]
-        center = [240, 320]
-        depth = depth[center[0] - workspace[0]:center[0] + workspace[0],
-                      center[1] - workspace[1]:center[1] + workspace[1]]
+        # Convert depth (distance from camera) to heightmap (distance from table)
         max_depth = np.max(depth)
+        depth[depth == 0] = max_depth
         depth = max_depth - depth
-        mask = mask[center[0] - workspace[0]:center[0] + workspace[0],
-                    center[1] - workspace[1]:center[1] + workspace[1]]
-
-        mask_obstacles = mask_obstacles[center[0] - workspace[0]:center[0] + workspace[0],
-                                        center[1] - workspace[1]:center[1] + workspace[1]]
-
         if len(np.argwhere(mask > 0)) == 0:
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
-        target_object = TargetObjectConvexHull(cv_tools.Feature(depth).mask_in(mask).array())
-        tx, ty = [int(target_object.centroid[0]), int(target_object.centroid[1])]
-        self.target_bounding_box_vision = target_object.image2world(self.pixels_to_m).get_bounding_box()
-        # self.target_bounding_box_vision = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
+        # cv_tools.Feature(depth).mask_in(mask).plot()
+        self.target_object = TargetObjectConvexHull(cv_tools.Feature(depth).mask_in(mask).array())
+        self.target_bounding_box_vision = self.target_object.get_bounding_box()
 
-        self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
-        self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
-        self.mask_obstacles = cv_tools.Feature(mask_obstacles).translate(tx, ty).array()
+        self.heightmap = cv_tools.Feature(depth).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
+        self.mask = cv_tools.Feature(mask).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
+        self.mask_obstacles = cv_tools.Feature(mask_obstacles).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
         self.singulation_area = (np.array([self.target_bounding_box_vision[1] + 0.01,
                                            self.target_bounding_box_vision[0] + 0.01]) / self.pixels_to_m).astype(np.int32)
 
