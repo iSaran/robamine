@@ -33,7 +33,7 @@ from mujoco_py.cymj import MjRenderContext
 
 from time import sleep
 
-OBSERVATION_DIM = 1254
+OBSERVATION_DIM = 645
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -773,6 +773,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         heightmap, mask = self.get_heightmap()
 
+        target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(10)
+        convex_hull_points = target_object.get_limits(sorted=True, normalized=True).flatten()
+
         # Use rotated features
         if self.heightmap_rotations > 0:
             features = []
@@ -804,12 +807,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                    .crop(50, 50) \
                                    .pooling().normalize(255)
 
+
             # depth_feature.plot()
             depth_feature = depth_feature.flatten()
-            mask_feature = mask_feature.flatten()
-            depth_feature = np.append(depth_feature, mask_feature)
-            for d in distances:
-                depth_feature = np.append(depth_feature, d)
+            depth_feature = np.concatenate((depth_feature, convex_hull_points))
+            # mask_feature = mask_feature.flatten()
+            # depth_feature = np.append(depth_feature, mask_feature)
+            # for d in distances:
+            #     depth_feature = np.append(depth_feature, d)
 
         return depth_feature
 
