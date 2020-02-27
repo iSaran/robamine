@@ -247,7 +247,7 @@ class ClutterXMLGenerator(XMLGenerator):
     def get_finger(self, index, type='sphere', rgba=[0.3, 0.3, 0.3, 1.0], size=[0.005, 0.005, 0.005]):
         return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size)
 
-    def get_table(self, rgba=[0.3, 0.18, 0.03, 1.0], size=[0.25, 0.25, 0.01]):
+    def get_table(self, rgba=[0.2, 0.2, 0.2, 1.0], size=[0.25, 0.25, 0.01]):
         body = self.get_body(name='table', pos=[0.0, 0.0, -size[2]])
         geom = self.get_geom(name='table', type='box', size=size, rgba=rgba)
         body.append(geom)
