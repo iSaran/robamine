@@ -33,7 +33,7 @@ from mujoco_py.cymj import MjRenderContext
 
 from time import sleep
 
-OBSERVATION_DIM = 645
+OBSERVATION_DIM = 649
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -811,10 +811,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             # depth_feature.plot()
             depth_feature = depth_feature.flatten()
             depth_feature = np.concatenate((depth_feature, convex_hull_points))
+            for d in distances:
+                depth_feature = np.append(depth_feature, d)
             # mask_feature = mask_feature.flatten()
             # depth_feature = np.append(depth_feature, mask_feature)
-            # for d in distances:
-            #     depth_feature = np.append(depth_feature, d)
 
         return depth_feature
 
