@@ -33,7 +33,7 @@ from mujoco_py.cymj import MjRenderContext
 
 from time import sleep
 
-OBSERVATION_DIM = 1254
+OBSERVATION_DIM = 649
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -769,18 +769,20 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         heightmap, mask = self.get_heightmap()
 
+        target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(10)
+        convex_hull_points = target_object.get_limits(sorted=True, normalized=True).flatten()
+
         # Use rotated features
         if self.heightmap_rotations > 0:
             features = []
             rot_angle = 360 / self.heightmap_rotations
             for i in range(0, self.heightmap_rotations):
+                depth_feature = cv_tools.Feature(self.heightmap)\
+                                        .rotate(rot_angle * i)\
+                                        .crop(50, 50)\
+                                        .pooling().normalize(self.max_object_height).flatten()
 
-                depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                                                .rotate(rot_angle * i)\
-                                                                .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
-                                                                .pooling()\
-                                                                .normalize(self.max_object_height)\
-                                                                .flatten()
+                depth_feature = np.concatenate((depth_feature, convex_hull_points))
                 for d in distances:
                     depth_feature = np.append(depth_feature, d)
 
@@ -800,12 +802,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                    .crop(50, 50) \
                                    .pooling().normalize(255)
 
+
             # depth_feature.plot()
             depth_feature = depth_feature.flatten()
-            mask_feature = mask_feature.flatten()
-            depth_feature = np.append(depth_feature, mask_feature)
+            depth_feature = np.concatenate((depth_feature, convex_hull_points))
             for d in distances:
                 depth_feature = np.append(depth_feature, d)
+            # mask_feature = mask_feature.flatten()
+            # depth_feature = np.append(depth_feature, mask_feature)
 
         return depth_feature
 
