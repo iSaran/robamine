@@ -33,14 +33,10 @@
     <camera name="xtion"
       pos="0 0 0.75"
       quat="1 0 0 0" />
-    <light
-      directional="false"
-      cutoff="90"
-      exponent="1"
-      diffuse="1 1 1"
-      specular="0 0 0"
-      pos="1 0 1.5"
-      dir="-1 0 -2.5"/>
+    <light directional="false" cutoff="90" exponent="1" diffuse="1 1 1" specular="0 0 0" pos="3 0 3" castshadow="false"/>
+    <light directional="false" cutoff="90" exponent="1" diffuse="1 1 1" specular="0 0 0" pos="0 3 3" castshadow="false"/>
+    <light directional="false" cutoff="90" exponent="1" diffuse="1 1 1" specular="0 0 0" pos="-3 0 3" castshadow="false" />
+    <light directional="false" cutoff="90" exponent="1" diffuse="1 1 1" specular="0 0 0" pos="0 -3 3" castshadow="false" />
     <geom
       name="floor"
       type="plane"
