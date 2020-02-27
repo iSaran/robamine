@@ -781,13 +781,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             features = []
             rot_angle = 360 / self.heightmap_rotations
             for i in range(0, self.heightmap_rotations):
+                depth_feature = cv_tools.Feature(self.heightmap)\
+                                        .rotate(rot_angle * i)\
+                                        .crop(50, 50)\
+                                        .pooling().normalize(self.max_object_height).flatten()
 
-                depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                                                .rotate(rot_angle * i)\
-                                                                .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
-                                                                .pooling()\
-                                                                .normalize(self.max_object_height)\
-                                                                .flatten()
+                depth_feature = np.concatenate((depth_feature, convex_hull_points))
                 for d in distances:
                     depth_feature = np.append(depth_feature, d)
 
