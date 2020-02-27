@@ -79,25 +79,16 @@ class Push:
                "z: " + str(self.z) + "\n"
 
 class PushTarget:
-    def __init__(self, distance, theta, push_distance, target_bounding_box, finger_size = 0.02):
+    def __init__(self, distance, theta, push_distance, target_object, finger_size = 0.02, pixels_to_m=1):
         self.theta = theta
         self.push_distance = push_distance
 
-        # Calculate the minimum initial distance from the target object which is
-        # along its sides, based on theta and its bounding box
-        theta_ = abs(theta)
-        if theta_ > math.pi / 2:
-            theta_ = math.pi - theta_
+        target_object = target_object.translate_wrt_centroid().image2world(pixels_to_m)
+        a, minimum_distance = target_object.get_limit_intersection(theta)
 
-        if theta_ >= math.atan2(target_bounding_box[1], target_bounding_box[0]):
-            minimum_distance = target_bounding_box[1] / math.sin(theta_)
-        else:
-            minimum_distance = target_bounding_box[0] / math.cos(theta_)
+        self.distance = minimum_distance + finger_size + distance + 0.008
 
-        self.distance = minimum_distance + finger_size + distance + 0.003
-        self.distance = distance
-
-        object_height = target_bounding_box[2]
+        object_height = target_object.get_bounding_box()[2]
         if object_height - finger_size > 0:
             offset = object_height - finger_size
         else:
@@ -545,6 +536,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.max_singulation_area = [40, 40]
 
+        self.target_object = None
+
     def __del__(self):
         if self.viewer is not None:
             glfw.make_context_current(self.viewer.window)
@@ -733,6 +726,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         centroid_camera = np.matmul(self.rgb_to_camera_frame, centroid_image)
         camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
         self.target_pos_vision = np.matmul(camera_pose, np.array([centroid_camera[0], centroid_camera[1], centroid_camera[2], 1.0]))[:3]
+        self.target_pos_vision[2] /= 2.0
 
         # Convert depth (distance from camera) to heightmap (distance from table)
         max_depth = np.max(depth)
@@ -742,14 +736,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
         # cv_tools.Feature(depth).mask_in(mask).plot()
-        self.target_object = TargetObjectConvexHull(cv_tools.Feature(depth).mask_in(mask).array())
-        self.target_bounding_box_vision = self.target_object.get_bounding_box()
 
         self.heightmap = cv_tools.Feature(depth).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
         self.mask = cv_tools.Feature(mask).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
         self.mask_obstacles = cv_tools.Feature(mask_obstacles).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
         self.singulation_area = (np.array([self.target_bounding_box_vision[1] + 0.01,
                                            self.target_bounding_box_vision[0] + 0.01]) / self.pixels_to_m).astype(np.int32)
+
+        self.target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask.astype(np.int8)).array())
+        self.target_bounding_box_vision = self.target_object.get_bounding_box(self.pixels_to_m)
 
         if self.singulation_area[0] > self.max_singulation_area[0]:
             self.singulation_area[0] = self.max_singulation_area[0]
@@ -869,6 +864,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return depth_feature
 
     def step(self, action):
+        action = action.copy()
 
         self.timesteps += 1
         time = self.do_simulation(action)
@@ -897,6 +893,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
+        target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array())
         if primitive == 0 or primitive == 1:
 
             # Push target primitive
@@ -905,7 +902,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push']['distance'][0], self.params['push']['distance'][1]])  # hardcoded read it from min max pushing distance
                 distance = rescale(action[3], min=-1, max=1, range=self.params['push']['target_init_distance'])  # hardcoded, read it from table limits
                 push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
-                                  target_bounding_box= self.target_bounding_box_vision, finger_size = self.finger_length)
+                                  target_object=target_object, finger_size = self.finger_length, pixels_to_m=self.pixels_to_m)
             # Push obstacle primitive
             elif primitive == 1:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
