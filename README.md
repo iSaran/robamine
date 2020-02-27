@@ -30,6 +30,11 @@ In order to work with `mujoco_py` you should have Mujoco version 1.50 with its l
 ```
 
 ### Install a Python Virtual Env
+Install `glew` if not installed:
+
+```bash
+sudo apt install libglew-dev
+```
 
 Install `python3-tk`:
 
