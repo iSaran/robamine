@@ -719,6 +719,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Calculate the centroid w.r.t. initial image (640x480) in pixels
         target_object = TargetObjectConvexHull(mask)
         centroid_pxl = target_object.centroid.astype(np.int32)
+        target_object.plot(blocking=False, path=self.log_dir)
 
         # Calculate the centroid and the target pos w.r.t. world
         z = depth[centroid_pxl[1], centroid_pxl[0]]

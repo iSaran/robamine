@@ -19,6 +19,8 @@ from robamine.utils.cv_tools import Feature
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
+import os
+
 class TargetObjectConvexHull:
     def __init__(self, masked_in_depth):
         self.intersection = None
@@ -177,7 +179,7 @@ class TargetObjectConvexHull:
         homog[0:2][3] = self.centroid
         return homog
 
-    def plot(self, blocking=True):
+    def plot(self, blocking=True, path=None):
         fig, ax = plt.subplots()
         color = iter(plt.cm.rainbow(np.linspace(0, 1, len(self.convex_hull))))
         ax.plot(self.mask_points[:, 0], self.mask_points[:, 1], '.', c='lightgrey')
@@ -199,6 +201,10 @@ class TargetObjectConvexHull:
             plt.show()
         else:
             plt.draw()
+
+        if path is not None:
+            fig.savefig(os.path.join(path, 'target_object.png'))
+            plt.close(fig)
 
     def get_bounding_box(self, pixels_to_m=1):
         limits = self.get_limits(sorted=False, normalized=False)
