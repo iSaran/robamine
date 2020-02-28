@@ -26,8 +26,20 @@ class TargetObjectConvexHull:
 
         self.mask_points = np.argwhere(np.transpose(masked_in_depth) > 0)
 
+
         # Calculate convex hull
-        self.convex_hull, hull_points = self._get_convex_hull()
+        try:
+            self.convex_hull, hull_points = self._get_convex_hull()
+        except Exception as err:
+            import sys
+            np.set_printoptions(threshold=sys.maxsize)
+            print('Mask points given to convex hull:')
+            print(self.mask_points)
+            print('max of mask', np.max(masked_in_depth))
+            print('min of mask', np.min(masked_in_depth))
+            plt.imsave('/tmp/convex_hull_error_mask.png', masked_in_depth, cmap='gray', vmin=np.min(masked_in_depth), vmax=np.max(masked_in_depth))
+            print(err)
+            raise Exception('Failed to create convex hull')
 
         # Calculate centroid
         self.centroid = self._get_centroid_convex_hull(hull_points)
