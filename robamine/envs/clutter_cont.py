@@ -671,7 +671,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 # if object is above the table
                 if self.sim.data.qpos[index[0] + 2] > 0:
                     index = self.sim.model.get_joint_qvel_addr(name)
-                    if np.linalg.norm(self.sim.data.qvel[index[0]:index[0]+6]) > 1e-3:
+                    if np.linalg.norm(self.sim.data.qvel[index[0]:index[0]+6]) > 1e-1:
                         all_objects_still = False
                         break
             self.sim_step()
