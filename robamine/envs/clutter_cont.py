@@ -713,7 +713,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         mask_obstacles = obstacle_detector.detect(bgr)
 
         cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
-        if len(np.argwhere(mask > 0)) == 0:
+        if len(np.argwhere(mask > 0)) < 200:
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
         # Calculate the centroid w.r.t. initial image (640x480) in pixels
@@ -732,7 +732,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         max_depth = np.max(depth)
         depth[depth == 0] = max_depth
         depth = max_depth - depth
-        if len(np.argwhere(mask > 0)) == 0:
+        if len(np.argwhere(mask > 0)) < 200:
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
         # cv_tools.Feature(depth).mask_in(mask).plot()
