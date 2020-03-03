@@ -8,7 +8,7 @@ Clutter Env for continuous control
 import numpy as np
 from numpy.linalg import norm
 
-from mujoco_py import load_model_from_xml, MjSim, MjViewer, MjRenderContextOffscreen
+from mujoco_py import load_model_from_xml, MjSim, MjViewer, MjRenderContext
 from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
@@ -445,8 +445,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self._viewers = {}
         self.viewer = None
 
-        self.offscreen = MjRenderContextOffscreen(self.sim, 0)
-        glfw.iconify_window(self.offscreen.opengl_context.window)
+        self.offscreen = MjRenderContext(sim=self.sim, device_id=0, offscreen=True, opengl_backend='glfw')
 
         self.init_qpos = self.sim.data.qpos.ravel().copy()
         self.init_qvel = self.sim.data.qvel.ravel().copy()
@@ -692,7 +691,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # This delay seems to avoid the screen to come back in front, so it allows to run trainings in the same
         # computer you work
         sleep(0.1)
-        glfw.restore_window(self.offscreen.opengl_context.window)
         while empty_rgb:
             self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
             rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
@@ -701,10 +699,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             if len(np.argwhere(rgb > 0)) > 0:
                 empty_rgb = False
             counter += 1
+            sleep(0.1)
             if counter > 20:
                 raise InvalidEnvError('Failed to grab a non-empty RGB image from offscreen after 20 attempts.')
-        glfw.iconify_window(self.offscreen.opengl_context.window)
-
         z_near = 0.2 * self.sim.model.stat.extent
         z_far = 50 * self.sim.model.stat.extent
         depth = cv_tools.gl2cv(depth, z_near, z_far)
