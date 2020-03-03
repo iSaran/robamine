@@ -15,6 +15,8 @@ setup(name='robamine',
                         'numpydoc', \
                         'matplotlib',\
                         'opencv-python==4.0.1.24',\
-                        'PyQt5==5.12.3'
-                        'torch']
+                        'PyQt5==5.12.3',\
+                        'torch==1.1.0',\
+                        'open3d-python==0.6.0.0',\
+                        'sklearn']
 )
