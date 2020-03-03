@@ -415,7 +415,7 @@ class ClutterContWrapper(gym.Env):
         except InvalidEnvError as e:
             print("WARN: {0}. Invalid environment during step. A new environment will be spawn.".format(e))
             self.reset()
-            result = self.env.step(action)
+            return self.step(action)
         return result
 
     def seed(self, seed):
