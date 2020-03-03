@@ -15,6 +15,7 @@ from sklearn.decomposition import PCA
 from robamine.utils.math import LineSegment2D, triangle_area
 from robamine.utils.orientation import rot_x, rot_z, rot2angleaxis
 from robamine.utils.cv_tools import Feature
+from robamine.utils.info import get_now_timestamp
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -25,9 +26,9 @@ import os
 class InvalidEnvError(Exception):
     pass
 
-
 class TargetObjectConvexHull:
     def __init__(self, masked_in_depth, log_dir='/tmp'):
+        self.masked_in_depth = masked_in_depth
         self.intersection = None
         self.mask_shape = masked_in_depth.shape
 
@@ -48,7 +49,7 @@ class TargetObjectConvexHull:
             print('min of mask', np.min(masked_in_depth))
             plt.imsave(os.path.join(self.log_dir, 'convex_hull_error_mask.png'), masked_in_depth, cmap='gray', vmin=np.min(masked_in_depth), vmax=np.max(masked_in_depth))
             print(err)
-            raise InvalidEnvError('Failed to create convex hull')
+            raise InvalidEnvError('Failed to create convex hull. Convex hull saved to:' + os.path.join(self.log_dir, 'convex_hull_error_mask.png'))
 
         # Calculate centroid
         self.centroid = self._get_centroid_convex_hull(hull_points)
@@ -165,10 +166,10 @@ class TargetObjectConvexHull:
 
         self.intersection = None
         max_distance = np.zeros(2)
-        max_distance[0] = np.max(self.mask_points[:, 0])
-        max_distance[1] = np.max(self.mask_points[:, 1])
-        max_distance = np.linalg.norm(max_distance)
-        final = max_distance * np.array([cos(theta), sin(theta)])
+        max_distance[0] = 1.5 * np.max(self.mask_points[:, 0])
+        max_distance[1] = 1.5 * np.max(self.mask_points[:, 1])
+        max_distance_norm = np.linalg.norm(max_distance)
+        final = max_distance_norm * np.array([cos(theta), sin(theta)])
         push = LineSegment2D(self.centroid, self.centroid + final)
 
         for h in self.convex_hull:
@@ -176,8 +177,20 @@ class TargetObjectConvexHull:
             if self.intersection is not None:
                 break
 
+        # If no intersection found log some debugging messages/plots and then raise invalid env error
         if self.intersection is None:
-            return None, None
+            path = os.path.join(self.log_dir, 'error_no_intersection_' + get_now_timestamp())
+            os.makedirs(path)
+            np.savetxt(os.path.join(path, 'max_distance.txt'), max_distance, delimiter=',')
+            np.savetxt(os.path.join(path, 'push.txt'), push.array(), delimiter=',')
+            fig, ax = self.draw()
+            ax.plot(push.p1[0], push.p1[1], color='black', marker='o')
+            ax.plot(push.p2[0], push.p2[1], color='black', marker='.')
+            ax.plot([push.p1[0], push.p2[0]], [push.p1[1], push.p2[1]], color='black', linestyle='-')
+            fig.savefig(os.path.join(path, 'target_object.png'))
+            plt.close(fig)
+            plt.imsave(os.path.join(path, 'mask.png'), self.masked_in_depth, cmap='gray', vmin=np.min(self.masked_in_depth), vmax=np.max(self.masked_in_depth))
+            raise InvalidEnvError('No intersection was found. Error report in ' + path)
 
         return self.intersection, np.linalg.norm(self.centroid - self.intersection)
 
@@ -186,7 +199,7 @@ class TargetObjectConvexHull:
         homog[0:2][3] = self.centroid
         return homog
 
-    def plot(self, blocking=True, path=None):
+    def draw(self):
         fig, ax = plt.subplots()
         color = iter(plt.cm.rainbow(np.linspace(0, 1, len(self.convex_hull))))
         ax.plot(self.mask_points[:, 0], self.mask_points[:, 1], '.', c='lightgrey')
@@ -204,6 +217,11 @@ class TargetObjectConvexHull:
 
         if self.intersection is not None:
             ax.plot(self.intersection[0], self.intersection[1], color='black', marker='o')
+
+        return fig, ax
+
+    def plot(self, blocking=True, path=None):
+        fig, ax = self.draw()
         if blocking:
             plt.show()
         else:
