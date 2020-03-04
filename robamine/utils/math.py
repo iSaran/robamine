@@ -120,6 +120,12 @@ class LineSegment2D:
     def __str__(self):
         return self.p1.__str__() + self.p2.__str__()
 
+    def array(self):
+        result = np.zeros((2, 2))
+        result[0, :] = self.p1
+        result[1, :] = self.p2
+        return result
+
 
     @staticmethod
     def plot_line_segments(line_segments, points=[]):

@@ -4,6 +4,7 @@ import subprocess
 import logging
 from tensorboard import default, program
 import os
+from datetime import datetime
 
 logger = logging.getLogger('robamine.utils.misc')
 
@@ -60,3 +61,17 @@ def bytes2human(bytes):
         return str("{:.2f} KB".format(bytes / 1024))
     else:
         return str(bytes) + ' Bytes'
+
+def get_now_timestamp():
+    """
+    Returns a timestamp for the current datetime as a string for using it in
+    log file naming.
+    """
+    now_raw = datetime.now()
+    return str(now_raw.year) + '.' + \
+           '{:02d}'.format(now_raw.month) + '.' + \
+           '{:02d}'.format(now_raw.day) + '.' + \
+           '{:02d}'.format(now_raw.hour) + '.' \
+           '{:02d}'.format(now_raw.minute) + '.' \
+           '{:02d}'.format(now_raw.second) + '.' \
+           '{:02d}'.format(now_raw.microsecond)
