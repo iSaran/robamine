@@ -31,6 +31,23 @@ def rescale_array(x, min=None, max=None, range=[0, 1], axis=None, reverse=False)
     return range_0 + ((x - _min) * (range_1 - range_0)) / (_max - _min)
 
 
+def min_max_scale(x, range, target_range):
+    assert range[1] > range[0]
+    assert target_range[1] > target_range[0]
+
+    if isinstance(x, np.ndarray):
+        range_min = range[0] * np.ones(x.shape)
+        range_max = range[1] * np.ones(x.shape)
+        target_min = target_range[0] * np.ones(x.shape)
+        target_max = target_range[1] * np.ones(x.shape)
+    else:
+        range_min = range[0]
+        range_max = range[1]
+        target_min = target_range[0]
+        target_max = target_range[1]
+
+    return target_min + ((x - range_min) * (target_max - target_min)) / (range_max - range_min)
+
 def rescale(x, min, max, range=[0, 1]):
     assert range[1] > range[0]
     return range[0] + ((x - min) * (range[1] - range[0])) / (max - min)
