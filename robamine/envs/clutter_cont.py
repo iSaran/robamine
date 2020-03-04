@@ -682,25 +682,38 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self._move_finger_outside_the_table()
 
         # Grab RGB and depth
-        empty_rgb = True
+        empty_grab = True
         counter = 0
-        # This delay seems to avoid the screen to come back in front, so it allows to run trainings in the same
-        # computer you work
-        sleep(0.1)
-        while empty_rgb:
-            self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
-            rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
-            bgr = cv_tools.rgb2bgr(rgb)
-            cv2.imwrite(os.path.join(self.log_dir, 'bgr.png'), bgr)
-            if len(np.argwhere(rgb > 0)) > 0:
-                empty_rgb = False
-            counter += 1
-            sleep(0.1)
-            if counter > 20:
-                raise InvalidEnvError('Failed to grab a non-empty RGB image from offscreen after 20 attempts.')
         z_near = 0.2 * self.sim.model.stat.extent
         z_far = 50 * self.sim.model.stat.extent
-        depth = cv_tools.gl2cv(depth, z_near, z_far)
+        while empty_grab:
+            self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
+            rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
+
+            # Convert depth (distance from camera) to heightmap (distance from table)
+            depth = cv_tools.gl2cv(depth, z_near, z_far)
+            max_depth = np.max(depth)
+            depth[depth == 0] = max_depth
+            heightmap = max_depth - depth
+
+            # In case of empty RGB or Depth create the offscreen context again
+            if len(np.argwhere(rgb > 0)) == 0 or len(np.argwhere(abs(heightmap) > 1e-10)) == 0:
+                empty_grab = True
+                glfw.make_context_current(self.offscreen.opengl_context.window)
+                glfw.destroy_window(self.offscreen.opengl_context.window)
+                self.offscreen = MjRenderContext(sim=self.sim, device_id=0, offscreen=True, opengl_backend='glfw')
+            else:
+                empty_grab = False
+
+            bgr = cv_tools.rgb2bgr(rgb)
+            cv2.imwrite(os.path.join(self.log_dir, 'bgr.png'), bgr)
+            cv2.imwrite(os.path.join(self.log_dir, 'depth.png'), depth)
+
+            if counter > 20:
+                raise InvalidEnvError('Failed to grab a non-empty RGB-D image from offscreen after 20 attempts.')
+
+            counter += 1
+
 
         # Calculate masks
         color_detector = cv_tools.ColorDetector('red')
@@ -726,16 +739,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos_vision = np.matmul(camera_pose, np.array([centroid_camera[0], centroid_camera[1], centroid_camera[2], 1.0]))[:3]
         self.target_pos_vision[2] /= 2.0
 
-        # Convert depth (distance from camera) to heightmap (distance from table)
-        max_depth = np.max(depth)
-        depth[depth == 0] = max_depth
-        depth = max_depth - depth
-        if len(np.argwhere(mask > 0)) < 200:
-            raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
-
-        # cv_tools.Feature(depth).mask_in(mask).plot()
-
-        self.heightmap = cv_tools.Feature(depth).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
+        self.heightmap = cv_tools.Feature(heightmap).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
         plt.imsave(os.path.join(self.log_dir, 'heightmap.png'), self.heightmap, cmap='gray', vmin=np.min(self.heightmap), vmax=np.max(self.heightmap))
         self.mask = cv_tools.Feature(mask).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
         plt.imsave(os.path.join(self.log_dir, 'mask.png'), self.mask, cmap='gray', vmin=np.min(self.mask), vmax=np.max(self.mask))
@@ -897,6 +901,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
+
         target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array())
         if primitive == 0 or primitive == 1:
 
@@ -1036,7 +1041,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         if points_prev == 0:
             points_prev = 1
-            
+
         # Compute the percentage of the aera that was freed
         free_area = points_diff / points_prev
         reward = rescale(free_area, 0, 1, range=[0, 10])
