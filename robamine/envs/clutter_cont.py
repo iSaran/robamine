@@ -23,6 +23,8 @@ import math
 from math import sqrt
 import glfw
 
+from robamine.envs.clutter_utils import TargetObjectConvexHull, InvalidEnvError
+
 import xml.etree.ElementTree as ET
 from robamine.utils.orientation import rot2quat
 
@@ -369,9 +371,6 @@ class ClutterXMLGenerator(XMLGenerator):
 
         xml = ET.tostring(self.root, encoding="utf-8", method="xml").decode("utf-8")
         return xml
-
-class InvalidEnvError(Exception):
-    pass
 
 class ClutterContWrapper(gym.Env):
     def __init__(self, params):
