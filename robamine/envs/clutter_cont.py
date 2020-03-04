@@ -533,6 +533,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                              max(self.params['obstacle']['max_bounding_box']))
 
         self.max_singulation_area = [40, 40]
+        self.observation_area = [50, 50]
 
         self.target_object = None
 
@@ -788,7 +789,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             for i in range(0, self.heightmap_rotations):
                 depth_feature = cv_tools.Feature(self.heightmap)\
                                         .rotate(rot_angle * i)\
-                                        .crop(50, 50)\
+                                        .crop(self.observation_area[0], self.observation_area[1])\
                                         .pooling().normalize(self.max_object_height).flatten()
 
                 depth_feature = np.concatenate((depth_feature, convex_hull_points))
@@ -804,11 +805,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Use single feature (one rotation)
         else:
             depth_feature = cv_tools.Feature(self.heightmap) \
-                                    .crop(50, 50) \
+                                    .crop(self.observation_area[0], self.observation_area[1]) \
                                     .pooling().normalize(self.max_object_height)
 
             mask_feature = cv_tools.Feature(self.mask) \
-                                   .crop(50, 50) \
+                                   .crop(self.observation_area[0], self.observation_area[1]) \
                                    .pooling().normalize(255)
 
 
@@ -873,14 +874,18 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return depth_feature
 
     def step(self, action):
-        action = action.copy()
+        action_ = action.copy()
+
+        if action_[0] == 0:
+            self.observation_area = [50, 50]
 
         self.timesteps += 1
-        time = self.do_simulation(action)
+        time = self.do_simulation(action_)
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
         obs = self.get_obs_push_target()
-        reward = self.get_reward(obs, action)
+
+        reward = self.get_reward(obs, action_)
         # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
 
