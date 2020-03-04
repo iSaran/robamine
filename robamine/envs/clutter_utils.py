@@ -6,21 +6,21 @@ Clutter Env for continuous control
 """
 
 import numpy as np
-from math import cos, sin, pi, acos
+from math import cos, sin, pi, acos, atan2
 
 from scipy.spatial import ConvexHull, Delaunay
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 
-from robamine.utils.math import LineSegment2D, triangle_area
+from robamine.utils.math import LineSegment2D, triangle_area, min_max_scale
 from robamine.utils.orientation import rot_x, rot_z, rot2angleaxis
 from robamine.utils.cv_tools import Feature
 from robamine.utils.info import get_now_timestamp
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-
 import os
+
 
 
 class InvalidEnvError(Exception):
@@ -61,18 +61,32 @@ class TargetObjectConvexHull:
         self.translated = False
         self.moved2world = False
 
-    def get_limits(self, sorted=False, normalized=False):
+    def get_limits(self, sorted=False, normalized=False, polar=False):
         # Calculate the limit points
         limits = np.zeros((len(self.convex_hull), 2))
         for i in range(len(self.convex_hull)):
             limits[i, :] = self.convex_hull[i].p1.copy()
 
+        if polar:
+            polar_limits = np.zeros(limits.shape)
+            for i in range(len(limits)):
+                polar_limits[i, 0] = np.linalg.norm(limits[i, :])
+                polar_limits[i, 1] = atan2(limits[i, 0], limits[i, 1])
+            limits = polar_limits
+
         if sorted:
             limits = limits[np.argsort(limits[:, 0])]
 
         if normalized:
-            limits[:, 0] /= self.mask_shape[0]
-            limits[:, 1] /= self.mask_shape[1]
+            if polar:
+                limits[:, 0] = min_max_scale(limits[:, 0], range=[0, np.linalg.norm(self.mask_shape)], target_range=[0, 1])
+                limits[:, 1] = min_max_scale(limits[:, 1], range=[-pi, pi], target_range=[0, 1])
+            else:
+                limits[:, 0] = min_max_scale(limits[:, 0], range=[-self.mask_shape[0], self.mask_shape[0]], target_range=[0, 1])
+                limits[:, 1] = min_max_scale(limits[:, 1], range=[-self.mask_shape[1], self.mask_shape[1]], target_range=[0, 1])
+
+            limits[limits > 1] = 1
+            limits[limits < 0] = 0
 
         return limits
 
