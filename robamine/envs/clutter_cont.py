@@ -17,7 +17,7 @@ import gym
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names, detect_contact, XMLGenerator
 from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z, Affine3
-from robamine.utils.math import sigmoid, rescale, filter_signal
+from robamine.utils.math import sigmoid, rescale, filter_signal, LineSegment2D, min_max_scale
 import robamine.utils.cv_tools as cv_tools
 import math
 from math import sqrt
@@ -81,14 +81,24 @@ class Push:
                "z: " + str(self.z) + "\n"
 
 class PushTarget:
-    def __init__(self, distance, theta, push_distance, target_object, finger_size = 0.02, pixels_to_m=1):
-        self.theta = theta
+    def __init__(self, distance, theta, push_distance, target_object, distance_limits, push_distance_limits, observation_boundaries, finger_size = 0.02, pixels_to_m=1):
+        self.theta = min_max_scale(theta, range=[-1, 1], target_range=[-math.pi, math.pi])
         self.push_distance = push_distance
+        self.distance = distance
+        self.target_object = target_object.translate_wrt_centroid().image2world(pixels_to_m)
 
-        target_object = target_object.translate_wrt_centroid().image2world(pixels_to_m)
-        a, minimum_distance = target_object.get_limit_intersection(theta)
+        boundaries_points = [np.array([ observation_boundaries[0],  observation_boundaries[1]]),
+                             np.array([ observation_boundaries[0], -observation_boundaries[1]]),
+                             np.array([-observation_boundaries[0], -observation_boundaries[1]]),
+                             np.array([-observation_boundaries[0],  observation_boundaries[1]])]
 
-        self.distance = minimum_distance + finger_size + distance + 0.008
+        self.observation_boundaries = [LineSegment2D(boundaries_points[0], boundaries_points[1]),
+                                       LineSegment2D(boundaries_points[1], boundaries_points[2]),
+                                       LineSegment2D(boundaries_points[2], boundaries_points[3]),
+                                       LineSegment2D(boundaries_points[3], boundaries_points[0])]
+
+        self.distance_line_segment = self._get_distance_line_segment(distance_limits, finger_size)
+        self.push_line_segment = self._get_push_line_segment(push_distance_limits)
 
         object_height = target_object.get_bounding_box()[2]
         if object_height - finger_size > 0:
@@ -97,17 +107,67 @@ class PushTarget:
             offset = 0
         self.z = finger_size + offset + 0.001
 
+    def _get_distance_line_segment(self, limits, finger_size):
+        assert limits[0] <= limits[1]
+        assert limits[0] >= 0 and limits[1] >= 0
+        direction = np.array([math.cos(self.theta), math.sin(self.theta)])
+        line_segment = LineSegment2D(np.zeros(2), 10 * direction)
+        min_point = line_segment.get_first_intersection_point(self.target_object.convex_hull)
+        max_point = line_segment.get_first_intersection_point(self.observation_boundaries)
+        min_point += (finger_size + 0.008) * direction
+
+        min_limit = min(np.linalg.norm(max_point), max(limits[0], np.linalg.norm(min_point)))
+        max_limit = max(np.linalg.norm(min_point), min(limits[1], np.linalg.norm(max_point)))
+        return LineSegment2D(min_limit * direction, max_limit * direction)
+
+    def _get_push_line_segment(self, limits):
+        assert limits[0] <= limits[1]
+        assert limits[0] >= 0 and limits[1] >= 0
+        direction = np.array([math.cos(self.theta + math.pi), math.sin(self.theta + math.pi)])
+        line_segment = LineSegment2D(np.zeros(2), 10 * direction)
+        min_point = np.zeros(2)
+        max_point = line_segment.get_first_intersection_point(self.observation_boundaries)
+
+        min_limit = min(np.linalg.norm(max_point), max(limits[0], np.linalg.norm(min_point)))
+        max_limit = max(np.linalg.norm(min_point), min(limits[1], np.linalg.norm(max_point)))
+        return LineSegment2D(min_limit * direction, max_limit * direction)
+
     def get_init_pos(self):
-        init = self.distance * np.array([math.cos(self.theta), math.sin(self.theta)])
+        lambd = min_max_scale(self.distance, range=[-1, 1], target_range=[0, 1])
+        init = self.distance_line_segment.get_point(lambd)
         return np.append(init, self.z)
 
     def get_final_pos(self):
-        init = self.get_init_pos()
-        direction = - init / np.linalg.norm(init)
-        return self.push_distance * direction
+        lambd = min_max_scale(self.push_distance, range=[-1, 1], target_range=[0, 1])
+        init = self.push_line_segment.get_point(lambd)
+        return np.append(init, self.z)
 
     def get_duration(self, distance_per_sec = 0.1):
         return np.linalg.norm(self.get_init_pos() - self.get_final_pos()) / distance_per_sec
+
+    def plot(self):
+
+        print(self.get_init_pos())
+        fig, ax = self.target_object.draw()
+        c = 'blue'
+        ax.plot( self.distance_line_segment.p1[0], self.distance_line_segment.p1[1], color=c, marker='o')
+        ax.plot( self.distance_line_segment.p2[0], self.distance_line_segment.p2[1], color=c, marker='.')
+        ax.plot([self.distance_line_segment.p1[0], self.distance_line_segment.p2[0]], [self.distance_line_segment.p1[1], self.distance_line_segment.p2[1]], color=c, linestyle='-')
+
+        c = 'red'
+        ax.plot( self.push_line_segment.p1[0], self.push_line_segment.p1[1], color=c, marker='o')
+        ax.plot( self.push_line_segment.p2[0], self.push_line_segment.p2[1], color=c, marker='.')
+        ax.plot([self.push_line_segment.p1[0], self.push_line_segment.p2[0]], [self.push_line_segment.p1[1], self.push_line_segment.p2[1]], color=c, linestyle='-')
+
+        for l in self.observation_boundaries:
+            c = 'black'
+            ax.plot(l.p1[0], l.p1[1], color=c, marker='o')
+            ax.plot(l.p2[0], l.p2[1], color=c, marker='.')
+            ax.plot([l.p1[0], l.p2[0]],
+                    [l.p1[1], l.p2[1]], color=c, linestyle='-')
+
+        plt.show()
+
 
 class PushObstacle:
     def __init__(self, theta = 0.0, push_distance = 0.1, object_height = 0.06, finger_size = 0.02):
@@ -913,11 +973,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             # Push target primitive
             if primitive == 0:
-                theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-                push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push']['distance'][0], self.params['push']['distance'][1]])  # hardcoded read it from min max pushing distance
-                distance = rescale(action[3], min=-1, max=1, range=self.params['push']['target_init_distance'])  # hardcoded, read it from table limits
-                push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
-                                  target_object=target_object, finger_size = self.finger_length, pixels_to_m=self.pixels_to_m)
+                push = PushTarget(theta=action[1],
+                                  push_distance=action[2],
+                                  distance=action[3],
+                                  target_object=target_object,
+                                  observation_boundaries=np.array(self.observation_area) * self.pixels_to_m,
+                                  distance_limits=self.params['push']['target_init_distance'],
+                                  push_distance_limits=self.params['push']['distance'],
+                                  finger_size = self.finger_length,
+                                  pixels_to_m=self.pixels_to_m)
             # Push obstacle primitive
             elif primitive == 1:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
