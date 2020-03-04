@@ -33,6 +33,8 @@ from mujoco_py.cymj import MjRenderContext
 
 from time import sleep
 
+import matplotlib.pyplot as plt
+
 OBSERVATION_DIM = 649
 
 def exp_reward(x, max_penalty, min, max):
@@ -707,7 +709,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         obstacle_detector = cv_tools.ColorDetector('blue')
         mask_obstacles = obstacle_detector.detect(bgr)
 
-        cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
+        cv2.imwrite(os.path.join(self.log_dir, 'initial_mask.png'), mask)
         if len(np.argwhere(mask > 0)) < 200:
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
@@ -734,12 +736,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # cv_tools.Feature(depth).mask_in(mask).plot()
 
         self.heightmap = cv_tools.Feature(depth).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
+        plt.imsave(os.path.join(self.log_dir, 'heightmap.png'), self.heightmap, cmap='gray', vmin=np.min(self.heightmap), vmax=np.max(self.heightmap))
         self.mask = cv_tools.Feature(mask).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
+        plt.imsave(os.path.join(self.log_dir, 'mask.png'), self.mask, cmap='gray', vmin=np.min(self.mask), vmax=np.max(self.mask))
         self.mask_obstacles = cv_tools.Feature(mask_obstacles).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
         self.singulation_area = (np.array([self.target_bounding_box_vision[1] + 0.01,
                                            self.target_bounding_box_vision[0] + 0.01]) / self.pixels_to_m).astype(np.int32)
 
-        self.target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask.astype(np.int8)).array())
+        self.target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask.astype(np.int8)).array(), log_dir=self.log_dir)
         self.target_bounding_box_vision = self.target_object.get_bounding_box(self.pixels_to_m)
 
         if self.singulation_area[0] > self.max_singulation_area[0]:
