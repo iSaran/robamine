@@ -131,6 +131,13 @@ class LineSegment2D:
             return p
         return None
 
+    def get_first_intersection_point(self, line_segments):
+        for line_segment in line_segments:
+            result = self.get_intersection_point(line_segment)
+            if result is not None:
+                break
+        return result
+
     def norm(self):
         return np.linalg.norm(self.p1 - self.p2)
 
