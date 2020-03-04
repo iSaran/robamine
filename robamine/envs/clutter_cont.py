@@ -777,8 +777,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         heightmap, mask = self.get_heightmap()
 
-        target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(10)
-        convex_hull_points = target_object.get_limits(sorted=True, normalized=True).flatten()
+        target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(10).translate_wrt_centroid().image2world(self.pixels_to_m)
+        convex_hull_points = target_object.get_limits(sorted=True, normalized=True, polar=True).flatten()
 
         # Use rotated features
         if self.heightmap_rotations > 0:
