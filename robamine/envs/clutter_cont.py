@@ -829,6 +829,22 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         :return:
         """
 
+        def get_feature(heightmap, mask, crop_area, max_object_height, angle=0):
+
+            feature = cv_tools.Feature(heightmap)
+            feature = feature.rotate(angle)
+
+            thresholded = np.zeros(feature.array().shape)
+            threshold = self.target_bounding_box_vision[2] - 1.5 * self.finger_height
+            if threshold < 0:
+                threshold = 0
+            thresholded[feature.array() > threshold] = 1
+            feature = cv_tools.Feature(thresholded)
+
+            feature = feature.crop(crop_area[0], crop_area[1])
+            feature = feature.pooling().normalize(max_object_height)
+            return feature
+
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos_vision[0], \
                      self.surface_size[0] + self.target_pos_vision[0], \
@@ -836,7 +852,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[1] + self.target_pos_vision[1]]
         distances = [x / 0.5 for x in distances]
 
-        heightmap, mask = self.get_heightmap()
+        self.get_heightmap()
 
         enforce_convex_hull = self.params['target'].get('enforce_convex_hull', 10)
         target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(enforce_convex_hull).translate_wrt_centroid().image2world(self.pixels_to_m)
@@ -847,10 +863,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             features = []
             rot_angle = 360 / self.heightmap_rotations
             for i in range(0, self.heightmap_rotations):
-                depth_feature = cv_tools.Feature(self.heightmap)\
-                                        .rotate(rot_angle * i)\
-                                        .crop(self.observation_area[0], self.observation_area[1])\
-                                        .pooling().normalize(self.max_object_height).flatten()
+                depth_feature = get_feature(self.heightmap, self.mask, self.observation_area,
+                                            self.max_object_height, rot_angle * i).flatten()
 
                 depth_feature = np.concatenate((depth_feature, convex_hull_points))
                 for d in distances:
@@ -864,22 +878,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Use single feature (one rotation)
         else:
-            depth_feature = cv_tools.Feature(self.heightmap) \
-                                    .crop(self.observation_area[0], self.observation_area[1]) \
-                                    .pooling().normalize(self.max_object_height)
+            depth_feature = get_feature(self.heightmap, self.mask, self.observation_area,
+                                        self.max_object_height, 0).flatten()
 
-            mask_feature = cv_tools.Feature(self.mask) \
-                                   .crop(self.observation_area[0], self.observation_area[1]) \
-                                   .pooling().normalize(255)
-
-
-            # depth_feature.plot()
-            depth_feature = depth_feature.flatten()
             depth_feature = np.concatenate((depth_feature, convex_hull_points))
             for d in distances:
                 depth_feature = np.append(depth_feature, d)
-            # mask_feature = mask_feature.flatten()
-            # depth_feature = np.append(depth_feature, mask_feature)
 
         return depth_feature
 
