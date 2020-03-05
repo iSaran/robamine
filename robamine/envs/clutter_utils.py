@@ -291,3 +291,10 @@ class TargetObjectConvexHull:
                 self.convex_hull.insert(index + 1, new)
         return self
 
+    def area(self):
+        '''See https://en.wikipedia.org/wiki/Shoelace_formula'''
+        limits = self.get_limits()
+        x = limits[:, 0]
+        y = limits[:, 1]
+        return 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+
