@@ -874,6 +874,20 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         :return:
         """
 
+        def get_feature(angle=0):
+            feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)
+            feature = feature.rotate(angle)
+
+            thresholded = np.zeros(feature.array().shape)
+            threshold = 2 * self.target_bounding_box_vision[2] + 1.5 * self.finger_height
+            thresholded[feature.array() > threshold] = 1
+
+            feature = cv_tools.Feature(thresholded)
+            feature = feature.crop(self.max_singulation_area[0], self.max_singulation_area[1])\
+                             .pooling()\
+                             .normalize(self.max_object_height)
+            return feature
+
         # Add the distance of the object from the edge
         distances = [self.surface_size[0] - self.target_pos_vision[0], \
                      self.surface_size[0] + self.target_pos_vision[0], \
@@ -881,7 +895,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                      self.surface_size[1] + self.target_pos_vision[1]]
         distances = [x / 0.5 for x in distances]
 
-        heightmap, mask = self.get_heightmap()
+        self.get_heightmap()
+
+        # Calculate normalized convex hall area
+        target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).translate_wrt_centroid().image2world(self.pixels_to_m)
+        convex_hull_area = target_object.area()
+        max_convex_hull_area = self.params['target']['max_bounding_box'][0] * self.params['target']['max_bounding_box'][0]
+        convex_hull_area = min_max_scale(convex_hull_area, range=[0, max_convex_hull_area], target_range=[0, 1])
+        if convex_hull_area > 1:
+            convex_hull_area = 1
+        if convex_hull_area < 0:
+            convex_hull_area = 0
 
         # Use rotated features
         if self.heightmap_rotations > 0:
@@ -889,12 +913,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             rot_angle = 360 / self.heightmap_rotations
             for i in range(0, self.heightmap_rotations):
 
-                depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                                                .rotate(rot_angle * i)\
-                                                                .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
-                                                                .pooling()\
-                                                                .normalize(self.max_object_height)\
-                                                                .flatten()
+                depth_feature = get_feature(rot_angle * i).flatten()
+                depth_feature = np.append(depth_feature, convex_hull_area)
+
                 for d in distances:
                     depth_feature = np.append(depth_feature, d)
 
@@ -906,12 +927,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Use single feature (one rotation)
         else:
-            depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                                            .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
-                                                            .pooling()\
-                                                            .normalize(self.max_object_height)
-            # depth_feature.plot()
-            depth_feature = depth_feature.flatten()
+            depth_feature = get_feature().flatten()
+            depth_feature = np.append(depth_feature, convex_hull_area)
+
+            depth_feature = np.append(depth_feature, )
             for d in distances:
                 depth_feature = np.append(depth_feature, d)
 
@@ -1105,7 +1124,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Compute the percentage of the aera that was freed
         free_area = points_diff / points_prev
         reward = rescale(free_area, 0, 1, range=[0, 10])
-        print('r:', reward)
 
         extra_penalty = 0
         # penalize pushes that start far from the target object
