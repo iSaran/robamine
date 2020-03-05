@@ -49,7 +49,7 @@ env:
       max_bounding_box: [.03, .03, .020]
       probability_box: 1.0
     push:
-      distance: [0.05, 0.10]
+      distance: [0.02, 0.10]
       target_init_distance: [0.0, 0.1]
     grasp:
       spread: [0.05, 0.05]
@@ -80,7 +80,7 @@ env_eval:
       max_bounding_box: [.03, .03, .020]
       probability_box: 1.0
     push:
-      distance: [0.05, 0.10]
+      distance: [0.02, 0.10]
       target_init_distance: [0.0, 0.1]
     grasp:
       spread: [0.05, 0.05]
