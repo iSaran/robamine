@@ -671,7 +671,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.feature_normalization_per == 'episode':
             self.max_object_height = np.max(self.heightmap)
 
-        return self.get_obs_push_target()
+        return self.get_obs()
 
     def _hug_target(self, number_of_obstacles):
         gain = 150
@@ -800,6 +800,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return self.heightmap, self.mask
 
+    def get_obs(self):
+        return self.get_obs_push_target()
+        # return self.get_obs_push_obstacle()
+
     def get_obs_push_target(self):
         """
         Read depth and extract height map as observation
@@ -864,8 +868,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return depth_feature
 
-
-    def get_obs(self):
+    def get_obs_push_obstacle(self):
         """
         Read depth and extract height map as observation
         :return:
@@ -924,7 +927,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         time = self.do_simulation(action_)
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
-        obs = self.get_obs_push_target()
+
+        obs = self.get_obs()
 
         reward = self.get_reward(obs, action_)
         # reward = self.get_shaped_reward_obs(obs, pcd, dim)
