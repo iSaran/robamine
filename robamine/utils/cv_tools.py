@@ -6,6 +6,7 @@ import math
 from sklearn.decomposition import PCA
 from robamine.utils.orientation import rot_z, rot_x, rot2angleaxis
 from math import pi
+import matplotlib.pyplot as plt
 
 '''
 Computer Vision Utils
@@ -294,7 +295,8 @@ class Feature:
         """
         Plot the heightmap
         """
-        plot_2d_img(self.heightmap, name)
+        plt.imshow(self.heightmap, cmap='gray', vmin=np.min(self.heightmap), vmax=np.max(self.heightmap))
+        plt.show()
 
     def normalize(self, max_height):
         normalized = self.heightmap / max_height
