@@ -45,8 +45,22 @@ def exp_reward(x, max_penalty, min, max):
     new_i = rescale(x, min, max, [min_exp, max_exp])
     return max_penalty * a * math.exp(b * new_i) + c
 
-class Push:
+class Primitive:
+    def __init__(self, theta, heightmap, mask, pixels_to_m=1):
+        self.theta = theta
+        self.target_object = TargetObjectConvexHull(cv_tools.Feature(heightmap).mask_in(mask).array()).translate_wrt_centroid().image2world(pixels_to_m)
+
+    def _draw(self):
+        fig, ax = self.target_object.draw()
+
+    def plot(self):
+        fig, ax = self._draw()
+        plt.show()
+
+class Push(Primitive):
     def __init__(self, theta, push_distance, heightmap, mask, push_distance_limits, observation_boundaries, pixels_to_m=1):
+        theta_ = min_max_scale(theta, range=[-1, 1], target_range=[-math.pi, math.pi])
+        super().__init__(theta=theta_, heightmap=heightmap, mask=mask, pixels_to_m=pixels_to_m)
         self.theta = min_max_scale(theta, range=[-1, 1], target_range=[-math.pi, math.pi])
         self.push_distance = push_distance
         self.target_object = TargetObjectConvexHull(cv_tools.Feature(heightmap).mask_in(mask).array()).translate_wrt_centroid().image2world(pixels_to_m)
@@ -106,7 +120,8 @@ class Push:
 
 class PushTarget(Push):
     def __init__(self, distance, theta, push_distance, heightmap, mask, distance_limits, push_distance_limits, observation_boundaries, finger_size = 0.02, pixels_to_m=1):
-        super().__init__(theta=theta, push_distance=push_distance, heightmap=heightmap, mask=mask,
+        theta_ = min_max_scale(theta, range=[-1, 1], target_range=[-math.pi, math.pi])
+        super().__init__(theta=theta_, push_distance=push_distance, heightmap=heightmap, mask=mask,
                          push_distance_limits=push_distance_limits, observation_boundaries=observation_boundaries,
                          pixels_to_m=pixels_to_m)
 
@@ -162,38 +177,50 @@ class PushObstacle(Push):
     def get_init_pos(self):
         return np.array([0.0, 0.0, self.z])
 
-class GraspTarget:
-    def __init__(self, theta, target_bounding_box, finger_radius):
-        self.theta = theta
+class GraspTarget(Primitive):
+    def __init__(self, theta, heightmap, mask, finger_size, pixels_to_m):
+        theta_ = min_max_scale(theta, range=[-1, 1], target_range=[0, math.pi])
+        super().__init__(theta=theta_, heightmap=heightmap, mask=mask, pixels_to_m=pixels_to_m)
 
-        # Calculate the minimum initial distance from the target object which is
-        # along its sides, based on theta and its bounding box
-        theta_ = abs(theta)
-        if theta_ > math.pi / 2:
-            theta_ = math.pi - theta_
+        self.grasp_line_segment = self._get_grasp_line_segment(finger_size)
 
-        if theta_ >= math.atan2(target_bounding_box[1], target_bounding_box[0]):
-            minimum_distance = target_bounding_box[1] / math.sin(theta_)
-        else:
-            minimum_distance = target_bounding_box[0] / math.cos(theta_)
-
-        self.distance = minimum_distance + finger_radius + 0.003
-
-        object_height = target_bounding_box[2]
-        if object_height - finger_radius > 0:
-            offset = object_height - finger_radius
+        object_height = self.target_object.get_bounding_box()[2]
+        if object_height - finger_size > 0:
+            offset = object_height - finger_size
         else:
             offset = 0
-        self.z = finger_radius + offset + 0.001
+        self.z = finger_size + offset + 0.001
+
+    def _get_grasp_line_segment(self, finger_size):
+        # Finger 1
+        direction = np.array([math.cos(self.theta), math.sin(self.theta)])
+        line_segment = LineSegment2D(np.zeros(2), 10 * direction)
+        point1 = line_segment.get_first_intersection_point(self.target_object.convex_hull)
+        point1 += (finger_size + 0.008) * direction
+
+        # Finger 2
+        direction = np.array([math.cos(self.theta + math.pi), math.sin(self.theta + math.pi)])
+        line_segment = LineSegment2D(np.zeros(2), 10 * direction)
+        point2 = line_segment.get_first_intersection_point(self.target_object.convex_hull)
+        point2 += (finger_size + 0.008) * direction
+        return LineSegment2D(point1, point2)
 
     def get_init_pos(self):
-        finger_1_init = self.distance * np.array([math.cos(self.theta), math.sin(self.theta)])
-        if self.theta > 0:
-            theta_ = self.theta - math.pi
-        else:
-            theta_ = self.theta + math.pi
-        finger_2_init = self.distance * np.array([math.cos(theta_), math.sin(theta_)])
-        return np.append(finger_1_init, self.z), np.append(finger_2_init, self.z)
+        return np.append(self.grasp_line_segment.p1, self.z)
+
+    def get_final_pos(self):
+        return np.append(self.grasp_line_segment.p2, self.z)
+
+    def _draw(self):
+        fig, ax = self.target_object.draw()
+
+        c = 'red'
+        ax.plot( self.grasp_line_segment.p1[0], self.grasp_line_segment.p1[1], color=c, marker='o')
+        ax.plot( self.grasp_line_segment.p2[0], self.grasp_line_segment.p2[1], color=c, marker='.')
+        ax.plot([self.grasp_line_segment.p1[0], self.grasp_line_segment.p2[0]], [self.grasp_line_segment.p1[1], self.grasp_line_segment.p2[1]], color=c, linestyle='-')
+
+        return fig, ax
+
 
 class GraspObstacle:
     def __init__(self, theta, distance, phi, spread, height, target_bounding_box, finger_radius):
@@ -936,6 +963,61 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return depth_feature
 
+    def get_obs_grasp_target(self):
+        """
+        Read depth and extract height map as observation
+        :return:
+        """
+
+        def get_feature(heightmap, mask, crop_area, max_object_height, angle=0):
+
+            feature = cv_tools.Feature(heightmap)
+            feature = feature.rotate(angle)
+
+            thresholded = np.zeros(feature.array().shape)
+            threshold = self.target_bounding_box_vision[2] - 1.5 * self.finger_height
+            if threshold < 0:
+                threshold = 0
+            thresholded[feature.array() > threshold] = 1
+            feature = cv_tools.Feature(thresholded)
+
+            feature = feature.crop(crop_area[0], crop_area[1])
+            feature = feature.pooling().normalize(max_object_height)
+            return feature
+
+        self.get_heightmap()
+
+        enforce_convex_hull = self.params['target'].get('enforce_convex_hull', 10)
+        target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(enforce_convex_hull).translate_wrt_centroid().image2world(self.pixels_to_m)
+        convex_hull_points = target_object.get_limits(sorted=True, normalized=True, polar=True).flatten()
+        grasping_area = [40, 40]
+
+        # Use rotated features
+        if self.heightmap_rotations > 0:
+            features = []
+            rot_angle = 360 / self.heightmap_rotations
+            for i in range(0, self.heightmap_rotations):
+                depth_feature = get_feature(self.heightmap, self.mask, grasping_area,
+                                            self.max_object_height, rot_angle * i).flatten()
+
+                depth_feature = np.concatenate((depth_feature, convex_hull_points))
+                features.append(depth_feature)
+
+            depth_feature = np.append(features[0], features[1], axis=0)
+            for i in range(2, len(features)):
+                depth_feature = np.append(depth_feature, features[i], axis=0)
+
+        # Use single feature (one rotation)
+        else:
+            # Max area with finger is 30, 30
+            depth_feature = get_feature(self.heightmap, self.mask, grasping_area,
+                                        self.max_object_height, 0).flatten()
+
+            depth_feature = np.concatenate((depth_feature, convex_hull_points))
+
+        return depth_feature
+
+
     def step(self, action):
         action_ = action.copy()
 
@@ -996,7 +1078,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                     push_distance_limits=self.params['push']['distance'],
                                     finger_size=self.finger_length,
                                     pixels_to_m=self.pixels_to_m)
-            push.plot()
 
             # Transform pushing from target frame to world frame
 
@@ -1016,16 +1097,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         elif primitive == 2 or primitive == 3:
             if primitive == 2:
-                theta = rescale(action[1], min=-1, max=1, range=[0, math.pi])
-                grasp = GraspTarget(theta=theta, target_bounding_box = self.target_bounding_box_vision, finger_radius = self.finger_length)
+                grasp = GraspTarget(theta=action[1], heightmap=self.heightmap, mask=self.mask, finger_size=self.finger_length, pixels_to_m=self.pixels_to_m)
+
             if primitive == 3:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
                 phi = rescale(action[2], min=-1, max=1, range=[0, math.pi])  # hardcoded, read it from table limits
                 distance = rescale(action[3], min=-1, max=1, range=self.params['grasp']['workspace'])  # hardcoded, read it from table limits
                 grasp = GraspObstacle(theta=theta, distance=distance, phi=phi, spread=self.grasp_spread, height=self.grasp_height, target_bounding_box = self.target_bounding_box_vision, finger_radius = self.finger_length)
 
-            f1_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[0], 1))[:3]
-            f2_initial_pos_world = np.matmul(target_pose.matrix(), np.append(grasp.get_init_pos()[1], 1))[:3]
+            f1_initial_pos_world = self.target_pos_vision + grasp.get_init_pos()
+            f2_initial_pos_world = self.target_pos_vision + grasp.get_final_pos()
 
             init_z = 2 * self.target_bounding_box[2] + 0.05
             self.sim.data.set_joint_qpos('finger1', [f1_initial_pos_world[0], f1_initial_pos_world[1], init_z, 1, 0, 0, 0])
@@ -1033,17 +1114,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.sim_step()
 
             if self.move_joints_to_target([None, None, grasp.z], [None, None, grasp.z], ext_force_policy='avoid'):
-                if primitive == 2:
-                    self.target_grasped_successfully = True
-                if primitive == 3:
-                    centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
-                    f1f2_dir = (f1_initial_pos_world - f2_initial_pos_world) / np.linalg.norm(f1_initial_pos_world - f2_initial_pos_world)
-                    f1f2_dir_1 = np.append(centroid[:2] + f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
-                    f1f2_dir_2 = np.append(centroid[:2] - f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
-                    if not self.move_joints_to_target(f1f2_dir_1, f1f2_dir_2, ext_force_policy='stop'):
-                        contacts1 = detect_contact(self.sim, 'finger1')
-                        contacts2 = detect_contact(self.sim, 'finger2')
-                        if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
+                centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
+                f1f2_dir = (f1_initial_pos_world - f2_initial_pos_world) / np.linalg.norm(f1_initial_pos_world - f2_initial_pos_world)
+                f1f2_dir_1 = np.append(centroid[:2] + f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
+                f1f2_dir_2 = np.append(centroid[:2] - f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
+                if not self.move_joints_to_target(f1f2_dir_1, f1f2_dir_2, ext_force_policy='stop'):
+                    contacts1 = detect_contact(self.sim, 'finger1')
+                    contacts2 = detect_contact(self.sim, 'finger2')
+                    if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
+                        if primitive == 2:
+                            self.target_grasped_successfully = True
+                        if primitive == 3:
                             self._remove_obstacle_from_table(contacts1[0])
                             self.obstacle_grasped_successfully = True
             else:
@@ -1098,7 +1179,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return -1 + extra_penalty
 
-
     def get_reward_push_obstacle(self, observation, action):
         if self.target_grasped_successfully:
             return 10
@@ -1142,6 +1222,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         #     return -5
         # else:
         #     return -1 + extra_penalty
+
+    def get_reward_grasp_target(self):
+        # Penalize external forces during going downwards
+        if self.push_stopped_ext_forces:
+            return -10
+
+        if self.target_grasped_successfully:
+            return 10
+
+        return 0
 
     def terminal_state(self, observation):
 
