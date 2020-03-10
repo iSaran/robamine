@@ -22,6 +22,7 @@ import matplotlib.patches as patches
 import os
 
 
+from robamine.algo.util import Transition
 
 class InvalidEnvError(Exception):
     pass
@@ -297,4 +298,31 @@ class TargetObjectConvexHull:
         x = limits[:, 0]
         y = limits[:, 1]
         return 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+
+def rotated_to_regular_transitions(transitions, heightmap_rotations=0):
+
+    if heightmap_rotations <= 0:
+        return transitions
+
+    resulted_transitions = []
+    for transition in transitions:
+        state_split = np.split(transition.state, heightmap_rotations)
+        next_state_split = np.split(transition.next_state, heightmap_rotations)
+
+        for j in range(heightmap_rotations):
+
+            # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
+            act = transition.action.copy()
+            act[1] += j * (2 / heightmap_rotations)
+            if act[1] > 1:
+                act[1] = -1 + abs(1 - act[1])
+
+            tran = Transition(state=state_split[j].copy(),
+                              action=act.copy(),
+                              reward=transition.reward,
+                              next_state=next_state_split[j].copy(),
+                              terminal=transition.terminal)
+
+            resulted_transitions.append(tran)
+    return resulted_transitions
 
