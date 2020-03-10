@@ -600,6 +600,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.observation_area = [50, 50]
 
         self.target_object = None
+        self.hardcode_primitive = self.params.get('hardcoded_primitive', None)
 
     def __del__(self):
         if self.viewer is not None:
@@ -828,8 +829,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.heightmap, self.mask
 
     def get_obs(self):
-        return self.get_obs_push_target()
         # return self.get_obs_push_obstacle()
+        if self.hardcode_primitive == 0:
+            return self.get_obs_push_target()
+        elif self.hardcode_primitive == 2:
+            return self.get_obs_grasp_target()
 
     def get_obs_push_target(self):
         """
@@ -1049,7 +1053,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def do_simulation(self, action):
         primitive = int(action[0])
-        primitive = 0
+        if self.hardcode_primitive is not None:
+            primitive = self.hardcode_primitive
         target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
@@ -1153,7 +1158,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation, action):
-        reward = self.get_reward_push_target(observation, action)
+        if self.hardcode_primitive == 0:
+            reward = self.get_reward_push_target(observation, action)
+        elif self.hardcode_primitive == 2:
+            reward = self.get_reward_grasp_target()
         reward = rescale(reward, -10, 10, range=[-1, 1])
         return reward
 
