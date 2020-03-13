@@ -215,20 +215,19 @@ class SplitDDPG(RLAgent):
         for t in transitions:
             self.replay_buffer[i].store(t)
 
-        for _ in range(self.params['update_iter'][i]):
-            self.update_net(i)
-
-    def update_net(self, i):
-        self.info['critic_' + str(i) + '_loss'] = 0
-        self.info['actor_' + str(i) + '_loss'] = 0
-
         if self.replay_buffer[i].size() < 1000:
             return
         else:
             self.preloading_finished = True
 
-        # Sample from replay buffer
-        batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
+        for _ in range(self.params['update_iter'][i]):
+            batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
+            self.update_net(i, batch)
+
+    def update_net(self, i, batch):
+        self.info['critic_' + str(i) + '_loss'] = 0
+        self.info['actor_' + str(i) + '_loss'] = 0
+
         batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
         batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
 
