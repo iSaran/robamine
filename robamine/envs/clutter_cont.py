@@ -35,7 +35,19 @@ from time import sleep
 
 import matplotlib.pyplot as plt
 
-OBSERVATION_DIM = 659
+def get_observation_dim(primitive, rotations):
+    if primitive == 0:
+        obs_dim = 659
+    elif primitive == 1:
+        obs_dim = 405
+    elif primitive == 2:
+        obs_dim = 430
+
+    if rotations > 0:
+        obs_dim *= rotations
+
+    return obs_dim
+
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -220,7 +232,6 @@ class GraspTarget(Primitive):
         ax.plot([self.grasp_line_segment.p1[0], self.grasp_line_segment.p2[0]], [self.grasp_line_segment.p1[1], self.grasp_line_segment.p2[1]], color=c, linestyle='-')
 
         return fig, ax
-
 
 class GraspObstacle:
     def __init__(self, theta, distance, phi, spread, height, target_bounding_box, finger_radius):
@@ -439,12 +450,9 @@ class ClutterContWrapper(gym.Env):
                                        high=np.array([1, 1]),
                                        dtype=np.float32)
 
+        self.hardcoded_primitive = self.params.get('hardcoded_primitive', None)
         self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
-
-        if self.heightmap_rotations > 0:
-            obs_dim = OBSERVATION_DIM * self.heightmap_rotations
-        else:
-            obs_dim = OBSERVATION_DIM
+        obs_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -510,12 +518,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                        high=np.array([1, 1]),
                                        dtype=np.float32)
 
+        self.hardcoded_primitive = self.params.get('hardcoded_primitive', None)
         self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
-
-        if self.heightmap_rotations > 0:
-            obs_dim = OBSERVATION_DIM * self.heightmap_rotations
-        else:
-            obs_dim = OBSERVATION_DIM
+        obs_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
 
         self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
                                             high=np.full((obs_dim,), 0.3),
@@ -600,7 +605,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.observation_area = [50, 50]
 
         self.target_object = None
-        self.hardcode_primitive = self.params.get('hardcoded_primitive', None)
 
     def __del__(self):
         if self.viewer is not None:
@@ -830,9 +834,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_obs(self):
         # return self.get_obs_push_obstacle()
-        if self.hardcode_primitive == 0:
+        if self.hardcoded_primitive == 0:
             return self.get_obs_push_target()
-        elif self.hardcode_primitive == 2:
+        elif self.hardcoded_primitive == 1:
+            return self.get_obs_push_obstacle()
+        elif self.hardcoded_primitive == 2:
             return self.get_obs_grasp_target()
 
     def get_obs_push_target(self):
@@ -960,8 +966,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             depth_feature = get_feature().flatten()
             depth_feature = np.append(depth_feature, convex_hull_area)
-
-            depth_feature = np.append(depth_feature, )
             for d in distances:
                 depth_feature = np.append(depth_feature, d)
 
@@ -1021,7 +1025,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return depth_feature
 
-
     def step(self, action):
         action_ = action.copy()
 
@@ -1053,8 +1056,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def do_simulation(self, action):
         primitive = int(action[0])
-        if self.hardcode_primitive is not None:
-            primitive = self.hardcode_primitive
+        if self.hardcoded_primitive is not None:
+            primitive = self.hardcoded_primitive
         target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
@@ -1158,9 +1161,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation, action):
-        if self.hardcode_primitive == 0:
+        if self.hardcoded_primitive == 0:
             reward = self.get_reward_push_target(observation, action)
-        elif self.hardcode_primitive == 2:
+        elif self.hardcoded_primitive == 1:
+            reward = self.get_reward_push_obstacle(observation, action)
+        elif self.hardcoded_primitive == 2:
             reward = self.get_reward_grasp_target()
         reward = rescale(reward, -10, 10, range=[-1, 1])
         return reward
@@ -1188,9 +1193,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return -1 + extra_penalty
 
     def get_reward_push_obstacle(self, observation, action):
-        if self.target_grasped_successfully:
-            return 10
-
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
             return -10
