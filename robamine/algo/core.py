@@ -673,6 +673,7 @@ class RLWorld(World):
             agent_name = agent['name']
             agent_handle = get_agent_handle(agent_name)
             agent_params = agent['params'] if 'params' in agent else {}
+            agent_params['log_dir'] = self.log_dir
             self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
             self.config['agent'] = agent
         elif isinstance(agent, Agent):
