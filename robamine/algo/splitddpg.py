@@ -14,6 +14,7 @@ import numpy as np
 import pickle
 
 import math
+import os
 
 import logging
 logger = logging.getLogger('robamine.algo.splitdqn')
@@ -150,6 +151,9 @@ class SplitDDPG(RLAgent):
                     self.actor[i].load_state_dict(pretrained_splitddpg['actor'][0])
                     self.target_actor[i].load_state_dict(pretrained_splitddpg['target_actor'][0])
 
+        self.n_preloaded_buffer = self.params['n_preloaded_buffer']
+        self.log_dir = self.params.get('log_dir', '/tmp')
+
     def predict(self, state):
         output = np.zeros(max(self.actions) + 1)
         s = torch.FloatTensor(self._state(state)).to(self.device)
@@ -215,10 +219,11 @@ class SplitDDPG(RLAgent):
         for t in transitions:
             self.replay_buffer[i].store(t)
 
-        if self.replay_buffer[i].size() < 1000:
+        if self.replay_buffer[i].size() < self.n_preloaded_buffer[i]:
             return
         else:
             self.preloading_finished = True
+            self.replay_buffer[i].save(os.path.join(self.log_dir, 'split_ddpg_preloaded_buffer_' + str(i)))
 
         for _ in range(self.params['update_iter'][i]):
             batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
