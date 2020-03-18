@@ -41,7 +41,7 @@ def get_observation_dim(primitive, rotations):
     elif primitive == 1:
         obs_dim = 405
     elif primitive == 2:
-        obs_dim = 430
+        obs_dim = 400
 
     if rotations > 0:
         obs_dim *= rotations
@@ -981,23 +981,25 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             feature = cv_tools.Feature(heightmap)
             feature = feature.rotate(angle)
+            my_mask = cv_tools.Feature(mask).rotate(angle)
 
             thresholded = np.zeros(feature.array().shape)
             threshold = self.target_bounding_box_vision[2] - 1.5 * self.finger_height
             if threshold < 0:
                 threshold = 0
             thresholded[feature.array() > threshold] = 1
+            thresholded[my_mask.array() > 0] = -1
             feature = cv_tools.Feature(thresholded)
 
             feature = feature.crop(crop_area[0], crop_area[1])
-            feature = feature.pooling().normalize(max_object_height)
+            feature = feature.pooling()
             return feature
 
         self.get_heightmap()
 
-        enforce_convex_hull = self.params['target'].get('enforce_convex_hull', 10)
-        target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(enforce_convex_hull).translate_wrt_centroid().image2world(self.pixels_to_m)
-        convex_hull_points = target_object.get_limits(sorted=True, normalized=True, polar=True).flatten()
+        # enforce_convex_hull = self.params['target'].get('enforce_convex_hull', 10)
+        # target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(enforce_convex_hull).translate_wrt_centroid().image2world(self.pixels_to_m)
+        # convex_hull_points = target_object.get_limits(sorted=True, normalized=True, polar=True).flatten()
         grasping_area = [40, 40]
 
         # Use rotated features
@@ -1008,7 +1010,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 depth_feature = get_feature(self.heightmap, self.mask, grasping_area,
                                             self.max_object_height, rot_angle * i).flatten()
 
-                depth_feature = np.concatenate((depth_feature, convex_hull_points))
+                # depth_feature = np.concatenate((depth_feature, convex_hull_points))
                 features.append(depth_feature)
 
             depth_feature = np.append(features[0], features[1], axis=0)
@@ -1021,7 +1023,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             depth_feature = get_feature(self.heightmap, self.mask, grasping_area,
                                         self.max_object_height, 0).flatten()
 
-            depth_feature = np.concatenate((depth_feature, convex_hull_points))
+            # depth_feature = np.concatenate((depth_feature, convex_hull_points))
+
 
         return depth_feature
 
@@ -1105,7 +1108,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         elif primitive == 2 or primitive == 3:
             if primitive == 2:
-                grasp = GraspTarget(theta=action[1], heightmap=self.heightmap, mask=self.mask, finger_size=self.finger_length, pixels_to_m=self.pixels_to_m)
+                grasp = GraspTarget(theta=action[1],
+                                    heightmap=self.heightmap,
+                                    mask=self.mask,
+                                    finger_size=self.finger_length,
+                                    pixels_to_m=self.pixels_to_m)
 
             if primitive == 3:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
@@ -1350,7 +1357,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return True
 
-    def move_joints_to_target(self, target_position, target_position2, duration=1, duration2=1, ext_force_policy = 'avoid', avoid_threshold=0.1, stop_threshold=1.0):
+    def move_joints_to_target(self, target_position, target_position2, duration=1, duration2=1,
+                              ext_force_policy = 'avoid', avoid_threshold=0.1, stop_threshold=101.0):
         assert ext_force_policy == 'avoid' or ext_force_policy == 'ignore' or ext_force_policy == 'stop'
         init_time = self.time
         desired_quat = Quaternion()
