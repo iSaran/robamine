@@ -60,6 +60,7 @@ env:
     heightmap_rotations: 8
     max_timesteps: 20
     log_dir: /home/espa/robamine_logs/test
+    hardcoded_primitive: 0
 env_eval:
   name: ClutterCont-v0
   params:
