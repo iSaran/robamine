@@ -106,7 +106,7 @@ class SplitDDPG(RLAgent):
 
         # The number of networks is the number of primitive actions. One network
         # per primitive action
-        self.nr_network = len(self.params['actions'])
+        self.nr_network = len(self.action_dim)
 
         self.device = self.params['device']
 
@@ -155,10 +155,10 @@ class SplitDDPG(RLAgent):
 
     def predict(self, state):
         output = np.zeros(max(self.action_dim) + 1)
-        s = torch.FloatTensor(self._state(state)).to(self.device)
         max_q = -1e10
         i = 0
         for i in range(self.nr_network):
+            s = torch.FloatTensor(self._state(state[i])).to(self.device)
             a = self.actor[i](s)
             q = self.critic[i](s, a).cpu().detach().numpy()
             self.info['q_values'][i] = q[0]
@@ -184,7 +184,7 @@ class SplitDDPG(RLAgent):
             action = pred[1:self.action_dim[i] + 1]
         else:
             i = self.rng.randint(0, len(self.action_dim))
-            s = torch.FloatTensor(self._state(state)).to(self.device)
+            s = torch.FloatTensor(self._state(state[i])).to(self.device)
             action = self.actor[i](s).cpu().detach().numpy()
 
         noise = self.exploration_noise[i]()
@@ -278,7 +278,7 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        s = torch.FloatTensor(self._state(state)).to(self.device)
+        s = torch.FloatTensor(self._state(state[i])).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
         q = self.critic[i](s, a).cpu().detach().numpy()
         return q
@@ -333,6 +333,7 @@ class SplitDDPG(RLAgent):
         return state_network
 
     def _state(self, state):
+        assert isinstance(state, np.ndarray)
         heightmap_rotations = self.params.get('heightmap_rotations', 0)
         if heightmap_rotations > 0:
             state_split = np.split(state, heightmap_rotations)
@@ -345,8 +346,8 @@ class SplitDDPG(RLAgent):
         transitions = []
         heightmap_rotations = self.params.get('heightmap_rotations', 0)
         if heightmap_rotations > 0:
-            state_split = np.split(transition.state, heightmap_rotations)
-            next_state_split = np.split(transition.next_state, heightmap_rotations)
+            state_split = np.split(transition.state[int(transition.action[0])], heightmap_rotations)
+            next_state_split = np.split(transition.next_state[int(transition.action[0])], heightmap_rotations)
 
             for j in range(heightmap_rotations):
 

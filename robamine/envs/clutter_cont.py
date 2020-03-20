@@ -56,8 +56,8 @@ def get_observation_dim(primitive, rotations):
         obs_dim = obs_dim_all
 
     if rotations > 0:
-        for dim in obs_dim:
-            dim *= rotations
+        for i in range(len(obs_dim)):
+            obs_dim[i] *= rotations
 
     return obs_dim
 
@@ -529,7 +529,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                        dtype=np.float32)
 
 
-        self.hardcoded_primitive = self.params.get('hardcoded_primitive', None)
+        self.hardcoded_primitive = self.params.get('hardcoded_primitive', -1)
         self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
         self.action_dim = get_action_dim(self.hardcoded_primitive)
         self.state_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
@@ -613,6 +613,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.observation_area = [50, 50]
 
         self.target_object = None
+
+        self.target_distances_from_limits = None
 
     def __del__(self):
         if self.viewer is not None:
@@ -838,6 +840,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # cv_tools.plot_2d_img(self.mask, 'depth')
         # ToDo: How to normalize depth??
 
+
+        self.target_distances_from_limits = [self.surface_size[0] - self.target_pos_vision[0], \
+                                             self.surface_size[0] + self.target_pos_vision[0], \
+                                             self.surface_size[1] - self.target_pos_vision[1], \
+                                             self.surface_size[1] + self.target_pos_vision[1]]
+        self.target_distances_from_limits = [x / 0.5 for x in self.target_distances_from_limits]
+
         return self.heightmap, self.mask
 
     def get_obs(self):
@@ -848,6 +857,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return self.get_obs_push_obstacle()
         elif self.hardcoded_primitive == 2:
             return self.get_obs_grasp_target()
+        elif self.hardcoded_primitive == -1:
+            return self.get_obs_all()
+        else:
+            raise Exception('Hardcoded primitive is not valid.')
+
+    def get_obs_all(self):
+        obs = []
+        obs.append(self.get_obs_push_target()[0])
+        obs.append(self.get_obs_push_obstacle()[0])
+        obs.append(self.get_obs_grasp_target()[0])
+        return obs
 
     def get_obs_push_target(self):
         """
@@ -874,11 +894,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return feature
 
         # Add the distance of the object from the edge
-        distances = [self.surface_size[0] - self.target_pos_vision[0], \
-                     self.surface_size[0] + self.target_pos_vision[0], \
-                     self.surface_size[1] - self.target_pos_vision[1], \
-                     self.surface_size[1] + self.target_pos_vision[1]]
-        distances = [x / 0.5 for x in distances]
 
         self.get_heightmap()
 
@@ -895,7 +910,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                             self.max_object_height, rot_angle * i).flatten()
 
                 # depth_feature = np.concatenate((depth_feature, convex_hull_points))
-                for d in distances:
+                for d in self.target_distances_from_limits:
                     depth_feature = np.append(depth_feature, d)
 
                 features.append(depth_feature)
@@ -910,10 +925,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                         self.max_object_height, 0).flatten()
 
             # depth_feature = np.concatenate((depth_feature, convex_hull_points))
-            for d in distances:
+            for d in self.target_distances_from_limits:
                 depth_feature = np.append(depth_feature, d)
 
-        return depth_feature
+        return [depth_feature]
 
     def get_obs_push_obstacle(self):
         """
@@ -934,13 +949,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                              .pooling()\
                              .normalize(self.max_object_height)
             return feature
-
-        # Add the distance of the object from the edge
-        distances = [self.surface_size[0] - self.target_pos_vision[0], \
-                     self.surface_size[0] + self.target_pos_vision[0], \
-                     self.surface_size[1] - self.target_pos_vision[1], \
-                     self.surface_size[1] + self.target_pos_vision[1]]
-        distances = [x / 0.5 for x in distances]
 
         self.get_heightmap()
 
@@ -963,7 +971,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 depth_feature = get_feature(rot_angle * i).flatten()
                 depth_feature = np.append(depth_feature, convex_hull_area)
 
-                for d in distances:
+                for d in self.target_distances_from_limits:
                     depth_feature = np.append(depth_feature, d)
 
                 features.append(depth_feature)
@@ -976,10 +984,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             depth_feature = get_feature().flatten()
             depth_feature = np.append(depth_feature, convex_hull_area)
-            for d in distances:
+            for d in self.target_distances_from_limits:
                 depth_feature = np.append(depth_feature, d)
 
-        return depth_feature
+        return [depth_feature]
 
     def get_obs_grasp_target(self):
         """
@@ -1036,7 +1044,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             # depth_feature = np.concatenate((depth_feature, convex_hull_points))
 
 
-        return depth_feature
+        return [depth_feature]
 
     def step(self, action):
         action_ = action.copy()
@@ -1069,7 +1077,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def do_simulation(self, action):
         primitive = int(action[0])
-        if self.hardcoded_primitive is not None:
+        if self.hardcoded_primitive != -1:
             primitive = self.hardcoded_primitive
         target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
@@ -1184,15 +1192,36 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             reward = self.get_reward_push_obstacle(observation, action)
         elif self.hardcoded_primitive == 2:
             reward = self.get_reward_grasp_target()
+        elif self.hardcoded_primitive == -1:
+            reward = self.get_reward_all(observation, action)
         reward = rescale(reward, -10, 10, range=[-1, 1])
         return reward
+
+    def get_reward_all(self, observation, action):
+        # Penalize external forces during going downwards
+        if self.push_stopped_ext_forces:
+            return -10
+
+        if self.target_grasped_successfully:
+            return 10
+
+        if min(self.target_distances_from_limits) < 0:
+            return -10
+
+        extra_penalty = 0
+        if int(action[0]) == 0:
+            extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
+
+        extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
+
+        return -1 + extra_penalty
 
     def get_reward_push_target(self, observation, action):
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
             return -10
 
-        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
+        if min(self.target_distances_from_limits) < 0:
             return -10
 
         points_around = cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
@@ -1214,7 +1243,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.push_stopped_ext_forces:
             return -10
 
-        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
+        if min(self.target_distances_from_limits) < 0:
             return -10
 
         points_prev = cv_tools.Feature(self.heightmap_prev).mask_out(self.mask_prev)\
@@ -1283,7 +1312,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # If the object has fallen from the table
-        if min([observation[-6], observation[-5], observation[-4], observation[-3]]) < 0:
+        if min(self.target_distances_from_limits) < 0:
             return True
 
         if cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
