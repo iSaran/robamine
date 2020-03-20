@@ -35,16 +35,29 @@ from time import sleep
 
 import matplotlib.pyplot as plt
 
+
+def get_action_dim(primitive):
+    action_dim_all = [3, 1, 1]
+
+    if primitive >= 0:
+        action_dim = [action_dim_all[primitive]]
+    else:
+        action_dim = action_dim_all
+
+    return action_dim
+
+
 def get_observation_dim(primitive, rotations):
-    if primitive == 0:
-        obs_dim = 629
-    elif primitive == 1:
-        obs_dim = 405
-    elif primitive == 2:
-        obs_dim = 400
+    obs_dim_all = [629, 405, 400]
+
+    if primitive >= 0:
+        obs_dim = [obs_dim_all[primitive]]
+    else:
+        obs_dim = obs_dim_all
 
     if rotations > 0:
-        obs_dim *= rotations
+        for dim in obs_dim:
+            dim *= rotations
 
     return obs_dim
 
@@ -452,11 +465,8 @@ class ClutterContWrapper(gym.Env):
 
         self.hardcoded_primitive = self.params.get('hardcoded_primitive', None)
         self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
-        obs_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
-
-        self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
-                                            high=np.full((obs_dim,), 0.3),
-                                            dtype=np.float32)
+        self.state_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
+        self.action_dim = get_action_dim(self.hardcoded_primitive)
 
     def reset(self, seed=None):
         if self.env is not None:
@@ -518,13 +528,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                        high=np.array([1, 1]),
                                        dtype=np.float32)
 
+
         self.hardcoded_primitive = self.params.get('hardcoded_primitive', None)
         self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
-        obs_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
-
-        self.observation_space = spaces.Box(low=np.full((obs_dim,), 0),
-                                            high=np.full((obs_dim,), 0.3),
-                                            dtype=np.float32)
+        self.action_dim = get_action_dim(self.hardcoded_primitive)
+        self.state_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
 
         finger_mass = get_body_mass(self.sim.model, 'finger1')
         self.pd = PDController.from_mass(mass = finger_mass)

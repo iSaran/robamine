@@ -652,11 +652,8 @@ class RLWorld(World):
             raise err
 
         # State dimensions
-        self.state_dim = int(self.env.observation_space.shape[0])
-        if isinstance(self.env.action_space, gym.spaces.discrete.Discrete):
-            self.action_dim = self.env.action_space.n
-        else:
-            self.action_dim = int(self.env.action_space.shape[0])
+        self.state_dim = self.env.state_dim
+        self.action_dim = self.env.action_dim
         self.env_name = self.env.spec.id
 
         # Agent setup
@@ -666,7 +663,7 @@ class RLWorld(World):
             if (agent_name == 'Dummy'):
                 self.agent = agent_handle(self.env.action_space, self.state_dim, self.action_dim)
             else:
-                self.agent = agent_handle(self.state_dim, self.action_dim)
+                self.agent = agent_handle(state_dim=self.state_dim, action_dim=self.action_dim)
             self.config['agent'] = {}
             self.config['agent']['name'] = agent
         elif isinstance(agent, dict):
@@ -674,7 +671,7 @@ class RLWorld(World):
             agent_handle = get_agent_handle(agent_name)
             agent_params = agent['params'] if 'params' in agent else {}
             agent_params['log_dir'] = self.log_dir
-            self.agent = agent_handle(self.state_dim, self.action_dim, agent_params)
+            self.agent = agent_handle(state_dim=self.state_dim, action_dim=self.action_dim, params=agent_params)
             self.config['agent'] = agent
         elif isinstance(agent, Agent):
             self.agent = agent
@@ -730,11 +727,11 @@ class RLWorld(World):
             logger.warn('Gym environment has a %s observation space. I will wrap it with a gym.wrappers.FlattenDictWrapper.', type(env.observation_space))
             env = gym.wrappers.FlattenDictWrapper(env, ['observation', 'desired_goal'])
 
-        state_dim = int(env.observation_space.shape[0])
+        state_dim = env.state_dim
         if isinstance(env.action_space, gym.spaces.discrete.Discrete):
             action_dim = env.action_space.n
         else:
-            action_dim = int(env.action_space.shape[0])
+            action_dim = env.action_dim
 
         # Create the world
         self = cls(config['agent'], env, config['world']['params'], config['world']['name'])

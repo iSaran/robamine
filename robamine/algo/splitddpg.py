@@ -107,7 +107,6 @@ class SplitDDPG(RLAgent):
         # The number of networks is the number of primitive actions. One network
         # per primitive action
         self.nr_network = len(self.params['actions'])
-        self.actions = self.params['actions']
 
         self.device = self.params['device']
 
@@ -115,10 +114,10 @@ class SplitDDPG(RLAgent):
         self.actor, self.target_actor, self.critic, self.target_critic = nn.ModuleList(), nn.ModuleList(), \
                                                                          nn.ModuleList(), nn.ModuleList()
         for i in range(self.nr_network):
-            self.actor.append(Actor(self._state_dim(state_dim), self.actions[i], self.params['actor']['hidden_units'][i]))
-            self.target_actor.append(Actor(self._state_dim(state_dim), self.actions[i], self.params['actor']['hidden_units'][i]))
-            self.critic.append(Critic(self._state_dim(state_dim), self.actions[i], self.params['critic']['hidden_units'][i]))
-            self.target_critic.append(Critic(self._state_dim(state_dim), self.actions[i], self.params['critic']['hidden_units'][i]))
+            self.actor.append(Actor(self._state_dim(self.state_dim[i]), self.action_dim[i], self.params['actor']['hidden_units'][i]))
+            self.target_actor.append(Actor(self._state_dim(self.state_dim[i]), self.action_dim[i], self.params['actor']['hidden_units'][i]))
+            self.critic.append(Critic(self._state_dim(self.state_dim[i]), self.action_dim[i], self.params['critic']['hidden_units'][i]))
+            self.target_critic.append(Critic(self._state_dim(self.state_dim[i]), self.action_dim[i], self.params['critic']['hidden_units'][i]))
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         self.info['q_values'] = []
@@ -131,11 +130,11 @@ class SplitDDPG(RLAgent):
             self.info['q_values'].append(0.0)
 
         self.exploration_noise = []
-        for i in range(len(self.actions)):
+        for i in range(len(self.action_dim)):
             if self.params['noise']['name'] == 'OU':
-                self.exploration_noise.append(OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.actions[i]), sigma=self.params['noise']['sigma']))
+                self.exploration_noise.append(OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim[i]), sigma=self.params['noise']['sigma']))
             elif self.params['noise']['name'] == 'Normal':
-                self.exploration_noise.append(NormalNoise(mu=np.zeros(self.actions[i]), sigma=self.params['noise']['sigma']))
+                self.exploration_noise.append(NormalNoise(mu=np.zeros(self.action_dim[i]), sigma=self.params['noise']['sigma']))
             else:
                 raise ValueError(self.name + ': Exploration noise should be OU or Normal.')
         self.learn_step_counter = 0
@@ -155,7 +154,7 @@ class SplitDDPG(RLAgent):
         self.log_dir = self.params.get('log_dir', '/tmp')
 
     def predict(self, state):
-        output = np.zeros(max(self.actions) + 1)
+        output = np.zeros(max(self.action_dim) + 1)
         s = torch.FloatTensor(self._state(state)).to(self.device)
         max_q = -1e10
         i = 0
@@ -169,7 +168,7 @@ class SplitDDPG(RLAgent):
                 max_primitive = i
 
         output[0] = max_primitive
-        output[1:(self.actions[max_primitive] + 1)] = max_a
+        output[1:(self.action_dim[max_primitive] + 1)] = max_a
         return output
 
     def explore(self, state):
@@ -182,9 +181,9 @@ class SplitDDPG(RLAgent):
         if (self.rng.uniform(0, 1) >= epsilon) and self.preloading_finished:
             pred = self.predict(state)
             i = int(pred[0])
-            action = pred[1:self.actions[i] + 1]
+            action = pred[1:self.action_dim[i] + 1]
         else:
-            i = self.rng.randint(0, len(self.actions))
+            i = self.rng.randint(0, len(self.action_dim))
             s = torch.FloatTensor(self._state(state)).to(self.device)
             action = self.actor[i](s).cpu().detach().numpy()
 
@@ -192,23 +191,23 @@ class SplitDDPG(RLAgent):
         action += noise
         action[action > 1] = 1
         action[action < -1] = -1
-        output = np.zeros(max(self.actions) + 1)
+        output = np.zeros(max(self.action_dim) + 1)
         output[0] = i
-        output[1:(self.actions[i] + 1)] = action
+        output[1:(self.action_dim[i] + 1)] = action
         return output
 
     def get_low_level_action(self, high_level_action):
         # Process a single high level action
         if len(high_level_action.shape) == 1:
             i = int(high_level_action[0])
-            return i, high_level_action[1:(self.actions[i] + 1)]
+            return i, high_level_action[1:(self.action_dim[i] + 1)]
 
         # Process a batch of high levels actions of the same primitive
         elif len(high_level_action.shape) == 2:
             indeces = high_level_action[:, 0].astype('int32')
             assert np.all(indeces == indeces[0])
             i = indeces[0]
-            return i, high_level_action[:, 1:(self.actions[i] + 1)]
+            return i, high_level_action[:, 1:(self.action_dim[i] + 1)]
 
         else:
             raise ValueError(self.name + ': Dimension of a high level action should be 1 or 2.')

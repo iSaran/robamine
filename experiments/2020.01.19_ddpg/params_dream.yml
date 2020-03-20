@@ -1,7 +1,6 @@
 agent:
   name: SplitDDPG
   params:
-    actions: [3]
     batch_size: [64, 64]
     device: cpu
     gamma: 0.99
@@ -32,6 +31,9 @@ agent:
 env:
   name: ClutterContWrapper-v0
   params:
+    hardcoded_primitive: 0
+    heightmap_rotations: 8
+    max_timesteps: 20
     all_equal_height_prob: 0.0
     finger_size:
     - 0.005
@@ -57,8 +59,6 @@ env:
       height: [0.01, 0.01]
       workspace: [0.0, 0.1]
     feature_normalization_per: 'session'  # available: 'session', 'episode'
-    heightmap_rotations: 8
-    max_timesteps: 20
     log_dir: /home/espa/robamine_logs/test
 env_eval:
   name: ClutterCont-v0
