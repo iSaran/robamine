@@ -885,7 +885,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             for i in range(0, self.heightmap_rotations):
                 depth_feature = get_feature(self.heightmap, self.mask, self.observation_area,
                                             self.max_object_height, rot_angle * i).flatten()
-
                 # depth_feature = np.concatenate((depth_feature, convex_hull_points))
                 for d in distances:
                     depth_feature = np.append(depth_feature, d)

@@ -2,7 +2,7 @@ agent:
   name: SplitDDPG
   params:
     actions: [3]
-    batch_size: [64, 64]
+    batch_size: [128, 128]
     device: cpu
     gamma: 0.99
     load_buffers: ''
@@ -23,7 +23,7 @@ agent:
       start: 0.9
       end: 0.05
       decay: 10000
-    heightmap_rotations: 8
+    heightmap_rotations: 16
     # load_actors:  # Uncomment to use pretrained actors. Comment-out for initialize actors from scratch it if want to initialize actors from scratch
     #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
     #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
@@ -38,7 +38,7 @@ env:
     - 0.005
     nr_of_obstacles:
     - 1
-    - 8
+    - 5
     render: false
     target:
       min_bounding_box: [.01, .01, .005]
@@ -57,47 +57,17 @@ env:
       height: [0.01, 0.01]
       workspace: [0.0, 0.1]
     feature_normalization_per: 'session'  # available: 'session', 'episode'
-    heightmap_rotations: 8
+    heightmap_rotations: 16
     max_timesteps: 20
     log_dir: /home/espa/robamine_logs/test
     hardcoded_primitive: 0
-env_eval:
-  name: ClutterCont-v0
-  params:
-    all_equal_height_prob: 0.0
-    finger_size:
-    - 0.005
-    - 0.005
-    nr_of_obstacles:
-    - 6
-    - 8
-    render: false
-    target:
-      min_bounding_box: [.01, .01, .005]
-      max_bounding_box: [.03, .03, .010]
-      probability_box: 1.0
-      enforce_convex_hull: 15
-    obstacle:
-      min_bounding_box: [.01, .01, .005]
-      max_bounding_box: [.03, .03, .020]
-      probability_box: 1.0
-    push:
-      distance: [0.02, 0.10]
-      target_init_distance: [0.0, 0.1]
-    grasp:
-      spread: [0.05, 0.05]
-      height: [0.01, 0.01]
-      workspace: [0.0, 0.1]
-    feature_normalization_per: 'session'  # available: 'session', 'episode'
-    heightmap_rotations: 8
-    max_timesteps: 5
 world:
   comments: ''
   friendly_name: ''
   logging_dir: /home/espa/robamine_logs
   name: TrainEval
   params:
-    episodes: 5000
+    episodes: 10000
     eval_episodes: 10
     eval_every: 20
     eval_render: false

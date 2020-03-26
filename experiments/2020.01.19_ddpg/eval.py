@@ -97,7 +97,7 @@ def process_eval_episodes(dir, smoothing = 0.98):
     plt.show()
 
 if __name__ == '__main__':
-    dir = '/home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410'
-    process_eval_episodes(dir)
+    dir = '/home/espa/robamine_logs/robamine_logs_2020.03.19.21.26.59.780471'
     # process_eval_episodes(dir)
-    # eval_with_render(dir)
+    # process_eval_episodes(dir)
+    eval_with_render(dir)
