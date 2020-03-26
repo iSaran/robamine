@@ -614,6 +614,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.target_object = None
 
+        self.target_distances_from_limits_vision = None
         self.target_distances_from_limits = None
 
     def __del__(self):
@@ -752,7 +753,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             if steps > wait_steps:
                 raise InvalidEnvError('Objects still moving after waiting for ' + str(wait_steps) + ' steps.')
 
-
     def seed(self, seed=None):
         super().seed(seed)
         self.xml_generator.seed(seed)
@@ -841,15 +841,25 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # ToDo: How to normalize depth??
 
 
-        self.target_distances_from_limits = [self.surface_size[0] - self.target_pos_vision[0], \
-                                             self.surface_size[0] + self.target_pos_vision[0], \
-                                             self.surface_size[1] - self.target_pos_vision[1], \
-                                             self.surface_size[1] + self.target_pos_vision[1]]
-        self.target_distances_from_limits = [x / 0.5 for x in self.target_distances_from_limits]
+        self.target_distances_from_limits_vision = [self.surface_size[0] - self.target_pos_vision[0], \
+                                                    self.surface_size[0] + self.target_pos_vision[0], \
+                                                    self.surface_size[1] - self.target_pos_vision[1], \
+                                                    self.surface_size[1] + self.target_pos_vision[1]]
+        self.target_distances_from_limits_vision = [x / 0.5 for x in self.target_distances_from_limits_vision]
 
         return self.heightmap, self.mask
 
     def get_obs(self):
+
+        if min(self.target_distances_from_limits) < 0:
+            if self.hardcoded_primitive < 0:
+                obs = []
+                for dim in self.state_dim:
+                    obs.append(np.zeros(dim))
+                return obs
+            else:
+                return [np.zeros(self.state_dim[self.hardcoded_primitive])]
+
         # return self.get_obs_push_obstacle()
         if self.hardcoded_primitive == 0:
             return self.get_obs_push_target()
@@ -910,7 +920,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                             self.max_object_height, rot_angle * i).flatten()
 
                 # depth_feature = np.concatenate((depth_feature, convex_hull_points))
-                for d in self.target_distances_from_limits:
+                for d in self.target_distances_from_limits_vision:
                     depth_feature = np.append(depth_feature, d)
 
                 features.append(depth_feature)
@@ -925,7 +935,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                         self.max_object_height, 0).flatten()
 
             # depth_feature = np.concatenate((depth_feature, convex_hull_points))
-            for d in self.target_distances_from_limits:
+            for d in self.target_distances_from_limits_vision:
                 depth_feature = np.append(depth_feature, d)
 
         return [depth_feature]
@@ -971,7 +981,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 depth_feature = get_feature(rot_angle * i).flatten()
                 depth_feature = np.append(depth_feature, convex_hull_area)
 
-                for d in self.target_distances_from_limits:
+                for d in self.target_distances_from_limits_vision:
                     depth_feature = np.append(depth_feature, d)
 
                 features.append(depth_feature)
@@ -984,7 +994,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             depth_feature = get_feature().flatten()
             depth_feature = np.append(depth_feature, convex_hull_area)
-            for d in self.target_distances_from_limits:
+            for d in self.target_distances_from_limits_vision:
                 depth_feature = np.append(depth_feature, d)
 
         return [depth_feature]
@@ -1544,6 +1554,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         temp = self.sim.data.get_joint_qpos('target')
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
+
+        self.target_distances_from_limits = [self.surface_size[0] - self.target_pos[0], \
+                                             self.surface_size[0] + self.target_pos[0], \
+                                             self.surface_size[1] - self.target_pos[1], \
+                                             self.surface_size[1] + self.target_pos[1]]
+        self.target_distances_from_limits = [x / 0.5 for x in self.target_distances_from_limits]
 
 
     def check_target_occlusion(self, number_of_obstacles):
