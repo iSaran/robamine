@@ -182,13 +182,11 @@ class SplitDDPG(RLAgent):
             pred = self.predict(state)
             i = int(pred[0])
             action = pred[1:self.action_dim[i] + 1]
+            action += self.exploration_noise[i]()
         else:
             i = self.rng.randint(0, len(self.action_dim))
-            s = torch.FloatTensor(self._state(state[i])).to(self.device)
-            action = self.actor[i](s).cpu().detach().numpy()
+            action = self.rng.uniform(-1, 1, self.action_dim[i])
 
-        noise = self.exploration_noise[i]()
-        action += noise
         action[action > 1] = 1
         action[action < -1] = -1
         output = np.zeros(max(self.action_dim) + 1)
