@@ -173,8 +173,8 @@ class SplitDDPG(RLAgent):
 
     def explore(self, state):
         # Calculate epsilon for epsilon-greedy
-        start = self.params['epsilon']['end']
-        end = self.params['epsilon']['start']
+        start = self.params['epsilon']['start']
+        end = self.params['epsilon']['end']
         decay = self.params['epsilon']['decay']
         epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
 
