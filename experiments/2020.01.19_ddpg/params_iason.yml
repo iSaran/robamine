@@ -8,7 +8,7 @@ agent:
     load_nets: ''
     replay_buffer_size: 1000000
     tau: 0.001
-    update_iter: [1, 1]
+    update_iter: [10, 1, 1]
     actor:
       hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
@@ -21,8 +21,8 @@ agent:
     epsilon:
       start: 0.9
       end: 0.05
-      decay: 10000
-    heightmap_rotations: 0
+      decay: 5000
+    heightmap_rotations: 8
     n_preloaded_buffer: [1000, 1000]
     # load_actors:  # Uncomment to use pretrained actors. Comment-out for initialize actors from scratch it if want to initialize actors from scratch
     #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
@@ -32,7 +32,7 @@ env:
   name: ClutterContWrapper-v0
   params:
     hardcoded_primitive: 0
-    heightmap_rotations: 0
+    heightmap_rotations: 8
     max_timesteps: 5
     all_equal_height_prob: 0.0
     finger_size:
@@ -92,10 +92,10 @@ env_eval:
 world:
   comments: ''
   friendly_name: ''
-  logging_dir: /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg
+  logging_dir: /home/iason/robamine_logs/2020.01.16.split_ddpg
   name: TrainEval
   params:
-    episodes: 5000
+    episodes: 10000
     eval_episodes: 10
     eval_every: 20
     eval_render: false
