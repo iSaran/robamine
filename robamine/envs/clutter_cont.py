@@ -468,6 +468,9 @@ class ClutterContWrapper(gym.Env):
         self.state_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
         self.action_dim = get_action_dim(self.hardcoded_primitive)
 
+        self.results = {}
+        self.results['collisions'] = 0
+
     def reset(self, seed=None):
         if self.env is not None:
             del self.env
@@ -486,6 +489,7 @@ class ClutterContWrapper(gym.Env):
     def step(self, action):
         try:
             result = self.env.step(action)
+            self.results['collisions'] += int(result[3]['collision'])
         except InvalidEnvError as e:
             print("WARN: {0}. Invalid environment during step. A new environment will be spawn.".format(e))
             self.reset()
@@ -1073,6 +1077,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
 
+        collision = self.push_stopped_ext_forces
         done = False
         if self.terminal_state(obs):
             done = True
@@ -1083,7 +1088,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.heightmap_prev = self.heightmap.copy()
 
-        return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
+        return obs, reward, done, {'experience_time': experience_time,
+                                   'success': self.success,
+                                   'extra_data': extra_data,
+                                   'collision': collision}
 
     def do_simulation(self, action):
         primitive = int(action[0])

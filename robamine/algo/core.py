@@ -692,6 +692,8 @@ class RLWorld(World):
         # Setup the internal config dictionary
         self.config['results']['n_episodes'] = 0
         self.config['results']['n_timesteps'] = 0
+        self.config['results']['agent'] = self.agent.results.copy()
+        self.config['results']['env'] = self.env.results.copy()
 
         logger.info('Initialized world with the %s in the %s environment', self.agent_name, self.env.spec.id)
 
@@ -843,6 +845,8 @@ class RLWorld(World):
 
         self.config['results']['n_' + self.iteration_name] = n_iterations
         self.config['results']['n_timesteps'] += n_timesteps
+        self.config['results']['agent'] = self.agent.results.copy()
+        self.config['results']['env'] = self.env.results.copy()
         prog = self.config['results']['n_' + self.iteration_name] / self.iterations
         super(RLWorld, self).update_results(progress=prog, thread_safe=False, write_yaml=False)
 

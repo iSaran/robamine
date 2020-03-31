@@ -153,6 +153,15 @@ class SplitDDPG(RLAgent):
         self.n_preloaded_buffer = self.params['n_preloaded_buffer']
         self.log_dir = self.params.get('log_dir', '/tmp')
 
+
+        self.results = {
+            'epsilon': 0.0,
+            'network_iterations': 0,
+            'replay_buffer_size': []
+        }
+        for i in range(self.nr_network):
+            self.results['replay_buffer_size'].append(0)
+
     def predict(self, state):
         output = np.zeros(max(self.action_dim) + 1)
         max_q = -1e10
@@ -177,6 +186,7 @@ class SplitDDPG(RLAgent):
         end = self.params['epsilon']['end']
         decay = self.params['epsilon']['decay']
         epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
+        self.results['epsilon'] = epsilon
 
         if (self.rng.uniform(0, 1) >= epsilon) and self.preloading_finished:
             pred = self.predict(state)
@@ -216,6 +226,8 @@ class SplitDDPG(RLAgent):
         for t in transitions:
             self.replay_buffer[i].store(t)
 
+        self.results['replay_buffer_size'][i] = self.replay_buffer[i].size()
+
         if self.replay_buffer[i].size() < self.n_preloaded_buffer[i]:
             return
         else:
@@ -225,6 +237,8 @@ class SplitDDPG(RLAgent):
         for _ in range(self.params['update_iter'][i]):
             batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
             self.update_net(i, batch)
+            self.results['network_iterations'] += 1
+
 
     def update_net(self, i, batch):
         self.info['critic_' + str(i) + '_loss'] = 0
