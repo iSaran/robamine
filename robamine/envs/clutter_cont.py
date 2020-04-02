@@ -1569,6 +1569,21 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                              self.surface_size[1] + self.target_pos[1]]
         self.target_distances_from_limits = [x / 0.5 for x in self.target_distances_from_limits]
 
+        # Check if any object jumped
+        names = ['target']
+        for i in range(1, self.xml_generator.n_obstacles + 1):
+            names.append("object" + str(i))
+        for i in range(self.sim.data.ncon):
+            contact = self.sim.data.contact[i]
+            if self.sim.model.geom_id2name(contact.geom1) == 'table' and self.sim.model.geom_id2name(
+                    contact.geom2) in names:
+                threshold = 0.01
+                if abs(contact.dist) > threshold:
+                    raise InvalidEnvError(
+                        'Contact dist of ' + self.sim.model.geom_id2name(contact.geom2) + ' with table: ' + str(
+                            contact.dist) + ' > ' + str(threshold) + '. Probably jumped. Timestep: ' + str(
+                            self.sim.data.time))
+
 
     def check_target_occlusion(self, number_of_obstacles):
         """
