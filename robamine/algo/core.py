@@ -774,7 +774,7 @@ class RLWorld(World):
         # Update tensorboard stats
         self.stats.update(i, episode.stats)
         self.episode_stats.append(episode.stats)
-        self.episode_list_data.append(episode.data)
+        # self.episode_list_data.append(episode.data)
 
         # Save agent model
         self.save()
