@@ -621,6 +621,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_distances_from_limits_vision = None
         self.target_distances_from_limits = None
 
+        self.convex_mask = None
+
     def __del__(self):
         if self.viewer is not None:
             glfw.make_context_current(self.viewer.window)
@@ -834,6 +836,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask.astype(np.int8)).array(), log_dir=self.log_dir)
         self.target_bounding_box_vision = self.target_object.get_bounding_box(self.pixels_to_m)
 
+        # Create a convex mask
+        mask_points = np.argwhere(self.mask > 0)
+        self.convex_mask = np.zeros(self.mask.shape, dtype=np.uint8)
+        cv2.fillPoly(self.convex_mask, pts=[self.target_object.get_limits().astype(np.int32)], color=(255, 255, 255))
+
         if self.singulation_area[0] > self.max_singulation_area[0]:
             self.singulation_area[0] = self.max_singulation_area[0]
 
@@ -920,7 +927,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             features = []
             rot_angle = 360 / self.heightmap_rotations
             for i in range(0, self.heightmap_rotations):
-                depth_feature = get_feature(self.heightmap, self.mask, self.observation_area,
+                depth_feature = get_feature(self.heightmap, self.convex_mask, self.observation_area,
                                             self.max_object_height, rot_angle * i).flatten()
 
                 # depth_feature = np.concatenate((depth_feature, convex_hull_points))
@@ -935,7 +942,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Use single feature (one rotation)
         else:
-            depth_feature = get_feature(self.heightmap, self.mask, self.observation_area,
+            depth_feature = get_feature(self.heightmap, self.convex_mask, self.observation_area,
                                         self.max_object_height, 0).flatten()
 
             # depth_feature = np.concatenate((depth_feature, convex_hull_points))
