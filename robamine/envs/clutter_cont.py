@@ -145,8 +145,7 @@ class Push(Primitive):
 
 class PushTarget(Push):
     def __init__(self, distance, theta, push_distance, heightmap, mask, distance_limits, push_distance_limits, observation_boundaries, finger_size = 0.02, pixels_to_m=1):
-        theta_ = min_max_scale(theta, range=[-1, 1], target_range=[-math.pi, math.pi])
-        super().__init__(theta=theta_, push_distance=push_distance, heightmap=heightmap, mask=mask,
+        super().__init__(theta=theta, push_distance=push_distance, heightmap=heightmap, mask=mask,
                          push_distance_limits=push_distance_limits, observation_boundaries=observation_boundaries,
                          pixels_to_m=pixels_to_m)
 
