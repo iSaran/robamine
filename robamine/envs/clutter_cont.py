@@ -313,22 +313,22 @@ class ClutterXMLGenerator(XMLGenerator):
         # Auxiliary variables
         self.surface_size = np.zeros(2)
 
-    def get_object(self, name, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.4, 0.6, 1.0], size=[0.01, 0.01, 0.01]):
+    def get_object(self, name, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.4, 0.6, 1.0], size=[0.01, 0.01, 0.01], mass=None):
         body = self.get_body(name=name, pos=pos, quat=quat)
         joint = self.get_joint(name=name, type='free')
-        geom = self.get_geom(name=name, type=type, size=size, rgba=rgba)
+        geom = self.get_geom(name=name, type=type, size=size, rgba=rgba, mass=mass)
         body.append(joint)
         body.append(geom)
         return body
 
     def get_target(self, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[1.0, 0.0, 0.0, 1.0], size=[0.01, 0.01, 0.01]):
-        return self.get_object(name='target', type=type, pos=pos, quat=quat, rgba=rgba, size=size)
+        return self.get_object(name='target', type=type, pos=pos, quat=quat, rgba=rgba, size=size, mass=0.05)
 
     def get_obstacle(self, index, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.0, 1.0, 1.0], size=[0.01, 0.01, 0.01]):
-        return self.get_object(name='object' + str(index), type=type, pos=pos, quat=quat, rgba=rgba, size=size)
+        return self.get_object(name='object' + str(index), type=type, pos=pos, quat=quat, rgba=rgba, size=size, mass=0.05)
 
     def get_finger(self, index, type='sphere', rgba=[0.3, 0.3, 0.3, 1.0], size=[0.005, 0.005, 0.005]):
-        return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size)
+        return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size, mass=0.1)
 
     def get_table(self, rgba=[0.2, 0.2, 0.2, 1.0], size=[0.25, 0.25, 0.01]):
         body = self.get_body(name='table', pos=[0.0, 0.0, -size[2]])
@@ -721,7 +721,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.get_obs()
 
     def _hug_target(self, number_of_obstacles):
-        gain = 150
+        gain = 40
 
         names = ["target"]
         for i in range(1, number_of_obstacles + 1):
@@ -1382,11 +1382,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             self.sim_step()
 
-            if stop_external_forces and (self.finger_external_force_norm > 0.1):
+            if stop_external_forces and (self.finger_external_force_norm > 0.01):
                 break
 
         # If external force is present move away
-        if stop_external_forces and (self.finger_external_force_norm > 0.1):
+        if stop_external_forces and (self.finger_external_force_norm > 0.01):
             self.sim_step()
             # Create a new trajectory for moving the finger slightly in the
             # opposite direction to reduce the external forces

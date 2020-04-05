@@ -9,10 +9,6 @@
   <size njmax="2000" nconmax="1000" />
   <default>
     <geom
-      solimp=".9 .9 .01"
-      solref="0.015 1"
-      friction="0.2 0.005 0.0001"
-      mass="1"
       rgba="0.0 0.4 0.6 1" />
   </default>
   <visual>
@@ -23,11 +19,11 @@
     <quality
       shadowsize="8192"/>
     <scale
-      forcewidth="0.03"
-      contactwidth="0.05"
-      contactheight="0.03"
-      framelength="1.5"
-      framewidth="0.025"/>
+      forcewidth="0.01"
+      contactwidth="0.02"
+      contactheight="0.015"
+      framelength="0.3"
+      framewidth="0.015"/>
   </visual>
   <worldbody>
     <camera name="xtion"
