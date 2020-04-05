@@ -688,7 +688,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             for _ in range(600):
                 self.sim_step()
 
-            self._hug_target(number_of_obstacles)
+            hug_probability = self.params.get('hug_probability', 1)
+            if self.rng.uniform(0, 1) < hug_probability:
+                self._hug_target(number_of_obstacles)
 
             self.check_target_occlusion(number_of_obstacles)
 

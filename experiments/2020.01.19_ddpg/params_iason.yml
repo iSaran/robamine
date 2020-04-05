@@ -59,6 +59,7 @@ env:
       height: [0.01, 0.01]
       workspace: [0.0, 0.1]
     feature_normalization_per: 'session'  # available: 'session', 'episode'
+    hug_probability: 0.5
 env_eval:
   name: ClutterCont-v0
   params:

@@ -60,6 +60,7 @@ env:
       workspace: [0.0, 0.1]
     feature_normalization_per: 'session'  # available: 'session', 'episode'
     log_dir: /home/espa/robamine_logs/test
+    hug_probability: 0.5
 env_eval:
   name: ClutterCont-v0
   params:
