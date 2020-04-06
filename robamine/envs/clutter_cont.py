@@ -9,6 +9,7 @@ import numpy as np
 from numpy.linalg import norm
 
 from mujoco_py import load_model_from_xml, MjSim, MjViewer, MjRenderContext
+from mujoco_py.builder import MujocoException
 from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
@@ -1515,7 +1516,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_quat_prev = self.finger_quat
         self.finger2_quat_prev = self.finger2_quat
 
-        self.sim.step()
+        try:
+            self.sim.step()
+        except MujocoException as e:
+            raise InvalidEnvError(e)
 
         self.time = self.sim.data.time
 
