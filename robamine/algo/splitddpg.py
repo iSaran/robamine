@@ -93,6 +93,14 @@ class Actor(nn.Module):
         out = torch.tanh(self.out(x))
         return out
 
+    def forward2(self, x):
+        for i in range(len(self.hidden_layers)):
+            x = self.hidden_layers[i](x)
+            x = nn.functional.relu(x)
+
+        out = self.out(x)
+        return out
+
 
 class SplitDDPG(RLAgent):
     '''
@@ -271,7 +279,13 @@ class SplitDDPG(RLAgent):
         self.critic_optimizer[i].step()
 
         # Compute actor loss
-        actor_loss = -self.critic[i](state, self.actor[i](state)).mean()
+        state_abs_mean = self.actor[i].forward2(state).abs().mean()
+        preactivation = (state_abs_mean - torch.tensor(1.0)).pow(2)
+        if state_abs_mean < torch.tensor(1.0):
+            preactivation = torch.tensor(0.0)
+        weight = .05
+        actor_loss = -self.critic[i](state, self.actor[i](state)).mean() + weight * preactivation
+
         self.info['actor_' + str(i) + '_loss'] = actor_loss.cpu().detach().numpy().copy()
 
         # Optimize actor
