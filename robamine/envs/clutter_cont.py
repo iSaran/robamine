@@ -49,7 +49,7 @@ def get_action_dim(primitive):
 
 
 def get_observation_dim(primitive, rotations):
-    obs_dim_all = [629, 405, 400]
+    obs_dim_all = [630, 405, 400]
 
     if primitive >= 0:
         obs_dim = [obs_dim_all[primitive]]
@@ -921,7 +921,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.get_heightmap()
 
         # enforce_convex_hull = self.params['target'].get('enforce_convex_hull', 10)
-        # target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(enforce_convex_hull).translate_wrt_centroid().image2world(self.pixels_to_m)
+        target_observation_ratio = TargetObjectConvexHull(cv_tools.Feature(self.convex_mask).array()).area() / (self.observation_area[0] * self.observation_area[1])
         # convex_hull_points = target_object.get_limits(sorted=True, normalized=True, polar=True).flatten()
 
         # Use rotated features
@@ -931,6 +931,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             for i in range(0, self.heightmap_rotations):
                 depth_feature = get_feature(self.heightmap, self.convex_mask, self.observation_area,
                                             self.max_object_height, rot_angle * i).flatten()
+
+                depth_feature = np.append(depth_feature, target_observation_ratio)
 
                 # depth_feature = np.concatenate((depth_feature, convex_hull_points))
                 for d in self.target_distances_from_limits_vision:
@@ -946,6 +948,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             depth_feature = get_feature(self.heightmap, self.convex_mask, self.observation_area,
                                         self.max_object_height, 0).flatten()
+
+            depth_feature = np.append(depth_feature, target_observation_ratio)
 
             # depth_feature = np.concatenate((depth_feature, convex_hull_points))
             for d in self.target_distances_from_limits_vision:
