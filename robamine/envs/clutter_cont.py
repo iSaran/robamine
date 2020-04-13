@@ -963,40 +963,40 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         :return:
         """
 
-        def get_feature(angle=0):
-            feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)
+        def get_feature(heightmap, mask, crop_area, angle=0):
+            feature = cv_tools.Feature(heightmap)
             feature = feature.rotate(angle)
+            my_mask = cv_tools.Feature(mask).rotate(angle)
 
             thresholded = np.zeros(feature.array().shape)
             threshold = 2 * self.target_bounding_box_vision[2] + 1.5 * self.finger_height
             thresholded[feature.array() > threshold] = 1
+            thresholded[my_mask.array() > 0] = -1
 
             feature = cv_tools.Feature(thresholded)
-            feature = feature.crop(self.max_singulation_area[0], self.max_singulation_area[1])\
-                             .pooling()\
-                             .normalize(self.max_object_height)
+            feature = feature.crop(crop_area[0], crop_area[1])\
+                             .pooling()
+
+            # Test the following:
+            # arr = feature.array()
+            # arr[arr > 0.1] = 1
+            # arr[arr < -0.1] = -1
+            # return cv_tools.Feature(arr)
+
             return feature
 
         self.get_heightmap()
 
         # Calculate normalized convex hall area
-        target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).translate_wrt_centroid().image2world(self.pixels_to_m)
-        convex_hull_area = target_object.area()
-        max_convex_hull_area = self.params['target']['max_bounding_box'][0] * self.params['target']['max_bounding_box'][0]
-        convex_hull_area = min_max_scale(convex_hull_area, range=[0, max_convex_hull_area], target_range=[0, 1])
-        if convex_hull_area > 1:
-            convex_hull_area = 1
-        if convex_hull_area < 0:
-            convex_hull_area = 0
+        target_observation_ratio = TargetObjectConvexHull(cv_tools.Feature(self.convex_mask).array()).area() / (self.max_singulation_area[0] * self.max_singulation_area[1])
 
         # Use rotated features
         if self.heightmap_rotations > 0:
             features = []
             rot_angle = 360 / self.heightmap_rotations
             for i in range(0, self.heightmap_rotations):
-
-                depth_feature = get_feature(rot_angle * i).flatten()
-                depth_feature = np.append(depth_feature, convex_hull_area)
+                depth_feature = get_feature(self.heightmap, self.convex_mask, self.max_singulation_area, rot_angle * i).flatten()
+                depth_feature = np.append(depth_feature, target_observation_ratio)
 
                 for d in self.target_distances_from_limits_vision:
                     depth_feature = np.append(depth_feature, d)
@@ -1009,8 +1009,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Use single feature (one rotation)
         else:
-            depth_feature = get_feature().flatten()
-            depth_feature = np.append(depth_feature, convex_hull_area)
+            depth_feature = get_feature(self.heightmap_rotations, self.convex_mask, self.max_singulation_area).flatten()
+            depth_feature = np.append(depth_feature, target_observation_ratio)
             for d in self.target_distances_from_limits_vision:
                 depth_feature = np.append(depth_feature, d)
 
