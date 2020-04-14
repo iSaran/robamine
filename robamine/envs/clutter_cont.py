@@ -1055,7 +1055,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             for i in range(0, self.heightmap_rotations):
                 depth_feature = get_feature(self.heightmap, self.mask, grasping_area,
                                             self.max_object_height, rot_angle * i).flatten()
-                depth_feature = np.concatenate((depth_feature, target_observation_ratio))
+                depth_feature = np.append(depth_feature, target_observation_ratio)
                 features.append(depth_feature)
 
             depth_feature = np.append(features[0], features[1], axis=0)
@@ -1067,7 +1067,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             # Max area with finger is 30, 30
             depth_feature = get_feature(self.heightmap, self.mask, grasping_area,
                                         self.max_object_height, 0).flatten()
-            depth_feature = np.concatenate((depth_feature, target_observation_ratio))
+            depth_feature = np.append(depth_feature, target_observation_ratio)
 
         return [depth_feature]
 
