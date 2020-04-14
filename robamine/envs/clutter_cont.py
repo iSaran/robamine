@@ -1426,7 +1426,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return True
 
     def move_joints_to_target(self, target_position, target_position2, duration=1, duration2=1,
-                              ext_force_policy = 'avoid', avoid_threshold=0.1, stop_threshold=101.0):
+                              ext_force_policy = 'avoid', avoid_threshold=0.1, stop_threshold=5):
         assert ext_force_policy == 'avoid' or ext_force_policy == 'ignore' or ext_force_policy == 'stop'
         init_time = self.time
         desired_quat = Quaternion()
