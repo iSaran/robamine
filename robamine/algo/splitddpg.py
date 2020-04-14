@@ -287,7 +287,7 @@ class SplitDDPG(RLAgent):
         preactivation = (state_abs_mean - torch.tensor(1.0)).pow(2)
         if state_abs_mean < torch.tensor(1.0):
             preactivation = torch.tensor(0.0)
-        weight = .05
+        weight = self.params['actor'].get('preactivation_weight', .05)
         actor_loss = -self.critic[i](state, self.actor[i](state)).mean() + weight * preactivation
 
         self.info['actor_' + str(i) + '_loss'] = actor_loss.cpu().detach().numpy().copy()
