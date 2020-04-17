@@ -326,3 +326,176 @@ def rotated_to_regular_transitions(transitions, heightmap_rotations=0):
             resulted_transitions.append(tran)
     return resulted_transitions
 
+
+def get_action_dim(primitive):
+    action_dim_all = [3, 1, 1]
+
+    if primitive >= 0:
+        action_dim = [action_dim_all[primitive]]
+    else:
+        action_dim = action_dim_all
+
+    return action_dim
+
+
+def get_observation_dim(primitive):
+    obs_dim_all = [PushTargetFeature.dim(), PushObstacleFeature.dim(), GraspTargetFeature.dim()]
+
+    if primitive >= 0:
+        obs_dim = [obs_dim_all[primitive]]
+    else:
+        obs_dim = obs_dim_all
+
+    return obs_dim
+
+
+# Features for different primitives
+# ---------------------------------
+
+class PrimitiveFeature:
+    def __init__(self, heightmap, mask, angle=0, name=None):
+        self.name = name
+        self.heightmap = Feature(heightmap).rotate(angle)
+        self.mask = Feature(mask).rotate(angle)
+        self.visual_feature = self.get_visual_feature()
+
+    def get_visual_feature(self):
+        raise NotImplementedError()
+
+    def array(self):
+        return self.visual_feature.flatten()
+
+    def plot(self):
+        self.visual_feature.plot()
+
+
+class PushTargetFeature(PrimitiveFeature):
+    def __init__(self, obs_dict, angle=0):
+        self.target_bounding_box_z = obs_dict['target_bounding_box'][2]
+        self.finger_height = obs_dict['finger_height']
+        self.crop_area = obs_dict['observation_area'].astype(np.int32)
+        self.target_distances_from_limits = obs_dict['target_distances_from_limits']
+        heightmap = obs_dict['heightmap_mask'][0, :]
+        mask = obs_dict['heightmap_mask'][1, :]
+        super().__init__(heightmap, mask, angle, name='PushTarget')
+
+    def get_visual_feature(self):
+        thresholded = np.zeros(self.heightmap.array().shape)
+        threshold = self.target_bounding_box_z - 1.5 * self.finger_height
+        if threshold < 0:
+            threshold = 0
+        thresholded[self.heightmap.array() > threshold] = 1
+        thresholded[self.mask.array() > 0] = -1
+        feature = Feature(thresholded)
+        feature = feature.crop(self.crop_area[0], self.crop_area[1])
+        feature = feature.pooling()
+        return feature
+
+    def array(self):
+        array = super().array()
+        target_observation_ratio = TargetObjectConvexHull(self.mask.array()).area() / (
+                    self.crop_area[0] * self.crop_area[1])
+        array = np.append(array, target_observation_ratio)
+        for d in self.target_distances_from_limits:
+            array = np.append(array, d)
+        assert array.shape[0] == self.dim()
+        return array
+
+    @staticmethod
+    def dim():
+        return 630
+
+
+class PushObstacleFeature(PrimitiveFeature):
+    def __init__(self, obs_dict, angle=0):
+        self.target_bounding_box_z = obs_dict['target_bounding_box'][2]
+        self.finger_height = obs_dict['finger_height']
+        self.crop_area = obs_dict['max_singulation_area'].astype(np.int32)
+        self.target_distances_from_limits = obs_dict['target_distances_from_limits']
+        heightmap = obs_dict['heightmap_mask'][0, :]
+        mask = obs_dict['heightmap_mask'][1, :]
+        super().__init__(heightmap, mask, angle, name='PushTarget')
+
+    def get_visual_feature(self):
+        thresholded = np.zeros(self.heightmap.array().shape)
+        threshold = 2 * self.target_bounding_box_z + 1.5 * self.finger_height
+        thresholded[self.heightmap.array() > threshold] = 1
+        thresholded[self.mask.array() > 0] = -1
+        feature = Feature(thresholded)
+        feature = feature.crop(self.crop_area[0], self.crop_area[1])
+        feature = feature.pooling()
+        return feature
+
+    def array(self):
+        array = super().array()
+        target_observation_ratio = TargetObjectConvexHull(self.mask.array()).area() / (self.crop_area[0] * self.crop_area[1])
+        array = np.append(array, target_observation_ratio)
+        assert array.shape[0] == self.dim()
+        return array
+
+    @staticmethod
+    def dim():
+        return 401
+
+
+class GraspTargetFeature(PrimitiveFeature):
+    def __init__(self, obs_dict, angle=0):
+        self.target_bounding_box_z = obs_dict['target_bounding_box'][2]
+        self.finger_height = obs_dict['finger_height']
+        self.crop_area = [40, 40]
+        self.target_distances_from_limits = obs_dict['target_distances_from_limits']
+        heightmap = obs_dict['heightmap_mask'][0, :]
+        mask = obs_dict['heightmap_mask'][1, :]
+        super().__init__(heightmap, mask, angle, name='GraspTarget')
+
+    def get_visual_feature(self):
+        thresholded = np.zeros(self.heightmap.array().shape)
+        threshold = self.target_bounding_box_z - 1.5 * self.finger_height
+        if threshold < 0:
+            threshold = 0
+        thresholded[self.heightmap.array() > threshold] = 1
+        thresholded[self.mask.array() > 0] = -1
+        feature = Feature(thresholded)
+        feature = feature.crop(self.crop_area[0], self.crop_area[1])
+        feature = feature.pooling()
+        return feature
+
+    def array(self):
+        array = super().array()
+        target_observation_ratio = TargetObjectConvexHull(self.mask.array()).area() / (self.crop_area[0] * self.crop_area[1])
+        array = np.append(array, target_observation_ratio)
+        assert array.shape[0] == self.dim()
+        return array
+
+    @staticmethod
+    def dim():
+        return 401
+
+
+def obs_dict2feature(primitive, obs_dict, angle=0):
+    if primitive == 0:
+        return PushTargetFeature(obs_dict=obs_dict, angle=angle)
+    if primitive == 1:
+        return PushObstacleFeature(obs_dict=obs_dict, angle=angle)
+    if primitive == 2:
+        return GraspTargetFeature(obs_dict=obs_dict, angle=angle)
+
+    raise ValueError('Primitive should be 0, 1 or 2.')
+
+def get_rotated_transition(transition, angle=0):
+    state = obs_dict2feature(transition.action[0], transition.state, angle).array()
+    if transition.next_state is not None:
+        next_state = obs_dict2feature(transition.action[0], transition.next_state, angle).array().copy()
+    else:
+        next_state = None
+
+    action = transition.action.copy()
+    action[1] += min_max_scale(angle, range=[-180, 180], target_range=[-1, 1])
+    if action[1] > 1:
+        action[1] = -1 + abs(1 - action[1])
+
+    return Transition(state=state.copy(),
+                      action=action.copy(),
+                      reward=transition.reward,
+                      next_state=next_state,
+                      terminal=transition.terminal)

@@ -24,7 +24,7 @@ import math
 from math import sqrt
 import glfw
 
-from robamine.envs.clutter_utils import TargetObjectConvexHull, InvalidEnvError
+from robamine.envs.clutter_utils import TargetObjectConvexHull, InvalidEnvError, get_action_dim, get_observation_dim
 
 import xml.etree.ElementTree as ET
 from robamine.utils.orientation import rot2quat
@@ -35,32 +35,6 @@ from mujoco_py.cymj import MjRenderContext
 from time import sleep
 
 import matplotlib.pyplot as plt
-
-
-def get_action_dim(primitive):
-    action_dim_all = [3, 1, 1]
-
-    if primitive >= 0:
-        action_dim = [action_dim_all[primitive]]
-    else:
-        action_dim = action_dim_all
-
-    return action_dim
-
-
-def get_observation_dim(primitive, rotations):
-    obs_dim_all = [630, 405, 401]
-
-    if primitive >= 0:
-        obs_dim = [obs_dim_all[primitive]]
-    else:
-        obs_dim = obs_dim_all
-
-    if rotations > 0:
-        for i in range(len(obs_dim)):
-            obs_dim[i] *= rotations
-
-    return obs_dim
 
 
 def exp_reward(x, max_penalty, min, max):
@@ -464,8 +438,7 @@ class ClutterContWrapper(gym.Env):
                                        dtype=np.float32)
 
         self.hardcoded_primitive = self.params.get('hardcoded_primitive', None)
-        self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
-        self.state_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
+        self.state_dim = get_observation_dim(self.hardcoded_primitive)
         self.action_dim = get_action_dim(self.hardcoded_primitive)
 
         self.results = {}
@@ -534,9 +507,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
 
         self.hardcoded_primitive = self.params.get('hardcoded_primitive', -1)
-        self.heightmap_rotations = self.params.get('heightmap_rotations', 0)
         self.action_dim = get_action_dim(self.hardcoded_primitive)
-        self.state_dim = get_observation_dim(self.hardcoded_primitive, self.heightmap_rotations)
+        self.state_dim = get_observation_dim(self.hardcoded_primitive)
 
         finger_mass = get_body_mass(self.sim.model, 'finger1')
         self.pd = PDController.from_mass(mass = finger_mass)
@@ -862,214 +834,39 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return self.heightmap, self.mask
 
+    @staticmethod
+    def get_obs_shapes():
+        return {'target_bounding_box': (3,),
+                'finger_height': (1,),
+                'observation_area': (2,),
+                'max_singulation_area': (2,),
+                'target_distances_from_limits': (4,),
+                'heightmap_mask': (2, 386, 386)}
+
     def get_obs(self):
+        shapes = self.get_obs_shapes()
+
+        obs_dict = {
+            'target_bounding_box': self.target_bounding_box_vision,
+            'finger_height': np.array([self.finger_height]),
+            'observation_area': np.array(self.observation_area),
+            'max_singulation_area': np.array(self.max_singulation_area),
+            'target_distances_from_limits': np.array(self.target_distances_from_limits_vision),
+            'heightmap_mask': np.zeros(shapes['heightmap_mask'])
+        }
 
         if min(self.target_distances_from_limits) < 0:
-            if self.hardcoded_primitive < 0:
-                obs = []
-                for dim in self.state_dim:
-                    obs.append(np.zeros(dim))
-                return obs
-            else:
-                return [np.zeros(self.state_dim[self.hardcoded_primitive])]
-
-        # return self.get_obs_push_obstacle()
-        if self.hardcoded_primitive == 0:
-            return self.get_obs_push_target()
-        elif self.hardcoded_primitive == 1:
-            return self.get_obs_push_obstacle()
-        elif self.hardcoded_primitive == 2:
-            return self.get_obs_grasp_target()
-        elif self.hardcoded_primitive == -1:
-            return self.get_obs_all()
-        else:
-            raise Exception('Hardcoded primitive is not valid.')
-
-    def get_obs_all(self):
-        obs = []
-        obs.append(self.get_obs_push_target()[0])
-        obs.append(self.get_obs_push_obstacle()[0])
-        obs.append(self.get_obs_grasp_target()[0])
-        return obs
-
-    def get_obs_push_target(self):
-        """
-        Read depth and extract height map as observation
-        :return:
-        """
-
-        def get_feature(heightmap, mask, crop_area, max_object_height, angle=0):
-
-            feature = cv_tools.Feature(heightmap)
-            feature = feature.rotate(angle)
-            my_mask = cv_tools.Feature(mask).rotate(angle)
-
-            thresholded = np.zeros(feature.array().shape)
-            threshold = self.target_bounding_box_vision[2] - 1.5 * self.finger_height
-            if threshold < 0:
-                threshold = 0
-            thresholded[feature.array() > threshold] = 1
-            thresholded[my_mask.array() > 0] = -1
-            feature = cv_tools.Feature(thresholded)
-
-            feature = feature.crop(crop_area[0], crop_area[1])
-            feature = feature.pooling()
-            return feature
-
-        # Add the distance of the object from the edge
+            for key in list(shapes.keys()):
+                assert obs_dict[key].shape == shapes[key]
+            return obs_dict
 
         self.get_heightmap()
+        obs_dict['heightmap_mask'][0, :] = self.heightmap
+        obs_dict['heightmap_mask'][1, :] = self.convex_mask
 
-        # enforce_convex_hull = self.params['target'].get('enforce_convex_hull', 10)
-        target_observation_ratio = TargetObjectConvexHull(cv_tools.Feature(self.convex_mask).array()).area() / (self.observation_area[0] * self.observation_area[1])
-        # convex_hull_points = target_object.get_limits(sorted=True, normalized=True, polar=True).flatten()
-
-        # Use rotated features
-        if self.heightmap_rotations > 0:
-            features = []
-            rot_angle = 360 / self.heightmap_rotations
-            for i in range(0, self.heightmap_rotations):
-                depth_feature = get_feature(self.heightmap, self.convex_mask, self.observation_area,
-                                            self.max_object_height, rot_angle * i).flatten()
-
-                depth_feature = np.append(depth_feature, target_observation_ratio)
-
-                # depth_feature = np.concatenate((depth_feature, convex_hull_points))
-                for d in self.target_distances_from_limits_vision:
-                    depth_feature = np.append(depth_feature, d)
-
-                features.append(depth_feature)
-
-            depth_feature = np.append(features[0], features[1], axis=0)
-            for i in range(2, len(features)):
-                depth_feature = np.append(depth_feature, features[i], axis=0)
-
-        # Use single feature (one rotation)
-        else:
-            depth_feature = get_feature(self.heightmap, self.convex_mask, self.observation_area,
-                                        self.max_object_height, 0).flatten()
-
-            depth_feature = np.append(depth_feature, target_observation_ratio)
-
-            # depth_feature = np.concatenate((depth_feature, convex_hull_points))
-            for d in self.target_distances_from_limits_vision:
-                depth_feature = np.append(depth_feature, d)
-
-        return [depth_feature]
-
-    def get_obs_push_obstacle(self):
-        """
-        Read depth and extract height map as observation
-        :return:
-        """
-
-        def get_feature(heightmap, mask, crop_area, angle=0):
-            feature = cv_tools.Feature(heightmap)
-            feature = feature.rotate(angle)
-            my_mask = cv_tools.Feature(mask).rotate(angle)
-
-            thresholded = np.zeros(feature.array().shape)
-            threshold = 2 * self.target_bounding_box_vision[2] + 1.5 * self.finger_height
-            thresholded[feature.array() > threshold] = 1
-            thresholded[my_mask.array() > 0] = -1
-
-            feature = cv_tools.Feature(thresholded)
-            feature = feature.crop(crop_area[0], crop_area[1])\
-                             .pooling()
-
-            # Test the following:
-            # arr = feature.array()
-            # arr[arr > 0.1] = 1
-            # arr[arr < -0.1] = -1
-            # return cv_tools.Feature(arr)
-
-            return feature
-
-        self.get_heightmap()
-
-        # Calculate normalized convex hall area
-        target_observation_ratio = TargetObjectConvexHull(cv_tools.Feature(self.convex_mask).array()).area() / (self.max_singulation_area[0] * self.max_singulation_area[1])
-
-        # Use rotated features
-        if self.heightmap_rotations > 0:
-            features = []
-            rot_angle = 360 / self.heightmap_rotations
-            for i in range(0, self.heightmap_rotations):
-                depth_feature = get_feature(self.heightmap, self.convex_mask, self.max_singulation_area, rot_angle * i).flatten()
-                depth_feature = np.append(depth_feature, target_observation_ratio)
-
-                for d in self.target_distances_from_limits_vision:
-                    depth_feature = np.append(depth_feature, d)
-
-                features.append(depth_feature)
-
-            depth_feature = np.append(features[0], features[1], axis=0)
-            for i in range(2, len(features)):
-                depth_feature = np.append(depth_feature, features[i], axis=0)
-
-        # Use single feature (one rotation)
-        else:
-            depth_feature = get_feature(self.heightmap, self.convex_mask, self.max_singulation_area).flatten()
-            depth_feature = np.append(depth_feature, target_observation_ratio)
-            for d in self.target_distances_from_limits_vision:
-                depth_feature = np.append(depth_feature, d)
-
-        return [depth_feature]
-
-    def get_obs_grasp_target(self):
-        """
-        Read depth and extract height map as observation
-        :return:
-        """
-
-        def get_feature(heightmap, mask, crop_area, max_object_height, angle=0):
-
-            feature = cv_tools.Feature(heightmap)
-            feature = feature.rotate(angle)
-            my_mask = cv_tools.Feature(mask).rotate(angle)
-
-            thresholded = np.zeros(feature.array().shape)
-            threshold = self.target_bounding_box_vision[2] - 1.5 * self.finger_height
-            if threshold < 0:
-                threshold = 0
-            thresholded[feature.array() > threshold] = 1
-            thresholded[my_mask.array() > 0] = -1
-            feature = cv_tools.Feature(thresholded)
-
-            feature = feature.crop(crop_area[0], crop_area[1])
-            feature = feature.pooling()
-            return feature
-
-        self.get_heightmap()
-
-        # enforce_convex_hull = self.params['target'].get('enforce_convex_hull', 10)
-        # target_object = TargetObjectConvexHull(cv_tools.Feature(self.heightmap).mask_in(self.mask).array()).enforce_number_of_points(enforce_convex_hull).translate_wrt_centroid().image2world(self.pixels_to_m)
-        # convex_hull_points = target_object.get_limits(sorted=True, normalized=True, polar=True).flatten()
-        grasping_area = [40, 40]
-        target_observation_ratio = TargetObjectConvexHull(cv_tools.Feature(self.convex_mask).array()).area() / (grasping_area[0] * grasping_area[1])
-
-        # Use rotated features
-        if self.heightmap_rotations > 0:
-            features = []
-            rot_angle = 360 / self.heightmap_rotations
-            for i in range(0, self.heightmap_rotations):
-                depth_feature = get_feature(self.heightmap, self.mask, grasping_area,
-                                            self.max_object_height, rot_angle * i).flatten()
-                depth_feature = np.append(depth_feature, target_observation_ratio)
-                features.append(depth_feature)
-
-            depth_feature = np.append(features[0], features[1], axis=0)
-            for i in range(2, len(features)):
-                depth_feature = np.append(depth_feature, features[i], axis=0)
-
-        # Use single feature (one rotation)
-        else:
-            # Max area with finger is 30, 30
-            depth_feature = get_feature(self.heightmap, self.mask, grasping_area,
-                                        self.max_object_height, 0).flatten()
-            depth_feature = np.append(depth_feature, target_observation_ratio)
-
-        return [depth_feature]
+        for key in list(shapes.keys()):
+            assert obs_dict[key].shape == shapes[key]
+        return obs_dict
 
     def step(self, action):
         action_ = action.copy()
