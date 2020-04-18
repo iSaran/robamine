@@ -1009,7 +1009,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Use single feature (one rotation)
         else:
-            depth_feature = get_feature(self.heightmap_rotations, self.convex_mask, self.max_singulation_area).flatten()
+            depth_feature = get_feature(self.heightmap, self.convex_mask, self.max_singulation_area).flatten()
             depth_feature = np.append(depth_feature, target_observation_ratio)
             for d in self.target_distances_from_limits_vision:
                 depth_feature = np.append(depth_feature, d)

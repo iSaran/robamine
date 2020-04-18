@@ -394,6 +394,11 @@ class SplitDDPG(RLAgent):
                                   terminal=transition.terminal)
                 transitions.append(tran)
         else:
-            transitions.append(transition)
+            tran = Transition(state=transition.state[int(transition.action[0])],
+                              action=transition.action,
+                              reward=transition.reward,
+                              next_state=transition.next_state[int(transition.action[0])],
+                              terminal=transition.terminal)
+            transitions.append(tran)
 
         return transitions
