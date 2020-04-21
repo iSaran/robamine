@@ -96,14 +96,7 @@ class ReplayBuffer:
         numpy.array
             The terminal batch
         """
-        batch = []
-
-        if self.count < given_batch_size:
-            batch_size = self.count
-        else:
-            batch_size = given_batch_size
-
-        batch = self.random.sample(self.buffer, batch_size)
+        batch = self.sample(given_batch_size)
 
         state_batch = np.array([_.state for _ in batch])
         action_batch = np.array([_.action for _ in batch])
@@ -112,6 +105,14 @@ class ReplayBuffer:
         terminal_batch = np.array([_.terminal for _ in batch])
 
         return Transition(state_batch, action_batch, reward_batch, next_state_batch, terminal_batch)
+
+    def sample(self, elements):
+        if self.count < elements:
+            batch_size = self.count
+        else:
+            batch_size = elements
+
+        return self.random.sample(self.buffer, batch_size)
 
     def clear(self):
         """
