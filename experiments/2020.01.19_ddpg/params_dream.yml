@@ -104,3 +104,4 @@ world:
     eval_render: false
     render: false
     save_every: 200
+    max_disk_size: 20 # GB

@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 import os
 import time
+import socket
 
 _logger = None
 _log_path = None
@@ -89,7 +90,8 @@ def init(directory='/tmp', friendly_name='', console_level=logging.INFO, file_le
     if friendly_name != '':
         log_path = os.path.join(directory, friendly_name)
     else:
-        log_path = os.path.join(directory, 'robamine_logs_' + get_now_timestamp())
+        hostname = socket.gethostname()
+        log_path = os.path.join(directory, 'robamine_logs_' + hostname + '_' + get_now_timestamp())
     os.makedirs(log_path)
     _log_path = log_path
 

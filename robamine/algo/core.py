@@ -442,8 +442,9 @@ class WorldState(Enum):
     FINISHED = 3
 
 class World:
-    def __init__(self, name=None):
+    def __init__(self, name=None, max_disk_size=None):
         self.name = name
+        self.max_disk_size = max_disk_size
 
         self.stop_running = False
         self.results_lock = Lock()
@@ -505,7 +506,17 @@ class World:
         self.config['results']['progress'] = progress
         self.config['results']['time_elapsed'] = transform_sec_to_timestamp(time.time() - self.start_time)
         self.config['results']['estimated_time'] = transform_sec_to_timestamp(((1 - progress) * (time.time() - self.start_time)) / progress)
-        self.config['results']['dir_size'] = get_dir_size(self.log_dir)
+        dir_size = get_dir_size(self.log_dir)
+        self.config['results']['dir_size'] = dir_size
+
+        if self.max_disk_size is not None:
+            if dir_size / 1e9 > 0.8 * self.max_disk_size:
+                logger.warn('Current disk size: ' + str(
+                    dir_size / 1e9) + 'GB. Disk size of the directory is close to the maximum' + str(self.max_disk_size))
+
+            if dir_size / 1e9 > self.max_disk_size:
+                logger.error('Training stopped due to maximum disk size of the world\'s directory')
+                self.stop_running = True
 
         if thread_safe:
             self.results_lock.release()
@@ -630,7 +641,8 @@ class SupervisedTrainWorld(World):
 
 class RLWorld(World):
     def __init__(self, agent, env, params, name=None):
-        super(RLWorld, self).__init__(name)
+        max_disk_size = params.get('max_disk_size', None)
+        super(RLWorld, self).__init__(name, max_disk_size=max_disk_size)
         # Environment setup
         if isinstance(env, gym.Env):
             self.env = env
