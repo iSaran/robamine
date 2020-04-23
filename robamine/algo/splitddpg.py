@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from robamine.algo.core import RLAgent
-from robamine.utils.memory import ReplayBuffer
+from robamine.utils.memory import ReplayBuffer, LargeReplayBuffer
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise, Transition
 
 from robamine.envs.clutter_utils import get_rotated_transition, obs_dict2feature
@@ -118,6 +118,8 @@ class SplitDDPG(RLAgent):
     def __init__(self, state_dim, action_dim, params=default_params):
         super().__init__(state_dim, action_dim, 'SplitDDPG', params)
 
+        self.log_dir = self.params.get('log_dir', '/tmp')
+
         # The number of networks is the number of primitive actions. One network
         # per primitive action
         self.nr_network = len(self.action_dim)
@@ -138,7 +140,8 @@ class SplitDDPG(RLAgent):
         for i in range(self.nr_network):
             self.critic_optimizer.append(optim.Adam(self.critic[i].parameters(), self.params['critic']['learning_rate']))
             self.actor_optimizer.append(optim.Adam(self.actor[i].parameters(), self.params['actor']['learning_rate']))
-            self.replay_buffer.append(ReplayBuffer(self.params['replay_buffer_size']))
+            replay_buffer_file = os.path.join(self.log_dir, 'replay_buffer_' + str(i) + '.hdf5')
+            self.replay_buffer.append(LargeReplayBuffer(self.params['replay_buffer_size'], 386, self.action_dim[i] + 1, replay_buffer_file))
             self.info['critic_' + str(i) + '_loss'] = 0
             self.info['actor_' + str(i) + '_loss'] = 0
             self.info['q_values'].append(0.0)
@@ -165,7 +168,6 @@ class SplitDDPG(RLAgent):
                     self.target_actor[i].load_state_dict(pretrained_splitddpg['target_actor'][0])
 
         self.n_preloaded_buffer = self.params['n_preloaded_buffer']
-        self.log_dir = self.params.get('log_dir', '/tmp')
 
 
         self.results = {
@@ -244,7 +246,7 @@ class SplitDDPG(RLAgent):
             return
         else:
             self.preloading_finished = True
-            self.replay_buffer[i].save(os.path.join(self.log_dir, 'split_ddpg_preloaded_buffer_' + str(i)))
+            # self.replay_buffer[i].save(os.path.join(self.log_dir, 'split_ddpg_preloaded_buffer_' + str(i)))
 
         for _ in range(self.params['update_iter'][i]):
             batch = self.replay_buffer[i].sample(self.params['batch_size'][i])
