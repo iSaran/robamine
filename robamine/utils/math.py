@@ -105,3 +105,65 @@ class Signal:
 
     def array(self):
         return self.signal
+
+
+class LineSegment2D:
+    def __init__(self, p1, p2):
+        self.p1 = p1.copy()
+        self.p2 = p2.copy()
+
+    def get_point(self, lambd):
+        assert lambd >=0 and lambd <=1
+        return (1 - lambd) * self.p1 + lambd * self.p2
+
+    def get_lambda(self, p3):
+        lambd = (p3[0] - self.p1[0]) / (self.p2[0] - self.p1[0])
+        lambd_2 = (p3[1] - self.p1[1]) / (self.p2[1] - self.p1[1])
+        if abs(lambd - lambd_2) > 1e-5:
+            return None
+        return lambd
+
+    def get_intersection_point(self, line_segment, belong_self=True, belong_second=True):
+        '''See wikipedia https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection#Given_two_points_on_each_line'''
+        x1 = self.p1[0]
+        y1 = self.p1[1]
+        x2 = self.p2[0]
+        y2 = self.p2[1]
+
+        x3 = line_segment.p1[0]
+        y3 = line_segment.p1[1]
+        x4 = line_segment.p2[0]
+        y4 = line_segment.p2[1]
+
+        if abs((x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)) < 1e-10:
+            return None
+
+        t =  ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / \
+             ((x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4))
+        u = - ((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / \
+              ((x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4))
+
+        p = np.array([x1 + t * (x2 - x1), y1 + t * (y2 - y1)])
+
+        if belong_self and belong_second:
+            if t >=0 and t <= 1 and u >= 0 and u <= 1:
+                return p
+            else:
+                return None
+        elif (belong_self and t >=0 and t <= 1) or (belong_second and u >= 0 and u <= 1):
+            return p
+        elif not belong_self and not belong_second:
+            return p
+        return None
+
+    def norm(self):
+        return np.linalg.norm(self.p1 - self.p2)
+
+    def __str__(self):
+        return self.p1.__str__() + self.p2.__str__()
+
+    def array(self):
+        result = np.zeros((2, 2))
+        result[0, :] = self.p1
+        result[1, :] = self.p2
+        return result

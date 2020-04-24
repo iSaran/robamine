@@ -684,12 +684,12 @@ class RLWorld(World):
         self.agent_name = self.agent.name
 
         # Check if environment and agent are compatible
-        try:
-            assert self.agent.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
-            assert self.agent.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
-        except AssertionError as err:
-            logger.exception(err)
-            raise err
+        # try:
+        #     assert self.agent.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
+        #     assert self.agent.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
+        # except AssertionError as err:
+        #     logger.exception(err)
+        #     raise err
 
         # Setup the internal config dictionary
         self.config['results']['n_episodes'] = 0
@@ -774,7 +774,7 @@ class RLWorld(World):
         # Update tensorboard stats
         self.stats.update(i, episode.stats)
         self.episode_stats.append(episode.stats)
-        self.episode_list_data.append(episode.data)
+        # self.episode_list_data.append(episode.data)
 
         # Save agent model
         self.save()

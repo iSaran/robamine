@@ -134,8 +134,9 @@ class XMLGenerator:
 
     # General API
     # -----------
-
-    def get_geom(self, name, type='sphere', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], size=[0, 0, 0], rgba=[0.5, 0.5, 0.5, 1]):
+    # def get_geom(self, name, type='sphere', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], size=[0, 0, 0], rgba=[0.5, 0.5, 0.5, 1]):
+    def get_geom(self, name, type='sphere', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], size=[0, 0, 0],
+                 rgba=[0.5, 0.5, 0.5, 1], mass=None):
         element = ET.Element('geom')
         attributes = {'name': name,
                       'type': type,
@@ -143,6 +144,8 @@ class XMLGenerator:
                       'quat': self.list_to_string(quat),
                       'size': self.list_to_string(size),
                       'rgba': self.list_to_string(rgba)}
+        if mass is not None:
+            attributes['mass'] = str(mass)
         element.attrib = attributes.copy()
         return element
 

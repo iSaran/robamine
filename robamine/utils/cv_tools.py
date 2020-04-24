@@ -6,6 +6,7 @@ import math
 from sklearn.decomposition import PCA
 from robamine.utils.orientation import rot_z, rot_x, rot2angleaxis
 from math import pi
+import matplotlib.pyplot as plt
 
 '''
 Computer Vision Utils
@@ -47,6 +48,17 @@ def rgb2bgr(rgb):
     return np.flip(bgr, axis=0)
 
 
+def normalize(img):
+    width, height = img.shape
+    cv_img = np.zeros((width, height), dtype=np.float32)
+    min_value = np.min(img)
+    max_value = np.max(img)
+    for i in range(width):
+        for j in range(height):
+            cv_img[i][j] = 255 * (img[i][j] - min_value) / (max_value - min_value)
+    return cv_img
+
+
 def plot_2d_img(img, name):
     width, height = img.shape
     cv_img = np.zeros((width, height), dtype=np.float32)
@@ -57,6 +69,11 @@ def plot_2d_img(img, name):
             cv_img[i][j] = (img[i][j] - min_value) / (max_value - min_value)
     cv2.imshow(name, cv_img)
     cv2.waitKey()
+
+
+def plt_plot(img):
+    plt.imshow(img, cmap='gray')
+    plt.show()
 
 
 def plot_point_cloud(point_cloud):
@@ -124,69 +141,123 @@ class ColorDetector:
         return [int(centroid[0]), int(centroid[1])]
 
     def get_bounding_box(self, mask, plot=False):
-        """
-        Returns the oriented bounding box of the given mask. Returns the
-        homogeneous transformation SE(2), w.r.t. the image frame along with the
-        size of the bounding box.
-        """
+        np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
+
         ij = np.argwhere(mask > 0)
         xy = np.zeros(ij.shape)
         xy[:, 0] = ij[:, 1]
         xy[:, 1] = ij[:, 0]
 
+        # compute centroid
+        centroid = np.sum(xy, axis=0) / float(xy.shape[0])
+
         pca = PCA(n_components=2)
         transformed = pca.fit_transform(xy)
-        homog = np.eye(4)
+        homog = np.eye(3)
         homog[:2, 0] = pca.components_[0, :]
         homog[:2, 1] = pca.components_[1, :]
-        if np.cross(homog[:3, 0], homog[:3, 1])[2] > 0:
-            temp = homog[:, 0].copy()
-            homog[:, 0] = homog[:, 1]
-            homog[:, 1] = temp
-        homog[2, 2] = -1
+        # homog[0, 2] = centroid[0]
+        # homog[1, 2] = centroid[1]
 
-        xy_transformed = np.transpose(np.matmul(np.transpose(homog[:2, :2]), np.transpose(xy)))
-        max_ = np.array([np.max(xy_transformed[:, 0]), np.max(xy_transformed[:, 1])])
-        min_ = np.array([np.min(xy_transformed[:, 0]), np.min(xy_transformed[:, 1])])
-        centroid = np.array([int((max_[0] + min_[0]) / 2), int((max_[1] + min_[1]) / 2)])
-        bb = np.array([max_[0] - centroid[0], max_[1] - centroid[1]])
-        homog[:2, 3] = np.matmul(homog[:2, :2], centroid)
+        # edges = cv2.Canny(mask, 1, 2)
+        ret, thresh = cv2.threshold(mask, 127, 255, 0)
+        contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        rect = cv2.minAreaRect(contours[0])
+        box = cv2.boxPoints(rect)
+        # print(len(box), len(contours))
+        # print(box)
 
-        # X axis is the longer dimension of the object
-        if bb[0] < bb[1]:
-            homog[:3, :3] = np.matmul(rot_z(pi / 2), homog[:3, :3])
-            temp = bb[0]
-            bb[0] = bb[1]
-            bb[1] = temp
+        centroid = (box[0] + box[2]) / 2
+        homog[0, 2] = centroid[0]
+        homog[1, 2] = centroid[1]
 
         if plot:
-            self.plot_image(mask, homog, bb)
+            self.plot_image(mask.copy(), homog, box)
 
-        return homog, bb
+        return homog, box
 
-    def plot_image(self, fig, matrix, bb):
-        import matplotlib.pyplot as plt
-        import matplotlib.patches as patches
-        from math import acos, pi
+    def plot_image(self, mask, homog, pts):
         _, ax = plt.subplots(1)
-        ax.imshow(fig, cmap='gray', vmin=0, vmax=np.max(fig))
-
-        # Plot image ref frame
-        ax.arrow(0, 0, 25, 0, color='red', linewidth=2)
-        ax.arrow(0, 0, 0, 25, color='green', linewidth=2)
-
-        ax.arrow(matrix[0, 3], matrix[1, 3], int(matrix[0, 0] * 25), int(matrix[1, 0] * 25), color='red', linewidth=2)
-        ax.arrow(matrix[0, 3], matrix[1, 3], int(matrix[0, 1] * 25), int(matrix[1, 1] * 25), color='green', linewidth=2)
-
-        center = np.array([-bb[0], -bb[1], 0, 1])
-        matrix[:3, :3] = np.matmul(matrix[:3, :3], rot_x(pi))
-        center_wrt_image = np.matmul(matrix, center)
-        angle, axis = rot2angleaxis(matrix[:3, :3])
-        if axis is None:
-            axis = np.array([0, 0, -1])
-        rect = patches.Rectangle((center_wrt_image[0], center_wrt_image[1]), 2*bb[0], 2*bb[1], angle=axis[2] * (180/pi)*angle, linewidth=1,edgecolor='r',facecolor='none')
-        ax.add_patch(rect)
+        ax.imshow(mask, cmap='gray', vmin=0, vmax=np.max(mask))
+        ax.arrow(homog[0, 2], homog[1, 2], int(homog[0, 0] * 25), int(homog[1, 0] * 25), color='red', linewidth=2)
+        ax.arrow(homog[0, 2], homog[1, 2], int(homog[0, 1] * 25), int(homog[1, 1] * 25), color='green', linewidth=2)
+        plt.scatter(pts[0][0], pts[0][1], s=8, color='r')
+        plt.scatter(pts[1][0], pts[1][1], s=8, color='g')
+        plt.scatter(pts[2][0], pts[2][1], s=8, color='b')
+        plt.scatter(pts[3][0], pts[3][1], s=8, color='y')
+        # plt.savefig('/home/mkiatos/Desktop/box.png')
+        # plt.close()
         plt.show()
+
+    #
+    # def get_bounding_box(self, mask, plot=False):
+    #     """
+    #     Returns the oriented bounding box of the given mask. Returns the
+    #     homogeneous transformation SE(2), w.r.t. the image frame along with the
+    #     size of the bounding box.
+    #     """
+    #
+    #     ij = np.argwhere(mask > 0)
+    #     xy = np.zeros(ij.shape)
+    #     xy[:, 0] = ij[:, 1]
+    #     xy[:, 1] = ij[:, 0]
+    #
+    #     pca = PCA(n_components=2)
+    #     transformed = pca.fit_transform(xy)
+    #     homog = np.eye(4)
+    #     homog[:2, 0] = pca.components_[0, :]
+    #     homog[:2, 1] = pca.components_[1, :]
+    #
+    #     if np.cross(homog[:3, 0], homog[:3, 1])[2] > 0:
+    #         temp = homog[:, 0].copy()
+    #         homog[:, 0] = homog[:, 1]
+    #         homog[:, 1] = temp
+    #     homog[2, 2] = -1
+    #
+    #     xy_transformed = np.transpose(np.matmul(np.transpose(homog[:2, :2]), np.transpose(xy)))
+    #     max_ = np.array([np.max(xy_transformed[:, 0]), np.max(xy_transformed[:, 1])])
+    #     min_ = np.array([np.min(xy_transformed[:, 0]), np.min(xy_transformed[:, 1])])
+    #     # print(min_, max_)
+    #     centroid = np.array([int((max_[0] + min_[0]) / 2), int((max_[1] + min_[1]) / 2)])
+    #     bb = np.array([max_[0] - centroid[0], max_[1] - centroid[1]])
+    #     homog[:2, 3] = np.matmul(homog[:2, :2], centroid)
+    #
+    #     # X axis is the longer dimension of the object
+    #     if bb[0] < bb[1]:
+    #         homog[:3, :3] = np.matmul(rot_z(pi / 2), homog[:3, :3])
+    #         temp = bb[0]
+    #         bb[0] = bb[1]
+    #         bb[1] = temp
+    #
+    #     plot_2d_img(mask, name='mask')
+    #     if plot:
+    #         self.plot_image(mask, homog, bb)
+    #
+    #     return homog, bb
+
+    # def plot_image(self, fig, matrix, bb):
+    #     import matplotlib.pyplot as plt
+    #     import matplotlib.patches as patches
+    #     from math import acos, pi
+    #     _, ax = plt.subplots(1)
+    #     ax.imshow(fig, cmap='gray', vmin=0, vmax=np.max(fig))
+    #
+    #     # Plot image ref frame
+    #     ax.arrow(0, 0, 25, 0, color='red', linewidth=2)
+    #     ax.arrow(0, 0, 0, 25, color='green', linewidth=2)
+    #
+    #     ax.arrow(matrix[0, 3], matrix[1, 3], int(matrix[0, 0] * 25), int(matrix[1, 0] * 25), color='red', linewidth=2)
+    #     ax.arrow(matrix[0, 3], matrix[1, 3], int(matrix[0, 1] * 25), int(matrix[1, 1] * 25), color='green', linewidth=2)
+    #
+    #     center = np.array([-bb[0], -bb[1], 0, 1])
+    #     matrix[:3, :3] = np.matmul(matrix[:3, :3], rot_x(pi))
+    #     center_wrt_image = np.matmul(matrix, center)
+    #     angle, axis = rot2angleaxis(matrix[:3, :3])
+    #     if axis is None:
+    #         axis = np.array([0, 0, -1])
+    #     rect = patches.Rectangle((center_wrt_image[0], center_wrt_image[1]), 2*bb[0], 2*bb[1], angle=axis[2] * (180/pi)*angle, linewidth=1,edgecolor='r',facecolor='none')
+    #     ax.add_patch(rect)
+    #     plt.show()
 
     def get_height(self, depth, mask):
         """
@@ -294,7 +365,9 @@ class Feature:
         """
         Plot the heightmap
         """
-        plot_2d_img(self.heightmap, name)
+        plt.imshow(self.heightmap, cmap='gray')
+        plt.show()
+        # plot_2d_img(self.heightmap, name)
 
     def normalize(self, max_height):
         normalized = self.heightmap / max_height
@@ -302,6 +375,9 @@ class Feature:
         normalized[normalized < 0] = 0
         return Feature(normalized)
 
+    def resize(self, size):
+        resized = cv2.resize(self.heightmap, size)
+        return Feature(resized)
 
 
 class PointCloud:

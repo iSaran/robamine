@@ -9,6 +9,7 @@ import numpy as np
 from numpy.linalg import norm
 
 from mujoco_py import load_model_from_xml, MjSim, MjViewer, MjRenderContext
+from mujoco_py.builder import MujocoException
 from gym import utils, spaces
 from gym.envs.mujoco import mujoco_env
 import os
@@ -16,8 +17,8 @@ import gym
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names, detect_contact, XMLGenerator
-from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z, Affine3
-from robamine.utils.math import sigmoid, rescale, filter_signal
+from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z, Affine3, quat2euler, euler2quat
+from robamine.utils.math import sigmoid, rescale, filter_signal, LineSegment2D
 import robamine.utils.cv_tools as cv_tools
 import math
 from math import sqrt
@@ -77,25 +78,44 @@ class Push:
                "z: " + str(self.z) + "\n"
 
 class PushTarget:
-    def __init__(self, distance, theta, push_distance, target_bounding_box, finger_size = 0.02):
+    def __init__(self, distance, theta, push_distance, target_bounding_box, target_pos, finger_size = 0.02):
         self.theta = theta
         self.push_distance = push_distance
 
         # Calculate the minimum initial distance from the target object which is
         # along its sides, based on theta and its bounding box
-        theta_ = abs(theta)
-        if theta_ > math.pi / 2:
-            theta_ = math.pi - theta_
+        # theta_ = abs(theta)
+        # if theta_ > math.pi / 2:
+        #     theta_ = math.pi - theta_
+        #
+        # if theta_ >= math.atan2(target_bounding_box[1], target_bounding_box[0]):
+        #     minimum_distance = target_bounding_box[1] / math.sin(theta_)
+        # else:
+        #     minimum_distance = target_bounding_box[0] / math.cos(theta_)
+        #
+        # self.distance = minimum_distance + finger_size + distance + 0.003
+        line_seg = [ LineSegment2D(target_bounding_box[0, :2], target_bounding_box[1, :2]),
+                     LineSegment2D(target_bounding_box[1, :2], target_bounding_box[2, :2]),
+                     LineSegment2D(target_bounding_box[2, :2], target_bounding_box[3, :2]),
+                     LineSegment2D(target_bounding_box[3, :2], target_bounding_box[0, :2]) ]
 
-        if theta_ >= math.atan2(target_bounding_box[1], target_bounding_box[0]):
-            minimum_distance = target_bounding_box[1] / math.sin(theta_)
-        else:
-            minimum_distance = target_bounding_box[0] / math.cos(theta_)
+        push = LineSegment2D(target_pos[:2], target_pos[:2] + 5 * np.array([np.cos(theta), np.sin(theta)]))
+        for line in line_seg:
+            point = push.get_intersection_point(line)
+            if point is not None:
+                break
 
+        if point is None:
+            for line in line_seg:
+                print(line)
+            print(push)
+            raise InvalidEnvError('intersection point is none')
+
+        minimum_distance = np.linalg.norm(point - target_pos[:2])
         self.distance = minimum_distance + finger_size + distance + 0.003
-        self.distance = distance
+        # self.distance = distance
 
-        object_height = target_bounding_box[2]
+        object_height = target_pos[2]
         if object_height - finger_size > 0:
             offset = object_height - finger_size
         else:
@@ -230,24 +250,31 @@ class ClutterXMLGenerator(XMLGenerator):
         # Auxiliary variables
         self.surface_size = np.zeros(2)
 
-    def get_object(self, name, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.4, 0.6, 1.0], size=[0.01, 0.01, 0.01]):
+    # def get_object(self, name, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.4, 0.6, 1.0], size=[0.01, 0.01, 0.01]):
+    def get_object(self, name, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0],
+                   rgba=[0.0, 0.4, 0.6, 1.0], size=[0.01, 0.01, 0.01], mass=None):
         body = self.get_body(name=name, pos=pos, quat=quat)
         joint = self.get_joint(name=name, type='free')
-        geom = self.get_geom(name=name, type=type, size=size, rgba=rgba)
+        # geom = self.get_geom(name=name, type=type, size=size, rgba=rgba)
+        geom = self.get_geom(name=name, type=type, size=size, rgba=rgba, mass=mass)
         body.append(joint)
         body.append(geom)
         return body
 
     def get_target(self, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[1.0, 0.0, 0.0, 1.0], size=[0.01, 0.01, 0.01]):
-        return self.get_object(name='target', type=type, pos=pos, quat=quat, rgba=rgba, size=size)
+        # return self.get_object(name='target', type=type, pos=pos, quat=quat, rgba=rgba, size=size)
+        return self.get_object(name='target', type=type, pos=pos, quat=quat, rgba=rgba, size=size, mass=0.05)
 
     def get_obstacle(self, index, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.0, 1.0, 1.0], size=[0.01, 0.01, 0.01]):
-        return self.get_object(name='object' + str(index), type=type, pos=pos, quat=quat, rgba=rgba, size=size)
+        # return self.get_object(name='object' + str(index), type=type, pos=pos, quat=quat, rgba=rgba, size=size)
+        return self.get_object(name='object' + str(index), type=type, pos=pos, quat=quat, rgba=rgba, size=size,
+                               mass=0.05)
 
     def get_finger(self, index, type='sphere', rgba=[0.3, 0.3, 0.3, 1.0], size=[0.005, 0.005, 0.005]):
-        return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size)
+        # return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size)
+        return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size, mass=0.1)
 
-    def get_table(self, rgba=[0.3, 0.18, 0.03, 1.0], size=[0.25, 0.25, 0.01]):
+    def get_table(self, rgba=[0.2, 0.2, 0.2, 1.0], size=[0.25, 0.25, 0.01]):
         body = self.get_body(name='table', pos=[0.0, 0.0, -size[2]])
         geom = self.get_geom(name='table', type='box', size=size, rgba=rgba)
         body.append(geom)
@@ -275,7 +302,7 @@ class ClutterXMLGenerator(XMLGenerator):
         self.surface_size[0] = self.rng.uniform(surface_length_range[0], surface_length_range[1])
         self.surface_size[1] = self.rng.uniform(surface_width_range[0], surface_width_range[1])
         table = self.get_table(size=[self.surface_size[0], self.surface_size[1], 0.01])
-        self.worldbody.append(table)
+        # self.worldbody.append(table)
 
         # Randomize target object
         # -----------------------
@@ -415,7 +442,7 @@ class ClutterContWrapper(gym.Env):
         except InvalidEnvError as e:
             print("WARN: {0}. Invalid environment during step. A new environment will be spawn.".format(e))
             self.reset()
-            result = self.env.step(action)
+            result = self.step(action)
         return result
 
     def seed(self, seed):
@@ -439,6 +466,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.seed(s)
 
         xml = self.xml_generator.generate_random_xml()
+        self.n_obstacles = self.xml_generator.n_obstacles
 
         self.model = load_model_from_xml(xml)
         self.sim = MjSim(self.model)
@@ -540,7 +568,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.max_object_height = 2 * max(max(self.params['target']['max_bounding_box']),
                                              max(self.params['obstacle']['max_bounding_box']))
 
-        self.max_singulation_area = [40, 40]
+        self.singulation_area = [40, 40]
+        self.obs_above_table = 0
+
+        self.dist_from_obstacles = []
 
     def __del__(self):
         if self.viewer is not None:
@@ -608,7 +639,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             for _ in range(600):
                 self.sim_step()
 
-            self._hug_target(number_of_obstacles)
+            # self._hug_target(number_of_obstacles)
 
             self.check_target_occlusion(number_of_obstacles)
 
@@ -628,6 +659,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         heightmap, mask = self.get_heightmap()
         self.heightmap_prev = heightmap.copy()
         self.mask_prev = mask.copy()
+        self.state_prev = self.get_state()
 
         self.last_timestamp = self.sim.data.time
         self.success = False
@@ -642,7 +674,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return self.get_obs_push_target()
 
     def _hug_target(self, number_of_obstacles):
-        gain = 150
+        gain = 40
 
         names = ["target"]
         for i in range(1, number_of_obstacles + 1):
@@ -686,145 +718,181 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_heightmap(self):
         self._move_finger_outside_the_table()
-        empty_rgb = True
+
+        # Grab RGB and depth
+        empty_grab = True
         counter = 0
-        # This delay seems to avoid the screen to come back in front, so it allows to run trainings in the same
-        # computer you work
-        sleep(0.1)
-        while empty_rgb:
-            self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
-            rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
-            bgr = cv_tools.rgb2bgr(rgb)
-            cv2.imwrite(os.path.join(self.log_dir, 'bgr.png'), bgr)
-            if len(np.argwhere(rgb > 0)) > 0:
-                empty_rgb = False
-            counter += 1
-            sleep(0.1)
-            if counter > 20:
-                raise InvalidEnvError('Failed to grab a non-empty RGB image from offscreen after 20 attempts.')
         z_near = 0.2 * self.sim.model.stat.extent
         z_far = 50 * self.sim.model.stat.extent
-        depth = cv_tools.gl2cv(depth, z_near, z_far)
+        while empty_grab:
+            self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
+            rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
+
+            # Convert depth (distance from camera) to heightmap (distance from table)
+            depth = cv_tools.gl2cv(depth, z_near, z_far)
+            max_depth = np.max(depth)
+            depth[depth == 0] = max_depth
+            heightmap = max_depth - depth
+
+            # In case of empty RGB or Depth create the offscreen context again
+            if len(np.argwhere(rgb > 0)) == 0 or len(np.argwhere(abs(heightmap) > 1e-10)) == 0:
+                empty_grab = True
+                glfw.make_context_current(self.offscreen.opengl_context.window)
+                glfw.destroy_window(self.offscreen.opengl_context.window)
+                self.offscreen = MjRenderContext(sim=self.sim, device_id=0, offscreen=True, opengl_backend='glfw')
+            else:
+                empty_grab = False
+
+            bgr = cv_tools.rgb2bgr(rgb)
+
+
+            if counter > 20:
+                raise InvalidEnvError('Failed to grab a non-empty RGB-D image from offscreen after 20 attempts.')
+
+            counter += 1
 
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
+        cv2.imwrite(os.path.join(self.log_dir, 'bgr.png'), bgr)
+        cv2.imwrite(os.path.join(self.log_dir, 'heightmap.png'), cv_tools.normalize(heightmap))
+        cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
+
+        if len(np.argwhere(mask > 0)) < 200:
+            raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
+
         obstacle_detector = cv_tools.ColorDetector('blue')
         mask_obstacles = obstacle_detector.detect(bgr)
 
-        cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
-
-        # cv2.imshow('bgr', bgr)
-        # cv2.waitKey()
         if len(np.argwhere(mask > 0)) == 0:
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
         homog, bb = self.color_detector.get_bounding_box(mask, plot=False)
-        centroid = [int(homog[0][3]), int(homog[1][3])]
-        # print(centroid)
+        centroid = [int(homog[0][2]), int(homog[1][2])]
         z = depth[centroid[1], centroid[0]]
-        p_camera = self.camera.back_project(centroid, z)
-        p_rgb = np.matmul(self.rgb_to_camera_frame, p_camera)
+        centroid_image = self.camera.back_project(centroid, z)
+        centroid_camera = np.matmul(self.rgb_to_camera_frame, centroid_image)
         camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
-        self.target_pos_vision = np.matmul(camera_pose, np.array([p_rgb[0], p_rgb[1], p_rgb[2], 1.0]))[:3]
+        self.target_pos_vision = np.matmul(camera_pose, np.array([centroid_camera[0],
+                                                                  centroid_camera[1],
+                                                                  centroid_camera[2], 1.0]))[:3]
+        self.target_pos_vision[2] /= 2.0
 
-        rot_mat = homog[:3, :3]
-        obj_to_camera = np.matmul(np.linalg.inv(self.rgb_to_camera_frame[:3, :3]), rot_mat)
-        obj_to_world = np.matmul(camera_pose[:3, :3], obj_to_camera)
-        self.target_quat_vision = Quaternion.from_rotation_matrix(obj_to_world)
+        if len(bb) < 4:
+            raise InvalidEnvError('Could not find bounding box limits.')
 
-        # Pre-process rgb-d height maps
-        workspace = [193, 193]
-        center = [240, 320]
-        depth = depth[center[0] - workspace[0]:center[0] + workspace[0],
-                center[1] - workspace[1]:center[1] + workspace[1]]
-        max_depth = np.max(depth)
-        depth = max_depth - depth
-        mask = mask[center[0] - workspace[0]:center[0] + workspace[0],
-               center[1] - workspace[1]:center[1] + workspace[1]]
+        self.target_bbox_corners = np.zeros((4, 3))
+        for i in range(4):
+            p = (int(bb[i][0]), int(bb[i][1]))
+            z = depth[p[1], p[0]]
+            p_image = self.camera.back_project(p, z)
+            p_camera = np.matmul(self.rgb_to_camera_frame, p_image)
+            self.target_bbox_corners[i] = np.matmul(camera_pose, np.array([p_camera[0],
+                                                                           p_camera[1],
+                                                                           p_camera[2], 1.0]))[:3]
+        self.target_bounding_box_vision = [0, 0, self.target_pos_vision[2]]
 
-        mask_obstacles = mask_obstacles[center[0] - workspace[0]:center[0] + workspace[0],
-                                        center[1] - workspace[1]:center[1] + workspace[1]]
-
-        if len(np.argwhere(mask > 0)) == 0:
-            raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
-
-        height = self.color_detector.get_height(depth, mask)
-        homog, bb = self.color_detector.get_bounding_box(mask)
-        tx, ty = [int(homog[0][3]), int(homog[1][3])]
-        self.heightmap = cv_tools.Feature(depth).translate(tx, ty).array()
-        self.mask = cv_tools.Feature(mask).translate(tx, ty).array()
-        self.mask_obstacles = cv_tools.Feature(mask_obstacles).translate(tx, ty).array()
-        self.target_bounding_box_vision = np.array([bb[0] * self.pixels_to_m, bb[1] * self.pixels_to_m, height / 2])
-        self.singulation_area = (np.array([self.target_bounding_box_vision[1] + 0.01,
-                                           self.target_bounding_box_vision[0] + 0.01]) / self.pixels_to_m).astype(np.int32)
-
-        if self.singulation_area[0] > self.max_singulation_area[0]:
-            self.singulation_area[0] = self.max_singulation_area[0]
-
-        if self.singulation_area[1] > self.max_singulation_area[1]:
-            self.singulation_area[1] = self.max_singulation_area[1]
-
-        # cv_tools.plot_2d_img(self.heightmap, 'depth')
-        # cv_tools.plot_2d_img(self.mask, 'depth')
-        # ToDo: How to normalize depth??
+        self.heightmap = cv_tools.Feature(heightmap).crop(193, 193).array()
+        self.mask = cv_tools.Feature(mask).crop(193, 193).array()
+        self.mask_obstacles = cv_tools.Feature(mask_obstacles).crop(193,193).array()
 
         return self.heightmap, self.mask
+
+    def cartesian2shperical(self, p):
+        r = math.sqrt(np.power(p[0], 2) + np.power(p[1], 2) + np.power(p[2], 2))
+        theta = math.atan2(p[1], p[0])
+        phi = math.atan2(math.sqrt(np.power(p[0], 2) + np.power(p[1], 2)), p[2])
+        return np.array([r, theta, phi])
+
+    def get_state(self, rotations=0, normalized=False, sort=True):
+        np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
+
+        min_t = np.array([-0.25, -0.25, 0])
+        max_t = np.array([0.25, 0.25, 0.05])
+        # min_bbox = np.array(self.params['obstacle']['min_bounding_box'])
+        # max_bbox = np.array(self.params['obstacle']['max_bounding_box'])
+        min_bbox = np.array([0.0, 0.0, 0.0])
+        max_bbox = np.array([0.03, 0.03, 0.02])
+
+
+        state = np.zeros((self.params['nr_of_obstacles'][1] + 1, 9))
+
+        # target always in the first place
+        t = self.sim.data.get_body_xpos('target')
+        q = self.sim.data.get_body_xquat('target')
+        eulers = quat2euler(q)
+        bbox = get_geom_size(self.sim.model, 'target')
+        state[0, :] = np.concatenate((t, eulers, bbox), axis=0)
+
+        self.obs_above_table = 0
+        for i in range(1, self.n_obstacles + 1):
+            obs_name = 'object' + str(i)
+            t = self.sim.data.get_body_xpos(obs_name)
+            if t[2] < 0:
+                continue
+            self.obs_above_table += 1
+            q = self.sim.data.get_body_xquat(obs_name)
+            eulers = quat2euler(q)
+            bbox = get_geom_size(self.sim.model, obs_name)
+            state[self.obs_above_table, :] = np.concatenate((t, eulers, bbox), axis=0)
+
+        if rotations > 0:
+            states = []
+            step_angle = 2 * np.pi / rotations
+            for i in range(rotations):
+                rotated_state = state.copy()
+                # rotated_state[0:self.n_obstacles + 1, 0:3] = np.matmul(rot_z(i * step_angle),
+                #                                                        state[0:self.n_obstacles + 1, 0:3])
+                rotated_state[0:self.n_obstacles + 1, 3] += i * step_angle
+                for j in range(self.n_obstacles + 1):
+                    rotated_state[j, 0:3] = np.matmul(rot_z(i * step_angle), state[j, 0:3].transpose())
+                    # print(self.cartesian2shperical(rotated_state[j, 0:3]))
+                    # input('')
+                    if rotated_state[j, 3] > np.pi:
+                        rotated_state[j, 3] = rotated_state[j, 3] - 2 * np.pi
+
+                # Sort by distance
+                if sort:
+                    dist = np.zeros((self.n_obstacles + 1, ))
+                    for i in range(self.n_obstacles + 1):
+                        dist[i] = np.linalg.norm(rotated_state[0, 0:3] - rotated_state[i, 0:3])
+                    # print(dist)
+                    tmp = rotated_state[0:self.n_obstacles + 1, :]
+                    tmp = tmp[np.argsort(dist)]
+                    rotated_state[0:self.n_obstacles + 1, :] = tmp
+
+                if normalized:
+                    rotated_state[0:self.n_obstacles + 1, 0:3] = (rotated_state[0:self.n_obstacles + 1, 0:3] - min_t) / (max_t - min_t)
+                    rotated_state[0:self.n_obstacles + 1, 3:6] = (rotated_state[0:self.n_obstacles + 1, 3:6] + np.pi) / (2 * np.pi)
+                    rotated_state[0:self.n_obstacles + 1, 6:9] = (rotated_state[0:self.n_obstacles + 1, 6:9]- min_bbox) / (max_bbox - min_bbox)
+
+                states = np.append(states, rotated_state.flatten().copy(), axis=0)
+            return states
+
 
     def get_obs_push_target(self):
         """
         Read depth and extract height map as observation
         :return:
         """
-
-        # Add the distance of the object from the edge
-        distances = [self.surface_size[0] - self.target_pos_vision[0], \
-                     self.surface_size[0] + self.target_pos_vision[0], \
-                     self.surface_size[1] - self.target_pos_vision[1], \
-                     self.surface_size[1] + self.target_pos_vision[1]]
-        distances = [x / 0.5 for x in distances]
-
+        state = self.get_state(rotations=16, normalized=True, sort=True)
         heightmap, mask = self.get_heightmap()
 
-        # Use rotated features
-        if self.heightmap_rotations > 0:
-            features = []
-            rot_angle = 360 / self.heightmap_rotations
-            for i in range(0, self.heightmap_rotations):
+        # cv_tools.Feature(self.heightmap).plot()
+        depth_feature = cv_tools.Feature(heightmap).resize((128, 128)).normalize(self.max_object_height)
+        mask_feature = cv_tools.Feature(mask).resize((128, 128)).normalize(255)
 
-                depth_feature = cv_tools.Feature(self.heightmap).mask_out(self.mask)\
-                                                                .rotate(rot_angle * i)\
-                                                                .crop(self.max_singulation_area[0], self.max_singulation_area[1])\
-                                                                .pooling()\
-                                                                .normalize(self.max_object_height)\
-                                                                .flatten()
-                for d in distances:
-                    depth_feature = np.append(depth_feature, d)
+        mask_heightmap = np.zeros((2, 128, 128))
+        mask_heightmap[0, :, :] = depth_feature.array()
+        mask_heightmap[1, :, :] = mask_feature.array()
 
-                features.append(depth_feature)
+        if np.isnan(state).any():
+            raise InvalidEnvError('State nan')
 
-            depth_feature = np.append(features[0], features[1], axis=0)
-            for i in range(2, len(features)):
-                depth_feature = np.append(depth_feature, features[i], axis=0)
+        if np.isnan(mask_heightmap).any():
+            raise InvalidEnvError('Heightmap nan')
 
-        # Use single feature (one rotation)
-        else:
-            depth_feature = cv_tools.Feature(self.heightmap) \
-                                    .crop(50, 50) \
-                                    .pooling().normalize(self.max_object_height)
-
-            mask_feature = cv_tools.Feature(self.mask) \
-                                   .crop(50, 50) \
-                                   .pooling().normalize(255)
-
-            # depth_feature.plot()
-            depth_feature = depth_feature.flatten()
-            mask_feature = mask_feature.flatten()
-            depth_feature = np.append(depth_feature, mask_feature)
-            for d in distances:
-                depth_feature = np.append(depth_feature, d)
-
-        return depth_feature
+        return [mask_heightmap, state.flatten()]
 
 
     def get_obs(self):
@@ -877,31 +945,37 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return depth_feature
 
     def step(self, action):
-
         self.timesteps += 1
         time = self.do_simulation(action)
         experience_time = time - self.last_timestamp
         self.last_timestamp = time
-        obs = self.get_obs_push_target()
-        reward = self.get_reward(obs, action)
-        # reward = self.get_shaped_reward_obs(obs, pcd, dim)
-        # reward = self.get_reward_obs(obs, pcd, dim)
 
-        done = False
-        if self.terminal_state(obs):
-            done = True
+        obs = self.get_obs_push_target()
+        reward = self.get_reward()
+
+        print('reward:', reward)
+        print('---')
 
         # Extra data for having pushing distance, theta along with displacements
         # of the target
         extra_data = {'target_init_pose': self.target_init_pose.matrix()}
 
-        self.heightmap_prev = self.heightmap.copy()
+        done = False
+        if self.terminal_state(obs[0]):
+            done = True
+            obs = np.zeros((2, 128, 128))
+            state = np.zeros((16 * 81, ))
+            obs = [obs, state]
+            return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
+        else:
+            obs = self.get_obs_push_target()
+            self.heightmap_prev = self.heightmap.copy()
+            return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
 
-        return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
 
     def do_simulation(self, action):
         primitive = int(action[0])
-        primitive = 0
+        primitive = 1
         target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
@@ -913,30 +987,28 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push']['distance'][0], self.params['push']['distance'][1]])  # hardcoded read it from min max pushing distance
                 distance = rescale(action[3], min=-1, max=1, range=self.params['push']['target_init_distance'])  # hardcoded, read it from table limits
                 push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
-                                  target_bounding_box= self.target_bounding_box_vision, finger_size = self.finger_length)
+                                  target_bounding_box= self.target_bbox_corners, target_pos=self.target_pos_vision, finger_size = self.finger_length)
             # Push obstacle primitive
             elif primitive == 1:
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-                push_distance = sqrt(pow(self.target_bounding_box_vision[0] + 0.01, 2) + pow(self.target_bounding_box_vision[1] + 0.01, 2))
+                push_distance = 0.1# sqrt(pow(self.target_bounding_box_vision[0] + 0.01, 2) + pow(self.target_bounding_box_vision[1] + 0.01, 2))
                 push = PushObstacle(theta=theta, push_distance=push_distance,
                                     object_height = self.target_bounding_box_vision[2], finger_size = self.finger_length)
 
             # Transform pushing from target frame to world frame
-
             push_initial_pos_world = push.get_init_pos() + self.target_pos_vision
             push_final_pos_world = push.get_final_pos() + self.target_pos_vision
 
             init_z = 2 * self.target_bounding_box[2] + 0.05
             self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
             self.sim_step()
-            duration = push.get_duration()
 
+            duration = push.get_duration()
             if self.move_joint_to_target('finger1', [None, None, push.z], stop_external_forces=True):
                 end = push_final_pos_world[:2]
-                self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
+                self.move_joint_to_target('finger1', [end[0], end[1], None], duration=duration)
             else:
                 self.push_stopped_ext_forces = True
-
         elif primitive == 2 or primitive == 3:
             if primitive == 2:
                 theta = rescale(action[1], min=-1, max=1, range=[0, math.pi])
@@ -994,10 +1066,99 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
-    def get_reward(self, observation, action):
-        reward = self.get_reward_push_target(observation, action)
-        reward = rescale(reward, -10, 10, range=[-1, 1])
+    def get_reward(self):
+        # reward = self.get_real_push_obstacle_reward(state, action)
+        reward = self.get_reward_push_obstacle()
+        reward = rescale(reward, 0, 10, range=[-1, 1])
+        # reward = 0.1 * reward
+        if reward is None:
+            raise ValueError('reward is None.')
         return reward
+
+    def get_real_push_obstacle_reward(self, state, action):
+        # Get reward for increasing the distance from the surrounding objects
+        # by subtracting the current distances from the previous ones
+        max_push_d = 0.15 # max_push_distance + offset
+        self.dist_from_obstacles = np.zeros((self.obs_above_table, 2))
+        for i in range(0, self.obs_above_table):
+            self.dist_from_obstacles[i][0] = np.linalg.norm(self.state_prev[0, 0:2] - self.state_prev[i + 1, 0:2])
+            self.dist_from_obstacles[i][1] = np.linalg.norm(state[0, 0:2] - state[i+1, 0:2])
+
+        n_closest_obstacles = np.zeros((self.obs_above_table, 1))
+        n_closest_obstacles[self.dist_from_obstacles[:, 0] < 0.1] = 1
+        diff = (self.dist_from_obstacles[:, 1] - self.dist_from_obstacles[:, 0]) *  n_closest_obstacles.transpose()
+        print(diff)
+
+        n_obstacles_moved = np.argwhere(diff > 0.001).shape[0]
+        if n_obstacles_moved == 0:
+            return -1
+        reward = np.sum(diff / (n_obstacles_moved * max_push_d))
+        if reward > 0:
+            reward = 1
+        print('obstacles moved:', n_obstacles_moved)
+        # reward = rescale(reward, 0, 1, range=[0, 5])
+
+        # If the target is singulated
+        if (self.dist_from_obstacles[:, 1] > 0.07).all():
+            return 5 + reward
+
+        return reward
+
+    def get_real_push_target_reward(self, state, action):
+
+        # Collision
+        if self.push_stopped_ext_forces:
+            return -10
+
+        # If the target falls from the table
+        if state[0][2] < 0:
+            return -10
+
+        # Get reward for increasing the distance from the surrounding objects
+        # by subtracting the current distances from the previous ones
+        max_push_d = 0.15 # max_push_distance + offset
+        self.dist_from_obstacles = np.zeros((self.obs_above_table, 2))
+        for i in range(0, self.obs_above_table):
+            self.dist_from_obstacles[i][0] = np.linalg.norm(self.state_prev[0, 0:2] - self.state_prev[i + 1, 0:2])
+            self.dist_from_obstacles[i][1] = np.linalg.norm(state[0, 0:2] - state[i+1, 0:2])
+
+        n_closest_obstacles = np.ones((self.obs_above_table, 1))
+        # n_closest_obstacles[self.dist_from_obstacles[:, 1] < 0.1] = 1
+        print(self.dist_from_obstacles[:, 1] - self.dist_from_obstacles[:, 0])
+        print(n_closest_obstacles)
+        diff = (self.dist_from_obstacles[:, 1] - self.dist_from_obstacles[:, 0]) *  n_closest_obstacles.transpose()
+
+        n_obstacles_moved = np.argwhere(np.abs(diff) > 0.01).shape[0]
+        if n_obstacles_moved == 0:
+            return 0
+        reward = np.sum(diff / (n_obstacles_moved * max_push_d))
+        print('obstacles moved:', n_obstacles_moved)
+        reward = rescale(reward, 0, 1, range=[0, 5])
+        print (reward)
+
+        # Penalty for initial distance
+        extra_penalty = 0
+        # if int(action[0]) == 0:
+        #     extra_penalty = -rescale(action[3], -1, 1, range=[0, 5])
+        #
+        # # Penalty for push distance
+        # extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
+
+        # # Penalize target positions next to table limits
+        # dist_from_table_limits = np.zeros((4, 1))
+        # target_pos = state[0, 0:2]
+        # dist_from_table_limits[0] = np.linalg.norm(target_pos - np.array([target_pos[0], 0.25]))
+        # dist_from_table_limits[1] = np.linalg.norm(target_pos - np.array([target_pos[0], -0.25]))
+        # dist_from_table_limits[2] = np.linalg.norm(target_pos - np.array([0.25, target_pos[1]]))
+        # dist_from_table_limits[3] = np.linalg.norm(target_pos - np.array([-0.25, target_pos[1]]))
+        # # does not need rescale (it is calculated in the range [0, 1]
+        # table_limits_penalty = -(1 - np.min(dist_from_table_limits, axis=0)[0] / 0.25)
+
+        # If the target is singulated
+        if (self.dist_from_obstacles[:, 1] > 0.05).all():
+            return 10 + reward + extra_penalty
+
+        return reward + extra_penalty
 
     def get_reward_push_target(self, observation, action):
         # Penalize external forces during going downwards
@@ -1021,18 +1182,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return -1 + extra_penalty
 
-
-    def get_reward_push_obstacle(self, observation, action):
-        if self.target_grasped_successfully:
-            return 10
-
-        # Penalize external forces during going downwards
-        if self.push_stopped_ext_forces:
-            return -10
-
-        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
-            return -10
-
+    def get_reward_push_obstacle(self):
         points_prev = cv_tools.Feature(self.heightmap_prev).mask_out(self.mask_prev)\
                                                            .crop(self.singulation_area[0], self.singulation_area[1])\
                                                            .non_zero_pixels()
@@ -1047,7 +1197,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Compute the percentage of the aera that was freed
         free_area = points_diff / points_prev
         reward = rescale(free_area, 0, 1, range=[0, 10])
-        print('r:', reward)
 
         extra_penalty = 0
         # penalize pushes that start far from the target object
@@ -1057,7 +1206,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # if int(action[0]) == 0 or int(action[0]) == 1:
         # extra_penalty += -rescale(action[2], -1, 1, range=[0, 1])
 
-        reward = rescale(reward, 0, 10, range=[-10, 10])
+        # reward = rescale(reward, 0, 10, range=[-10, 10])
         return reward
 
         # if points_cur < 20:
@@ -1066,6 +1215,24 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         #     return -5
         # else:
         #     return -1 + extra_penalty
+
+    def real_terminal_state(self, state):
+        if self.timesteps >= self.max_timesteps:
+            return True
+
+        if self.push_stopped_ext_forces:
+            self.push_stopped_ext_forces = False
+            return True
+
+        # If the object has fallen from the table
+        if state[0][2] < 0:
+            return True
+
+        if (self.dist_from_obstacles[:, 1] > 0.05).all():
+            self.success = True
+            return True
+
+        return False
 
     def terminal_state(self, observation):
 
@@ -1090,8 +1257,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # If the object has fallen from the table
-        if min([observation[-6], observation[-5], observation[-4], observation[-3]]) < 0:
-            return True
+        # if min([observation[-6], observation[-5], observation[-4], observation[-3]]) < 0:
+        #     return True
 
         if cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
                                                 .non_zero_pixels() < 20:
@@ -1107,7 +1274,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return False
 
-    def move_joint_to_target(self, joint_name, target_position, duration = 1, stop_external_forces=False):
+    def move_joint_to_target(self, joint_name, target_position, duration = 0.05, stop_external_forces=False):
         """
         Generates a trajectory in Cartesian space (x, y, z) from the current
         position of a joint to a target position. If one of the x, y, z is None
@@ -1142,11 +1309,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             self.sim_step()
 
-            if stop_external_forces and (self.finger_external_force_norm > 0.1):
+            if stop_external_forces and (self.finger_external_force_norm > 0.01):
                 break
 
         # If external force is present move away
-        if stop_external_forces and (self.finger_external_force_norm > 0.1):
+        if stop_external_forces and (self.finger_external_force_norm > 0.01):
             self.sim_step()
             # Create a new trajectory for moving the finger slightly in the
             # opposite direction to reduce the external forces
@@ -1266,7 +1433,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.finger_quat_prev = self.finger_quat
         self.finger2_quat_prev = self.finger2_quat
 
-        self.sim.step()
+        # self.sim.step()
+        try:
+            self.sim.step()
+        except MujocoException as e:
+            raise InvalidEnvError(e)
 
         self.time = self.sim.data.time
 
@@ -1322,6 +1493,19 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_pos = np.array([temp[0], temp[1], temp[2]])
         self.target_quat = Quaternion(w=temp[3], x=temp[4], y=temp[5], z=temp[6])
 
+        names = ['target']
+        for i in range(1, self.xml_generator.n_obstacles + 1):
+            names.append("object" + str(i))
+        for i in range(self.sim.data.ncon):
+            contact = self.sim.data.contact[i]
+            if self.sim.model.geom_id2name(contact.geom1) == 'table' and self.sim.model.geom_id2name(
+                    contact.geom2) in names:
+                threshold = 0.01
+                if abs(contact.dist) > threshold:
+                    raise InvalidEnvError(
+                        'Contact dist of ' + self.sim.model.geom_id2name(contact.geom2) + ' with table: ' + str(
+                            contact.dist) + ' > ' + str(threshold) + '. Probably jumped. Timestep: ' + str(
+                            self.sim.data.time))
 
     def check_target_occlusion(self, number_of_obstacles):
         """
@@ -1348,6 +1532,29 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 qvel = self.sim.data.qvel.ravel().copy()
                 qpos[index[0] + 2] = - 0.2
                 self.set_state(qpos, qvel)
+
+    def get_angle(self, object_name):
+        rot = self.sim.data.get_body_xmat(object_name)
+        size = get_geom_size(self.sim.model, object_name)
+        x_axis = np.array([1.0, 0.0, 0.0])
+        surface_normal = np.array([0.0, 0.0, 1.0])
+        if np.abs(np.inner(rot[:, 0], surface_normal)) > 0.9:
+            if size[1] > size[2]:
+                return np.inner(rot[:, 1], x_axis)
+            else:
+                return np.inner(rot[:, 2], x_axis)
+        elif np.abs(np.inner(rot[:, 1], surface_normal)) > 0.9:
+            if size[0] > size[2]:
+                return np.inner(rot[:, 0], x_axis)
+            else:
+                return np.inner(rot[:, 2], x_axis)
+        elif np.abs(np.inner(rot[:, 2], surface_normal)) > 0.9:
+            if size[0] > size[1]:
+                return np.inner(rot[:, 0], x_axis)
+            else:
+                return np.inner(rot[:, 1], x_axis)
+        else:
+            raise InvalidEnvError("No axis is perpendicular to surface...!")
 
     def get_object_dimensions(self, object_name, surface_normal):
         """

@@ -3,16 +3,12 @@
     angle="radian"
     inertiafromgeom="true" />
   <option
-    iterations="10"
+    iterations="200"
     timestep="0.001"
-    solver="Newton"/>
+    solver="CG"/>
   <size njmax="2000" nconmax="1000" />
   <default>
     <geom
-      solimp=".9 .9 .01"
-      solref="0.015 1"
-      friction="0.2 0.005 0.0001"
-      mass="1"
       rgba="0.0 0.4 0.6 1" />
   </default>
   <visual>
@@ -28,6 +24,11 @@
       contactheight="0.03"
       framelength="1.5"
       framewidth="0.025"/>
+<!--      forcewidth="0.03"-->
+<!--      contactwidth="0.05"-->
+<!--      contactheight="0.03"-->
+<!--      framelength="1.5"-->
+<!--      framewidth="0.025"/>-->
   </visual>
   <worldbody>
     <camera name="xtion"
@@ -47,6 +48,29 @@
       pos ="0 0 -0.3"
       size="0.24 0.24 0.25"
       rgba="0.0 0.0 0.0 1"/>
+<!--    <geom-->
+<!--            conaffinity="1"-->
+<!--            condim="3"-->
+<!--            name="floor"-->
+<!--            type="box"-->
+<!--            pos="0 0 -0.2"-->
+<!--            quat="1 0 0 0"-->
+<!--            size="1 1 0.2125"-->
+<!--            rgba="0.0 0.0 0.0 1"-->
+<!--            friction="1 0.005 0.0001"/>-->
+    <body
+      name="table"
+      pos="0.0 0 -0.01"
+      quat="1 0 0 0">
+      <geom
+            conaffinity="1"
+            condim="3"
+            name="table"
+            type="box"
+            quat="1 0 0 0"
+            size="0.25 0.25 0.01"
+            rgba="0.0 0.0 0.0 1"/>
+    </body>
   </worldbody>
   <actuator>
     <motor gear="1 0 0 0 0 0" joint="finger1" name="finger_0_wrench_actuator"/>

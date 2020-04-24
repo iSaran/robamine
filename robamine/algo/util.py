@@ -395,7 +395,6 @@ class Stats:
             True if printing stats in the console is desired at the end of the episode
         """
         logger.debug('Stats: Updating for episode.')
-
         row = [episode_data['n_timesteps'], int(episode_data['success'])]
         for operation in self.stats_name:
             operation = getattr(importlib.import_module('numpy'), operation)
