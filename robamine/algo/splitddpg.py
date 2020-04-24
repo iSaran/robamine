@@ -183,7 +183,12 @@ class SplitDDPG(RLAgent):
         max_q = -1e10
         i = 0
         for i in range(self.nr_network):
-            s = torch.FloatTensor(obs_dict2feature(i, state).array()).to(self.device)
+
+            if len(self.action_dim) == 1:
+                k = self.params['hardcoded_primitive']
+            else:
+                k = i
+            s = torch.FloatTensor(obs_dict2feature(k, state).array()).to(self.device)
             a = self.actor[i](s)
             q = self.critic[i](s, a).cpu().detach().numpy()
             self.info['q_values'][i] = q[0]
@@ -261,7 +266,11 @@ class SplitDDPG(RLAgent):
         rotated_batch = []
         for transition in batch:
             random_angle = self.rng.uniform(-180, 180)
+
+            if len(self.action_dim) == 1:
+                transition.action[0] = self.params['hardcoded_primitive']
             rotated_batch.append(get_rotated_transition(transition, angle=random_angle))
+            rotated_batch[-1].action[0] = 0
 
         reward = torch.FloatTensor([_.reward for _ in rotated_batch]).reshape((len(rotated_batch), 1)).to(self.device)
         terminal = torch.FloatTensor([_.terminal for _ in rotated_batch]).reshape((len(rotated_batch), 1)).to(self.device).to(self.device)
@@ -312,7 +321,11 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        s = torch.FloatTensor(obs_dict2feature(i, state).array()).to(self.device)
+        if len(self.action_dim) == 1:
+            k = self.params['hardcoded_primitive']
+        else:
+            k = i
+        s = torch.FloatTensor(obs_dict2feature(k, state).array()).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
         q = self.critic[i](s, a).cpu().detach().numpy()
         return q
