@@ -39,6 +39,7 @@ class Agent:
         self.name = name
         self.params = params.copy()
         self.info = {}
+        self.results = {}
         self.rng = np.random.RandomState()
         self.prediction_horizon = params.get('prediction_horizon', None)
 
@@ -531,7 +532,7 @@ class SupervisedTrainWorld(World):
         super(SupervisedTrainWorld, self).__init__(name)
         self.epochs = epochs
         self.save_every = save_every
-        self.dataset = pickle.load(open(dataset, 'rb'))
+        self.dataset = dataset
 
         # Agent setup
         if isinstance(agent, str):
@@ -623,7 +624,7 @@ class SupervisedTrainWorld(World):
             self.results_lock.acquire()
 
         self.config['results']['n_epochs'] = n_epochs
-        prog = self.config['results']['n_epochs'] / self.config['world']['params']['epochs']
+        prog = self.config['results']['n_epochs'] / self.epochs
 
         super(SupervisedTrainWorld, self).update_results(progress=prog, thread_safe=False, write_yaml=False)
 
