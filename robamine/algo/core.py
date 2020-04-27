@@ -699,12 +699,12 @@ class RLWorld(World):
         self.agent_name = self.agent.name
 
         # Check if environment and agent are compatible
-        try:
-            assert self.agent.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
-            assert self.agent.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
-        except AssertionError as err:
-            logger.exception(err)
-            raise err
+        # try:
+        #     assert self.agent.state_dim == self.state_dim, 'Agent and environment has incompatible state dimension'
+        #     assert self.agent.action_dim == self.action_dim, 'Agent and environment has incompantible action dimension'
+        # except AssertionError as err:
+        #     logger.exception(err)
+        #     raise err
 
         # Setup the internal config dictionary
         self.config['results']['n_episodes'] = 0
