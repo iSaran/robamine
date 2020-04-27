@@ -1,12 +1,14 @@
 import gym
 from robamine.algo.core import SupervisedTrainWorld, EvalWorld
 from robamine.algo.util import Transition
+from robamine.utils.math import min_max_scale
 from robamine.envs.clutter_cont import ClutterContWrapper
+from robamine.envs.clutter_utils import get_action_dim
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG
 from robamine.algo.supervisedactorcritic import SupervisedActorCritic
 from robamine import rb_logging
-from robamine.utils.memory import LargeReplayBuffer
+from robamine.utils.memory import LargeReplayBuffer, RotatedLargeReplayBuffer
 import logging
 import yaml
 import os
@@ -45,7 +47,7 @@ env:
     nr_of_obstacles:
     - 1
     - 6
-    render: false
+    render: true
     target:
       min_bounding_box: [.01, .01, .005]
       max_bounding_box: [.03, .03, .010]
@@ -80,8 +82,10 @@ world:
 
 # Data collection
 buffer_path = '/home/espa/robamine_logs/2020.04.26_supervised_actor_critic/data/replay_buffer.hdf5'
+# buffer_path = '/home/iason/Desktop/temp.hdf5'
 buffer_size = 10000
-buffer_episodes = 1000
+buffer_episodes = 5000
+rotations = 4
 
 def train(params):
     epochs = params['agent']['params']['actor']['epochs'] + params['agent']['params']['critic']['epochs']
@@ -91,19 +95,32 @@ def train(params):
 
 def compile_dataset(params):
     env = ClutterContWrapper(params)
-    buffer = LargeReplayBuffer(buffer_size, 386, env.action_dim[0] + 1, buffer_path)
+    buffer = RotatedLargeReplayBuffer(buffer_size, 386, env.action_dim[0] + 1, buffer_path, rotations=rotations)
 
     for i in range(buffer_episodes):
 
         state = env.reset()
-        while True:
-            action = np.array([0, np.random.uniform(-1, 1)])
+        state_dict = env.env.state_dict()
+
+        action_to_store = np.zeros((rotations, get_action_dim(params['hardcoded_primitive'])[0] + 1))
+        reward_to_store = np.zeros((rotations, 1))
+        for phi in range(rotations):
+            step = 180/rotations
+            theta = phi * step
+            theta = np.random.normal(theta, step/4)
+            theta = min(theta, 180)
+            theta = max(theta, 0)
+            theta = min_max_scale(theta, range=[0, 180], target_range=[-1, 1])
+            action = np.array([0, theta])
             next_state, reward, done, info = env.step(action)
-            transition = Transition(state, action, reward, next_state, done)
-            state = next_state.copy()
-            if done:
-                break
-            buffer.store(transition)
+
+            action_to_store[phi, :] = action
+            reward_to_store[phi, :] = reward
+            env.env.load_state_dict(state_dict)
+            env.env.reset_model()
+
+        transition = Transition(state, action_to_store, reward_to_store, None, None)
+        buffer.store(transition)
         print('Episode ', i, ' from ', buffer_episodes)
 
 def eval(params):
@@ -115,6 +132,6 @@ def eval(params):
 
 if __name__ == '__main__':
     params = yaml.safe_load(stream)
-    # compile_dataset(params['env']['params'])
+    compile_dataset(params['env']['params'])
     # train(params)
-    eval(params)
+    # eval(params)
