@@ -117,7 +117,7 @@ class SupervisedActorCritic(Agent):
         self.critic = Critic(self.state_dim, self.action_dim, self.params['critic']['hidden_units'])
         self.critic_optimizer = optim.Adam(self.critic.parameters(), self.params['critic']['learning_rate'])
         self.actor_optimizer = optim.Adam(self.actor.parameters(), self.params['actor']['learning_rate'])
-        self.info = {'train': {'critic_loss': 0.0, 'actor_loss': 0.0}}
+        self.info = {'critic_loss': 0.0, 'actor_loss': 0.0}
         self.replay_buffer = None
         self.n_updates = 0
         self.critic_finished = False
@@ -204,11 +204,11 @@ class SupervisedActorCritic(Agent):
                 self.actor_optimizer.step()
 
         if not self.critic_finished:
-            self.info['train']['critic_loss'] = np.mean(logging_loss)
-            self.info['train']['actor_loss'] = 0.0
+            self.info['critic_loss'] = np.mean(logging_loss)
+            self.info['actor_loss'] = 0.0
         else:
-            self.info['train']['actor_loss'] = np.mean(logging_loss)
-            self.info['train']['critic_loss'] = 0.0
+            self.info['actor_loss'] = np.mean(logging_loss)
+            self.info['critic_loss'] = 0.0
 
         self.n_updates += 1
         if self.n_updates > self.params['critic']['epochs']:

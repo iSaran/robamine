@@ -558,15 +558,11 @@ class SupervisedTrainWorld(World):
         self.agent.load_dataset(self.dataset)
 
         # Create datastreams
-        self.datastream = {}
-        self.groups = list(self.agent.info.keys())
-        self.variables = {}
-        for group in self.groups:
-            self.variables[group] = list(self.agent.info[group].keys())
-            self.datastream[group] = DataStream(self.sess, self.log_dir, \
-                                                self.tf_writer, \
-                                                self.variables[group], \
-                                                group)
+        self.variables = list(self.agent.info.keys())
+        self.datastream = DataStream(self.sess, self.log_dir, \
+                                            self.tf_writer, \
+                                            self.variables, \
+                                            'robamine')
 
         # Setup the internal config dictionary
         self.config['results']['n_epochs'] = 0
@@ -582,11 +578,10 @@ class SupervisedTrainWorld(World):
                 break
 
             # Log agent's info
-            for group in self.groups:
-                row = []
-                for var in self.variables[group]:
-                    row.append(self.agent.info[group][var])
-                self.datastream[group].log(i, row)
+            row = []
+            for var in self.variables:
+                row.append(self.agent.info[var])
+            self.datastream.log(i, row)
 
 
             # Save agent model
