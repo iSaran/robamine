@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 from robamine.algo.util import Transition
 import h5py
+from math import floor
 
 class ReplayBuffer:
     """
@@ -216,6 +217,13 @@ class LargeReplayBuffer:
         return Transition(state=state, next_state=next_state, action=self.action[i, :],
                           reward=self.reward[i, :], terminal=self.terminal[i, :])
 
+    def resize(self, size):
+        self.obs.resize(size, axis=0)
+        self.next_obs.resize(size, axis=0)
+        self.action.resize(size, axis=0)
+        self.reward.resize(size, axis=0)
+        self.terminal.resize(size, axis=0)
+
     def store(self, transition):
 
         if self.count < self.buffer_size and self.n_rows < self.buffer_size and self.count > 0:
@@ -241,6 +249,15 @@ class LargeReplayBuffer:
 
         self.count += 1
 
+    def sample(self, elements):
+        indices = np.arange(0, self.n_rows, 1)
+        self.rng.shuffle(indices)
+
+        transitions = []
+        for i in range(min(elements, self.size())):
+            transitions.append(self(indices[i]))
+
+        return transitions
 
     def sample_batch(self, given_batch_size):
         batch = self.sample(given_batch_size)
@@ -252,16 +269,6 @@ class LargeReplayBuffer:
         terminal_batch = np.array([_.terminal for _ in batch])
 
         return Transition(state_batch, action_batch, reward_batch, next_state_batch, terminal_batch)
-
-    def sample(self, elements):
-        indices = np.arange(0, self.n_rows, 1)
-        self.rng.shuffle(indices)
-
-        transitions = []
-        for i in range(min(elements, self.size())):
-            transitions.append(self(indices[i]))
-
-        return transitions
 
     def clear(self):
         """
@@ -299,9 +306,87 @@ class LargeReplayBuffer:
     def remove(self, index):
         raise NotImplementedError()
 
+
+class RotatedLargeReplayBuffer(LargeReplayBuffer):
+    def __init__(self, buffer_size, observation_dim, action_dim, path, existing=False, rotations=1, mode="a"):
+        self.buffer_size = buffer_size
+        self.count = 0
+        self.n_scenes = 1
+        self.rotations = rotations
+
+        self.file = h5py.File(path, mode)
+
+        if not existing:
+            self.obs = self.file.create_dataset('obs', (self.n_scenes, 2, observation_dim, observation_dim), dtype='f',
+                                                maxshape=(buffer_size, 2, observation_dim, observation_dim))
+            self.action = self.file.create_dataset('action', (self.n_scenes, rotations, action_dim), dtype='f',
+                                                   maxshape=(buffer_size, rotations, action_dim))
+            self.reward = self.file.create_dataset('reward', (self.n_scenes, rotations, 1), dtype='f',
+                                                   maxshape=(buffer_size, rotations, 1))
+        else:
+            self.obs = self.file['obs']
+            self.action = self.file['action']
+            self.reward = self.file['reward']
+
+        self.rng = Random()
+
+    def _get_elem(self, i):
+        global_index = floor(i / self.rotations)
+        local_index = i - global_index * self.rotations
+        state = {
+            'heightmap': self.obs[global_index, 0, :],
+            'mask': self.obs[global_index, 1, :]
+        }
+
+        for key in list(self.obs.attrs.keys()):
+            state[key] = self.obs.attrs[key]
+
+        return Transition(state=state, next_state=None, action=self.action[global_index, local_index, :],
+                          reward=self.reward[global_index, local_index, :], terminal=None)
+
     def resize(self, size):
         self.obs.resize(size, axis=0)
-        self.next_obs.resize(size, axis=0)
         self.action.resize(size, axis=0)
         self.reward.resize(size, axis=0)
-        self.terminal.resize(size, axis=0)
+
+    def store(self, transition):
+
+        if self.count < self.buffer_size and self.n_scenes < self.buffer_size and self.count > 0:
+            self.n_scenes += 1
+            self.resize(self.n_scenes)
+
+        if self.count >= self.buffer_size:
+            self.count = 0
+
+        self.obs[self.count, 0, :] = transition.state['heightmap']
+        self.obs[self.count, 1, :] = transition.state['mask']
+        for key in list(transition.state.keys()):
+            if key != 'heightmap' and key != 'mask':
+                self.obs.attrs[key] = transition.state[key]
+        self.action[self.count, :] = transition.action
+        self.reward[self.count, :] = transition.reward
+
+        self.count += 1
+
+    def sample(self, elements):
+        raise NotImplementedError()
+
+    def sample_batch(self, given_batch_size):
+        raise NotImplementedError()
+
+    def size(self):
+        return self.n_scenes * self.rotations
+
+    @classmethod
+    def load(cls, file_path, mode="a"):
+        with h5py.File(file_path, "r") as f:
+            buffer_size = f['obs'].maxshape[0]
+            observation_dim = f['obs'].shape[2]
+            action_dim = f['action'].shape[2]
+            n_scenes = f['obs'].shape[0]
+            rotations = f['action'].shape[1]
+        buffer = cls(buffer_size=buffer_size, observation_dim=observation_dim, action_dim=action_dim, path=file_path,
+                     existing=True, rotations=rotations, mode=mode)
+        buffer.n_scenes = n_scenes
+        buffer.count = n_scenes - 1
+        return buffer
