@@ -50,5 +50,13 @@ def plot_normal_noise():
     noise = NormalNoise(mu=np.array([0.0, 0.0]), sigma=0.2)
     print(noise())
 
+def plot_normal():
+    from robamine.algo.util import NormalNoise
+    data = []
+    for i in range(10000):
+        data.append(np.random.normal(45, 5))
+
+    plt.hist(data, bins = 100)
+    plt.show()
 if __name__ == '__main__':
-    plot_exponential_reward()
+    plot_normal()
