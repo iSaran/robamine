@@ -445,33 +445,44 @@ class ClutterContWrapper(gym.Env):
         self.results['collisions'] = 0
 
         self.last_reset_state_dict = None
+        self.safe = self.params.get('safe', True)
 
     def reset(self, seed=None):
         if self.env is not None:
             del self.env
-        self.params['seed'] = seed
-        reset_not_valid = True
-        while reset_not_valid:
-            reset_not_valid = False
-            self.env = gym.make('ClutterCont-v0', params=self.params)
-            try:
-                obs = self.env.reset()
-            except InvalidEnvError as e:
-                print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
-                reset_not_valid = True
+        if seed is not None:
+            self.params['seed'] = seed
+        if self.safe:
+            reset_not_valid = True
+            while reset_not_valid:
+                reset_not_valid = False
+                self.env = ClutterCont(params=self.params)
+                try:
+                    obs = self.env.reset()
+                except InvalidEnvError as e:
+                    print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
+                    reset_not_valid = True
+        else:
+            self.env = ClutterCont(params=self.params)
+            obs = self.env.reset()
 
         self.last_reset_state_dict = self.env.state_dict()
         return obs
 
     def step(self, action):
-        try:
+        if self.safe:
+            try:
+                result = self.env.step(action)
+                self.results['collisions'] += int(result[3]['collision'])
+            except InvalidEnvError as e:
+                print("WARN: {0}. Invalid environment during step. A new environment will be spawn.".format(e))
+                self.reset()
+                return self.step(action)
+            return result
+        else:
             result = self.env.step(action)
             self.results['collisions'] += int(result[3]['collision'])
-        except InvalidEnvError as e:
-            print("WARN: {0}. Invalid environment during step. A new environment will be spawn.".format(e))
-            self.reset()
-            return self.step(action)
-        return result
+            return result
 
     def seed(self, seed):
         self.env.seed(seed)
