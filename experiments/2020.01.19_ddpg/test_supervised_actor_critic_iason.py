@@ -3,7 +3,7 @@ from robamine.algo.core import SupervisedTrainWorld, EvalWorld
 from robamine.algo.util import Transition
 from robamine.utils.math import min_max_scale
 from robamine.envs.clutter_cont import ClutterContWrapper
-from robamine.envs.clutter_utils import get_action_dim
+from robamine.envs.clutter_utils import get_action_dim, InvalidEnvError
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG
 from robamine.algo.supervisedactorcritic import SupervisedActorCritic
@@ -85,7 +85,7 @@ buffer_path = '/home/espa/robamine_logs/2020.04.26_supervised_actor_critic/data/
 # buffer_path = '/home/iason/Desktop/temp.hdf5'
 buffer_size = 10000
 buffer_episodes = 5000
-rotations = 4
+rotations = 16
 
 def train(params):
     epochs = params['agent']['params']['actor']['epochs'] + params['agent']['params']['critic']['epochs']
@@ -98,14 +98,20 @@ def compile_dataset(params):
     buffer = RotatedLargeReplayBuffer(buffer_size, 386, env.action_dim[0] + 1, buffer_path, rotations=rotations)
 
     for i in range(buffer_episodes):
+        transition = run_episode(env, i)
+        buffer.store(transition)
 
+def run_episode(env, i):
+    print('Episode ', i, ' from ', buffer_episodes)
+
+    try:
         state = env.reset()
         state_dict = env.state_dict()
 
-        action_to_store = np.zeros((rotations, get_action_dim(params['hardcoded_primitive'])[0] + 1))
+        action_to_store = np.zeros((rotations, get_action_dim(env.params['hardcoded_primitive'])[0] + 1))
         reward_to_store = np.zeros((rotations, 1))
         for phi in range(rotations):
-            step = 180/rotations
+            step = 180 / rotations
             theta = phi * step
             theta = np.random.normal(theta, step/4)
             theta = min(theta, 180)
@@ -116,12 +122,13 @@ def compile_dataset(params):
 
             action_to_store[phi, :] = action
             reward_to_store[phi, :] = reward
-            
             env.load_state_dict(state_dict)
-
         transition = Transition(state, action_to_store, reward_to_store, None, None)
-        buffer.store(transition)
-        print('Episode ', i, ' from ', buffer_episodes)
+    except InvalidEnvError as e:
+        print("WARN: {0}. Invalid environment episode in data collection. A new environment will be spawn.".format(e))
+        return run_episode(env, i)
+    return transition
+
 
 def eval(params):
     rb_logging.init(directory=params['world']['logging_dir'], friendly_name=params['world']['friendly_name'], file_level=logging.INFO)
