@@ -4,7 +4,7 @@ agent:
     actions: [1]
     batch_size: [64, 64]
     device: cpu
-    gamma: 0.9
+    gamma: 0.0
     load_buffers: ''
     load_nets: ''
     replay_buffer_size: 100000
