@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from robamine.algo.core import Agent
-from robamine.utils.memory import ReplayBuffer, LargeReplayBuffer
+from robamine.utils.memory import ReplayBuffer, LargeReplayBuffer, RotatedLargeReplayBuffer
 
 from robamine.envs.clutter_utils import get_rotated_transition, obs_dict2feature, get_observation_dim, get_action_dim
 
@@ -176,8 +176,6 @@ class SupervisedActorCritic(Agent):
 
             reward = torch.FloatTensor([_.reward for _ in rotated_batch]).reshape((len(rotated_batch), 1)).to(
                 self.device)
-            terminal = torch.FloatTensor([_.terminal for _ in rotated_batch]).reshape(
-                (len(rotated_batch), 1)).to(self.device).to(self.device)
             _, action = self.get_low_level_action(np.array([_.action for _ in rotated_batch]))
             action = torch.FloatTensor(action).to(self.device)
             state = torch.FloatTensor([_.state for _ in rotated_batch]).to(self.device)
@@ -251,7 +249,7 @@ class SupervisedActorCritic(Agent):
         self.load_trainable_dict(trainable)
 
     def load_dataset(self, dataset):
-        self.replay_buffer = LargeReplayBuffer.load(dataset)
+        self.replay_buffer = RotatedLargeReplayBuffer.load(dataset, mode="r")
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
