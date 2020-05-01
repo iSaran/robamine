@@ -641,8 +641,9 @@ class SupervisedTrainWorld(World):
         self.agent.save(agent_model_file_name)
 
 class RLWorld(World):
-    def __init__(self, agent, env, params, name=None):
+    def __init__(self, agent, env, params, name=None, seed_list=None):
         max_disk_size = params.get('max_disk_size', None)
+        self.seed_list = seed_list
         super(RLWorld, self).__init__(name, max_disk_size=max_disk_size)
         # Environment setup
         if isinstance(env, gym.Env):
@@ -782,7 +783,11 @@ class RLWorld(World):
         else:
             init_state = None
 
-        episode.run(render=self.render, init_state=init_state)
+        if self.seed_list is not None:
+            seed = self.seed_list[i]
+        else:
+            seed = None
+        episode.run(render=self.render, init_state=init_state, seed=seed)
 
         # Update tensorboard stats
         self.stats.update(i, episode.stats)
@@ -1086,10 +1091,10 @@ class Episode:
 
         self.data = EpisodeData()
 
-    def run(self, render = False, init_state = None):
+    def run(self, render = False, init_state = None, seed=None):
 
+        state = self.env.reset(seed=seed)
         # self.env.load_state_dict(init_state)
-        state = self.env.reset()
 
         while True:
             if (render):
