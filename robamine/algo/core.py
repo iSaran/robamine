@@ -792,7 +792,7 @@ class RLWorld(World):
         # Update tensorboard stats
         self.stats.update(i, episode.stats)
         self.episode_stats.append(episode.stats)
-        # self.episode_list_data.append(episode.data)
+        self.episode_list_data.append(episode.data)
 
         # Save agent model
         self.save()
@@ -1133,6 +1133,8 @@ class Episode:
 
         timestep = TimestepData()
         timestep.transition = transition.copy()
+        timestep.transition.state = None
+        timestep.transition.next_state = None
         timestep.q_value = self.agent.q_value(transition.state, transition.action)
         self.data.append(timestep)
 
