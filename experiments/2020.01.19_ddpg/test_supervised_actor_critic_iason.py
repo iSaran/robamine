@@ -137,8 +137,22 @@ def eval(params):
     eval = EvalWorld(agent=agent, env=params['env'], params={'episodes': 5, 'render': True})
     eval.run()
 
+def eval_in_scenes(model_path='/home/espa/robamine_logs/2020.04.26_supervised_actor_critic/robamine_logs_2020.04.30.16.41.17.945353/model.pkl'):
+    rb_logging.init(directory=params['world']['logging_dir'], friendly_name=params['world']['friendly_name'], file_level=logging.INFO)
+    agent = SupervisedActorCritic.load(model_path)
+    params['env']['params']['render'] = False
+    params['env']['params']['safe'] = False
+    # params['env']['params']['seed'] = 5
+    saved_scenes = np.arange(0, 1000, 1).tolist()
+    eval = EvalWorld(agent=agent, env=params['env'], params={'episodes': len(saved_scenes), 'render': False})
+    eval.seed_list = saved_scenes
+    eval.run()
+
+
+
 if __name__ == '__main__':
     params = yaml.safe_load(stream)
-    compile_dataset(params['env']['params'])
+    # compile_dataset(params['env']['params'])
     # train(params)
     # eval(params)
+    eval_in_scenes()
