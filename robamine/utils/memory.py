@@ -385,3 +385,17 @@ class RotatedLargeReplayBuffer(LargeReplayBuffer):
         buffer.n_scenes = n_scenes
         buffer.count = n_scenes - 1
         return buffer
+
+    def merge(self, buffer):
+        assert buffer.n_scenes + self.n_scenes < self.buffer_size
+        n_scenes_new = self.n_scenes + buffer.n_scenes - 1
+        self.resize(n_scenes_new)
+
+        for key in list(self.file['obs'].keys()):
+            self.file['obs'][key][self.n_scenes - 1:, :] = buffer.file['obs'][key]
+        self.file['action'][self.n_scenes - 1:, :] = buffer.file['action']
+        self.file['reward'][self.n_scenes - 1:, :] = buffer.file['reward']
+
+        self.n_scenes += buffer.n_scenes
+        self.count += self.n_scenes
+
