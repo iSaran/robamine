@@ -150,10 +150,27 @@ def eval_in_scenes(model_path='/home/espa/robamine_logs/2020.04.26_supervised_ac
     eval.run()
 
 
+def merge_buffers(path='/home/espa/robamine_logs/2020.04.26_supervised_actor_critic/data/', merged_name='buffer_all',
+                  buffer_names=['1', '2']):
+    buffers = []
+    for name in buffer_names:
+        buffers.append(RotatedLargeReplayBuffer.load(os.path.join(path, name + '.hdf5')))
+
+    shapes = ClutterCont.get_obs_shapes()
+    action_dim = buffers[0].file['action'].shape[2]
+    rotations = buffers[0].file['action'].shape[1]
+    buffer = RotatedLargeReplayBuffer(buffer_size, shapes, action_dim, os.path.join(path, merged_name + '.hdf5'),
+                                      rotations=rotations)
+
+    for b in buffers:
+        buffer.merge(b)
+
+
 
 if __name__ == '__main__':
     params = yaml.safe_load(stream)
     # compile_dataset(params['env']['params'])
+    merge_buffers()
     # train(params)
     # eval(params)
     eval_in_scenes()
