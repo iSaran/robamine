@@ -2,7 +2,7 @@ import gym
 from robamine.algo.core import SupervisedTrainWorld, EvalWorld, InvalidEnvError
 from robamine.algo.util import Transition
 from robamine.utils.math import min_max_scale
-from robamine.envs.clutter_cont import ClutterContWrapper
+from robamine.envs.clutter_cont import ClutterContWrapper, ClutterCont
 from robamine.envs.clutter_utils import get_action_dim
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG
@@ -95,7 +95,8 @@ def train(params):
 
 def compile_dataset(params):
     env = ClutterContWrapper(params)
-    buffer = RotatedLargeReplayBuffer(buffer_size, 386, env.action_dim[0] + 1, buffer_path, rotations=rotations)
+    shapes = ClutterCont.get_obs_shapes()
+    buffer = RotatedLargeReplayBuffer(buffer_size, shapes, env.action_dim[0] + 1, buffer_path, rotations=rotations)
 
     for i in range(buffer_episodes):
         transition = run_episode(env, i)
