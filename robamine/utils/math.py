@@ -142,7 +142,7 @@ class LineSegment2D:
         return np.linalg.norm(self.p1 - self.p2)
 
     def __str__(self):
-        return self.p1.__str__() + self.p2.__str__()
+        return self.p1.__str__() + ' ' + self.p2.__str__()
 
     def array(self):
         result = np.zeros((2, 2))
