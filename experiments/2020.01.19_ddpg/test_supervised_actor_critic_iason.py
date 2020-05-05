@@ -180,12 +180,20 @@ def preprocess_dataset(path='/home/espa/robamine_logs/2020.04.26_supervised_acto
         transition = Transition({'feature': feature}, scene.action, scene.reward, None, None)
         new.store(transition)
 
+def run_one_transition_in_clutter(params):
+    '''Just to test quickly changes in clutter'''
+    params['render'] = True
+    env = ClutterContWrapper(params)
+    state = env.reset()
+    action = np.array([0, 0, 0, 0])
+    env.step(action)
 
 
 if __name__ == '__main__':
     params = yaml.safe_load(stream)
     # compile_dataset(params['env']['params'])
-    merge_buffers()
+    # merge_buffers()
     # train(params)
     # eval(params)
-    eval_in_scenes()
+    # eval_in_scenes()
+    run_one_transition_in_clutter(params['env']['params'])
