@@ -356,18 +356,31 @@ class ClutterXMLGenerator(XMLGenerator):
         target_width  = self.rng.uniform(self.params['target']['min_bounding_box'][1], min(target_length, self.params['target']['max_bounding_box'][1]))
         target_height = self.rng.uniform(max(self.params['target']['min_bounding_box'][2], finger_size), self.params['target']['max_bounding_box'][2])
 
+        # Randomize position
+        theta = self.rng.uniform(0, 2 * math.pi)
+        table_line_segments = [LineSegment2D(np.array([self.surface_size[0], -self.surface_size[1]]),
+                                             np.array([self.surface_size[0], self.surface_size[1]])),
+                               LineSegment2D(np.array([self.surface_size[0], self.surface_size[1]]),
+                                             np.array([-self.surface_size[0], self.surface_size[1]])),
+                               LineSegment2D(np.array([-self.surface_size[0], self.surface_size[1]]),
+                                             np.array([-self.surface_size[0], -self.surface_size[1]])),
+                               LineSegment2D(np.array([-self.surface_size[0], -self.surface_size[1]]),
+                                             np.array([self.surface_size[0], -self.surface_size[1]]))]
+        distance_table = np.linalg.norm(
+            LineSegment2D(np.zeros(2), np.array([math.cos(theta), math.sin(theta)])).get_first_intersection_point(
+                table_line_segments))
+
+        max_distance = distance_table - math.sqrt(math.pow(target_length, 2) + math.pow(target_width, 2))
+        distance = min(1, abs(self.rng.normal(0, 0.5))) * max_distance
+        target_pos = [distance * math.cos(theta), distance * math.sin(theta), 0.0]
+
         #   Randomize orientation
-        # theta = self.rng.uniform(0, 2 * math.pi)
-        # target_orientation = Quaternion()
-        # target_orientation.rot_z(theta)
-        # index = self.sim.model.get_joint_qpos_addr("target")
-        # random_qpos[index[0] + 3] = target_orientation.w
-        # random_qpos[index[0] + 4] = target_orientation.x
-        # random_qpos[index[0] + 5] = target_orientation.y
-        # random_qpos[index[0] + 6] = target_orientation.z
+        theta = self.rng.uniform(0, 2 * math.pi)
+        quat = Quaternion()
+        quat.rot_z(theta)
 
         if type == 'box':
-            target = self.get_target(type, size = [target_length, target_width, target_height])
+            target = self.get_target(type, pos=target_pos, quat=[quat.w, quat.x, quat.y, quat.z], size = [target_length, target_width, target_height])
         else:
             target = self.get_target(type, size = [target_length, target_height, 0.0])
         self.worldbody.append(target)
@@ -421,7 +434,7 @@ class ClutterXMLGenerator(XMLGenerator):
             # Randomize the positions
             r = self.rng.exponential(0.01) + target_length + max(x, y)
             theta = self.rng.uniform(0, 2 * math.pi)
-            pos = [r * math.cos(theta), r * math.sin(theta), z]
+            pos = [r * math.cos(theta) + target_pos[0], r * math.sin(theta) + target_pos[1], z]
             obstacle = self.get_obstacle(index=i, type=type, pos=pos, size=[x, y, z])
             self.worldbody.append(obstacle)
 
@@ -726,11 +739,18 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         for i in range(1, number_of_obstacles + 1):
             names.append("object" + str(i))
 
+        centroid = np.zeros(2)
+        for name in names:
+            body_id = get_body_names(self.sim.model).index(name)
+            pos = self.sim.data.body_xpos[body_id]
+            centroid += pos[:2]
+        centroid /= len(names)
+
         for _ in range(300):
             for name in names:
                 body_id = get_body_names(self.sim.model).index(name)
-                self.sim.data.xfrc_applied[body_id][0] = - gain * self.sim.data.body_xpos[body_id][0]
-                self.sim.data.xfrc_applied[body_id][1] = - gain * self.sim.data.body_xpos[body_id][1]
+                self.sim.data.xfrc_applied[body_id][0] = - gain * (self.sim.data.body_xpos[body_id][0] - centroid[0])
+                self.sim.data.xfrc_applied[body_id][1] = - gain * (self.sim.data.body_xpos[body_id][1] - centroid[1])
             self.sim_step()
 
         for name in names:
