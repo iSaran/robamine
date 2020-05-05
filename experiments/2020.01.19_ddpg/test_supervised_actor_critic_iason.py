@@ -3,7 +3,7 @@ from robamine.algo.core import SupervisedTrainWorld, EvalWorld, InvalidEnvError
 from robamine.algo.util import Transition
 from robamine.utils.math import min_max_scale
 from robamine.envs.clutter_cont import ClutterContWrapper, ClutterCont
-from robamine.envs.clutter_utils import get_action_dim
+from robamine.envs.clutter_utils import get_action_dim, get_observation_dim, obs_dict2feature
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG
 from robamine.algo.supervisedactorcritic import SupervisedActorCritic
@@ -164,6 +164,21 @@ def merge_buffers(path='/home/espa/robamine_logs/2020.04.26_supervised_actor_cri
 
     for b in buffers:
         buffer.merge(b)
+
+
+def preprocess_dataset(path='/home/espa/robamine_logs/2020.04.26_supervised_actor_critic/data/', name='buffer',
+                       target_name='feature_buffer', primitive=1):
+    '''Transforms a heightmap dataset to a feature dataset'''
+    old = RotatedLargeReplayBuffer.load(os.path.join(path, name + '.hdf5'))
+    shape = {'feature': (get_observation_dim(primitive),)}
+    new = RotatedLargeReplayBuffer(old.buffer_size, shape, old.action_dim, os.path.join(path, target_name + '.hdf5'),
+                                   existing=False, rotations=old.rotations)
+
+    for i in range(old.n_scenes):
+        scene = old.get_scene(i)
+        feature = obs_dict2feature(primitive=primitive, obs_dict=scene.state, angle=0).array()
+        transition = Transition({'feature': feature}, scene.action, scene.reward, None, None)
+        new.store(transition)
 
 
 
