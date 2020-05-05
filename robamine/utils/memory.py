@@ -313,6 +313,8 @@ class RotatedLargeReplayBuffer(LargeReplayBuffer):
         self.count = 0
         self.n_scenes = 1
         self.rotations = rotations
+        self.action_dim = action_dim
+        self.rotations = rotations
 
         self.file = h5py.File(path, mode)
 
@@ -338,6 +340,19 @@ class RotatedLargeReplayBuffer(LargeReplayBuffer):
 
         return Transition(state=state, next_state=None, action=self.file['action'][global_index, local_index, :],
                           reward=self.file['reward'][global_index, local_index, :], terminal=None)
+
+    def get_transition(self, i):
+        return self._get_elem(i)
+
+    def get_scene(self, i):
+        global_index = i
+        state = {}
+        for key in list(self.file['obs'].keys()):
+            state[key] = self.file['obs'][key][global_index, :]
+
+        return Transition(state=state, next_state=None, action=self.file['action'][global_index, :],
+                          reward=self.file['reward'][global_index, :], terminal=None)
+
 
     def resize(self, size):
         for key in list(self.file['obs'].keys()):
