@@ -114,8 +114,8 @@ class SupervisedActorCritic(Agent):
 
         self.device = self.params['device']
         # Create a list of actor-critics and their targets
-        self.actor = Actor(self.state_dim, self.action_dim, self.params['actor']['hidden_units'])
-        self.critic = Critic(self.state_dim, self.action_dim, self.params['critic']['hidden_units'])
+        self.actor = Actor(self.state_dim, self.action_dim, self.params['actor']['hidden_units']).to(self.device)
+        self.critic = Critic(self.state_dim, self.action_dim, self.params['critic']['hidden_units']).to(self.device)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), self.params['critic']['learning_rate'])
         self.actor_optimizer = optim.Adam(self.actor.parameters(), self.params['actor']['learning_rate'])
         self.info = {'critic_loss': 0.0, 'actor_loss': 0.0, 'test_critic_loss': 0.0, 'test_actor_loss': 0.0}
@@ -211,8 +211,8 @@ class SupervisedActorCritic(Agent):
             else:
                 state_abs_mean = self.actor.forward2(state).abs().mean()
                 preactivation = (state_abs_mean - torch.tensor(1.0)).pow(2)
-                if state_abs_mean < torch.tensor(1.0):
-                    preactivation = torch.tensor(0.0)
+                if state_abs_mean < torch.tensor(1.0).to(self.device):
+                    preactivation = torch.tensor(0.0).to(self.device)
                 weight = self.params['actor'].get('preactivation_weight', .05)
                 actor_loss = -self.critic(state, self.actor(state)).mean() + weight * preactivation
                 logging_loss.append(actor_loss.detach().cpu().numpy().copy())
