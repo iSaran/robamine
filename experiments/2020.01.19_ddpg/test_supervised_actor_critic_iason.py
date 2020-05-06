@@ -138,13 +138,13 @@ def eval(params):
     eval = EvalWorld(agent=agent, env=params['env'], params={'episodes': 5, 'render': True})
     eval.run()
 
-def eval_in_scenes(model_path='/home/espa/robamine_logs/2020.04.26_supervised_actor_critic/robamine_logs_2020.04.30.16.41.17.945353/model.pkl'):
+def eval_in_scenes(model_path, n_scenes=1000):
     rb_logging.init(directory=params['world']['logging_dir'], friendly_name=params['world']['friendly_name'], file_level=logging.INFO)
     agent = SupervisedActorCritic.load(model_path)
     params['env']['params']['render'] = False
     params['env']['params']['safe'] = False
     # params['env']['params']['seed'] = 5
-    saved_scenes = np.arange(0, 1000, 1).tolist()
+    saved_scenes = np.arange(0, n_scenes, 1).tolist()
     eval = EvalWorld(agent=agent, env=params['env'], params={'episodes': len(saved_scenes), 'render': False})
     eval.seed_list = saved_scenes
     eval.run()
@@ -170,7 +170,7 @@ def preprocess_dataset(path='/home/espa/robamine_logs/2020.04.26_supervised_acto
                        target_name='feature_buffer', primitive=1):
     '''Transforms a heightmap dataset to a feature dataset'''
     old = RotatedLargeReplayBuffer.load(os.path.join(path, name + '.hdf5'))
-    shape = {'feature': (get_observation_dim(primitive),)}
+    shape = {'feature': (get_observation_dim(primitive)[0],)}
     new = RotatedLargeReplayBuffer(old.buffer_size, shape, old.action_dim, os.path.join(path, target_name + '.hdf5'),
                                    existing=False, rotations=old.rotations)
 
@@ -195,5 +195,5 @@ if __name__ == '__main__':
     # merge_buffers()
     # train(params)
     # eval(params)
-    # eval_in_scenes()
+    # eval_in_scenes(model_path='/home/espa/robamine_logs/2020.04.26_supervised_actor_critic/robamine_logs_2020.04.30.16.41.17.945353/model.pkl')
     run_one_transition_in_clutter(params['env']['params'])
