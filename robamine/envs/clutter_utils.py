@@ -20,12 +20,11 @@ from robamine.utils.info import get_now_timestamp
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import os
+from robamine.algo.core import InvalidEnvError
 
 
 from robamine.algo.util import Transition
 
-class InvalidEnvError(Exception):
-    pass
 
 class TargetObjectConvexHull:
     def __init__(self, masked_in_depth, log_dir='/tmp'):

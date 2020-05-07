@@ -34,6 +34,9 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 logger = logging.getLogger('robamine.algo.core')
 
+class InvalidEnvError(Exception):
+    pass
+
 class Agent:
     def __init__(self, name='', params={}):
         self.name = name
@@ -900,13 +903,48 @@ class EvalWorld(RLWorld):
         self.with_prediction_horizon = False
         if self.agent.prediction_horizon:
             self.with_prediction_horizon = True
+        self.seed_offset = 0
 
     def run_episode(self, i):
         if self.with_prediction_horizon:
             episode = TestingEpisodePredictionHorizon(self.agent, self.env)
         else:
             episode = TestingEpisode(self.agent, self.env)
-        super().run_episode(episode, i)
+
+        # LIke super run episode
+        if self.env_init_states:
+            init_state = self.env_init_states[i]
+        else:
+            init_state = None
+
+        if self.seed_list is not None:
+            seed = self.seed_list[i + self.seed_offset]
+        else:
+            seed = None
+
+        try:
+            episode.run(render=self.render, init_state=init_state, seed=seed)
+        except InvalidEnvError as e:
+            print("WARN: {0}. Invalid environment during running testing episode.".format(e))
+            self.seed_offset += 1
+            self.seed_list.append(self.seed_list[-1] + 1000)
+            self.run_episode(i)
+            return
+
+        # Update tensorboard stats
+        self.stats.update(i, episode.stats)
+        self.episode_stats.append(episode.stats)
+        self.episode_list_data.append(episode.data)
+
+        # Save agent model
+        self.save()
+        if self.save_every and (i + 1) % self.save_every == 0:
+            self.save(suffix='_' + str(i+1))
+
+        # Save the config in YAML file
+        self.experience_time += episode.stats['experience_time']
+        self.update_results(n_iterations = i + 1, n_timesteps = episode.stats['n_timesteps'])
+
         for i in range (0, episode.stats['n_timesteps']):
             self.expected_values_file.write(str(episode.stats['q_value'][i]) + ',' + str(episode.stats['monte_carlo_return'][i]) + '\n')
             self.expected_values_file.flush()

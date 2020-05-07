@@ -24,7 +24,8 @@ import math
 from math import sqrt
 import glfw
 
-from robamine.envs.clutter_utils import TargetObjectConvexHull, InvalidEnvError, get_action_dim, get_observation_dim
+from robamine.envs.clutter_utils import TargetObjectConvexHull, get_action_dim, get_observation_dim
+from robamine.algo.core import InvalidEnvError
 
 import xml.etree.ElementTree as ET
 from robamine.utils.orientation import rot2quat
