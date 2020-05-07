@@ -444,6 +444,8 @@ class ClutterContWrapper(gym.Env):
         self.results = {}
         self.results['collisions'] = 0
 
+        self.last_reset_state_dict = None
+
     def reset(self, seed=None):
         if self.env is not None:
             del self.env
@@ -457,6 +459,8 @@ class ClutterContWrapper(gym.Env):
             except InvalidEnvError as e:
                 print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
                 reset_not_valid = True
+
+        self.last_reset_state_dict = self.env.state_dict()
         return obs
 
     def step(self, action):
@@ -474,6 +478,13 @@ class ClutterContWrapper(gym.Env):
 
     def render(self, mode='human'):
         self.env.render(mode)
+
+    def state_dict(self):
+        return self.last_reset_state_dict
+
+    def load_state_dict(self, state_dict):
+        self.env.load_state_dict(state_dict)
+        self.env.reset_model()
 
 
 class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
