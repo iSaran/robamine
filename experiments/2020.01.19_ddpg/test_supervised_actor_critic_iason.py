@@ -1,9 +1,9 @@
 import gym
-from robamine.algo.core import SupervisedTrainWorld, EvalWorld
+from robamine.algo.core import SupervisedTrainWorld, EvalWorld, InvalidEnvError
 from robamine.algo.util import Transition
 from robamine.utils.math import min_max_scale
 from robamine.envs.clutter_cont import ClutterContWrapper
-from robamine.envs.clutter_utils import get_action_dim, InvalidEnvError
+from robamine.envs.clutter_utils import get_action_dim
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG
 from robamine.algo.supervisedactorcritic import SupervisedActorCritic
