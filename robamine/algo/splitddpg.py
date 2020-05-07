@@ -8,7 +8,9 @@ import torch.optim as optim
 
 from robamine.algo.core import RLAgent
 from robamine.utils.memory import ReplayBuffer
+from robamine.utils.math import min_max_scale
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise, Transition
+from robamine.envs.clutter_utils import get_observation_dim, get_action_dim, obs_dict2feature
 
 import numpy as np
 import pickle
@@ -114,6 +116,9 @@ class SplitDDPG(RLAgent):
     invalid.
     '''
     def __init__(self, state_dim, action_dim, params=default_params):
+        self.hardcoded_primitive = params['hardcoded_primitive']
+        self.state_dim = get_observation_dim(self.hardcoded_primitive)
+        self.action_dim = get_action_dim(self.hardcoded_primitive)
         super().__init__(state_dim, action_dim, 'SplitDDPG', params)
 
         # The number of networks is the number of primitive actions. One network
@@ -122,14 +127,16 @@ class SplitDDPG(RLAgent):
 
         self.device = self.params['device']
 
+
+
         # Create a list of actor-critics and their targets
         self.actor, self.target_actor, self.critic, self.target_critic = nn.ModuleList(), nn.ModuleList(), \
                                                                          nn.ModuleList(), nn.ModuleList()
         for i in range(self.nr_network):
-            self.actor.append(Actor(self._state_dim(self.state_dim[i]), self.action_dim[i], self.params['actor']['hidden_units'][i]))
-            self.target_actor.append(Actor(self._state_dim(self.state_dim[i]), self.action_dim[i], self.params['actor']['hidden_units'][i]))
-            self.critic.append(Critic(self._state_dim(self.state_dim[i]), self.action_dim[i], self.params['critic']['hidden_units'][i]))
-            self.target_critic.append(Critic(self._state_dim(self.state_dim[i]), self.action_dim[i], self.params['critic']['hidden_units'][i]))
+            self.actor.append(Actor(self.state_dim[i], self.action_dim[i], self.params['actor']['hidden_units'][i]))
+            self.target_actor.append(Actor(self.state_dim[i], self.action_dim[i], self.params['actor']['hidden_units'][i]))
+            self.critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i]))
+            self.target_critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i]))
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         self.info['q_values'] = []
@@ -179,7 +186,11 @@ class SplitDDPG(RLAgent):
         max_q = -1e10
         i = 0
         for i in range(self.nr_network):
-            s = torch.FloatTensor(self._state(state[i])).to(self.device)
+            if self.hardcoded_primitive < 0:
+                k = i
+            else:
+                k = self.hardcoded_primitive
+            s = torch.FloatTensor(obs_dict2feature(k, state).array()).to(self.device)
             a = self.actor[i](s)
             q = self.critic[i](s, a).cpu().detach().numpy()
             self.info['q_values'][i] = q[0]
@@ -188,7 +199,10 @@ class SplitDDPG(RLAgent):
                 max_a = a.cpu().detach().numpy()
                 max_primitive = i
 
-        output[0] = max_primitive
+        if self.hardcoded_primitive < 0:
+            output[0] = max_primitive
+        else:
+            output[0] = int(self.hardcoded_primitive)
         output[1:(self.action_dim[max_primitive] + 1)] = max_a
         return output
 
@@ -233,7 +247,10 @@ class SplitDDPG(RLAgent):
             raise ValueError(self.name + ': Dimension of a high level action should be 1 or 2.')
 
     def learn(self, transition):
-        i = int(transition.action[0]) # first element of action defines the primitive action
+        if self.hardcoded_primitive < 0:
+            i = int(transition.action[0])
+        else:
+            i = 0
         transitions = self._transitions(transition)
         for t in transitions:
             self.replay_buffer[i].store(t)
@@ -244,7 +261,7 @@ class SplitDDPG(RLAgent):
             return
         else:
             self.preloading_finished = True
-            self.replay_buffer[i].save(os.path.join(self.log_dir, 'split_ddpg_preloaded_buffer_' + str(i)))
+            # self.replay_buffer[i].save(os.path.join(self.log_dir, 'split_ddpg_preloaded_buffer_' + str(i)))
 
         for _ in range(self.params['update_iter'][i]):
             batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
@@ -308,8 +325,10 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        s = torch.FloatTensor(self._state(state[i])).to(self.device)
+        s = torch.FloatTensor(obs_dict2feature(i, state).array()).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
+        if self.hardcoded_primitive >= 0:
+            i = 0
         q = self.critic[i](s, a).cpu().detach().numpy()
         return q
 
@@ -354,50 +373,44 @@ class SplitDDPG(RLAgent):
             self.target_actor[i].load_state_dict(trainable['target_actor'][i])
             self.target_critic[i].load_state_dict(trainable['target_critic'][i])
 
-    def _state_dim(self, state_dim):
-        heightmap_rotations = self.params.get('heightmap_rotations', 0)
-        if heightmap_rotations > 0:
-            state_network = int(state_dim / heightmap_rotations)
-        else:
-            state_network = state_dim
-        return state_network
-
-    def _state(self, state):
-        assert isinstance(state, np.ndarray)
-        heightmap_rotations = self.params.get('heightmap_rotations', 0)
-        if heightmap_rotations > 0:
-            state_split = np.split(state, heightmap_rotations)
-            s = state_split[0]
-        else:
-            s = state
-        return s
-
     def _transitions(self, transition):
         transitions = []
         heightmap_rotations = self.params.get('heightmap_rotations', 0)
         if heightmap_rotations > 0:
-            state_split = np.split(transition.state[int(transition.action[0])], heightmap_rotations)
-            next_state_split = np.split(transition.next_state[int(transition.action[0])], heightmap_rotations)
+
 
             for j in range(heightmap_rotations):
+                angle = 2 / heightmap_rotations * j
+
+                # TODO this 360 might be different in grasp target
+                angle_deg = min_max_scale(angle, [-1, 1], [0, 360])
+
+                state = obs_dict2feature(int(transition.action[0]), transition.state, angle=angle_deg).array()
+                next_state = np.zeros(get_observation_dim(int(transition.action[0]))[0])
+                if not transition.terminal:
+                    next_state = obs_dict2feature(int(transition.action[0]), transition.next_state, angle=angle_deg).array()
 
                 # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
                 act = transition.action.copy()
-                act[1] += j * (2 / heightmap_rotations)
+                act[1] += angle
                 if act[1] > 1:
                     act[1] = -1 + abs(1 - act[1])
 
-                tran = Transition(state=state_split[j].copy(),
+                tran = Transition(state=state.copy(),
                                   action=act.copy(),
                                   reward=transition.reward,
-                                  next_state=next_state_split[j].copy(),
+                                  next_state=next_state.copy(),
                                   terminal=transition.terminal)
                 transitions.append(tran)
         else:
-            tran = Transition(state=transition.state[int(transition.action[0])],
+            state = obs_dict2feature(int(transition.action[0]), transition.state).array()
+            next_state = np.zeros(get_observation_dim(int(transition.action[0]))[0])
+            if not transition.terminal:
+                next_state = obs_dict2feature(int(transition.action[0]), transition.next_state).array()
+            tran = Transition(state=state,
                               action=transition.action,
                               reward=transition.reward,
-                              next_state=transition.next_state[int(transition.action[0])],
+                              next_state=next_state,
                               terminal=transition.terminal)
             transitions.append(tran)
 
