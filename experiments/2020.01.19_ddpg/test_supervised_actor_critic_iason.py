@@ -100,7 +100,7 @@ def compile_dataset(params):
     for i in range(buffer_episodes):
 
         state = env.reset()
-        state_dict = env.env.state_dict()
+        state_dict = env.state_dict()
 
         action_to_store = np.zeros((rotations, get_action_dim(params['hardcoded_primitive'])[0] + 1))
         reward_to_store = np.zeros((rotations, 1))
@@ -116,8 +116,8 @@ def compile_dataset(params):
 
             action_to_store[phi, :] = action
             reward_to_store[phi, :] = reward
-            env.env.load_state_dict(state_dict)
-            env.env.reset_model()
+            
+            env.load_state_dict(state_dict)
 
         transition = Transition(state, action_to_store, reward_to_store, None, None)
         buffer.store(transition)
