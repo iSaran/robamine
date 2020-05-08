@@ -701,6 +701,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             if self.rng.uniform(0, 1) < hug_probability:
                 self._hug_target(number_of_obstacles)
 
+            if not self._target_is_on_table():
+                raise InvalidEnvError('Target has fallen off the table during resetting the env.')
+
             self.check_target_occlusion(number_of_obstacles)
 
             for _ in range(100):
@@ -857,6 +860,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         mask_points = np.argwhere(self.mask > 0)
         self.convex_mask = np.zeros(self.mask.shape, dtype=np.uint8)
         cv2.fillPoly(self.convex_mask, pts=[self.target_object.get_limits().astype(np.int32)], color=(255, 255, 255))
+        plt.imsave(os.path.join(self.log_dir, 'convex_mask.png'), self.convex_mask, cmap='gray', vmin=np.min(self.convex_mask), vmax=np.max(self.convex_mask))
+        if len(np.argwhere(self.convex_mask > 0)) < 200:
+            raise InvalidEnvError('Convex mask is empty during reset.')
 
         if self.singulation_area[0] > self.max_singulation_area[0]:
             self.singulation_area[0] = self.max_singulation_area[0]
@@ -876,6 +882,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_distances_from_limits_vision = [x / 0.5 for x in self.target_distances_from_limits_vision]
 
         return self.heightmap, self.mask
+
+    def _target_is_on_table(self):
+        body_id = get_body_names(self.sim.model).index('target')
+        pos = self.sim.data.body_xpos[body_id]
+        if pos[2] > 0:
+            return True
+
+        print('Target fell off the table.')
+        return False
 
     @staticmethod
     def get_obs_shapes():
@@ -898,7 +913,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'heightmap_mask': np.zeros(shapes['heightmap_mask'])
         }
 
-        if min(self.target_distances_from_limits) < 0:
+        if not self._target_is_on_table():
             for key in list(shapes.keys()):
                 assert obs_dict[key].shape == shapes[key]
             return obs_dict
