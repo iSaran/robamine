@@ -829,12 +829,15 @@ class RLWorld(World):
             plotter.plot()
 
     @classmethod
-    def load(cls, directory):
+    def load(cls, directory, overwrite_config=None):
         with open(os.path.join(directory, 'config.yml'), 'r') as stream:
             try:
                 config = yaml.safe_load(stream)
             except yaml.YAMLError as exc:
                 print(exc)
+
+        if overwrite_config is not None:
+            config = overwrite_config
 
         if len(config['env']) == 1:
             env = gym.make(config['env']['name'])
