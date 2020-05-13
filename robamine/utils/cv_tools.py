@@ -185,7 +185,7 @@ class ColorDetector:
         plt.scatter(pts[1][0], pts[1][1], s=8, color='g')
         plt.scatter(pts[2][0], pts[2][1], s=8, color='b')
         plt.scatter(pts[3][0], pts[3][1], s=8, color='y')
-        # plt.savefig('/home/mkiatos/Desktop/box.png')
+        plt.savefig('/home/mkiatos/Desktop/box.png')
         # plt.close()
         plt.show()
 
@@ -343,6 +343,12 @@ class Feature:
         """
         scale = 1.0
         rot = cv2.getRotationMatrix2D((self.center[0], self.center[1]), theta, scale)
+        rotated_heightmap = cv2.warpAffine(self.heightmap, rot, self.size)
+        return Feature(rotated_heightmap)
+
+    def rotate_around_point(self, theta, point):
+        scale = 1.0
+        rot = cv2.getRotationMatrix2D((point[0], point[1]), theta, scale)
         rotated_heightmap = cv2.warpAffine(self.heightmap, rot, self.size)
         return Feature(rotated_heightmap)
 

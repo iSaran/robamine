@@ -71,22 +71,45 @@ class Critic(nn.Module):
         self.hidden_layers.append(nn.Linear(state_dim + action_dim, hidden_units[0]))
         for i in range(1, len(hidden_units)):
             self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
-            # stdv = 1. / math.sqrt(self.hidden_layers[i].weight.size(1))
-            # self.hidden_layers[i].weight.data.uniform_(-stdv, stdv)
-            # if self.hidden_layers[i].bias is not None:
-            #     self.hidden_layers[i].bias.data.uniform_(-stdv, stdv)
-            # self.hidden_layers[i].weight.data.uniform_(-0.003, 0.003)
-            # self.hidden_layers[i].bias.data.uniform_(-0.003, 0.003)
+            self.hidden_layers[i].weight.data.uniform_(-0.003, 0.003)
+            self.hidden_layers[i].bias.data.uniform_(-0.003, 0.003)
 
         self.out = nn.Linear(hidden_units[-1], 1)
-        # stdv = 1. / math.sqrt(self.hidden_units[-1].weight.size(1))
-        # self.hidden_layers[-1].weight.data.uniform_(-stdv, stdv)
-        # if self.hidden_layers[-1].bias is not None:
-        #     self.hidden_layers[-1].bias.data.uniform_(-stdv, stdv)
-        # self.out.weight.data.uniform_(-0.003, 0.003)
-        # self.out.bias.data.uniform_(-0.003, 0.003)
+        self.out.weight.data.uniform_(-0.003, 0.003)
+        self.out.bias.data.uniform_(-0.003, 0.003)
 
-    def forward(self, x, u):
+    def forward(self, x, u, angle, cout=False):
+        # u_ = u.clone()
+        # if len(u.shape) == 1:
+        #     u_[0] = 0
+        # else:
+        #     u_[:, 0] = torch.zeros((x.shape[0]))
+        #
+        # x_ = x.clone()
+        # angles = np.arange(1, 108, 3)
+        # for i in angles:
+        #     if len(u.shape) == 1:
+        #         x_[i] -= u[0]
+        #         if x_[i] < -1.0:
+        #             x_[i] = torch.tensor(1.0) - torch.abs(torch.tensor(-1.0) - x_[i])
+        #     else:
+        #         x_[:, i] -= u[:, 0]
+        #         x_[:, i][x_[:, i] < -1.0] = torch.tensor(1.0) - torch.abs(torch.tensor(-1.0) - x_[:, i][x_[:, i] < -1.0])
+        #
+        # if cout:
+        #     print('x:')
+        #     print(x.detach().cpu().numpy())
+        #     print('---')
+        #     print('x_:')
+        #     print(x_.detach().cpu().numpy())
+        #
+        #     print('u:')
+        #     print(u.detach().cpu().numpy())
+        #     print('----')
+        #     print('u_:')
+        #     print(u_.detach().cpu().numpy())
+        # x = torch.cat([x_, u_], x.dim() - 1)
+
         x = torch.cat([x, u], x.dim() - 1)
         for layer in self.hidden_layers:
             x = nn.functional.relu(layer(x))
@@ -95,27 +118,19 @@ class Critic(nn.Module):
 
 
 class Actor(nn.Module):
-    def __init__(self, obs_dim, action_dim, hidden_units):
+    def __init__(self, state_dim, action_dim, hidden_units):
         super(Actor, self).__init__()
 
         self.hidden_layers = nn.ModuleList()
-        self.hidden_layers.append(nn.Linear(obs_dim, hidden_units[0]))
+        self.hidden_layers.append(nn.Linear(state_dim, hidden_units[0]))
         for i in range(1, len(hidden_units)):
             self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
-            stdv = 1. / math.sqrt(self.hidden_layers[i].weight.size(1))
-            # self.hidden_layers[i].weight.data.uniform_(-stdv, stdv)
-            # if self.hidden_layers[i].bias is not None:
-            #     self.hidden_layers[i].bias.data.uniform_(-stdv, stdv)
-            # self.hidden_layers[i].weight.data.uniform_(-0.003, 0.003)
-            # self.hidden_layers[i].bias.data.uniform_(-0.003, 0.003)
+            self.hidden_layers[i].weight.data.uniform_(-0.003, 0.003)
+            self.hidden_layers[i].bias.data.uniform_(-0.003, 0.003)
 
         self.out = nn.Linear(hidden_units[-1], action_dim)
-        # stdv = 1. / math.sqrt(self.hidden_units[-1].weight.size(1))
-        # self.hidden_layers[-1].weight.data.uniform_(-stdv, stdv)
-        # if self.hidden_layers[-1].bias is not None:
-        #     self.hidden_layers[-1].bias.data.uniform_(-stdv, stdv)
-        # self.out.weight.data.uniform_(-0.003, 0.003)
-        # self.out.bias.data.uniform_(-0.003, 0.003)
+        self.out.weight.data.uniform_(-0.003, 0.003)
+        self.out.bias.data.uniform_(-0.003, 0.003)
 
         self.actions_real = []
 
@@ -123,7 +138,7 @@ class Actor(nn.Module):
         for layer in self.hidden_layers:
             x = nn.functional.relu(layer(x))
         self.actions_real = self.out(x)
-        out = torch.tanh(self.out(x))
+        out = torch.tanh(self.actions_real)
         return out
 
 
@@ -158,8 +173,10 @@ class FeatureExtractor(nn.Module):
         # cv_tools.plt_plot(x2[0, 0, :, :].detach().cpu().numpy())
         z1 = self.heightmap_net.encoder(x1)
         z2 = self.mask_net.encoder(x2)
-        # cv_tools.plt_plot(z1[0, 0, :, :].detach().cpu().numpy())
-        # cv_tools.plt_plot(z2[0, 0, :, :].detach().cpu().numpy())
+        # x1_recon = self.heightmap_net.decoder(z1)
+        # cv_tools.plt_plot(x1_recon[0, 0, :, :].detach().cpu().numpy())
+        # x2_recon = self.mask_net.decoder(z2)
+        # cv_tools.plt_plot(x2_recon[0, 0, :, :].detach().cpu().numpy())
         x = torch.cat((z1, z2), 1)
         return x
 
@@ -172,11 +189,11 @@ class SplitDDPG(RLAgent):
     invalid.
     '''
     def __init__(self, state_dim, action_dim, params=default_params):
-        self.feature_extractor = FeatureExtractor()
-
-        state_dim = 81
-        obs_dim = 2048
         super().__init__(state_dim, action_dim, 'SplitDDPG', params)
+
+        torch.autograd.set_detect_anomaly(True)
+
+        self.obs_dim = 2048
 
         # The number of networks is the number of primitive actions. One network
         # per primitive action
@@ -188,16 +205,15 @@ class SplitDDPG(RLAgent):
         self.actor, self.target_actor, self.critic, self.target_critic = nn.ModuleList(), nn.ModuleList(), \
                                                                          nn.ModuleList(), nn.ModuleList()
         for i in range(self.nr_network):
-            self.actor.append(Actor(state_dim, self.actions[i],
-                                    self.params['actor']['hidden_units'][i]).to(self.device))
-            self.target_actor.append(Actor(state_dim, self.actions[i],
-                                           self.params['actor']['hidden_units'][i]).to(self.device))
-            self.critic.append(Critic(state_dim, self.actions[i],
-                                      self.params['critic']['hidden_units'][i]).to(self.device))
-            self.target_critic.append(Critic(state_dim, self.actions[i],
-                                             self.params['critic']['hidden_units'][i]).to(self.device))
+            self.actor.append(Actor(self.obs_dim, self.actions[i],
+                                    self.params['actor']['hidden_units'][i]))
+            self.target_actor.append(Actor(self.obs_dim, self.actions[i],
+                                           self.params['actor']['hidden_units'][i]))
+            self.critic.append(Critic(self._state_dim(state_dim), self.actions[i],
+                                      self.params['critic']['hidden_units'][i]))
+            self.target_critic.append(Critic(self._state_dim(state_dim), self.actions[i],
+                                             self.params['critic']['hidden_units'][i]))
 
-        # Create the optimizers for each actor and each critic, initialize the replay buffers
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         self.info['q_values'] = []
         for i in range(self.nr_network):
@@ -210,9 +226,6 @@ class SplitDDPG(RLAgent):
             self.info['actor_' + str(i) + '_loss'] = 0
             self.info['preactivation_' + str(i) + '_loss'] = 0
             self.info['q_values'].append(0.0)
-
-        self.replay_buffer[0] = ReplayBuffer.load('/home/mkiatos/Desktop/buffer')
-        print('replay buffer size:', self.replay_buffer[0].size())
 
         self.exploration_noise = []
         for i in range(len(self.actions)):
@@ -242,33 +255,65 @@ class SplitDDPG(RLAgent):
         self.n_rollout_steps = 100
         self.t_rollout = 0
 
+        # self.replay_buffer[0] = ReplayBuffer.load('/home/mkiatos/Desktop/buffer')
+        # print('replay buffer size:', self.replay_buffer[0].size())
+
 
     def predict(self, state):
+        np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
+
         output = np.zeros(max(self.actions) + 1)
-
-        # obs = torch.cuda.FloatTensor(state[0]).to(self.device)
-        # obs = obs.unsqueeze(0)
-        # s = torch.cuda.FloatTensor(state[1]).to(self.device)
-        # s = s.unsqueeze(0)
         s = torch.FloatTensor(self._state(state)).to(self.device)
-
+        obs = torch.FloatTensor(self._obs(state)).to(self.device)
+        angle = torch.FloatTensor(self._angle(state)).to(self.device)
         max_q = -1e10
         i = 0
+
+        # for j in range(32):
+        #     a = j * 2 / 32
+        #     init_d = -1 + a
+        #     action = torch.FloatTensor(np.array([init_d, -1, -1]))
+        #     q = self.critic[0](s, action, angle)
+        #     print(action.detach().cpu().numpy()[:], q.detach().cpu().numpy()[0])
+        # print('----')
+        # # input('')
+        # for j in range(10):
+        #     a = j * 2 / 10
+        #     init_d = -1 + a
+        #     action = torch.FloatTensor(np.array([0, init_d, 0]))
+        #     q = self.critic[0](s, action, angle)
+        #     print(action.detach().cpu().numpy()[:], q.detach().cpu().numpy()[0])
+        # print('----')
+        # for j in range(10):
+        #     a = j * 2 / 10
+        #     init_d = -1 + a
+        #     action = torch.FloatTensor(np.array([0, 0, init_d]))
+        #     q = self.critic[0](s, action, angle)
+        #     print(action.detach().cpu().numpy()[:], q.detach().cpu().numpy()[0])
+
+        # theta = np.linspace(-1, 1, 30)
+        # push_d = np.linspace(-1, 1, 30)
+        # init_d = np.linspace(-1, 0, 30)
+        # for x in theta:
+        #     sum_q_value = []
+        #     for y in push_d:
+        #         for z in init_d:
+        #             action = torch.FloatTensor(np.array([z, y, x]))
+        #             q = self.critic[0](s, action, angle)
+        #             sum_q_value.append(q.detach().cpu().numpy()[0])
+        #
+        #     print('q_', str(x), ':', np.mean(sum_q_value), np.min(sum_q_value), np.max(sum_q_value))
+
         for i in range(self.nr_network):
-            a = self.actor[i](s)
-            q = self.critic[i](s, a).cpu().detach().numpy()
-            print('actor_output:', a.cpu().detach().numpy()[0])
-            print('critic_output:', q[0])
+            a = self.actor[i](obs)
+            q = self.critic[i](s, a, angle).detach().cpu().numpy()
             self.info['q_values'][i] = q[0]
             if q > max_q:
                 max_q = q
-                max_a = a.cpu().detach().numpy()
+                max_a = a.detach().cpu().numpy()
                 max_primitive = i
-            else:
-                print('Q:', q)
-
-        # print(self.actor[i].hidden_layers[1].weight)
-        # input('')
+            print('actor_output:', a.detach().cpu().numpy()[:])
+            print('critic_output:', q[0])
 
         output[0] = max_primitive
         output[1:(self.actions[max_primitive] + 1)] = max_a
@@ -282,21 +327,15 @@ class SplitDDPG(RLAgent):
         epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
 
         if (self.rng.uniform(0, 1) >= epsilon) and self.preloading_finished:
-        # if random.random() < 0.8 and self.preloading_finished:
             pred = self.predict(state)
             i = int(pred[0])
             action = pred[1:self.actions[i] + 1]
             action += self.exploration_noise[i]()
         else:
-            print('random_action')
             i = self.rng.randint(0, len(self.actions))
             action = self.rng.uniform(-1, 1, self.actions[i])
+            print('random action')
             print(action)
-            # obs = torch.cuda.FloatTensor(self._state(state[0])).to(self.device)
-            # obs = obs.unsqueeze(0)
-            # s = torch.cuda.FloatTensor(state[1]).to(self.device)
-            # s = s.unsqueeze(0)
-            # action = self.actor[i](s).cpu().detach().numpy()
 
         action[action > 1] = 1
         action[action < -1] = -1
@@ -339,59 +378,55 @@ class SplitDDPG(RLAgent):
         for t in transitions:
             self.replay_buffer[i].store(t)
 
-        for _ in range(self.params['update_iter'][i]):
-            self.update_net(i)
-
-    def update_net(self, i):
-        self.info['critic_' + str(i) + '_loss'] = 0
-        self.info['actor_' + str(i) + '_loss'] = 0
-
         if not self.preloading_finished:
             if self.replay_buffer[i].size() < 1000:
                 print("%d/1000" % self.replay_buffer[i].size())
                 return
             else:
-                # self.replay_buffer[i].save('/home/mkiatos/Desktop/buffer')
+                self.replay_buffer[i].save('/home/mkiatos/Desktop/buffer')
                 self.preloading_finished = True
 
+        for _ in range(self.params['update_iter'][i]):
+            self.update_net(i)
+
+    def split_state_batch(self, batch_state):
+        batch_size = batch_state.shape[0]
+        state = np.zeros((batch_size, self._state_dim(self.state_dim)))
+        obs = np.zeros((batch_size, self.obs_dim))
+        angle = np.zeros((batch_size, ))
+        for i in range(batch_size):
+            state[i] = batch_state[i, 0]
+            obs[i] = batch_state[i, 1]
+            angle[i] = batch_state[i, 2]
+        return state, obs, angle
+
+    def update_net(self, i):
         # Sample from replay buffer
-        batch_size = self.params['batch_size'][i]
-        batch = self.replay_buffer[i].sample_batch(batch_size)
+        batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
         batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
         batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
 
-        batch_obs = np.zeros((batch_size, 2 ,128, 128))
-        for j in range(batch_size):
-            batch_obs[j] = batch.state[j, 0]
-        batch_s = np.zeros((batch_size, 81))
-        for j in range(batch_size):
-            batch_s[j] = batch.state[j, 1]
+        batch_state, batch_obs, batch_angle = self.split_state_batch(batch.state)
+        batch_next_state, batch_next_obs, batch_next_angle = self.split_state_batch(batch.next_state)
 
-        obs = torch.cuda.FloatTensor(batch_obs).to(self.device)
-        state = torch.cuda.FloatTensor(batch_s).to(self.device)
-
+        state = torch.FloatTensor(batch_state).to(self.device)
+        obs = torch.FloatTensor(batch_obs).to(self.device)
         _, action_ = self.get_low_level_action(batch.action)
-        action = torch.cuda.FloatTensor(action_).to(self.device)
-        reward = torch.cuda.FloatTensor(batch.reward).to(self.device)
+        action = torch.FloatTensor(action_).to(self.device)
+        reward = torch.FloatTensor(batch.reward).to(self.device)
+        next_state = torch.FloatTensor(batch_next_state).to(self.device)
+        next_obs = torch.FloatTensor(batch_next_obs).to(self.device)
+        terminal = torch.FloatTensor(batch.terminal).to(self.device)
 
-        batch_next_obs = np.zeros((batch_size, 2, 128, 128))
-        for j in range(batch_size):
-            batch_next_obs[j] = batch.next_state[j, 0]
-
-        batch_next_s = np.zeros((batch_size, 81))
-        for j in range(batch_size):
-            batch_next_s[j] = batch.next_state[j, 1]
-
-        next_state = torch.cuda.FloatTensor(batch_next_s).to(self.device)
-        next_obs = torch.cuda.FloatTensor(batch_next_obs).to(self.device)
-        terminal = torch.cuda.FloatTensor(batch.terminal).to(self.device)
+        angle = torch.FloatTensor(batch_angle).to(self.device)
+        next_angle = torch.FloatTensor(batch_next_angle).to(self.device)
 
         # Compute the target Q-value
-        target_q = self.target_critic[i](next_state, self.target_actor[i](next_state))
+        target_q = self.target_critic[i](next_state, self.target_actor[i](next_obs), next_angle)
         target_q = reward + ((1 - terminal) * self.params['gamma'] * target_q).detach()
 
         # Get the current q estimate
-        q = self.critic[i](state, action)
+        q = self.critic[i](state, action, angle)
 
         # Critic loss
         critic_loss = nn.functional.mse_loss(q, target_q)
@@ -402,17 +437,8 @@ class SplitDDPG(RLAgent):
         critic_loss.backward()
         self.critic_optimizer[i].step()
 
-        # Compute actor loss
-        # actor_loss = - self.critic[i](state, self.actor[i](state)).mean()
-        # preactivation_loss = self.action_l2 * (self.actor[i].actions_real / self.max_action).pow(2).mean()
-        # actor_loss += preactivation_loss
-        # actor_loss = - self.critic[i](state, self.actor[i](state)).mean()
-        # weight = .1
-        # preactivation_loss = self.actor[i].actions_real.abs().mean().pow(2)
-        # if preactivation_loss > 1:
-        #     actor_loss += weight * preactivation_loss
-
-        actor_loss = - self.critic[i](state, self.actor[i](state)).mean()
+        # Optimize actor
+        actor_loss = - self.critic[i](state, self.actor[i](obs), angle).mean()
         state_abs_mean = self.actor[i].actions_real.abs().mean()
         preactivation_loss = (state_abs_mean - torch.tensor(1.0)).pow(2)
         if state_abs_mean < torch.tensor(1.0):
@@ -421,6 +447,10 @@ class SplitDDPG(RLAgent):
 
         self.info['preactivation_' + str(i) + '_loss'] = preactivation_loss.cpu().detach().numpy().copy()
         self.info['actor_' + str(i) + '_loss'] = actor_loss.cpu().detach().numpy().copy()
+
+        print('losses:', critic_loss.cpu().detach().numpy().copy(),
+                         actor_loss.cpu().detach().numpy().copy(),
+                         preactivation_loss.cpu().detach().numpy().copy())
 
         # Optimize actor
         self.actor_optimizer[i].zero_grad()
@@ -438,9 +468,10 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        s = torch.cuda.FloatTensor(self._state(state)).to(self.device)
-        a = torch.cuda.FloatTensor(action_).to(self.device)
-        q = self.critic[i](s, a).cpu().detach().numpy()
+        s = torch.FloatTensor(self._state(state)).to(self.device)
+        angle = torch.FloatTensor(self._angle(state)).to(self.device)
+        a = torch.FloatTensor(action_).to(self.device)
+        q = self.critic[i](s, a, angle).cpu().detach().numpy()
         return q
 
     def seed(self, seed):
@@ -449,7 +480,8 @@ class SplitDDPG(RLAgent):
 
     def state_dict(self):
         state_dict = super().state_dict()
-        state_dict['actor'], state_dict['critic'], state_dict['target_actor'], state_dict['target_critic'] = [], [], [], []
+        state_dict['actor'], state_dict['critic'], state_dict['target_actor'], state_dict[
+            'target_critic'] = [], [], [], []
         for i in range(self.nr_network):
             state_dict['actor'].append(self.actor[i].state_dict())
             state_dict['critic'].append(self.critic[i].state_dict())
@@ -495,18 +527,33 @@ class SplitDDPG(RLAgent):
     def _state(self, state):
         heightmap_rotations = self.params.get('heightmap_rotations', 0)
         if heightmap_rotations > 0:
-            state_split = np.split(state[1], heightmap_rotations)
+            state_split = np.split(state[0], heightmap_rotations)
             s = state_split[0]
         else:
-            s = state
+            s = state[0]
         return s
+
+    def _obs(self, state):
+        heightmap_rotations = self.params.get('heightmap_rotations', 0)
+        if heightmap_rotations > 0:
+            state_split = np.split(state[1], heightmap_rotations)
+            obs = state_split[0]
+        else:
+            obs = state[1]
+        return obs
+
+    def _angle(self, state):
+        return [state[2]]
 
     def _transitions(self, transition):
         transitions = []
         heightmap_rotations = self.params.get('heightmap_rotations', 0)
         if heightmap_rotations > 0:
-            state_split = np.split(transition.state[1], heightmap_rotations)
-            next_state_split = np.split(transition.next_state[1], heightmap_rotations)
+            state_split = np.split(transition.state[0], heightmap_rotations)
+            next_state_split = np.split(transition.next_state[0], heightmap_rotations)
+
+            obs_split = np.split(transition.state[1], heightmap_rotations)
+            next_obs_split = np.split(transition.next_state[1], heightmap_rotations)
 
             for j in range(heightmap_rotations):
 
@@ -516,14 +563,10 @@ class SplitDDPG(RLAgent):
                 if act[1] > 1:
                     act[1] = -1 + abs(1 - act[1])
 
-                # print(state_split[j])
-                # print(act[1])
-                # input('')
-
-                tran = Transition(state=[None, state_split[j].copy()],
+                tran = Transition(state=[state_split[j].copy(), obs_split[j].copy()],
                                   action=act.copy(),
                                   reward=transition.reward,
-                                  next_state=[transition.next_state[0], next_state_split[j].copy()],
+                                  next_state=[next_state_split[j].copy(), next_obs_split[j].copy()],
                                   terminal=transition.terminal)
                 transitions.append(tran)
         else:

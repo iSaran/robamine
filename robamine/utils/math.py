@@ -2,9 +2,46 @@
 from math import exp
 import numpy as np
 import matplotlib.pyplot as plt
+import math
+
+
+def cartesian2shperical(p):
+    p = np.round(p, 4)
+    r = math.sqrt(np.power(p[0], 2) + np.power(p[1], 2) + np.power(p[2], 2))
+
+    if np.abs(p[0] < 1e-10):
+        theta = 0
+    else:
+        theta = math.atan2(p[1], p[0])
+
+    if np.abs(p[2] < 1e-10):
+        phi = 0
+    else:
+        phi = math.atan2(math.sqrt(np.power(p[0], 2) + np.power(p[1], 2)), p[2])
+    return np.array([r, theta, phi])
+
 
 def sigmoid(x, a=1, b=1, c=0, d=0):
     return a / (1 + exp(-b * x + c)) + d;
+
+
+def min_max_scale(x, range, target_range):
+    assert range[1] > range[0]
+    assert target_range[1] > target_range[0]
+
+    if isinstance(x, np.ndarray):
+        range_min = range[0] * np.ones(x.shape)
+        range_max = range[1] * np.ones(x.shape)
+        target_min = target_range[0] * np.ones(x.shape)
+        target_max = target_range[1] * np.ones(x.shape)
+    else:
+        range_min = range[0]
+        range_max = range[1]
+        target_min = target_range[0]
+        target_max = target_range[1]
+
+    return target_min + ((x - range_min) * (target_max - target_min)) / (range_max - range_min)
+
 
 def rescale_array(x, min=None, max=None, range=[0, 1], axis=None, reverse=False):
     assert range[1] > range[0]
@@ -167,3 +204,18 @@ class LineSegment2D:
         result[0, :] = self.p1
         result[1, :] = self.p2
         return result
+
+
+def draw(line_segments):
+    fig, ax = plt.subplots()
+    color = iter(plt.cm.rainbow(np.linspace(0, 1, len(line_segments))))
+
+    for line_segment in line_segments:
+        c = next(color)
+
+        ax.plot(line_segment.p1[0], line_segment.p1[1], color=c, marker='o')
+        ax.plot(line_segment.p2[0], line_segment.p2[1], color=c, marker='.')
+        ax.plot([line_segment.p1[0], line_segment.p2[0]], [line_segment.p1[1], line_segment.p2[1]],
+        color=c, linestyle='-')
+
+    plt.show()

@@ -17,9 +17,11 @@ import gym
 
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.mujoco import get_body_mass, get_body_pose, get_camera_pose, get_geom_size, get_body_inertia, get_geom_id, get_body_names, detect_contact, XMLGenerator
-from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z, Affine3, quat2euler, euler2quat
-from robamine.utils.math import sigmoid, rescale, filter_signal, LineSegment2D
+from robamine.utils.orientation import Quaternion, rot2angleaxis, rot_z, Affine3, quat2euler, euler2quat, quat2rot
+from robamine.utils.math import sigmoid, rescale, filter_signal, LineSegment2D, cartesian2shperical, draw, min_max_scale
 import robamine.utils.cv_tools as cv_tools
+from robamine.algo.splitddpg import FeatureExtractor
+import torch
 import math
 from math import sqrt
 import glfw
@@ -32,7 +34,11 @@ from mujoco_py.cymj import MjRenderContext
 
 from time import sleep
 
-OBSERVATION_DIM = 1254
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
+import matplotlib.pyplot as plt
+
+
+OBSERVATION_DIM = 112
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -572,6 +578,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.obs_above_table = 0
 
         self.dist_from_obstacles = []
+        self.feature_extractor = FeatureExtractor()
+
 
     def __del__(self):
         if self.viewer is not None:
@@ -639,7 +647,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             for _ in range(600):
                 self.sim_step()
 
-            # self._hug_target(number_of_obstacles)
+            self._hug_target(number_of_obstacles)
 
             self.check_target_occlusion(number_of_obstacles)
 
@@ -709,7 +717,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             wait_steps = 1000
             if steps > wait_steps:
                 raise InvalidEnvError('Objects still moving after waiting for ' + str(wait_steps) + ' steps.')
-
 
     def seed(self, seed=None):
         super().seed(seed)
@@ -794,35 +801,46 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.heightmap = cv_tools.Feature(heightmap).crop(193, 193).array()
         self.mask = cv_tools.Feature(mask).crop(193, 193).array()
-        self.mask_obstacles = cv_tools.Feature(mask_obstacles).crop(193,193).array()
-
+        self.mask_obstacles = cv_tools.Feature(mask_obstacles).translate(centroid[0], centroid[1])\
+                                                              .crop(193,193).array()
         return self.heightmap, self.mask
 
-    def cartesian2shperical(self, p):
-        r = math.sqrt(np.power(p[0], 2) + np.power(p[1], 2) + np.power(p[2], 2))
-        theta = math.atan2(p[1], p[0])
-        phi = math.atan2(math.sqrt(np.power(p[0], 2) + np.power(p[1], 2)), p[2])
-        return np.array([r, theta, phi])
+    def get_pose_matrix(self, q, t):
+        matrix = np.eye(4)
+        matrix[0:3, 0:3] = quat2rot(q)
+        matrix[0:3, 3] = t
+        return matrix
 
     def get_state(self, rotations=0, normalized=False, sort=True):
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
 
-        min_t = np.array([-0.25, -0.25, 0])
-        max_t = np.array([0.25, 0.25, 0.05])
-        # min_bbox = np.array(self.params['obstacle']['min_bounding_box'])
-        # max_bbox = np.array(self.params['obstacle']['max_bounding_box'])
+        # min_t = np.array([-0.25, -0.25, 0])
+        # max_t = np.array([0.25, 0.25, 0.05])
+        min_t = 0
+        max_t = 0.5
         min_bbox = np.array([0.0, 0.0, 0.0])
-        max_bbox = np.array([0.03, 0.03, 0.02])
+        max_bbox = np.array(self.params['obstacle']['max_bounding_box'])
 
-
-        state = np.zeros((self.params['nr_of_obstacles'][1] + 1, 9))
+        state = np.zeros((self.params['nr_of_obstacles'][1] + 1, 10))
 
         # target always in the first place
         t = self.sim.data.get_body_xpos('target')
+
+        distances = [self.surface_size[0] - t[0], \
+                     self.surface_size[0] + t[0], \
+                     self.surface_size[1] - t[1], \
+                     self.surface_size[1] + t[1]]
+        distances = [x / 0.5 for x in distances]
+
         q = self.sim.data.get_body_xquat('target')
-        eulers = quat2euler(q)
+        # eulers = quat2euler(q)
         bbox = get_geom_size(self.sim.model, 'target')
-        state[0, :] = np.concatenate((t, eulers, bbox), axis=0)
+        state[0, :] = np.concatenate((t, q, bbox), axis=0)
+
+        target_pose = get_body_pose(self.sim, name='target')
+        translation_pose = target_pose.copy()
+        translation_pose[0:3, 0:3] = np.eye(3)
+        target_pose[2, 3] = 0
 
         self.obs_above_table = 0
         for i in range(1, self.n_obstacles + 1):
@@ -832,68 +850,160 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 continue
             self.obs_above_table += 1
             q = self.sim.data.get_body_xquat(obs_name)
-            eulers = quat2euler(q)
+            # eulers = quat2euler(q)
             bbox = get_geom_size(self.sim.model, obs_name)
-            state[self.obs_above_table, :] = np.concatenate((t, eulers, bbox), axis=0)
+            state[self.obs_above_table, :] = np.concatenate((t, q, bbox), axis=0)
 
         if rotations > 0:
             states = []
             step_angle = 2 * np.pi / rotations
+
+            # fig = plt.figure()
+            # ax = fig.add_subplot(111, projection='3d')
+            # color = iter(plt.cm.rainbow(np.linspace(0, 1, 8)))
+
             for i in range(rotations):
-                rotated_state = state.copy()
-                # rotated_state[0:self.n_obstacles + 1, 0:3] = np.matmul(rot_z(i * step_angle),
-                #                                                        state[0:self.n_obstacles + 1, 0:3])
-                rotated_state[0:self.n_obstacles + 1, 3] += i * step_angle
-                for j in range(self.n_obstacles + 1):
-                    rotated_state[j, 0:3] = np.matmul(rot_z(i * step_angle), state[j, 0:3].transpose())
-                    # print(self.cartesian2shperical(rotated_state[j, 0:3]))
-                    # input('')
-                    if rotated_state[j, 3] > np.pi:
-                        rotated_state[j, 3] = rotated_state[j, 3] - 2 * np.pi
+                rotated_state = np.zeros((self.params['nr_of_obstacles'][1] + 1, 12))
+
+                for j in range(0, self.obs_above_table + 1):
+                    centroid = np.matmul(rot_z(i * step_angle), state[j, 0:3].transpose())
+                    # centroid = np.matmul(np.linalg.inv(target_pose), np.append(centroid, 1.0))[:3]  # transform w.r.t. target
+                    centroid_spehrical = cartesian2shperical(centroid)
+
+                    bbox = state[j, 7:10]
+                    bbox_corners = np.array([[bbox[0], bbox[1], bbox[2]],
+                                             [bbox[0], -bbox[1], bbox[2]],
+                                             [bbox[0], bbox[1], -bbox[2]],
+                                             [bbox[0], -bbox[1], -bbox[2]],
+                                             [-bbox[0], bbox[1], bbox[2]],
+                                             [-bbox[0], -bbox[1], bbox[2]],
+                                             [-bbox[0], bbox[1], -bbox[2]],
+                                             [-bbox[0], -bbox[1], -bbox[2]]])
+                    world_bbox_corners = bbox_corners.copy()
+                    matrix = np.eye(4)
+                    matrix[0:3, 0:3] = quat2rot(state[j, 3:7])
+                    matrix[0:3, 3] = state[j, 0:3]
+                    for k in range(8):
+                        world_bbox_corners[k] = np.matmul(matrix, np.append(world_bbox_corners[k], 1.0))[:3] # transform w.r.t. world
+                        # bbox_corners[k] = np.matmul(rot_z(i * step_angle), bbox_corners[k]) # rotate around z axis
+                        world_bbox_corners[k] = np.matmul(np.linalg.inv(target_pose), np.append(world_bbox_corners[k], 1.0))[:3]  # transform w.r.t. target
+                        # bbox_corners_spherical[k] = cartesian2shperical(bbox_corners[k])
+
+                    min_id = np.argmin(np.linalg.norm(world_bbox_corners, axis=1))
+                    if j == 0:
+                        min_id = 2
+                    principal_corners = np.zeros((4, 3))
+                    principal_corners[0] = bbox_corners[min_id]
+                    principal_corners[1] = np.array([-bbox_corners[min_id][0],
+                                                     bbox_corners[min_id][1],
+                                                     bbox_corners[min_id][2]])
+                    principal_corners[2] = np.array([bbox_corners[min_id][0],
+                                                     -bbox_corners[min_id][1],
+                                                     bbox_corners[min_id][2]])
+                    principal_corners[3] = np.array([bbox_corners[min_id][0],
+                                                     bbox_corners[min_id][1],
+                                                     -bbox_corners[min_id][2]])
+
+                    for k in range(principal_corners.shape[0]):
+                        principal_corners[k] = np.matmul(matrix, np.append(principal_corners[k], 1.0))[:3] # transform w.r.t. world
+                        principal_corners[k] = np.matmul(np.linalg.inv(translation_pose), np.append(principal_corners[k], 1.0))[:3] # tranlate w.r.t. target
+                        principal_corners[k] = cartesian2shperical(principal_corners[k])
+                        # ax.scatter(principal_corners[k][0], principal_corners[k][1], principal_corners[k][2])
+
+                    # c = next(color)
+                    # for k in range(1, 4):
+                    #     ax.plot([principal_corners[0][0], principal_corners[k][0]],
+                    #             [principal_corners[0][1], principal_corners[k][1]],
+                    #             [principal_corners[0][2], principal_corners[k][2]], color=c, linestyle='-')
+
+                    rotated_state[j, :] = principal_corners.flatten()
+                # ax.axis('equal')
+                # plt.show()
 
                 # Sort by distance
                 if sort:
-                    dist = np.zeros((self.n_obstacles + 1, ))
-                    for i in range(self.n_obstacles + 1):
-                        dist[i] = np.linalg.norm(rotated_state[0, 0:3] - rotated_state[i, 0:3])
-                    # print(dist)
-                    tmp = rotated_state[0:self.n_obstacles + 1, :]
-                    tmp = tmp[np.argsort(dist)]
-                    rotated_state[0:self.n_obstacles + 1, :] = tmp
+                    tmp = rotated_state[1:self.n_obstacles + 1, :]
+                    tmp = tmp[np.argsort(tmp[:, 0])]
+                    rotated_state[1:self.n_obstacles + 1, :] = tmp
 
                 if normalized:
-                    rotated_state[0:self.n_obstacles + 1, 0:3] = (rotated_state[0:self.n_obstacles + 1, 0:3] - min_t) / (max_t - min_t)
-                    rotated_state[0:self.n_obstacles + 1, 3:6] = (rotated_state[0:self.n_obstacles + 1, 3:6] + np.pi) / (2 * np.pi)
-                    rotated_state[0:self.n_obstacles + 1, 6:9] = (rotated_state[0:self.n_obstacles + 1, 6:9]- min_bbox) / (max_bbox - min_bbox)
+                    # rotated_state[0:self.n_obstacles + 1, 0] = (rotated_state[0:self.n_obstacles + 1, 0] - min_t) / (
+                    #         max_t - min_t)
+                    # rotated_state[0:self.n_obstacles + 1, 3] = (rotated_state[0:self.n_obstacles + 1, 3] - min_t) / (
+                    #         max_t - min_t)
+                    # rotated_state[0:self.n_obstacles + 1, 6] = (rotated_state[0:self.n_obstacles + 1, 6] - min_t) / (
+                    #             max_t - min_t)
+                    # rotated_state[0:self.n_obstacles + 1, 9] = (rotated_state[0:self.n_obstacles + 1, 9] - min_t) / (
+                    #         max_t - min_t)
+                    #
+                    # rotated_state[0:self.n_obstacles + 1, 1:3] = (rotated_state[0:self.n_obstacles + 1,
+                    #                                               1:3] + np.pi) / (2 * np.pi)
+                    # rotated_state[0:self.n_obstacles + 1, 4:6] = (rotated_state[0:self.n_obstacles + 1,
+                    #                                               4:6] + np.pi) / (2 * np.pi)
+                    # rotated_state[0:self.n_obstacles + 1, 7:9] = (rotated_state[0:self.n_obstacles + 1,
+                    #                                               7:9] + np.pi) / (2 * np.pi)
+                    # rotated_state[0:self.n_obstacles + 1, 10:12] = (rotated_state[0:self.n_obstacles + 1,
+                    #                                               10:12] + np.pi) / (2 * np.pi)
+                    for i in [0, 3, 6, 9]:
+                        rotated_state[0:self.n_obstacles + 1, i] = min_max_scale(rotated_state[0:self.n_obstacles + 1, i],
+                                                                                 range=[min_t, max_t], target_range=[0, 1])
+                        rotated_state[0:self.n_obstacles + 1, (i+1):(i+3)] = min_max_scale(rotated_state[0:self.n_obstacles + 1, (i+1):(i+3)],
+                                                                                 range=[-np.pi, np.pi], target_range=[0, 1])
 
                 states = np.append(states, rotated_state.flatten().copy(), axis=0)
+                for d in distances:
+                    states = np.append(states, d)
             return states
-
+        else:
+            return state
 
     def get_obs_push_target(self):
         """
         Read depth and extract height map as observation
         :return:
         """
-        state = self.get_state(rotations=16, normalized=True, sort=True)
+        self.heightmap_rotations = 1
+
+        zero_state = self.get_state()
+        if zero_state[0, 2] < 0:
+            print('falling...')
+            state = np.zeros((self.heightmap_rotations * OBSERVATION_DIM, ))
+            features = np.zeros((self.heightmap_rotations * 2048, ))
+            return [state.flatten(), features.flatten(), 0]
+
+        state = self.get_state(rotations=self.heightmap_rotations, normalized=True, sort=True)
         heightmap, mask = self.get_heightmap()
 
-        # cv_tools.Feature(self.heightmap).plot()
-        depth_feature = cv_tools.Feature(heightmap).resize((128, 128)).normalize(self.max_object_height)
-        mask_feature = cv_tools.Feature(mask).resize((128, 128)).normalize(255)
+        if self.heightmap_rotations > 0:
+            features = []
+            rot_angle = 360 / self.heightmap_rotations
+            for i in range(0, self.heightmap_rotations):
+                depth_feature = cv_tools.Feature(heightmap).rotate(rot_angle * i).resize((128, 128)).normalize(self.max_object_height)
+                mask_feature = cv_tools.Feature(mask).rotate(rot_angle * i).resize((128, 128)).normalize(255)
 
-        mask_heightmap = np.zeros((2, 128, 128))
-        mask_heightmap[0, :, :] = depth_feature.array()
-        mask_heightmap[1, :, :] = mask_feature.array()
+                mask_heightmap = np.zeros((2, 128, 128))
+                mask_heightmap[0, :, :] = depth_feature.array()
+                mask_heightmap[1, :, :] = mask_feature.array()
+                x = torch.cuda.FloatTensor(mask_heightmap).unsqueeze(0)
+                z = self.feature_extractor(x)
+                z = rescale(z.detach().cpu().numpy(), 0, 15, range=[0, 1])
+                features = np.append(features, z)
+
+        if (state > 1.0).any():
+            raise Exception
+
+        if (state < 0.0).any():
+            raise Exception
 
         if np.isnan(state).any():
             raise InvalidEnvError('State nan')
 
-        if np.isnan(mask_heightmap).any():
+        if np.isnan(features).any():
             raise InvalidEnvError('Heightmap nan')
 
-        return [mask_heightmap, state.flatten()]
-
+        target_pose = get_body_pose(self.sim, name='target')
+        target_angle = math.acos(target_pose[0, 0])
+        return [state.flatten(), features.flatten(), target_angle]
 
     def get_obs(self):
         """
@@ -951,7 +1061,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.last_timestamp = time
 
         obs = self.get_obs_push_target()
-        reward = self.get_reward()
+        state = self.get_state()
+        reward = self.get_reward(state, action)
 
         print('reward:', reward)
         print('---')
@@ -961,21 +1072,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         extra_data = {'target_init_pose': self.target_init_pose.matrix()}
 
         done = False
-        if self.terminal_state(obs[0]):
+        if self.terminal_state(obs[0], state):
             done = True
-            obs = np.zeros((2, 128, 128))
-            state = np.zeros((16 * 81, ))
-            obs = [obs, state]
-            return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
+            return obs, reward, done, \
+                   {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
         else:
-            obs = self.get_obs_push_target()
             self.heightmap_prev = self.heightmap.copy()
             return obs, reward, done, {'experience_time': experience_time, 'success': self.success, 'extra_data': extra_data}
 
-
     def do_simulation(self, action):
         primitive = int(action[0])
-        primitive = 1
+        primitive = 0
         target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
@@ -986,6 +1093,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
                 push_distance = rescale(action[2], min=-1, max=1, range=[self.params['push']['distance'][0], self.params['push']['distance'][1]])  # hardcoded read it from min max pushing distance
                 distance = rescale(action[3], min=-1, max=1, range=self.params['push']['target_init_distance'])  # hardcoded, read it from table limits
+                # push_distance = 0.03
+                # distance = 0.0
                 push = PushTarget(theta=theta, push_distance=push_distance, distance=distance,
                                   target_bounding_box= self.target_bbox_corners, target_pos=self.target_pos_vision, finger_size = self.finger_length)
             # Push obstacle primitive
@@ -1066,10 +1175,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.elevation = -90  # default -90
         self.viewer.cam.azimuth = 90
 
-    def get_reward(self):
+    def get_reward(self, state, action):
         # reward = self.get_real_push_obstacle_reward(state, action)
-        reward = self.get_reward_push_obstacle()
-        reward = rescale(reward, 0, 10, range=[-1, 1])
+        # reward = self.get_reward_push_obstacle()
+        reward = self.get_reward_push_target(state, action)
+        reward = rescale(reward, -10, 10, range=[-1, 1])
         # reward = 0.1 * reward
         if reward is None:
             raise ValueError('reward is None.')
@@ -1165,7 +1275,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.push_stopped_ext_forces:
             return -10
 
-        if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
+        # if min([observation[-4], observation[-3], observation[-2], observation[-1]]) < 0:
+        #     return -10
+        if observation[0, 2] < 0:
             return -10
 
         points_around = cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
@@ -1234,7 +1346,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return False
 
-    def terminal_state(self, observation):
+    def terminal_state(self, observation, state):
 
         if self.timesteps >= self.max_timesteps:
             return True
@@ -1259,6 +1371,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # If the object has fallen from the table
         # if min([observation[-6], observation[-5], observation[-4], observation[-3]]) < 0:
         #     return True
+        if state[0, 2] < 0:
+            return True
 
         if cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
                                                 .non_zero_pixels() < 20:
