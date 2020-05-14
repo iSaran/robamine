@@ -899,7 +899,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'observation_area': (2,),
                 'max_singulation_area': (2,),
                 'target_distances_from_limits': (4,),
-                'heightmap_mask': (2, 386, 386)}
+                'heightmap_mask': (2, 386, 386),
+                'surface_size': (2,),
+                'target_pos': (3,)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
@@ -910,7 +912,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'observation_area': np.array(self.observation_area),
             'max_singulation_area': np.array(self.max_singulation_area),
             'target_distances_from_limits': np.array(self.target_distances_from_limits_vision),
-            'heightmap_mask': np.zeros(shapes['heightmap_mask'])
+            'heightmap_mask': np.zeros(shapes['heightmap_mask']),
+            'surface_size': self.surface_size.copy(),
+            'target_pos': self.target_pos_vision.copy()
         }
 
         if not self._target_is_on_table():
