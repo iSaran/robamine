@@ -354,6 +354,7 @@ def get_observation_dim(primitive):
 class PrimitiveFeature:
     def __init__(self, heightmap, mask, angle=0, name=None):
         self.name = name
+        self.angle = angle
         self.heightmap = Feature(heightmap).rotate(angle)
         self.mask = Feature(mask).rotate(angle)
         self.visual_feature = self.get_visual_feature()
@@ -373,7 +374,8 @@ class PushTargetFeature(PrimitiveFeature):
         self.target_bounding_box_z = obs_dict['target_bounding_box'][2]
         self.finger_height = obs_dict['finger_height']
         self.crop_area = obs_dict['observation_area'].astype(np.int32)
-        self.target_distances_from_limits = obs_dict['target_distances_from_limits']
+        self.target_pos = obs_dict['target_pos'][:2]
+        self.surface_size = obs_dict['surface_size'][:2]
         heightmap = obs_dict['heightmap_mask'][0, :]
         mask = obs_dict['heightmap_mask'][1, :]
         super().__init__(heightmap, mask, angle, name='PushTarget')
@@ -387,7 +389,7 @@ class PushTargetFeature(PrimitiveFeature):
         thresholded[self.mask.array() > 0] = -1
         feature = Feature(thresholded)
         feature = feature.crop(self.crop_area[0], self.crop_area[1])
-        feature = feature.pooling()
+        feature = feature.pooling(mode='AVG')
         return feature
 
     def array(self):
@@ -395,8 +397,23 @@ class PushTargetFeature(PrimitiveFeature):
         target_observation_ratio = TargetObjectConvexHull(self.mask.array()).area() / (
                     self.crop_area[0] * self.crop_area[1])
         array = np.append(array, target_observation_ratio)
-        for d in self.target_distances_from_limits:
-            array = np.append(array, d)
+
+        theta = min_max_scale(self.angle, range=[-180, 180], target_range=[-pi, pi])
+        rot_2d = np.array([[cos(theta), -sin(theta)], [sin(theta), cos(theta)]])
+
+        max_surface_edge = np.linalg.norm(self.surface_size)
+
+        target_pos = np.matmul(rot_2d, self.target_pos)
+        target_pos = min_max_scale(target_pos, range=[-max_surface_edge, max_surface_edge], target_range=[-1, 1])
+        surface_edge = np.matmul(rot_2d, self.surface_size)
+        surface_edge = min_max_scale(surface_edge, range=[-max_surface_edge, max_surface_edge], target_range=[-1, 1])
+
+        array = np.append(array, target_pos)
+        array = np.append(array, surface_edge)
+
+        assert (array <= 1).all()
+        assert (array >= -1).all()
+
         assert array.shape[0] == self.dim()
         return array
 
