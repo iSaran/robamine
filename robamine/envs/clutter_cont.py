@@ -36,6 +36,7 @@ from mujoco_py.cymj import MjRenderContext
 from time import sleep
 
 import matplotlib.pyplot as plt
+from robamine.utils.cv_tools import Feature
 
 
 def exp_reward(x, max_penalty, min, max):
@@ -796,9 +797,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
             rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
 
+            rgb = Feature(rgb).crop(193, 193).increase_canvas_size(480, 640).array()
+
             # Convert depth (distance from camera) to heightmap (distance from table)
             depth = cv_tools.gl2cv(depth, z_near, z_far)
+            depth = Feature(depth).crop(193, 193).array()
             max_depth = np.max(depth)
+            depth = Feature(depth).increase_canvas_size(480, 640).array()
             depth[depth == 0] = max_depth
             heightmap = max_depth - depth
 

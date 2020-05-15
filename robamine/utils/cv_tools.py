@@ -211,6 +211,21 @@ class Feature:
         self.size = heightmap.shape
         self.center = [int(self.size[0] / 2), int(self.size[1] / 2)]
 
+    def increase_canvas_size(self, x, y):
+        assert x >= self.size[0] and y >= self.size[1]
+        new_center = [int(x / 2), int(y / 2)]
+        if len(self.heightmap.shape) == 3:
+            new_shape = (x, y, self.heightmap.shape[2])
+        else:
+            new_shape = (x, y)
+        new_canvas = np.zeros(new_shape, dtype=self.heightmap.dtype)
+        first_row = new_center[0] - self.center[0]
+        first_col = new_center[1] - self.center[1]
+        last_row = first_row + self.size[0]
+        last_col = first_col + self.size[1]
+        new_canvas[first_row:last_row, first_col:last_col] = self.heightmap.copy()
+        return Feature(new_canvas)
+
     def crop(self, x, y):
         """
         Crop the height map around the center with the given size
@@ -291,12 +306,17 @@ class Feature:
         """
         return self.heightmap.flatten()
 
-    def plot(self, name='height_map'):
+    def plot(self, name='height_map', grayscale=True):
         """
         Plot the heightmap
         """
-        plt.imshow(self.heightmap, cmap='gray', vmin=np.min(self.heightmap), vmax=np.max(self.heightmap))
+        if grayscale:
+            plt.imshow(self.heightmap, cmap='gray', vmin=np.min(self.heightmap), vmax=np.max(self.heightmap))
+        else:
+            plt.imshow(self.heightmap)
+        plt.title(name)
         plt.show()
+        return self
 
     def normalize(self, max_height):
         normalized = self.heightmap / max_height
