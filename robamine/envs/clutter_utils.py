@@ -417,6 +417,11 @@ class PushTargetFeature(PrimitiveFeature):
         assert array.shape[0] == self.dim()
         return array
 
+    def plot(self):
+        self.visual_feature.plot()
+
+        print()
+
     @staticmethod
     def dim():
         return 630
