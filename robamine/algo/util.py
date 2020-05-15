@@ -376,10 +376,11 @@ class Stats:
     def __init__(self, sess, log_dir, tf_writer, name, additional_info = {}, stats_name = ['mean', 'min', 'max', 'std', 'sum']):
         self.stats_name = stats_name
         log_var_names = ['n_timesteps', 'success']
+        self.additional_info_keys = list(additional_info.keys())
         for j in stats_name:
             log_var_names.append(j + '_reward')
             log_var_names.append(j + '_q_value')
-            for k in additional_info:
+            for k in self.additional_info_keys:
                 log_var_names.append(j + '_' + k)
 
         self.data_stream = DataStream(sess, log_dir, tf_writer, log_var_names, name)
@@ -401,7 +402,7 @@ class Stats:
             operation = getattr(importlib.import_module('numpy'), operation)
             row.append(np.squeeze(operation(np.array(episode_data['reward']))))
             row.append(np.squeeze(operation(np.array(episode_data['q_value']))))
-            for k in episode_data['info']:
+            for k in self.additional_info_keys:
                 row.append(np.squeeze(operation(np.array(episode_data['info'][k]))))
         self.data_stream.log(episode, row)
 
