@@ -292,7 +292,7 @@ class SplitDDPG(RLAgent):
 
         # Critic loss
         critic_loss = nn.functional.mse_loss(q, target_q)
-        self.info['critic_' + str(i) + '_loss'] = critic_loss.cpu().detach().numpy().copy()
+        self.info['critic_' + str(i) + '_loss'] = float(critic_loss.detach().cpu().numpy())
 
         # Optimize critic
         self.critic_optimizer[i].zero_grad()
@@ -307,7 +307,7 @@ class SplitDDPG(RLAgent):
         weight = self.params['actor'].get('preactivation_weight', .05)
         actor_loss = -self.critic[i](state, self.actor[i](state)).mean() + weight * preactivation
 
-        self.info['actor_' + str(i) + '_loss'] = actor_loss.cpu().detach().numpy().copy()
+        self.info['actor_' + str(i) + '_loss'] = float(actor_loss.detach().cpu().numpy())
 
         # Optimize actor
         self.actor_optimizer[i].zero_grad()
