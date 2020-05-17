@@ -117,7 +117,8 @@ class SplitDDPG(RLAgent):
     '''
     def __init__(self, state_dim, action_dim, params=default_params):
         self.hardcoded_primitive = params['hardcoded_primitive']
-        self.state_dim = get_observation_dim(self.hardcoded_primitive)
+        self.real_state = params.get('real_state', False)
+        self.state_dim = get_observation_dim(self.hardcoded_primitive, self.real_state)
         self.action_dim = get_action_dim(self.hardcoded_primitive)
         super().__init__(state_dim, action_dim, 'SplitDDPG', params)
 
@@ -190,7 +191,7 @@ class SplitDDPG(RLAgent):
                 k = i
             else:
                 k = self.hardcoded_primitive
-            s = torch.FloatTensor(obs_dict2feature(k, state).array()).to(self.device)
+            s = torch.FloatTensor(obs_dict2feature(k, state, real_state=self.real_state).array()).to(self.device)
             a = self.actor[i](s)
             q = self.critic[i](s, a).cpu().detach().numpy()
             self.info['q_values'][i] = q[0]
@@ -325,7 +326,7 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        s = torch.FloatTensor(obs_dict2feature(i, state).array()).to(self.device)
+        s = torch.FloatTensor(obs_dict2feature(i, state, real_state=self.real_state).array()).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
         if self.hardcoded_primitive >= 0:
             i = 0
@@ -385,10 +386,10 @@ class SplitDDPG(RLAgent):
                 # TODO this 360 might be different in grasp target
                 angle_deg = min_max_scale(angle, [-1, 1], [0, 360])
 
-                state = obs_dict2feature(int(transition.action[0]), transition.state, angle=angle_deg).array()
-                next_state = np.zeros(get_observation_dim(int(transition.action[0]))[0])
+                state = obs_dict2feature(int(transition.action[0]), transition.state, angle=angle_deg, real_state=self.real_state).array()
+                next_state = np.zeros(get_observation_dim(int(transition.action[0]), self.real_state)[0])
                 if not transition.terminal:
-                    next_state = obs_dict2feature(int(transition.action[0]), transition.next_state, angle=angle_deg).array()
+                    next_state = obs_dict2feature(int(transition.action[0]), transition.next_state, angle=angle_deg, real_state=self.real_state).array()
 
                 # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
                 act = transition.action.copy()
@@ -403,10 +404,10 @@ class SplitDDPG(RLAgent):
                                   terminal=transition.terminal)
                 transitions.append(tran)
         else:
-            state = obs_dict2feature(int(transition.action[0]), transition.state).array()
-            next_state = np.zeros(get_observation_dim(int(transition.action[0]))[0])
+            state = obs_dict2feature(int(transition.action[0]), transition.state, real_state=self.real_state).array()
+            next_state = np.zeros(get_observation_dim(int(transition.action[0]), real_state=self.real_state)[0])
             if not transition.terminal:
-                next_state = obs_dict2feature(int(transition.action[0]), transition.next_state).array()
+                next_state = obs_dict2feature(int(transition.action[0]), transition.next_state, real_state=self.real_state).array()
             tran = Transition(state=state,
                               action=transition.action,
                               reward=transition.reward,
