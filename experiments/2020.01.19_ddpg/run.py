@@ -12,6 +12,7 @@ import os
 import gym
 
 from robamine.algo.util import get_agent_handle
+from robamine.envs.clutter_utils import RealState
 
 logger = logging.getLogger('robamine')
 
@@ -62,6 +63,30 @@ def process_episodes(dir):
     for episode in data:
         print(episode.actions_performed)
 
+def check_transition(params):
+    '''Run environment'''
+
+    seed = np.random.randint(100000000)
+    # seed = 39574883  # seed for scene with obstacles visible
+    # seed = 28794391
+    print('Seed:', seed)
+
+    params['env']['params']['render'] = True
+    env = gym.make(params['env']['name'], params=params['env']['params'])
+    obs = env.reset(seed=seed)
+    f = RealState(obs, normalize=True)
+    # print(f.array()) print(f.principal_corners)
+
+    # print
+
+    # RealState(obs['heightmap_mask'][0]).plot()
+    # # PushTargetFeature(obs).plot()
+    #
+    #
+    #
+    #
+    # action = np.array([0, 0.5, 0, 1])
+    # obs, reward, done, info = env.step(action)
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
@@ -86,4 +111,5 @@ if __name__ == '__main__':
     #
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
 
-    process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
+    # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
+    check_transition(params)
