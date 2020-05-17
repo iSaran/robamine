@@ -899,6 +899,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     @staticmethod
     def get_obs_shapes():
+        """
+        Provides the shapes of the observation returned by the env. The shapes should be constants and should not change
+        dynamically, because we want them to store them in arrays like h5py.
+        """
+        max_n_obstacles = 10  # TODO: the maximum possible number of obstacles is hardcoded.
         return {'target_bounding_box': (3,),
                 'finger_height': (1,),
                 'observation_area': (2,),
@@ -906,10 +911,31 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'target_distances_from_limits': (4,),
                 'heightmap_mask': (2, 386, 386),
                 'surface_size': (2,),
-                'target_pos': (3,)}
+                'target_pos': (3,),
+                'object_poses': (max_n_obstacles, 7),
+                'object_bounding_box': (max_n_obstacles, 3),
+                'object_above_table': (max_n_obstacles,),
+                'n_objects': (1,),
+                'max_n_objects': (1,)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
+
+        n_obstacles = self.xml_generator.n_obstacles
+        assert n_obstacles <= shapes['object_poses'][0]
+        poses, bounding_box, above_table = np.zeros(shapes['object_poses']), np.zeros(
+            shapes['object_bounding_box']), np.zeros(shapes['object_above_table'], dtype=np.bool)
+        names = ["target"]
+        for i in range(1, n_obstacles + 1):
+            names.append("object" + str(i))
+
+        for i in range(n_obstacles + 1):
+            body_id = get_body_names(self.sim.model).index(names[i])
+            poses[i, 0:3] = self.sim.data.body_xpos[body_id]
+            poses[i, 3:] = self.sim.data.body_xquat[body_id]
+            bounding_box[i, :] = get_geom_size(self.sim.model, names[i])
+            if poses[i, 2] > 0:
+                above_table[i] = True
 
         obs_dict = {
             'target_bounding_box': self.target_bounding_box_vision,
@@ -919,7 +945,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'target_distances_from_limits': np.array(self.target_distances_from_limits_vision),
             'heightmap_mask': np.zeros(shapes['heightmap_mask']),
             'surface_size': self.surface_size.copy(),
-            'target_pos': self.target_pos_vision.copy()
+            'target_pos': self.target_pos_vision.copy(),
+            'object_poses': poses,
+            'object_bounding_box': bounding_box,
+            'object_above_table': above_table,
+            'n_objects': np.array([self.xml_generator.n_obstacles + 1]),
+            'max_n_objects': np.array([shapes['object_poses'][0]])
         }
 
         if not self._target_is_on_table():
@@ -930,6 +961,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.get_heightmap()
         obs_dict['heightmap_mask'][0, :] = self.heightmap
         obs_dict['heightmap_mask'][1, :] = self.convex_mask
+
+        assert set(obs_dict.keys()) == set(shapes.keys())
 
         for key in list(shapes.keys()):
             assert obs_dict[key].shape == shapes[key]
