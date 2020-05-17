@@ -118,9 +118,9 @@ class SplitDDPG(RLAgent):
     def __init__(self, state_dim, action_dim, params=default_params):
         self.hardcoded_primitive = params['hardcoded_primitive']
         self.real_state = params.get('real_state', False)
-        self.state_dim = get_observation_dim(self.hardcoded_primitive, self.real_state)
+        self.state_dim = get_observation_dim(self.hardcoded_primitive, real_state=self.real_state)
         self.action_dim = get_action_dim(self.hardcoded_primitive)
-        super().__init__(state_dim, action_dim, 'SplitDDPG', params)
+        super().__init__(self.state_dim, self.action_dim, 'SplitDDPG', params)
 
         # The number of networks is the number of primitive actions. One network
         # per primitive action
