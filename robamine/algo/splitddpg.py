@@ -190,8 +190,6 @@ class SplitDDPG(RLAgent):
     def __init__(self, state_dim, action_dim, params=default_params):
         super().__init__(state_dim, action_dim, 'SplitDDPG', params)
 
-        torch.autograd.set_detect_anomaly(True)
-
         self.obs_dim = 2048
 
         # The number of networks is the number of primitive actions. One network
@@ -259,14 +257,11 @@ class SplitDDPG(RLAgent):
 
 
     def predict(self, state):
-        np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
-
         output = np.zeros(max(self.actions) + 1)
         s = torch.FloatTensor(self._state(state)).to(self.device)
         obs = torch.FloatTensor(self._obs(state)).to(self.device)
-        angle = torch.FloatTensor(self._angle(state)).to(self.device)
+        # angle = torch.FloatTensor(self._angle(state)).to(self.device)
         max_q = -1e10
-        i = 0
 
         # for j in range(32):
         #     a = j * 2 / 32
@@ -392,12 +387,12 @@ class SplitDDPG(RLAgent):
         batch_size = batch_state.shape[0]
         state = np.zeros((batch_size, self._state_dim(self.state_dim)))
         obs = np.zeros((batch_size, self.obs_dim))
-        angle = np.zeros((batch_size, ))
+        # angle = np.zeros((batch_size, ))
         for i in range(batch_size):
             state[i] = batch_state[i, 0]
             obs[i] = batch_state[i, 1]
-            angle[i] = batch_state[i, 2]
-        return state, obs, angle
+            # angle[i] = batch_state[i, 2]
+        return state, obs
 
     def update_net(self, i):
         # Sample from replay buffer
@@ -405,8 +400,8 @@ class SplitDDPG(RLAgent):
         batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
         batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
 
-        batch_state, batch_obs, batch_angle = self.split_state_batch(batch.state)
-        batch_next_state, batch_next_obs, batch_next_angle = self.split_state_batch(batch.next_state)
+        batch_state, batch_obs = self.split_state_batch(batch.state)
+        batch_next_state, batch_next_obs = self.split_state_batch(batch.next_state)
 
         state = torch.FloatTensor(batch_state).to(self.device)
         obs = torch.FloatTensor(batch_obs).to(self.device)
@@ -468,7 +463,7 @@ class SplitDDPG(RLAgent):
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
         s = torch.FloatTensor(self._state(state)).to(self.device)
-        angle = torch.FloatTensor(self._angle(state)).to(self.device)
+        # angle = torch.FloatTensor(self._angle(state)).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
         q = self.critic[i](s, a).cpu().detach().numpy()
         return q

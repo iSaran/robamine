@@ -815,15 +815,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return matrix
 
     def get_state(self, rotations=0, normalized=False, sort=True):
-        # np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
-
-        # min_t = np.array([-0.25, -0.25, 0])
-        # max_t = np.array([0.25, 0.25, 0.05])
-        min_t = -0.3
-        max_t = 0.3
-        min_bbox = np.array([0.0, 0.0, 0.0])
-        max_bbox = np.array(self.params['obstacle']['max_bounding_box'])
-
         state = np.zeros((self.params['nr_of_obstacles'][1] + 1, 10))
 
         # target always in the first place
@@ -967,7 +958,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     #                                                                  target_range=[0, 1])
 
                     rotated_state[0:self.obs_above_table+1, :] = min_max_scale(rotated_state[0:self.obs_above_table+1, :],
-                                                                               range=[min_t, max_t], target_range=[0, 1])
+                                                                               range=[-0.3, 0.3], target_range=[0, 1])
 
                 states = np.append(states, rotated_state.flatten().copy(), axis=0)
                 for d in distances:
