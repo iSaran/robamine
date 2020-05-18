@@ -12,13 +12,11 @@ def run():
 
     env = gym.make(params['env']['name'], params=params['env']['params'])
 
-    print(quat2rot(np.array([0.0, 0.0, 0.0, 0.0])))
-
     # Push target
     # -----------
     action = np.array([0, -0.5, 1, -1])
     # env.reset()
-    env.reset(seed=0)
+    env.reset()
     env.step(action)
 
     action = np.array([0, -0.5, 0, -1])

@@ -78,7 +78,7 @@ class Critic(nn.Module):
         self.out.weight.data.uniform_(-0.003, 0.003)
         self.out.bias.data.uniform_(-0.003, 0.003)
 
-    def forward(self, x, u, angle, cout=False):
+    def forward(self, x, u):
         # u_ = u.clone()
         # if len(u.shape) == 1:
         #     u_[0] = 0
@@ -109,7 +109,6 @@ class Critic(nn.Module):
         #     print('u_:')
         #     print(u_.detach().cpu().numpy())
         # x = torch.cat([x_, u_], x.dim() - 1)
-
         x = torch.cat([x, u], x.dim() - 1)
         for layer in self.hidden_layers:
             x = nn.functional.relu(layer(x))
@@ -252,7 +251,7 @@ class SplitDDPG(RLAgent):
 
         self.action_l2 = 0.1
         self.max_action = 5
-        self.n_rollout_steps = 100
+        self.n_rollout_steps = 30
         self.t_rollout = 0
 
         # self.replay_buffer[0] = ReplayBuffer.load('/home/mkiatos/Desktop/buffer')
@@ -306,7 +305,7 @@ class SplitDDPG(RLAgent):
 
         for i in range(self.nr_network):
             a = self.actor[i](obs)
-            q = self.critic[i](s, a, angle).detach().cpu().numpy()
+            q = self.critic[i](s, a).detach().cpu().numpy()
             self.info['q_values'][i] = q[0]
             if q > max_q:
                 max_q = q
@@ -418,15 +417,15 @@ class SplitDDPG(RLAgent):
         next_obs = torch.FloatTensor(batch_next_obs).to(self.device)
         terminal = torch.FloatTensor(batch.terminal).to(self.device)
 
-        angle = torch.FloatTensor(batch_angle).to(self.device)
-        next_angle = torch.FloatTensor(batch_next_angle).to(self.device)
+        # angle = torch.FloatTensor(batch_angle).to(self.device)
+        # next_angle = torch.FloatTensor(batch_next_angle).to(self.device)
 
         # Compute the target Q-value
-        target_q = self.target_critic[i](next_state, self.target_actor[i](next_obs), next_angle)
+        target_q = self.target_critic[i](next_state, self.target_actor[i](next_obs))
         target_q = reward + ((1 - terminal) * self.params['gamma'] * target_q).detach()
 
         # Get the current q estimate
-        q = self.critic[i](state, action, angle)
+        q = self.critic[i](state, action)
 
         # Critic loss
         critic_loss = nn.functional.mse_loss(q, target_q)
@@ -438,7 +437,7 @@ class SplitDDPG(RLAgent):
         self.critic_optimizer[i].step()
 
         # Optimize actor
-        actor_loss = - self.critic[i](state, self.actor[i](obs), angle).mean()
+        actor_loss = - self.critic[i](state, self.actor[i](obs)).mean()
         state_abs_mean = self.actor[i].actions_real.abs().mean()
         preactivation_loss = (state_abs_mean - torch.tensor(1.0)).pow(2)
         if state_abs_mean < torch.tensor(1.0):
@@ -471,7 +470,7 @@ class SplitDDPG(RLAgent):
         s = torch.FloatTensor(self._state(state)).to(self.device)
         angle = torch.FloatTensor(self._angle(state)).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
-        q = self.critic[i](s, a, angle).cpu().detach().numpy()
+        q = self.critic[i](s, a).cpu().detach().numpy()
         return q
 
     def seed(self, seed):

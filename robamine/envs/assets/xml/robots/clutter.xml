@@ -3,9 +3,9 @@
     angle="radian"
     inertiafromgeom="true" />
   <option
-    iterations="200"
+    iterations="10"
     timestep="0.001"
-    solver="CG"/>
+    solver="Newton"/>
   <size njmax="2000" nconmax="1000" />
   <default>
     <geom
@@ -19,58 +19,26 @@
     <quality
       shadowsize="8192"/>
     <scale
-      forcewidth="0.03"
-      contactwidth="0.05"
-      contactheight="0.03"
-      framelength="1.5"
-      framewidth="0.025"/>
-<!--      forcewidth="0.03"-->
-<!--      contactwidth="0.05"-->
-<!--      contactheight="0.03"-->
-<!--      framelength="1.5"-->
-<!--      framewidth="0.025"/>-->
+      forcewidth="0.01"
+      contactwidth="0.02"
+      contactheight="0.015"
+      framelength="0.3"
+      framewidth="0.015"/>
   </visual>
   <worldbody>
     <camera name="xtion"
       pos="0 0 0.75"
       quat="1 0 0 0" />
-    <light
-      directional="false"
-      cutoff="90"
-      exponent="1"
-      diffuse="1 1 1"
-      specular="0 0 0"
-      pos="1 0 1.5"
-      dir="-1 0 -2.5"/>
+    <light directional="false" cutoff="90" exponent="1" diffuse="1 1 1" specular="0 0 0" pos="3 0 3" castshadow="false"/>
+    <light directional="false" cutoff="90" exponent="1" diffuse="1 1 1" specular="0 0 0" pos="0 3 3" castshadow="false"/>
+    <light directional="false" cutoff="90" exponent="1" diffuse="1 1 1" specular="0 0 0" pos="-3 0 3" castshadow="false" />
+    <light directional="false" cutoff="90" exponent="1" diffuse="1 1 1" specular="0 0 0" pos="0 -3 3" castshadow="false" />
     <geom
       name="floor"
       type="plane"
       pos ="0 0 -0.3"
       size="0.24 0.24 0.25"
       rgba="0.0 0.0 0.0 1"/>
-<!--    <geom-->
-<!--            conaffinity="1"-->
-<!--            condim="3"-->
-<!--            name="floor"-->
-<!--            type="box"-->
-<!--            pos="0 0 -0.2"-->
-<!--            quat="1 0 0 0"-->
-<!--            size="1 1 0.2125"-->
-<!--            rgba="0.0 0.0 0.0 1"-->
-<!--            friction="1 0.005 0.0001"/>-->
-    <body
-      name="table"
-      pos="0.0 0 -0.01"
-      quat="1 0 0 0">
-      <geom
-            conaffinity="1"
-            condim="3"
-            name="table"
-            type="box"
-            quat="1 0 0 0"
-            size="0.25 0.25 0.01"
-            rgba="0.0 0.0 0.0 1"/>
-    </body>
   </worldbody>
   <actuator>
     <motor gear="1 0 0 0 0 0" joint="finger1" name="finger_0_wrench_actuator"/>
