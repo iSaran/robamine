@@ -52,8 +52,9 @@ default_params = {
 
 
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_units):
+    def __init__(self, state_dim, action_dim, hidden_units, rotation_invariant=False):
         super(Critic, self).__init__()
+        self.rotation_invariant = rotation_invariant
 
         self.hidden_layers = nn.ModuleList()
         self.hidden_layers.append(nn.Linear(state_dim + action_dim, hidden_units[0]))
@@ -69,7 +70,35 @@ class Critic(nn.Module):
         self.out.bias.data.uniform_(-stdv, stdv)
 
     def forward(self, x, u):
-        x = torch.cat([x, u], x.dim() - 1)
+        # Clone an reshape in case of single input in order to have a "batch" shape
+        u_ = u.clone()
+        x_ = x.clone()
+
+        # Rotation invariant features assumes spherical coordinates
+        if self.rotation_invariant:
+            if len(u.shape) == 1:
+                u_ = u_.reshape((1, -1))
+            if len(x_.shape) == 1:
+                x_ = x_.reshape((1, -1))
+
+            batch_size = x_.shape[0]
+            x__ = x_[:, :120].reshape((batch_size, -1, 4, 3)).clone()
+            # Find number of obstacles in order to NOT rotate the zero padding
+            n_obstacles = 0
+            for i in range(1, x__.shape[1]):
+                if not (x__[:, i] == -1).all():
+                    n_obstacles += 1
+            # Rotate and threshold
+            x__[:, :n_obstacles + 1, :, 1] -= u_[:, 0]
+            x__[:, :n_obstacles + 1, :, 1][x__[:, :n_obstacles + 1, :, 1] < -1.0] = torch.tensor(1.0) - torch.abs(
+                torch.tensor(-1.0) - x__[:, :n_obstacles + 1, :, 1][x__[:, :n_obstacles + 1, :, 1] < -1.0])
+            x__[:, :n_obstacles + 1, :, 1][x__[:, :n_obstacles + 1, :, 1] > 1.0] = torch.tensor(-1.0) + torch.abs(
+                torch.tensor(1.0) - x__[:, :n_obstacles + 1, :, 1][x__[:, :n_obstacles + 1, :, 1] > 1.0])
+            x__ = x__.reshape((batch_size, -1))
+            x_[:, :120] = x__
+            u_[:, 0] = torch.zeros(u_.shape[0])
+
+        x = torch.cat([x_, u_], x_.dim() - 1)
         for layer in self.hidden_layers:
             x = nn.functional.relu(layer(x))
         out = self.out(x)
@@ -136,8 +165,8 @@ class SplitDDPG(RLAgent):
         for i in range(self.nr_network):
             self.actor.append(Actor(self.state_dim[i], self.action_dim[i], self.params['actor']['hidden_units'][i]))
             self.target_actor.append(Actor(self.state_dim[i], self.action_dim[i], self.params['actor']['hidden_units'][i]))
-            self.critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i]))
-            self.target_critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i]))
+            self.critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i], rotation_invariant=self.params.get('rotation_invariant', False)))
+            self.target_critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i], rotation_invariant=self.params.get('rotation_invariant', False)))
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         self.info['q_values'] = []
