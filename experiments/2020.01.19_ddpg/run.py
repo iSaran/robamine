@@ -96,6 +96,7 @@ def check_transition(params):
         rng = np.random.RandomState()
         rng.seed(seed)
         obs = env.reset(seed=seed)
+        RealState(obs, spherical=True)
         # plot_point_cloud_of_scene(obs)
         while True:
             action = rng.uniform(-1, 1, 4)
@@ -107,15 +108,17 @@ def check_transition(params):
                 break
 
 def test():
-    from robamine.envs.clutter_utils import discretize_2d_box, discretize_3d_box
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D
-    fig = plt.figure()
-    ax = Axes3D(fig)
-    points = discretize_3d_box(1, 0.5, 0.2, 0.1)
-    ax.scatter(points[:, 0], points[:, 1], points[:, 2], marker='o')
-    ax.axis('equal')
-    plt.show()
+    from robamine.utils.math import cartesian2shperical
+    points = np.array([[1, 1, 1], [2, 2, 2]])
+    points = np.round(np.random.rand(5, 3), 1) * 10
+    points[0] = np.zeros(3)
+    points[1] = np.array([1, 2, 10])
+    print('random', points)
+    points = cartesian2shperical(points)
+    print('final in spherical', points)
+    points = cartesian2shperical(np.zeros(3))
+    print(points)
+    print(points.shape)
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
@@ -136,10 +139,10 @@ if __name__ == '__main__':
 
     # Run sth
 
-    # train(params)
+    train(params)
     #
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
 
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
-    check_transition(params)
+    # check_transition(params)
     # test()
