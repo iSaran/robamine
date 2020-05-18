@@ -12,7 +12,7 @@ import os
 import gym
 
 from robamine.algo.util import get_agent_handle
-from robamine.envs.clutter_utils import RealState
+from robamine.envs.clutter_utils import RealState, plot_point_cloud_of_scene
 
 logger = logging.getLogger('robamine')
 
@@ -66,15 +66,15 @@ def process_episodes(dir):
 def check_transition(params):
     '''Run environment'''
 
-    seed = np.random.randint(100000000)
-    # seed = 39574883  # seed for scene with obstacles visible
-    # seed = 28794391
-    print('Seed:', seed)
 
     params['env']['params']['render'] = True
+    params['env']['params']['safe'] = False
     env = gym.make(params['env']['name'], params=params['env']['params'])
-    obs = env.reset(seed=seed)
-    f = RealState(obs, normalize=True)
+
+    # seed = 39574883  # seed for scene with obstacles visible
+    # seed = 28794391
+    # seed = 77269035
+    # f = RealState(obs, normalize=True)
     # print(f.array()) print(f.principal_corners)
 
     # print
@@ -85,8 +85,37 @@ def check_transition(params):
     #
     #
     #
-    # action = np.array([0, 0.5, 0, 1])
-    # obs, reward, done, info = env.step(action)
+    # action = np.array([0, 1, 0, 1])
+    while True:
+        seed = np.random.randint(100000000)
+        # seed = 39574883  # seed for scene with obstacles visible
+        # seed = 28794391
+        # seed = 77269035
+        # seed = 17176674
+        print('Seed:', seed)
+        rng = np.random.RandomState()
+        rng.seed(seed)
+        obs = env.reset(seed=seed)
+        # plot_point_cloud_of_scene(obs)
+        while True:
+            action = rng.uniform(-1, 1, 4)
+            action[0] = 0
+            obs, reward, done, info = env.step(action)
+            # plot_point_cloud_of_scene(obs)
+            print('reward: ', reward, 'done:', done)
+            if done:
+                break
+
+def test():
+    from robamine.envs.clutter_utils import discretize_2d_box, discretize_3d_box
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    points = discretize_3d_box(1, 0.5, 0.2, 0.1)
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2], marker='o')
+    ax.axis('equal')
+    plt.show()
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
@@ -113,3 +142,4 @@ if __name__ == '__main__':
 
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     check_transition(params)
+    # test()
