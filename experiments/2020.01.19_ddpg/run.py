@@ -1,4 +1,5 @@
 from robamine.algo.core import TrainWorld, EvalWorld
+from robamine.clutter.real_mdp import PushTarget, RealState
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG
 from robamine.algo.util import EpisodeListData
@@ -12,8 +13,10 @@ import os
 import gym
 
 from robamine.algo.util import get_agent_handle
-from robamine.envs.clutter_utils import RealState, plot_point_cloud_of_scene, discretize_2d_box
+from robamine.envs.clutter_utils import plot_point_cloud_of_scene, discretize_2d_box
 import matplotlib.pyplot as plt
+from robamine.utils.math import min_max_scale
+from math import pi
 
 logger = logging.getLogger('robamine')
 
@@ -93,16 +96,29 @@ def check_transition(params):
         # seed = 28794391
         # seed = 77269035
         # seed = 17176674
+        # seed = 16193743
         print('Seed:', seed)
         rng = np.random.RandomState()
         rng.seed(seed)
         obs = env.reset(seed=seed)
-        RealState(obs, spherical=True)
+        # RealState(obs, spherical=True)
         # plot_point_cloud_of_scene(obs)
         while True:
             action = rng.uniform(-1, 1, 4)
             action[0] = 0
+            # action_ = np.zeros(action.shape)
+            # action_[1] = min_max_scale(action[1], range=[-1, 1], target_range=[-pi, pi])
+            # action_[2] = min_max_scale(action[2], range=[-1, 1], target_range=params['env']['params']['push']['distance'])
+            # action_[3] = min_max_scale(action[3], range=[-1, 1], target_range=params['env']['params']['push']['target_init_distance'])
+            # RealState(obs).plot(action=action_)
+            # action = [0, -1, 1, -1]
+            print('action', action)
             obs, reward, done, info = env.step(action)
+            RealState(obs).plot()
+            array = RealState(obs).array()
+            if (array > 1).any() or (array < -1).any():
+                print('out of limits indeces > 1:', array[array < -1])
+                print('out of limits indeces < -1:', array[array < -1])
             # plot_point_cloud_of_scene(obs)
             print('reward: ', reward, 'done:', done)
             if done:
@@ -165,6 +181,6 @@ if __name__ == '__main__':
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
 
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
-    # check_transition(params)
+    check_transition(params)
     # test()
-    visualize_critic_predictions('/home/espa/robamine_logs/test/model.pkl')
+    # visualize_critic_predictions('/home/espa/robamine_logs/test/model.pkl')
