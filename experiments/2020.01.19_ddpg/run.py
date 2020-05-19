@@ -175,12 +175,12 @@ if __name__ == '__main__':
     params['world']['logging_dir'] = logging_dir
 
     # Run sth
-
-    # train(params)
+#
+    train(params)
     #
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
 
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
-    check_transition(params)
+    # check_transition(params)
     # test()
     # visualize_critic_predictions('/home/espa/robamine_logs/test/model.pkl')

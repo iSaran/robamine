@@ -7,13 +7,15 @@ from robamine.clutter.mdp import FeatureBase, PushActionBase
 from robamine.utils.math import LineSegment2D
 
 class RealState(FeatureBase):
-    def __init__(self, obs_dict, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1], name=None):
+    def __init__(self, obs_dict, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+                 translate_wrt_target=False, name=None):
         '''Angle in rad.'''
         self.poses = obs_dict['object_poses'][obs_dict['object_above_table']]
         self.bounding_box = obs_dict['object_bounding_box'][obs_dict['object_above_table']]
         self.n_objects = self.poses.shape[0]
         self.max_n_objects = obs_dict['max_n_objects']
         self.range_norm = range_norm
+        self.translate_wrt_target = translate_wrt_target
 
         # Calculate principal corners for feature
         self.principal_corners = np.zeros((self.n_objects, 4, 3))
@@ -66,10 +68,14 @@ class RealState(FeatureBase):
         principal_corners_world = self._transform_list_of_points(principal_corners_object, pos, quat)
         # Mujoco due to soft contacts has bottom under 0. Enforce to zero
         principal_corners_world[:, 2][principal_corners_world[:, 2] < 0] = 0
-        principal_corners_target = self._transform_list_of_points(principal_corners_world, np.append(pos_target[0:2], 0), Quaternion(), inv=True)
 
-        # bbox_corners_target_rotated = np.matmul(rot_z(angle))
-        return principal_corners_target
+        if self.translate_wrt_target:
+            principal_corners_target = self._transform_list_of_points(principal_corners_world,
+                                                                      np.append(pos_target[0:2], 0), Quaternion(),
+                                                                      inv=True)
+            return principal_corners_target
+
+        return principal_corners_world
 
     def _get_principal_corner_target(self):
         pos = self.poses[0, 0:3]
@@ -81,9 +87,12 @@ class RealState(FeatureBase):
         principal_corners_world = self._transform_list_of_points(principal_corners_object, pos=pos, quat=quat)
         # Mujoco due to soft contacts has bottom under 0. Enforce to zero
         principal_corners_world[:, 2][principal_corners_world[:, 2] < 0] = 0
-        principal_corners_target = self._transform_list_of_points(principal_corners_world, pos=np.append(self.poses[0, 0:2], 0),
-                                                                  quat=Quaternion(), inv=True)
-        return principal_corners_target
+        if self.translate_wrt_target:
+            principal_corners_target = self._transform_list_of_points(principal_corners_world,
+                                                                      pos=np.append(self.poses[0, 0:2], 0),
+                                                                      quat=Quaternion(), inv=True)
+            return principal_corners_target
+        return principal_corners_world
 
     def _transform_list_of_points(self, points, pos, quat, inv=False):
         assert points.shape[1] == 3
@@ -196,7 +205,8 @@ class RealState(FeatureBase):
 
 
 class PushTarget(PushActionBase):
-    def __init__(self, obs_dict, theta, push_distance, distance, push_distance_range, init_distance_range):
+    def __init__(self, obs_dict, theta, push_distance, distance, push_distance_range, init_distance_range,
+                 translate_wrt_target=True):
         # Get the vertices of the bounding box from real state
         self.theta = min_max_scale(theta, range=[-1, 1], target_range=[-pi, pi])
         self.push_distance = push_distance
@@ -204,12 +214,19 @@ class PushTarget(PushActionBase):
 
         self.push_distance_range = push_distance_range
         self.init_distance_range = init_distance_range
-        self.target_principal_corners = RealState(obs_dict, sort=False, normalize=False, spherical=False).principal_corners[0]
+        self.target_principal_corners = RealState(obs_dict, sort=False, normalize=False,
+                                                  spherical=False,
+                                                  translate_wrt_target=translate_wrt_target).principal_corners[0]
 
+        fourth_point = self.target_principal_corners[2][0:2] - self.target_principal_corners[0][0:2]
+        fourth_point += self.target_principal_corners[1][0:2]
         self.convex_hull = [LineSegment2D(self.target_principal_corners[0][0:2], self.target_principal_corners[1][0:2]),
                             LineSegment2D(self.target_principal_corners[0][0:2], self.target_principal_corners[2][0:2]),
-                            LineSegment2D(-self.target_principal_corners[0][0:2], self.target_principal_corners[1][0:2]),
-                            LineSegment2D(-self.target_principal_corners[0][0:2], self.target_principal_corners[2][0:2])]
+                            LineSegment2D(fourth_point, self.target_principal_corners[1][0:2]),
+                            LineSegment2D(fourth_point, self.target_principal_corners[2][0:2])]
+
+        self.centroid = (self.target_principal_corners[0][0:2] + self.target_principal_corners[1][0:2] +
+                         self.target_principal_corners[2][0:2] + fourth_point) / 4
 
         finger_size = obs_dict['finger_height']
         self.distance_line_segment = self._get_distance_line_segment(finger_size)
@@ -224,18 +241,17 @@ class PushTarget(PushActionBase):
 
     def _get_push_line_segment(self):
         direction = np.array([cos(self.theta + pi), sin(self.theta + pi)])
-        line_segment = LineSegment2D(np.zeros(2), 10 * direction)
-        min_point = np.zeros(2)
-        max_point = self.push_distance_range[1] * direction
+        min_point = self.centroid
+        max_point = self.centroid + self.push_distance_range[1] * direction
         return LineSegment2D(min_point, max_point)
 
     def _get_distance_line_segment(self, finger_size):
         # Calculate the intersection point between the direction of the push theta and the convex hull (four line segments)
         direction = np.array([cos(self.theta), sin(self.theta)])
-        line_segment = LineSegment2D(np.zeros(2), 10 * direction)
+        line_segment = LineSegment2D(self.centroid, self.centroid + 10 * direction)
         min_point = line_segment.get_first_intersection_point(self.convex_hull)
         min_point += (finger_size + 0.008) * direction
-        max_point = (np.linalg.norm(min_point) + self.init_distance_range[1]) * direction
+        max_point = self.centroid + (np.linalg.norm(self.centroid - min_point) + self.init_distance_range[1]) * direction
         return LineSegment2D(min_point, max_point)
 
     def get_init_pos(self):
@@ -250,4 +266,3 @@ class PushTarget(PushActionBase):
 
     def get_duration(self, distance_per_sec = 0.1):
         return np.linalg.norm(self.get_init_pos() - self.get_final_pos()) / distance_per_sec
-
