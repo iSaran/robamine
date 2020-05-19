@@ -131,12 +131,14 @@ def visualize_critic_predictions(agent_path):
 
     splitddpg = SplitDDPG.load(agent_path)
 
-    out = discretize_2d_box(1, 1, 0.1)
+    out = discretize_2d_box(1, 1, 0.5)
     z = np.zeros((len(out[:, 0]), len(out[:, 1])))
+    print(z.shape)
     for i in range(len(out[:, 0])):
         for j in range(len(out[:, 1])):
-            z[i, j] = splitddpg.q_value(obs, np.array([0, out[i, 0], 1, out[i, 1]]))
+            z[i, j] = splitddpg.q_value(obs, np.array([0, out[i, 0], 1, out[j, 1]]))
     plt.contourf(out[:, 0], out[:, 1], z)
+    plt.colorbar()
     plt.show()
 
 if __name__ == '__main__':
@@ -165,4 +167,4 @@ if __name__ == '__main__':
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
     # test()
-    visualize_critic_predictions()
+    visualize_critic_predictions('/home/espa/robamine_logs/test/model.pkl')
