@@ -39,6 +39,7 @@ from time import sleep
 import matplotlib.pyplot as plt
 from robamine.utils.cv_tools import Feature
 
+from robamine.clutter.real_mdp import PushTarget as PushTargetReal
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -633,6 +634,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.convex_mask = None
         self.singulation_distance = 0.03
+        self.obs_dict = None
 
     def __del__(self):
         if self.viewer is not None:
@@ -968,6 +970,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         for key in list(shapes.keys()):
             assert obs_dict[key].shape == shapes[key]
+        self.obs_dict = obs_dict
         return obs_dict
 
     def step(self, action):
@@ -1011,21 +1014,28 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         target_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
         self.target_grasped_successfully = False
         self.obstacle_grasped_successfully = False
+        translate_wrt_target = False
 
         if primitive == 0 or primitive == 1:
 
             # Push target primitive
             if primitive == 0:
-                push = PushTarget(theta=action[1],
-                                  push_distance=action[2],
-                                  distance=action[3],
-                                  heightmap=self.heightmap,
-                                  mask=self.mask,
-                                  observation_boundaries=np.array(self.observation_area) * self.pixels_to_m,
-                                  distance_limits=self.params['push']['target_init_distance'],
-                                  push_distance_limits=self.params['push']['distance'],
-                                  finger_size = self.finger_length,
-                                  pixels_to_m=self.pixels_to_m)
+                if self.params.get('real_state', False):
+                    push = PushTargetReal(self.obs_dict, action[1], action[2], action[3],
+                                          self.params['push']['distance'],
+                                          self.params['push']['target_init_distance'],
+                                          translate_wrt_target=translate_wrt_target)
+                else:
+                    push = PushTarget(theta=action[1],
+                                      push_distance=action[2],
+                                      distance=action[3],
+                                      heightmap=self.heightmap,
+                                      mask=self.mask,
+                                      observation_boundaries=np.array(self.observation_area) * self.pixels_to_m,
+                                      distance_limits=self.params['push']['target_init_distance'],
+                                      push_distance_limits=self.params['push']['distance'],
+                                      finger_size = self.finger_length,
+                                      pixels_to_m=self.pixels_to_m)
             # Push obstacle primitive
             elif primitive == 1:
                 push = PushObstacle(theta=action[1],
@@ -1039,8 +1049,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             # Transform pushing from target frame to world frame
 
-            push_initial_pos_world = push.get_init_pos() + self.target_pos_vision
-            push_final_pos_world = push.get_final_pos() + self.target_pos_vision
+            # In this case the push is wrt target, tarnsform it to world:
+            if translate_wrt_target:
+                push_initial_pos_world = push.get_init_pos() + self.target_pos_vision
+                push_final_pos_world = push.get_final_pos() + self.target_pos_vision
+            else:
+                push_initial_pos_world = push.get_init_pos()
+                push_final_pos_world = push.get_final_pos()
 
             if self.predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
                 self.push_stopped_ext_forces = True
@@ -1240,7 +1255,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         reward += extra_penalty
 
-        return min_max_scale(reward, range=[-10, 10], target_range=[-1, 1])
+        return min_max_scale(reward, range=[-11, 10], target_range=[-1, 1])
 
     def terminal_state_real_state_push_target(self, obs):
         if self.timesteps >= self.max_timesteps:
