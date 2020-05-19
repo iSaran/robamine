@@ -12,7 +12,8 @@ import os
 import gym
 
 from robamine.algo.util import get_agent_handle
-from robamine.envs.clutter_utils import RealState, plot_point_cloud_of_scene
+from robamine.envs.clutter_utils import RealState, plot_point_cloud_of_scene, discretize_2d_box
+import matplotlib.pyplot as plt
 
 logger = logging.getLogger('robamine')
 
@@ -108,7 +109,7 @@ def check_transition(params):
                 break
 
 def test():
-    from robamine.utils.math import cartesian2shperical
+    from robamine.utils.math import cartesian2spherical
     points = np.array([[1, 1, 1], [2, 2, 2]])
     points = np.round(np.random.rand(5, 3), 1) * 10
     points[0] = np.zeros(3)
@@ -119,6 +120,24 @@ def test():
     points = cartesian2shperical(np.zeros(3))
     print(points)
     print(points.shape)
+
+def visualize_critic_predictions(agent_path):
+    params['env']['params']['render'] = True
+    params['env']['params']['safe'] = False
+    env = gym.make(params['env']['name'], params=params['env']['params'])
+    seed = np.random.randint(100000000)
+    print('Seed:', seed)
+    obs = env.reset(seed=seed)
+
+    splitddpg = SplitDDPG.load(agent_path)
+
+    out = discretize_2d_box(1, 1, 0.1)
+    z = np.zeros((len(out[:, 0]), len(out[:, 1])))
+    for i in range(len(out[:, 0])):
+        for j in range(len(out[:, 1])):
+            z[i, j] = splitddpg.q_value(obs, np.array([0, out[i, 0], 1, out[i, 1]]))
+    plt.contourf(out[:, 0], out[:, 1], z)
+    plt.show()
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
@@ -139,10 +158,11 @@ if __name__ == '__main__':
 
     # Run sth
 
-    train(params)
+    # train(params)
     #
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
 
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
     # test()
+    visualize_critic_predictions()
