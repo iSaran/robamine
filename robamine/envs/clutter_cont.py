@@ -1245,7 +1245,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         dist = self.get_real_distance_from_closest_obstacle(observation)
         reward = min_max_scale(min(dist, self.singulation_distance), range=[0, self.singulation_distance],
-                               target_range=[-5, 10])
+                               target_range=[-4, 10])
 
         extra_penalty = 0
         if int(action[0]) == 0:
@@ -1255,7 +1255,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         reward += extra_penalty
 
-        return min_max_scale(reward, range=[-11, 10], target_range=[-1, 1])
+        return min_max_scale(reward, range=[-10, 10], target_range=[-1, 1])
 
     def terminal_state_real_state_push_target(self, obs):
         if self.timesteps >= self.max_timesteps:
