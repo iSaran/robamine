@@ -1243,13 +1243,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if observation['object_poses'][0][2] < 0:
             return -1
 
-        dist = self.get_real_distance_from_closest_obstacle(observation)
-        reward = min_max_scale(min(dist, self.singulation_distance), range=[0, self.singulation_distance],
-                               target_range=[-4, 10])
-
+        # dist = self.get_real_distance_from_closest_obstacle(observation)
+        reward = -np.linalg.norm(observation['object_poses'][0][:2])
+        reward = min_max_scale(reward, range=[-np.linalg.norm(observation['surface_size']) + 0.03, 0],
+                               target_range=[-8, 10])
         extra_penalty = 0
         if int(action[0]) == 0:
-            extra_penalty = -min_max_scale(action[3], range=[-1, 1], target_range=[0, 5])
+            extra_penalty = -min_max_scale(action[3], range=[-1, 1], target_range=[0, 1])
 
         extra_penalty += -min_max_scale(action[2], range=[-1, 1], target_range=[0, 1])
 
@@ -1277,9 +1277,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if obs['object_poses'][0][2] < 0:
             return True
 
-        if self.get_real_distance_from_closest_obstacle(obs) > self.singulation_distance:
-            return True
-
+        # if self.get_real_distance_from_closest_obstacle(obs) > self.singulation_distance:
+        #     return True
+        #
         return False
 
     def get_real_distance_from_closest_obstacle(self, obs_dict):
