@@ -3,7 +3,7 @@ agent:
   params:
     batch_size: [64, 64]
     device: cpu
-    gamma: 0.99
+    gamma: 0.9
     load_buffers: ''
     load_nets: ''
     replay_buffer_size: 1000000
@@ -23,28 +23,29 @@ agent:
       start: 0.9
       end: 0.05
       decay: 10000
-    heightmap_rotations: 8
+    heightmap_rotations: 0
+    hardcoded_primitive: 0
     # load_actors:  # Uncomment to use pretrained actors. Comment-out for initialize actors from scratch it if want to initialize actors from scratch
     #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
     #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
     n_preloaded_buffer: [1000, 1000]
     real_state: True
-    rotation_invariant: True
+    rotation_invariant: False
   trainable_params: ''
 env:
   name: ClutterContWrapper-v0
   params:
     hardcoded_primitive: 0
-    heightmap_rotations: 8
-    max_timesteps: 20
+    heightmap_rotations: 0
+    max_timesteps: 5
     real_state: True
     all_equal_height_prob: 0.0
     finger_size:
     - 0.005
     - 0.005
     nr_of_obstacles:
-    - 1
-    - 8
+    - 0
+    - 0
     render: false
     target:
       min_bounding_box: [.01, .01, .005]
