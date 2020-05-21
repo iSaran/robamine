@@ -137,29 +137,55 @@ def test():
     print(points)
     print(points.shape)
 
-def visualize_critic_predictions(agent_path):
+def visualize_critic_predictions(exp_dir, model_name='model.pkl'):
+    # from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
+
     params['env']['params']['render'] = True
     params['env']['params']['safe'] = False
     env = gym.make(params['env']['name'], params=params['env']['params'])
     seed = np.random.randint(100000000)
     print('Seed:', seed)
     obs = env.reset(seed=seed)
+    import math
 
-    splitddpg = SplitDDPG.load(agent_path)
+    splitddpg = SplitDDPG.load(os.path.join(exp_dir, model_name))
 
-    out = discretize_2d_box(1, 1, 0.5)
-    z = np.zeros((len(out[:, 0]), len(out[:, 1])))
-    print(z.shape)
-    for i in range(len(out[:, 0])):
-        for j in range(len(out[:, 1])):
-            z[i, j] = splitddpg.q_value(obs, np.array([0, out[i, 0], 1, out[j, 1]]))
-    plt.contourf(out[:, 0], out[:, 1], z)
-    plt.colorbar()
-    plt.show()
+    X = np.linspace(-1, 1, 10)
+    Y = np.linspace(-1, 1, 10)
+    U = np.linspace(-1, 1, 8)
+    s = len(X)
+    X, Y = np.meshgrid(X, Y)
+    while(True):
+        fig, axs = plt.subplots(len(U),)
+        # print(X)
+        # print(Y)
+        Z = np.zeros((s, s))
+        for k in range(len(U)):
+            for i in range(s):
+                for j in range(s):
+                    Z[i, j] = splitddpg.q_value(obs, np.array([0, X[i, j], U[k], Y[i, j]]))
+
+            co = axs[k].contourf(X, Y, Z)
+            fig.colorbar(co, ax=axs[k])
+
+            # axs[k].colorbar()
+
+            # Z[i, j] = X[i, j] ** 2 + Y[i, j] ** 2
+
+        # fig = plt.figure()
+        # ax = fig.gca(projection='3d')
+        # surf = ax.plot_surface(X, Y, Z)
+
+        plt.show()
+
+        obs, _, _, _ = env.step(action=splitddpg.predict(obs))
+
+
+
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
-    exp_dir = 'robamine_logs_dream_2020.05.08.16.36.58.36044'
+    exp_dir = 'test'
 
     if hostname == 'dream':
         yml_name = 'params_dream.yml'
@@ -176,11 +202,11 @@ if __name__ == '__main__':
 
     # Run sth
 #
-    train(params)
+    # train(params)
     #
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
 
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
     # test()
-    # visualize_critic_predictions('/home/espa/robamine_logs/test/model.pkl')
+    visualize_critic_predictions(os.path.join(params['world']['logging_dir'], exp_dir))
