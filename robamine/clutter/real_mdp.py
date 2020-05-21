@@ -237,7 +237,7 @@ class PushTarget(PushActionBase):
             offset = object_height - finger_size
         else:
             offset = 0
-        self.z = finger_size + offset + 0.001
+        self.z = float(finger_size + offset + 0.001)
 
     def _get_push_line_segment(self):
         direction = np.array([cos(self.theta + pi), sin(self.theta + pi)])
