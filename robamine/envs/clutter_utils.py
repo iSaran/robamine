@@ -70,3 +70,53 @@ def discretize_3d_box(x, y, z, density):
         faces.append(face)
     result = np.concatenate(faces, axis=0)
     return result
+
+def is_object_above_object(pose, bbox, pose_2, bbox_2, density=0.005, plot=False):
+    """
+    Test if object with pose `pose_2` and bounding box `bbox_2`
+    is above the object with pose `pose` and bounding box `bbox`
+    """
+    def in_hull(p, hull):
+        """
+        Test if points in `p` are in `hull`
+
+        `p` should be a `NxK` coordinates of `N` points in `K` dimensions
+        `hull` is either a scipy.spatial.Delaunay object or the `MxK` array of the
+        coordinates of `M` points in `K`dimensions for which Delaunay triangulation
+        will be computed
+        """
+        if not isinstance(hull, Delaunay):
+            hull = Delaunay(hull)
+
+        return hull.find_simplex(p) >= 0
+
+    def get_corners(pose, bbox):
+        """
+        Return the 8 points of the bounding box
+        """
+        bbox_corners_object = np.array([[bbox[0], bbox[1], bbox[2]],
+                                        [bbox[0], -bbox[1], bbox[2]],
+                                        [bbox[0], bbox[1], -bbox[2]],
+                                        [bbox[0], -bbox[1], -bbox[2]],
+                                        [-bbox[0], bbox[1], bbox[2]],
+                                        [-bbox[0], -bbox[1], bbox[2]],
+                                        [-bbox[0], bbox[1], -bbox[2]],
+                                        [-bbox[0], -bbox[1], -bbox[2]]])
+        pos = pose[0:3]
+        quat = Quaternion(pose[3], pose[4], pose[5], pose[6])
+        return transform_list_of_points(bbox_corners_object, pos, quat)
+
+    corners_1 = get_corners(pose, bbox)
+    hull = ConvexHull(corners_1[:, 0:2])
+    base_corners = corners_1[hull.vertices, 0:2]
+
+    if plot:
+        plt.scatter(base_corners[:, 0], base_corners[:, 1], color=[1, 0, 0])
+    point_cloud = discretize_3d_box(bbox_2[0], bbox_2[1], bbox_2[2], density=density)
+    pos = pose_2[0:3]
+    quat = Quaternion(pose_2[3], pose_2[4], pose_2[5], pose_2[6])
+    point_cloud = transform_list_of_points(point_cloud, pos, quat)
+    if plot:
+        plt.scatter(point_cloud[:, 0], point_cloud[:, 1], color=[0, 1, 0])
+        plt.show()
+    return in_hull(point_cloud[:, 0:2], base_corners).any()
