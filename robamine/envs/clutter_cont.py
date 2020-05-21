@@ -706,7 +706,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             if not self._target_is_on_table():
                 raise InvalidEnvError('Target has fallen off the table during resetting the env.')
 
-            self.check_target_occlusion(number_of_obstacles)
+            self.check_target_occlusion_2()
 
             for _ in range(100):
                 for i in range(1, number_of_obstacles):
@@ -1502,6 +1502,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         """
         Checks if an obstacle is above the target object and occludes it. Then
         it removes it from the arena.
+
+        Obsolete by check_target_occlusion_2
         """
         for i in range(1, number_of_obstacles):
             body_id = get_body_names(self.sim.model).index("target")
@@ -1594,3 +1596,35 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 return True
         return False
 
+    def check_target_occlusion_2(self, eps=0.003):
+        """
+        Checks if an obstacle is above the target object and occludes it. Then
+        it removes it from the arena.
+        """
+        n_obstacles = self.xml_generator.n_obstacles
+        names = []
+        for i in range(n_obstacles):
+            names.append("object" + str(i + 1))
+
+        body_id = get_body_names(self.sim.model).index('target')
+        target_pose = np.zeros(7)
+        target_pose[0:3] = self.sim.data.body_xpos[body_id]
+        target_pose[3:] = self.sim.data.body_xquat[body_id]
+        target_bbox = get_geom_size(self.sim.model, 'target') - eps
+
+        for i in range(n_obstacles):
+            body_id = get_body_names(self.sim.model).index(names[i])
+            obstacle_pose = np.zeros(7)
+            obstacle_pose[0:3] = self.sim.data.body_xpos[body_id]
+            obstacle_pose[3:] = self.sim.data.body_xquat[body_id]
+            obstacle_bbox = get_geom_size(self.sim.model, names[i])
+
+            if obstacle_pose[2] < 0:
+                continue
+
+            if is_object_above_object(target_pose, target_bbox, obstacle_pose, obstacle_bbox):
+                index = self.sim.model.get_joint_qpos_addr(names[i])
+                qpos = self.sim.data.qpos.ravel().copy()
+                qvel = self.sim.data.qvel.ravel().copy()
+                qpos[index[0] + 2] = - 0.2
+                self.set_state(qpos, qvel)
