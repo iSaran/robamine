@@ -187,11 +187,10 @@ if __name__ == '__main__':
     hostname = socket.gethostname()
     exp_dir = 'test'
 
+    yml_name = 'params.yml'
     if hostname == 'dream':
-        yml_name = 'params_dream.yml'
         logging_dir = '/home/espa/robamine_logs/'
     elif hostname == 'triss':
-        yml_name = 'params_iason.yml'
         logging_dir = '/home/iason/robamine_logs/2020.01.16.split_ddpg'
     else:
         raise ValueError()
