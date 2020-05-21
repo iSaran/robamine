@@ -168,6 +168,9 @@ def visualize_critic_predictions(exp_dir, model_name='model.pkl'):
             co = axs[k].contourf(X, Y, Z)
             fig.colorbar(co, ax=axs[k])
 
+        action = splitddpg.predict(obs)
+        axs.scatter(action[1], action[2], color=[1, 0, 0])
+
             # axs[k].colorbar()
 
             # Z[i, j] = X[i, j] ** 2 + Y[i, j] ** 2
@@ -178,7 +181,7 @@ def visualize_critic_predictions(exp_dir, model_name='model.pkl'):
 
         plt.show()
 
-        obs, _, _, _ = env.step(action=splitddpg.predict(obs))
+        obs, _, _, _ = env.step(action=action)
 
 
 
