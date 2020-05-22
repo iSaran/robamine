@@ -25,7 +25,7 @@ from math import sqrt
 import glfw
 
 from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim, get_observation_dim,
-                                         transform_list_of_points, is_object_above_object)
+                                         get_distance_of_two_bbox, transform_list_of_points, is_object_above_object)
 from robamine.algo.core import InvalidEnvError
 
 import xml.etree.ElementTree as ET
@@ -632,6 +632,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.target_distances_from_limits = None
 
         self.convex_mask = None
+        self.singulation_distance = 0.03
 
     def __del__(self):
         if self.viewer is not None:
@@ -1114,6 +1115,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation, action):
+        if self.params.get('real_state', False):
+            return self.get_reward_real_state_push_target(observation, action)
         if self.hardcoded_primitive == 0:
             reward = self.get_reward_push_target(observation, action)
         elif self.hardcoded_primitive == 1:
@@ -1217,8 +1220,75 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return 0
 
-    def terminal_state(self, observation):
+    def get_reward_real_state_push_target(self, observation, action):
+        if self.push_stopped_ext_forces:
+            return -1
 
+        if observation['object_poses'][0][2] < 0:
+            return -1
+
+        dist = self.get_real_distance_from_closest_obstacle(observation)
+        reward = min_max_scale(min(dist, self.singulation_distance), range=[0, self.singulation_distance],
+                               target_range=[-5, 10])
+
+        extra_penalty = 0
+        if int(action[0]) == 0:
+            extra_penalty = -min_max_scale(action[3], range=[-1, 1], target_range=[0, 5])
+
+        extra_penalty += -min_max_scale(action[2], range=[-1, 1], target_range=[0, 1])
+
+        reward += extra_penalty
+
+        return min_max_scale(reward, range=[-10, 10], target_range=[-1, 1])
+
+    def terminal_state_real_state_push_target(self, obs):
+        if self.timesteps >= self.max_timesteps:
+            return True
+
+        # Terminal if collision is detected
+        if self.push_stopped_ext_forces:
+            self.push_stopped_ext_forces = False
+            return True
+
+        # Terminate if the target flips to its side, i.e. if target's z axis is
+        # parallel to table, terminate.
+        target_z = self.target_quat.rotation_matrix()[:,2]
+        world_z = np.array([0, 0, 1])
+        if np.dot(target_z, world_z) < 0.9:
+            return True
+
+        # If the object has fallen from the table
+        if obs['object_poses'][0][2] < 0:
+            return True
+
+        if self.get_real_distance_from_closest_obstacle(obs) > self.singulation_distance:
+            return True
+
+        return False
+
+    def get_real_distance_from_closest_obstacle(self, obs_dict):
+        '''Returns the minimum distance of target from the obstacles'''
+        n_objects = int(obs_dict['n_objects'])
+        target_pose = obs_dict['object_poses'][0]
+        target_bbox = obs_dict['object_bounding_box'][0]
+
+        distances = 100 * np.ones((int(n_objects),))
+        for i in range(1, n_objects):
+            obstacle_pose = obs_dict['object_poses'][i]
+            obstacle_bbox = obs_dict['object_bounding_box'][i]
+
+            distances[i] = get_distance_of_two_bbox(target_pose, target_bbox, obstacle_pose, obstacle_bbox)
+
+        return np.min(distances)
+
+
+    def terminal_state(self, observation):
+        if self.params.get('real_state', False):
+            return self.terminal_state_real_state_push_target(observation)
+        else:
+            return self.terminal_state_visual(observation)
+
+    def terminal_state_visual(self, observation):
         if self.timesteps >= self.max_timesteps:
             return True
 
