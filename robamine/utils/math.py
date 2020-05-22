@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-from math import exp
+from math import exp, cos, sin
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-import math
+from scipy.spatial import Delaunay
 
 def sigmoid(x, a=1, b=1, c=0, d=0):
     return a / (1 + exp(-b * x + c)) + d;
@@ -175,6 +175,17 @@ class LineSegment2D:
         plt.legend(handles=lines)
         plt.show()
 
+    def rotate(self, theta):
+        '''Theta in rad'''
+        rot = np.array([[cos(theta), -sin(theta)], [sin(theta), cos(theta)]])
+        self.p1 = np.matmul(rot, self.p1)
+        self.p2 = np.matmul(rot, self.p2)
+        return self
+
+    def translate(self, p):
+        self.p1 += p
+        self.p2 += p
+        return self
 
 class Signal:
     def __init__(self, signal):
@@ -234,3 +245,23 @@ def cartesian2spherical(points):
     if init_shape == 1:
         result = result.reshape(3,)
     return result
+
+def get_centroid_convex_hull(hull_points):
+    tri = Delaunay(hull_points)
+    triangles = np.zeros((tri.simplices.shape[0], 3, 2))
+    for i in range(len(tri.simplices)):
+        for j in range(3):
+            triangles[i, j, 0] = hull_points[tri.simplices[i, j], 0]
+            triangles[i, j, 1] = hull_points[tri.simplices[i, j], 1]
+
+    centroids = np.mean(triangles, axis=1)
+
+    triangle_areas = np.zeros(len(triangles))
+    for i in range(len(triangles)):
+        triangle_areas[i] = triangle_area(triangles[i, :, :])
+
+    weights = triangle_areas / np.sum(triangle_areas)
+
+    centroid = np.average(centroids, axis=0, weights=weights)
+
+    return centroid
