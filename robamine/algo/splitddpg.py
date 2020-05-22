@@ -202,9 +202,9 @@ class SplitDDPG(RLAgent):
         self.actor, self.target_actor, self.critic, self.target_critic = nn.ModuleList(), nn.ModuleList(), \
                                                                          nn.ModuleList(), nn.ModuleList()
         for i in range(self.nr_network):
-            self.actor.append(Actor(self.obs_dim, self.actions[i],
+            self.actor.append(Actor(self._state_dim(state_dim), self.actions[i],
                                     self.params['actor']['hidden_units'][i]))
-            self.target_actor.append(Actor(self.obs_dim, self.actions[i],
+            self.target_actor.append(Actor(self._state_dim(state_dim), self.actions[i],
                                            self.params['actor']['hidden_units'][i]))
             self.critic.append(Critic(self._state_dim(state_dim), self.actions[i],
                                       self.params['critic']['hidden_units'][i]))
@@ -299,7 +299,7 @@ class SplitDDPG(RLAgent):
         #     print('q_', str(x), ':', np.mean(sum_q_value), np.min(sum_q_value), np.max(sum_q_value))
 
         for i in range(self.nr_network):
-            a = self.actor[i](obs)
+            a = self.actor[i](s)
             q = self.critic[i](s, a).detach().cpu().numpy()
             self.info['q_values'][i] = q[0]
             if q > max_q:
@@ -377,7 +377,7 @@ class SplitDDPG(RLAgent):
                 print("%d/1000" % self.replay_buffer[i].size())
                 return
             else:
-                self.replay_buffer[i].save('/home/mkiatos/Desktop/buffer')
+                # self.replay_buffer[i].save('/home/mkiatos/Desktop/buffer')
                 self.preloading_finished = True
 
         for _ in range(self.params['update_iter'][i]):
@@ -416,7 +416,7 @@ class SplitDDPG(RLAgent):
         # next_angle = torch.FloatTensor(batch_next_angle).to(self.device)
 
         # Compute the target Q-value
-        target_q = self.target_critic[i](next_state, self.target_actor[i](next_obs))
+        target_q = self.target_critic[i](next_state, self.target_actor[i](next_state))
         target_q = reward + ((1 - terminal) * self.params['gamma'] * target_q).detach()
 
         # Get the current q estimate
@@ -432,7 +432,7 @@ class SplitDDPG(RLAgent):
         self.critic_optimizer[i].step()
 
         # Optimize actor
-        actor_loss = - self.critic[i](state, self.actor[i](obs)).mean()
+        actor_loss = - self.critic[i](state, self.actor[i](state)).mean()
         state_abs_mean = self.actor[i].actions_real.abs().mean()
         preactivation_loss = (state_abs_mean - torch.tensor(1.0)).pow(2)
         if state_abs_mean < torch.tensor(1.0):

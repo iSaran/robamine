@@ -14,7 +14,7 @@ def run():
 
     # Push target
     # -----------
-    action = np.array([0, -0.5, 1, -1])
+    action = np.array([0, -0.5, 0, -1])
     # env.reset()
     env.reset()
     env.step(action)
@@ -27,7 +27,7 @@ def run():
     # # env.reset()
     # env.step(action)
 
-    action = np.array([0, -0.5, 0, 1])
+    action = np.array([0, -0.5, 0, -1])
     # env.reset()
     env.step(action)
 
