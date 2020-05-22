@@ -991,6 +991,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         done = False
         if self.terminal_state(obs):
             done = True
+        self.push_stopped_ext_forces = False
 
         # Extra data for having pushing distance, theta along with displacements
         # of the target
@@ -1246,9 +1247,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return True
 
         # Terminal if collision is detected
-        if self.push_stopped_ext_forces:
-            self.push_stopped_ext_forces = False
-            return True
+        # if self.push_stopped_ext_forces:
+        #     self.push_stopped_ext_forces = False
+        #     return True
 
         # Terminate if the target flips to its side, i.e. if target's z axis is
         # parallel to table, terminate.
