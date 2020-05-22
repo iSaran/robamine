@@ -12,8 +12,8 @@ from scipy.spatial import ConvexHull, Delaunay
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 
-from robamine.utils.math import LineSegment2D, triangle_area, min_max_scale
-from robamine.utils.orientation import rot_x, rot_z, rot2angleaxis, rot_y
+from robamine.utils.math import LineSegment2D, triangle_area, min_max_scale, cartesian2spherical
+from robamine.utils.orientation import rot_x, rot_z, rot2angleaxis, Quaternion, rot_y
 from robamine.utils.cv_tools import Feature
 from robamine.utils.info import get_now_timestamp
 
@@ -25,7 +25,7 @@ from robamine.algo.core import InvalidEnvError
 from scipy.spatial.distance import cdist
 
 from robamine.algo.util import Transition
-
+from robamine.clutter.real_mdp import PushTarget, RealState
 
 class TargetObjectConvexHull:
     def __init__(self, masked_in_depth, log_dir='/tmp'):
@@ -338,8 +338,11 @@ def get_action_dim(primitive):
     return action_dim
 
 
-def get_observation_dim(primitive):
-    obs_dim_all = [PushTargetFeature.dim(), PushObstacleFeature.dim(), GraspTargetFeature.dim()]
+def get_observation_dim(primitive, real_state=False):
+    if real_state:
+        obs_dim_all = [RealState.dim(), RealState.dim(), RealState.dim()]
+    else:
+        obs_dim_all = [PushTargetFeature.dim(), PushObstacleFeature.dim(), GraspTargetFeature.dim()]
 
     if primitive >= 0:
         obs_dim = [obs_dim_all[primitive]]
@@ -351,6 +354,9 @@ def get_observation_dim(primitive):
 
 # Features for different primitives
 # ---------------------------------
+
+
+
 
 class PrimitiveFeature:
     def __init__(self, heightmap, mask, angle=0, name=None):
@@ -494,13 +500,16 @@ class GraspTargetFeature(PrimitiveFeature):
         return 401
 
 
-def obs_dict2feature(primitive, obs_dict, angle=0):
-    if primitive == 0:
-        return PushTargetFeature(obs_dict=obs_dict, angle=angle)
-    if primitive == 1:
-        return PushObstacleFeature(obs_dict=obs_dict, angle=angle)
-    if primitive == 2:
-        return GraspTargetFeature(obs_dict=obs_dict, angle=angle)
+def obs_dict2feature(primitive, obs_dict, angle=0, real_state=False):
+    if real_state:
+        return RealState(obs_dict=obs_dict, angle=0)
+    else:
+        if primitive == 0:
+            return PushTargetFeature(obs_dict=obs_dict, angle=angle)
+        if primitive == 1:
+            return PushObstacleFeature(obs_dict=obs_dict, angle=angle)
+        if primitive == 2:
+            return GraspTargetFeature(obs_dict=obs_dict, angle=angle)
 
     raise ValueError('Primitive should be 0, 1 or 2.')
 
