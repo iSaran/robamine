@@ -3,6 +3,7 @@ from math import exp
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import math
 
 def sigmoid(x, a=1, b=1, c=0, d=0):
     return a / (1 + exp(-b * x + c)) + d;
@@ -220,3 +221,16 @@ class Signal:
 def triangle_area(t):
     """Calculates the area of a triangle defined given its 3 vertices. n_vertices x n_dims =  3 x 2"""
     return (1 / 2) * abs((t[0][0] - t[2][0]) * (t[1][1] - t[0][1]) - (t[0][0] - t[1][0]) * (t[2][1] - t[0][1]))
+
+def cartesian2spherical(points):
+    init_shape = len(points.shape)
+    if init_shape == 1:
+        points = points.reshape(1, -1)
+    x2y2 = points[:, 0] ** 2 + points[:, 1] ** 2
+    r = np.sqrt(x2y2 + points[:, 2] ** 2)
+    theta = np.arctan2(points[:, 1], points[:, 0])
+    phi = np.arctan2(np.sqrt(x2y2), points[:, 2])
+    result = np.concatenate((r.reshape(-1, 1), theta.reshape(-1, 1), phi.reshape(-1, 1)), axis=1)
+    if init_shape == 1:
+        result = result.reshape(3,)
+    return result
