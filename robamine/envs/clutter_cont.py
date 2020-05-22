@@ -454,7 +454,7 @@ class ClutterContWrapper(gym.Env):
                                        dtype=np.float32)
 
         self.hardcoded_primitive = self.params.get('hardcoded_primitive', None)
-        self.state_dim = get_observation_dim(self.hardcoded_primitive)
+        self.state_dim = get_observation_dim(self.hardcoded_primitive, self.params.get('real_state', False))
         self.action_dim = get_action_dim(self.hardcoded_primitive)
 
         self.results = {}
@@ -546,7 +546,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.hardcoded_primitive = self.params.get('hardcoded_primitive', -1)
         self.action_dim = get_action_dim(self.hardcoded_primitive)
-        self.state_dim = get_observation_dim(self.hardcoded_primitive)
+        self.state_dim = get_observation_dim(self.hardcoded_primitive, self.params.get('real_state', False))
 
         finger_mass = get_body_mass(self.sim.model, 'finger1')
         self.pd = PDController.from_mass(mass = finger_mass)

@@ -35,6 +35,7 @@ env:
     hardcoded_primitive: 0
     heightmap_rotations: 8
     max_timesteps: 20
+    real_state: True
     all_equal_height_prob: 0.0
     finger_size:
     - 0.005

@@ -35,6 +35,7 @@ env:
   params:
     hardcoded_primitive: 0
     max_timesteps: 5
+    real_state: True
     all_equal_height_prob: 0.0
     finger_size:
     - 0.005
