@@ -3,10 +3,10 @@ from math import cos, sin, pi, acos, atan2
 from robamine.utils.math import min_max_scale, cartesian2spherical
 from robamine.utils.orientation import rot_z, Quaternion
 import matplotlib.pyplot as plt
-from robamine.clutter.mdp import FeatureBase, PushActionBase
+from robamine.clutter.mdp import Feature, PushTargetWithObstacleAvoidance, PushAction2D, PushTarget2D
 from robamine.utils.math import LineSegment2D
 
-class RealState(FeatureBase):
+class RealState(Feature):
     def __init__(self, obs_dict, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
                  translate_wrt_target=False, name=None):
         '''Angle in rad.'''
@@ -203,66 +203,74 @@ class RealState(FeatureBase):
     def dim():
         return 10 * 4 * 3 + 4 # TODO: hardcoded max n objects
 
-
-class PushTarget(PushActionBase):
+class PushTargetRealWithObstacleAvoidance(PushTargetWithObstacleAvoidance):
     def __init__(self, obs_dict, theta, push_distance, distance, push_distance_range, init_distance_range,
                  translate_wrt_target=True):
-        # Get the vertices of the bounding box from real state
-        self.theta = min_max_scale(theta, range=[-1, 1], target_range=[-pi, pi])
-        self.push_distance = push_distance
-        self.distance = distance
-
+        # Store the ranges to use it in case array is called with normalized
         self.push_distance_range = push_distance_range
         self.init_distance_range = init_distance_range
-        self.target_principal_corners = RealState(obs_dict, sort=False, normalize=False,
+        # Get the vertices of the bounding box from real state, calculate the fourth vertice and this is the convex hull
+        target_principal_corners = RealState(obs_dict, sort=False, normalize=False,
                                                   spherical=False,
                                                   translate_wrt_target=translate_wrt_target).principal_corners[0]
 
-        fourth_point = self.target_principal_corners[2][0:2] - self.target_principal_corners[0][0:2]
-        fourth_point += self.target_principal_corners[1][0:2]
-        self.convex_hull = [LineSegment2D(self.target_principal_corners[0][0:2], self.target_principal_corners[1][0:2]),
-                            LineSegment2D(self.target_principal_corners[0][0:2], self.target_principal_corners[2][0:2]),
-                            LineSegment2D(fourth_point, self.target_principal_corners[1][0:2]),
-                            LineSegment2D(fourth_point, self.target_principal_corners[2][0:2])]
-
-        self.centroid = (self.target_principal_corners[0][0:2] + self.target_principal_corners[1][0:2] +
-                         self.target_principal_corners[2][0:2] + fourth_point) / 4
+        fourth_point = target_principal_corners[2][0:2] - target_principal_corners[0][0:2]
+        fourth_point += target_principal_corners[1][0:2]
+        convex_hull = [LineSegment2D(target_principal_corners[0][0:2], target_principal_corners[1][0:2]),
+                       LineSegment2D(target_principal_corners[1][0:2], fourth_point),
+                       LineSegment2D(fourth_point, target_principal_corners[2][0:2]),
+                       LineSegment2D(target_principal_corners[2][0:2], target_principal_corners[0][0:2])]
 
         finger_size = obs_dict['finger_height']
-        self.distance_line_segment = self._get_distance_line_segment(finger_size)
-        self.push_line_segment = self._get_push_line_segment()
+        object_height = target_principal_corners[3][2] / 2
 
-        object_height = self.target_principal_corners[3][2] / 2
+        super(PushTargetRealWithObstacleAvoidance, self).__init__(theta=theta, push_distance=push_distance, distance=distance,
+                                         push_distance_range=push_distance_range,
+                                         init_distance_range=init_distance_range,
+                                         convex_hull=convex_hull, object_height=object_height, finger_size=finger_size)
+
+    def array(self):
+        x_ = min_max_scale(self.p1[0], range=[-self.init_distance_range[1], self.init_distance_range[1]],
+                           target_range=[-1, 1])
+        y_ = min_max_scale(self.p1[1], range=[-self.init_distance_range[1], self.init_distance_range[1]],
+                           target_range=[-1, 1])
+        push_distance = np.linalg.norm(self.centroid - self.p2)
+        push_distance = min_max_scale(push_distance, range=self.push_distance_range, target_range=[-1, 1])
+
+        return np.array([0, x_, y_, push_distance])
+
+class PushTargetRealCartesian(PushTarget2D):
+    '''Init pos if target is at zero and push distance. Then you can translate the push.'''
+    def __init__(self, x_init, y_init, push_distance, push_distance_range, max_init_distance, object_height, finger_size):
+        self.push_distance_range = push_distance_range
+        self.workspace = [-max_init_distance, max_init_distance]
+        x_ = min_max_scale(x_init, range=[-1, 1], target_range=self.workspace)
+        y_ = min_max_scale(y_init, range=[-1, 1], target_range=self.workspace)
+        push_distance_ = min_max_scale(push_distance, range=[-1, 1], target_range=push_distance_range)
+        p1 = np.array([x_, y_])
+        theta = np.arctan2(y_, x_)
+        p2 = - push_distance_ * np.array([cos(theta), sin(theta)])
+
+        # Calculate height (z) of the push
+        # --------------------------------
         if object_height - finger_size > 0:
             offset = object_height - finger_size
         else:
             offset = 0
-        self.z = float(finger_size + offset + 0.001)
+        z = float(finger_size + offset + 0.001)
 
-    def _get_push_line_segment(self):
-        direction = np.array([cos(self.theta + pi), sin(self.theta + pi)])
-        min_point = self.centroid
-        max_point = self.centroid + self.push_distance_range[1] * direction
-        return LineSegment2D(min_point, max_point)
+        super(PushTargetRealCartesian, self).__init__(p1, p2, z, push_distance_)
 
-    def _get_distance_line_segment(self, finger_size):
-        # Calculate the intersection point between the direction of the push theta and the convex hull (four line segments)
-        direction = np.array([cos(self.theta), sin(self.theta)])
-        line_segment = LineSegment2D(self.centroid, self.centroid + 10 * direction)
-        min_point = line_segment.get_first_intersection_point(self.convex_hull)
-        min_point += (finger_size + 0.008) * direction
-        max_point = self.centroid + (np.linalg.norm(self.centroid - min_point) + self.init_distance_range[1]) * direction
-        return LineSegment2D(min_point, max_point)
+    def array(self):
+        x_ = min_max_scale(self.p1[0], range=self.workspace, target_range=[-1, 1])
+        y_ = min_max_scale(self.p1[1], range=self.workspace, target_range=[-1, 1])
+        push_distance = min_max_scale(self.push_distance, range=self.push_distance_range, target_range=[-1, 1])
+        return np.array([0, x_, y_, push_distance])
 
-    def get_init_pos(self):
-        lambd = min_max_scale(self.distance, range=[-1, 1], target_range=[0, 1])
-        init = self.distance_line_segment.get_point(lambd)
-        return np.append(init, self.z)
 
-    def get_final_pos(self):
-        lambd = min_max_scale(self.push_distance, range=[-1, 1], target_range=[0, 1])
-        init = self.push_line_segment.get_point(lambd)
-        return np.append(init, self.z)
 
-    def get_duration(self, distance_per_sec = 0.1):
-        return np.linalg.norm(self.get_init_pos() - self.get_final_pos()) / distance_per_sec
+
+
+
+
+
