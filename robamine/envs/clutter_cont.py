@@ -39,7 +39,7 @@ from time import sleep
 import matplotlib.pyplot as plt
 from robamine.utils.cv_tools import Feature
 
-from robamine.clutter.real_mdp import PushTarget as PushTargetReal
+from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance, PushTargetRealCartesian
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -1021,10 +1021,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             # Push target primitive
             if primitive == 0:
                 if self.params.get('real_state', False):
-                    push = PushTargetReal(self.obs_dict, action[1], action[2], action[3],
-                                          self.params['push']['distance'],
-                                          self.params['push']['target_init_distance'],
-                                          translate_wrt_target=translate_wrt_target)
+                    # push = PushTargetRealWithObstacleAvoidance(self.obs_dict, action[1], action[2], action[3],
+                    #                       self.params['push']['distance'],
+                    #                       self.params['push']['target_init_distance'],
+                    #                       translate_wrt_target=translate_wrt_target)
+                    push = PushTargetRealCartesian(action[1], action[2], action[3], self.params['push']['distance'],
+                                                   self.params['push']['target_init_distance'][1],
+                                                   object_height=self.target_bounding_box[2],
+                                                   finger_size=self.finger_height)
+                    push.translate(self.obs_dict['object_poses'][0, :2])
                 else:
                     push = PushTarget(theta=action[1],
                                       push_distance=action[2],
@@ -1059,11 +1064,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             if self.predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
                 self.push_stopped_ext_forces = True
+                print('Collision detected!')
                 return self.sim.data.time
 
-            self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push.z, 1, 0, 0, 0])
+            self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push_initial_pos_world[2], 1, 0, 0, 0])
             self.sim_step()
-            self.move_joint_to_target('finger1', [None, None, push.z], 0.01)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+            self.move_joint_to_target('finger1', [None, None, push_initial_pos_world[2]], 0.01)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
             duration = push.get_duration()
 
             end = push_final_pos_world[:2]

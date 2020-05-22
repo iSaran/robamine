@@ -25,7 +25,7 @@ from robamine.algo.core import InvalidEnvError
 from scipy.spatial.distance import cdist
 
 from robamine.algo.util import Transition
-from robamine.clutter.real_mdp import PushTarget, RealState
+from robamine.clutter.real_mdp import RealState
 
 class TargetObjectConvexHull:
     def __init__(self, masked_in_depth, log_dir='/tmp'):
