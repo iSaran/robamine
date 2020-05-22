@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial.distance import cdist
+from scipy.spatial import ConvexHull, Delaunay
 from robamine.utils.orientation import Quaternion, rot_x, rot_y, rot_z
 
 
