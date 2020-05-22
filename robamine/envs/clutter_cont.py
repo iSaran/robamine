@@ -27,7 +27,7 @@ import math
 from math import sqrt
 import glfw
 
-from robamine.envs.clutter_utils import (transform_list_of_points, is_object_above_object)
+from robamine.envs.clutter_utils import (get_distance_of_two_bbox, transform_list_of_points, is_object_above_object)
 import xml.etree.ElementTree as ET
 from robamine.utils.orientation import rot2quat
 
@@ -586,6 +586,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.dist_from_obstacles = []
         self.feature_extractor = FeatureExtractor()
 
+        self.singulation_distance = 0.03
 
     def __del__(self):
         if self.viewer is not None:
@@ -1214,7 +1215,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # reward = self.get_real_push_obstacle_reward(state, action)
         # reward = self.get_reward_push_obstacle()
         # reward = rescale(reward, 0, 10, range=[-1, 1])
-        reward = self.get_reward_push_target(state, action)
+        # reward = self.get_reward_push_target(state, action)
+        reward = self.get_reward_real_state_push_target(state, action)
         reward = rescale(reward, -10, 10, range=[-1, 1])
         # reward = 0.1 * reward
         if reward > 1 or reward < -1:
@@ -1403,6 +1405,42 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return False
 
+    def get_reward_real_state_push_target(self, observation, action):
+        if self.push_stopped_ext_forces:
+            return -1
+
+        if observation['object_poses'][0][2] < 0:
+            return -1
+
+        dist = self.get_real_distance_from_closest_obstacle(observation)
+        reward = min_max_scale(min(dist, self.singulation_distance), range=[0, self.singulation_distance],
+                               target_range=[-5, 10])
+
+        extra_penalty = 0
+        if int(action[0]) == 0:
+            extra_penalty = -min_max_scale(action[3], range=[-1, 1], target_range=[0, 5])
+
+        extra_penalty += -min_max_scale(action[2], range=[-1, 1], target_range=[0, 1])
+
+        reward += extra_penalty
+
+        return min_max_scale(reward, range=[-10, 10], target_range=[-1, 1])
+
+    def get_real_distance_from_closest_obstacle(self, obs_dict):
+        '''Returns the minimum distance of target from the obstacles'''
+        n_objects = int(obs_dict['n_objects'])
+        target_pose = obs_dict['object_poses'][0]
+        target_bbox = obs_dict['object_bounding_box'][0]
+
+        distances = 100 * np.ones((int(n_objects),))
+        for i in range(1, n_objects):
+            obstacle_pose = obs_dict['object_poses'][i]
+            obstacle_bbox = obs_dict['object_bounding_box'][i]
+
+            distances[i] = get_distance_of_two_bbox(target_pose, target_bbox, obstacle_pose, obstacle_bbox)
+
+        return np.min(distances)
+
     def terminal_state(self, observation, state):
 
         if self.timesteps >= self.max_timesteps:
@@ -1431,10 +1469,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if state[0, 2] < 0:
             return True
 
-        if cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
-                                                .non_zero_pixels() < 20:
-            self.success = True
+        if self.get_real_distance_from_closest_obstacle(state) > self.singulation_distance:
             return True
+        #
+        # if cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
+        #                                         .non_zero_pixels() < 20:
+        #     self.success = True
+        #     return True
 
         # If the object is free from obstacles around (no points around)
         # if cv_tools.Feature(self.heightmap).mask_out(self.mask)\
