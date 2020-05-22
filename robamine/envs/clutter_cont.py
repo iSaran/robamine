@@ -27,6 +27,7 @@ import math
 from math import sqrt
 import glfw
 
+from robamine.envs.clutter_utils import (transform_list_of_points, is_object_above_object)
 import xml.etree.ElementTree as ET
 from robamine.utils.orientation import rot2quat
 
@@ -1140,16 +1141,18 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             push_initial_pos_world = push.get_init_pos() + self.target_pos_vision
             push_final_pos_world = push.get_final_pos() + self.target_pos_vision
 
-            init_z = 2 * self.target_bounding_box[2] + 0.05
-            self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
-            self.sim_step()
-
-            duration = push.get_duration()
-            if self.move_joint_to_target('finger1', [None, None, push.z], stop_external_forces=True):
-                end = push_final_pos_world[:2]
-                self.move_joint_to_target('finger1', [end[0], end[1], None], duration=duration)
-            else:
+            if self.predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
                 self.push_stopped_ext_forces = True
+                return self.sim.data.time
+
+            self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push.z, 1, 0, 0, 0])
+            self.sim_step()
+            self.move_joint_to_target('finger1', [None, None, push.z], 0.01)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+            duration = push.get_duration()
+
+            end = push_final_pos_world[:2]
+            self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
+
         elif primitive == 2 or primitive == 3:
             if primitive == 2:
                 theta = rescale(action[1], min=-1, max=1, range=[0, math.pi])
@@ -1778,3 +1781,19 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.preloaded_init_state = state.copy()
         else:
             state = None
+
+    def predict_collision(self, obs, x, y):
+        n_objects = int(obs['n_objects'])
+        sphere_pose = np.zeros(7)
+        sphere_pose[0] = x
+        sphere_pose[1] = y
+        sphere_pose[2] = 0.5
+        sphere_pose[3] = 1  # identity orientation
+        sphere_bbox = obs['finger_height'][0] * np.ones(3)
+        for i in range(0, n_objects):
+            object_pose = obs['object_poses'][i]
+            object_bbox = obs['object_bounding_box'][i]
+            if is_object_above_object(object_pose, object_bbox, sphere_pose, sphere_bbox, density=0.0025):
+                return True
+        return False
+
