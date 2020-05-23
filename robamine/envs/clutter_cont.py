@@ -636,6 +636,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.convex_mask = None
         self.singulation_distance = 0.03
         self.obs_dict = None
+        self.bgr = None
 
     def __del__(self):
         if self.viewer is not None:
@@ -822,6 +823,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 empty_grab = False
 
             bgr = cv_tools.rgb2bgr(rgb)
+            self.bgr = bgr
             cv2.imwrite(os.path.join(self.log_dir, 'bgr.png'), bgr)
             cv2.imwrite(os.path.join(self.log_dir, 'depth.png'), depth)
 
