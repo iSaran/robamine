@@ -676,3 +676,19 @@ def is_object_above_object(pose, bbox, pose_2, bbox_2, density=0.005, plot=False
         plt.scatter(point_cloud[:, 0], point_cloud[:, 1], color=[0, 1, 0])
         plt.show()
     return in_hull(point_cloud[:, 0:2], base_corners).any()
+
+
+def predict_collision(obs, x, y):
+    n_objects = int(obs['n_objects'])
+    sphere_pose = np.zeros(7)
+    sphere_pose[0] = x
+    sphere_pose[1] = y
+    sphere_pose[2] = 0.5
+    sphere_pose[3] = 1  # identity orientation
+    sphere_bbox = obs['finger_height'][0] * np.ones(3)
+    for i in range(0, n_objects):
+        object_pose = obs['object_poses'][i]
+        object_bbox = obs['object_bounding_box'][i]
+        if is_object_above_object(object_pose, object_bbox, sphere_pose, sphere_bbox, density=0.0025):
+            return True
+    return False
