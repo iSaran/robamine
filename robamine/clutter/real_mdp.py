@@ -20,8 +20,8 @@ class RealState(Feature):
         # Calculate principal corners for feature
         self.principal_corners = np.zeros((self.n_objects, 4, 3))
         self.calculate_principal_corners()
-        self.principal_corners_plot = self.principal_corners.copy()
         self.rotate(angle)
+        self.principal_corners_plot = self.principal_corners.copy()
         self.surface_size = obs_dict['surface_size']
         self.coordinates = 'cartesian'
         if spherical:
@@ -158,12 +158,15 @@ class RealState(Feature):
 
     def rotate(self, angle):
         for i in range(self.n_objects):
-            self.principal_corners[i] = self._transform_list_of_points(self.principal_corners[i], pos=np.zeros(3), quat=Quaternion.from_rotation_matrix(rot_z(angle)))
+            self.principal_corners[i] = self._transform_list_of_points(self.principal_corners[i], pos=np.zeros(3),
+                                                                       quat=Quaternion.from_rotation_matrix(
+                                                                           rot_z(angle)))
 
-    def plot(self, centroids=False, action=None):
+    def plot(self, centroids=False, action=None, ax=None):
         from mpl_toolkits.mplot3d import Axes3D
-        fig = plt.figure()
-        ax = Axes3D(fig)
+        if ax is None:
+            fig = plt.figure()
+            ax = Axes3D(fig)
 
         color = iter(plt.cm.rainbow(np.linspace(0, 1, self.principal_corners_plot.shape[0])))
 
@@ -197,7 +200,7 @@ class RealState(Feature):
 
         # ax.axis([-0.25, 0.25, -0.25, 0.25])
         ax.axis('equal')
-        plt.show()
+        # plt.show()
 
     @staticmethod
     def dim():
