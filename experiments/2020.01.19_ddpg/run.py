@@ -1,5 +1,5 @@
 from robamine.algo.core import TrainWorld, EvalWorld
-from robamine.clutter.real_mdp import PushTarget, RealState
+from robamine.clutter.real_mdp import RealState
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG
 from robamine.algo.util import EpisodeListData
@@ -11,6 +11,7 @@ import socket
 import numpy as np
 import os
 import gym
+import pickle
 
 from robamine.algo.util import get_agent_handle
 from robamine.envs.clutter_utils import plot_point_cloud_of_scene, discretize_2d_box
@@ -183,6 +184,98 @@ def visualize_critic_predictions(exp_dir, model_name='model.pkl'):
 
         obs, _, _, _ = env.step(action=action)
 
+def collect_scenes_real_state(params, dir_to_save, n_scenes=1000):
+    print('Collecting the real state of some scenes...')
+    from robamine.envs.clutter_cont import ClutterContWrapper
+    from robamine.envs.clutter_utils import InvalidEnvError
+
+    def safe_seed_run(env):
+        seed = np.random.randint(1000000000)
+        try:
+            obs = env.reset(seed=seed)
+        except InvalidEnvError as e:
+            print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
+            return safe_seed_run(env)
+        return obs, seed
+
+    params['env']['params']['render'] = False
+    params['env']['params']['safe'] = False
+    env = ClutterContWrapper(params=params['env']['params'])
+
+    real_states = []
+    keywords = ['object_poses', 'object_above_table', 'object_bounding_box', 'max_n_objects', 'surface_size',
+                'finger_height', 'n_objects']
+
+    for i in range(n_scenes):
+        print('Scene: ', i, 'out of', n_scenes)
+        scene = {}
+
+        obs, seed = safe_seed_run(env)
+        scene['seed'] = seed
+
+        for key in keywords:
+            scene[key] = obs[key]
+        real_states.append(scene)
+        plt.imsave(os.path.join(dir_to_save, 'screenshots/bgr_' + str(i) + '.png'), env.env.bgr)
+
+    with open(os.path.join(dir_to_save, 'scenes.pkl'), 'wb') as file:
+        pickle.dump([real_states, params], file)
+
+def create_dataset_from_scenes(dir):
+    from robamine.envs.clutter_utils import predict_collision
+    from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance
+
+    def reward(obs_dict, p, distance):
+        if predict_collision(obs_dict, p[0], p[1]):
+            return -1
+
+        reward = 1 - min_max_scale(distance, range=[-1, 1], target_range=[0, 1])
+        return reward
+
+    from robamine.clutter.real_mdp import RealState
+    with open(os.path.join(dir, 'scenes.pkl'), 'rb') as file:
+        data, params = pickle.load(file)
+
+    n_scenes = len(data)
+    n_actions_r = 10
+    n_actions_theta = 10
+    n_datapoints = n_scenes * n_actions_r * n_actions_theta
+    n_features = 125
+    dataset_x = np.zeros((n_datapoints, n_features))
+    dataset_y = np.zeros((n_datapoints, 1))
+
+    # for scene in data:
+    r = np.linspace(-1, 1, n_actions_r)
+    theta = np.linspace(-1, 1, n_actions_theta)
+    r, theta = np.meshgrid(r, theta)
+    sample = 0
+    for scene in data:
+        for i in range(n_actions_r):
+            for j in range(n_actions_theta):
+                rad = min_max_scale(theta[i, j], range=[-1, 1], target_range=[-np.pi, np.pi])
+                state = RealState(obs_dict=scene, angle=-rad, sort=True, normalize=True, spherical=False,
+                                  translate_wrt_target=True)
+
+                push = PushTargetRealWithObstacleAvoidance(scene, theta=theta[i, j], push_distance=-1, distance=r[i, j],
+                                                           push_distance_range=params['env']['params']['push']['distance'],
+                                                           init_distance_range=params['env']['params']['push']['target_init_distance'],
+                                                           translate_wrt_target=False)
+                p = push.get_init_pos()
+
+                # from mpl_toolkits.mplot3d import Axes3D
+                # fig = plt.figure()
+                # ax = Axes3D(fig)
+                # ax.plot([p[0]], [p[1]], [0], color=[0, 0, 0], marker='o')
+                # state.plot(ax=ax)
+                # plt.show()
+
+                dataset_x[sample] = np.append(state.array(), r[i, j])
+                rewardd = reward(scene, p, r[i, j])
+                dataset_y[sample] = rewardd
+                sample += 1
+
+    with open(os.path.join(dir, 'dataset.pkl'), 'wb') as file:
+        pickle.dump([dataset_x, dataset_y], file)
 
 
 
@@ -210,5 +303,9 @@ if __name__ == '__main__':
 
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
-    # test()
-    visualize_critic_predictions(os.path.join(params['world']['logging_dir'], exp_dir))
+    # test(params)
+    # visualize_critic_predictions(os.path.join(params['world']['logging_dir'], exp_dir))
+
+    # Supervised learning:
+    collect_scenes_real_state(params, os.path.join(logging_dir, 'scenes'), n_scenes=50)
+    # create_dataset_from_scenes(os.path.join(logging_dir, 'scenes'))
