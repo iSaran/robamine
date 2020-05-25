@@ -159,3 +159,19 @@ class ReplayBuffer:
     def remove(self, index):
         del self.buffer[index]
         self.count -= 1
+
+
+def get_batch_indices(dataset_size, batch_size, shuffle=True, seed=None):
+    indices = np.arange(0, dataset_size, 1)
+    if shuffle:
+        np.random.seed(seed)
+        np.random.shuffle(indices)
+    total_size = len(indices)
+    batch_size_ = min(batch_size, total_size)
+    residual = total_size % batch_size_
+    if residual > 0:
+        for_splitting = indices[:-residual]
+    else:
+        for_splitting = indices
+    batches = np.split(for_splitting, (total_size - residual) / batch_size_)
+    return batches
