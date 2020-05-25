@@ -1,8 +1,9 @@
-from robamine.algo.core import TrainWorld, EvalWorld
+from robamine.algo.core import TrainWorld, EvalWorld, SupervisedTrainWorld
 from robamine.clutter.real_mdp import RealState
 # from robamine.algo.ddpg_torch import DDPG_TORCH
-from robamine.algo.splitddpg import SplitDDPG
+from robamine.algo.splitddpg import SplitDDPG, Critic
 from robamine.algo.util import EpisodeListData
+from robamine.algo.core import Agent
 from robamine import rb_logging
 import logging
 import yaml
@@ -13,11 +14,17 @@ import os
 import gym
 import pickle
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
 from robamine.algo.util import get_agent_handle
 from robamine.envs.clutter_utils import plot_point_cloud_of_scene, discretize_2d_box
 import matplotlib.pyplot as plt
 from robamine.utils.math import min_max_scale
+from robamine.utils.memory import get_batch_indices
 from math import pi
+from math import floor
 
 logger = logging.getLogger('robamine')
 
@@ -184,6 +191,148 @@ def visualize_critic_predictions(exp_dir, model_name='model.pkl'):
 
         obs, _, _, _ = env.step(action=action)
 
+
+# Supervised learning of a critic
+# -------------------------------
+import math
+
+class CriticNet(nn.Module):
+    def __init__(self, input_dim, hidden_units):
+        super(CriticNet, self).__init__()
+
+        self.hidden_layers = nn.ModuleList()
+        self.hidden_layers.append(nn.Linear(input_dim, hidden_units[0]))
+        for i in range(1, len(hidden_units)):
+            self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
+            stdv = 1. / math.sqrt(self.hidden_layers[i].weight.size(1))
+            self.hidden_layers[i].weight.data.uniform_(-stdv, stdv)
+            self.hidden_layers[i].bias.data.uniform_(-stdv, stdv)
+
+        self.out = nn.Linear(hidden_units[-1], 1)
+        stdv = 1. / math.sqrt(self.out.weight.size(1))
+        self.out.weight.data.uniform_(-stdv, stdv)
+        self.out.bias.data.uniform_(-stdv, stdv)
+
+    def forward(self, x):
+        # Clone an reshape in case of single input in order to have a "batch" shape
+        # x = torch.cat([x_, u_], x_.dim() - 1)
+        for layer in self.hidden_layers:
+            x = nn.functional.relu(layer(x))
+        out = self.out(x)
+        return out
+
+class Critic(Agent):
+    '''
+    A class for train PyTorch networks. Inherit and create a self.network (which
+    inherits from torch.nn.Module) before calling super().__init__()
+    '''
+    def __init__(self):
+        super().__init__(name='Critic', params={})
+        self.device = 'cpu'
+        self.learning_rate = 0.001
+        self.batch_size = 64
+        # self.hidden_units = [800, 500, 300]
+        self.hidden_units = [400, 300]
+
+        self.network = CriticNet(125, self.hidden_units)
+
+        # Create the networks, optimizers and loss
+        self.optimizer = optim.Adam(self.network.parameters(),
+                                    lr=self.learning_rate)
+
+        self.loss = nn.MSELoss()
+
+        self.iterations = 0
+        self.info['train'] = {'loss': 0.0}
+        self.info['test'] = {'loss': 0.0}
+        self.train_dataset = None
+        self.test_dataset = None
+
+    def load_dataset(self, dataset, split=0.8):
+        self.dataset = dataset
+
+        scenes = floor(split * len(dataset[2]))
+        print('scenes', scenes)
+        print(dataset[2][scenes])
+        self.train_dataset = [dataset[0][:dataset[2][scenes]], dataset[1][:dataset[2][scenes]]]
+        self.test_dataset = [dataset[0][dataset[2][scenes]:], dataset[1][dataset[2][scenes]:]]
+
+    def predict(self, state):
+        # ndim == 1 is assumed to mean 1 sample (not multiple samples of 1 feature)
+        if state.ndim == 1:
+            state_ = state.reshape(1, -1)
+        else:
+            state_ = state
+
+        inputs = state_.copy()
+        s = torch.FloatTensor(inputs).to(self.device)
+        prediction = self.network(s).cpu().detach().numpy()
+
+        return prediction
+
+    def learn(self):
+        '''Run one epoch'''
+        self.iterations += 1
+
+        # Calculate loss in train dataset
+        train_x, train_y = self.train_dataset[0], self.train_dataset[1]
+        real_x = torch.FloatTensor(train_x).to(self.device)
+        prediction = self.network(real_x)
+        real_y = torch.FloatTensor(train_y).to(self.device)
+        loss = self.loss(prediction, real_y)
+        self.info['train']['loss'] = loss.detach().cpu().numpy().copy()
+
+        # Calculate loss in test dataset
+        test_x, test_y = self.test_dataset[0], self.test_dataset[1]
+        real_x = torch.FloatTensor(test_x).to(self.device)
+        prediction = self.network(real_x)
+        real_y = torch.FloatTensor(test_y).to(self.device)
+        loss = self.loss(prediction, real_y)
+        self.info['test']['loss'] = loss.detach().cpu().numpy().copy()
+
+        # Minimbatch update of network
+        minibatches = get_batch_indices(dataset_size=self.train_dataset[0].shape[0], batch_size=self.batch_size)
+        for minibatch in minibatches:
+            batch_x = self.train_dataset[0][minibatch]
+            batch_y = self.train_dataset[1][minibatch]
+
+            real_x = torch.FloatTensor(batch_x).to(self.device)
+            prediction = self.network(real_x)
+            real_y = torch.FloatTensor(batch_y).to(self.device)
+            loss = self.loss(prediction, real_y)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+    def state_dict(self):
+        state_dict = super().state_dict()
+        state_dict['trainable'] = self.trainable_dict()
+        state_dict['iterations'] = self.iterations
+        return state_dict
+
+    def trainable_dict(self):
+        return self.network.state_dict()
+
+    def load_trainable_dict(self, trainable):
+        self.network.load_state_dict(trainable)
+
+    def load_trainable(self, file_path):
+        '''Assume that file path is a pickle with with self.state_dict() '''
+        state_dict = pickle.load(open(input, 'rb'))
+        self.load_trainable_dict(state_dict['trainable'])
+
+    @classmethod
+    def load_state_dict(cls, state_dict):
+        self = cls()
+        self.load_trainable_dict(state_dict['trainable'])
+        self.iterations = state_dict['iterations']
+        return self
+
+    def seed(self, seed=None):
+        super().seed(seed)
+        self.train_dataset.seed(seed)
+        self.test_dataset.seed(seed)
+
 def collect_scenes_real_state(params, dir_to_save, n_scenes=1000):
     print('Collecting the real state of some scenes...')
     from robamine.envs.clutter_cont import ClutterContWrapper
@@ -207,7 +356,7 @@ def collect_scenes_real_state(params, dir_to_save, n_scenes=1000):
                 'finger_height', 'n_objects']
 
     for i in range(n_scenes):
-        print('Scene: ', i, 'out of', n_scenes)
+        print('Collecting scenes. Scene: ', i, 'out of', n_scenes)
         scene = {}
 
         obs, seed = safe_seed_run(env)
@@ -216,12 +365,12 @@ def collect_scenes_real_state(params, dir_to_save, n_scenes=1000):
         for key in keywords:
             scene[key] = obs[key]
         real_states.append(scene)
-        plt.imsave(os.path.join(dir_to_save, 'screenshots/bgr_' + str(i) + '.png'), env.env.bgr)
+        plt.imsave(os.path.join(dir_to_save, 'screenshots/' + str(i) + '_screenshot.png'), env.env.bgr)
 
     with open(os.path.join(dir_to_save, 'scenes.pkl'), 'wb') as file:
         pickle.dump([real_states, params], file)
 
-def create_dataset_from_scenes(dir):
+def create_dataset_from_scenes(dir, n_x=16, n_y=16):
     from robamine.envs.clutter_utils import predict_collision
     from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance
 
@@ -236,48 +385,129 @@ def create_dataset_from_scenes(dir):
     with open(os.path.join(dir, 'scenes.pkl'), 'rb') as file:
         data, params = pickle.load(file)
 
+
+    x = np.linspace(-1, 1, n_x)
+    y = np.linspace(-1, 1, n_y)
+    x, y = np.meshgrid(x, y)
+    x_y = np.column_stack((x.ravel(), y.ravel()))
+    distance = np.linalg.norm(x_y[0, :] - x_y[1, :])
+    x_y = x_y[np.linalg.norm(x_y, axis=1) <= 1]
+
     n_scenes = len(data)
-    n_actions_r = 10
-    n_actions_theta = 10
-    n_datapoints = n_scenes * n_actions_r * n_actions_theta
+    n_datapoints = n_scenes * x_y.shape[0]
     n_features = 125
     dataset_x = np.zeros((n_datapoints, n_features))
     dataset_y = np.zeros((n_datapoints, 1))
 
     # for scene in data:
-    r = np.linspace(-1, 1, n_actions_r)
-    theta = np.linspace(-1, 1, n_actions_theta)
-    r, theta = np.meshgrid(r, theta)
+    # r = np.linspace(-1, 1, n_actions_r)
+    # theta = np.linspace(-1, 1, n_actions_theta)
+    # r, theta = np.meshgrid(r, theta)
     sample = 0
-    for scene in data:
-        for i in range(n_actions_r):
-            for j in range(n_actions_theta):
-                rad = min_max_scale(theta[i, j], range=[-1, 1], target_range=[-np.pi, np.pi])
-                state = RealState(obs_dict=scene, angle=-rad, sort=True, normalize=True, spherical=False,
+    scene_start_id = np.zeros(len(data), dtype=np.int32)
+    for scene in range(len(data)):
+        print('Creating dataset scenes. Scene: ', scene, 'out of', n_scenes)
+        x_y_random = np.random.normal(x_y, distance / 4)
+        plt.plot(x_y_random[:, 0], x_y_random[:, 1], marker='.', color='k', linestyle='none')
+        plt.show()
+        # plt.plot(x_y_random[:, 0], x_y_random[:, 1], marker='.', color='k', linestyle='none')
+        # plt.show()
+        scene_start_id[scene] = sample
+        for i in range(x_y_random.shape[0]):
+            theta = np.arctan2(x_y_random[i, 1], x_y_random[i, 0])
+            theta = min_max_scale(theta, range=[-np.pi, np.pi], target_range=[-1, 1])  # it seems silly just to leave the rest the same
+            rad = min_max_scale(theta, range=[-1, 1], target_range=[-np.pi, np.pi])
+            state = RealState(obs_dict=data[scene], angle=-rad, sort=True, normalize=True, spherical=False,
+                              translate_wrt_target=True)
+
+            r = np.linalg.norm(x_y_random[i])
+            if r > 1:
+                r = 1
+            push = PushTargetRealWithObstacleAvoidance(data[scene], theta=theta, push_distance=-1, distance=r,
+                                                       push_distance_range=params['env']['params']['push']['distance'],
+                                                       init_distance_range=params['env']['params']['push']['target_init_distance'],
+                                                       translate_wrt_target=False)
+            p = push.get_init_pos()
+
+            # from mpl_toolkits.mplot3d import Axes3D
+            # fig = plt.figure()
+            # ax = Axes3D(fig)
+            # ax.plot([p[0]], [p[1]], [0], color=[0, 0, 0], marker='o')
+            # state.plot(ax=ax)
+            # plt.show()
+
+            dataset_x[sample] = np.append(state.array(), r)
+            rewardd = reward(data[scene], p, r)
+            dataset_y[sample] = rewardd
+            sample += 1
+    print(scene_start_id)
+
+    with open(os.path.join(dir, 'dataset' + str(n_x) + 'x' + str(n_y) +  '.pkl'), 'wb') as file:
+        pickle.dump([dataset_x, dataset_y, scene_start_id], file)
+
+def train_supervised_critic(dir, dataset_name):
+    rb_logging.init(directory=dir, friendly_name='', file_level=logging.INFO)
+    with open(os.path.join(dir, dataset_name), 'rb') as file:
+        dataset = pickle.load(file)
+    agent = Critic()
+    trainer = SupervisedTrainWorld(agent, dataset, epochs=150, save_every=10)
+    trainer.run()
+    print('Logging dir:', trainer.log_dir)
+
+def visualize_supervised_output(model_dir, scenes_dir):
+    from robamine.envs.clutter_utils import predict_collision
+    from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance
+    def reward(obs_dict, p, distance):
+        if predict_collision(obs_dict, p[0], p[1]):
+            return -1
+
+        reward = 1 - min_max_scale(distance, range=[-1, 1], target_range=[0, 1])
+        return reward
+    critic = Critic.load(os.path.join(model_dir, 'model_20.pkl'))
+    density = 32
+    scene_id = 12
+
+    with open(os.path.join(scenes_dir, 'scenes.pkl'), 'rb') as file:
+        data, _ = pickle.load(file)
+
+    scenes_to_plot = len(data)
+    for scene_id in range(scenes_to_plot):
+        print('Processing scene', scene_id, 'out of', scenes_to_plot)
+
+
+        x = np.linspace(-0.1, .1, density)
+        y = np.linspace(-.1, .1, density)
+        sizee = len(x)
+        x, y = np.meshgrid(x, y)
+        fig, axs = plt.subplots()
+        z = np.zeros((sizee, sizee))
+        for i in range(sizee):
+            for j in range(sizee):
+                theta = np.arctan2(y[i, j], x[i, j])
+                rad = theta
+                state = RealState(obs_dict=data[scene_id], angle=-rad, sort=True, normalize=True, spherical=False,
                                   translate_wrt_target=True)
 
-                push = PushTargetRealWithObstacleAvoidance(scene, theta=theta[i, j], push_distance=-1, distance=r[i, j],
-                                                           push_distance_range=params['env']['params']['push']['distance'],
-                                                           init_distance_range=params['env']['params']['push']['target_init_distance'],
-                                                           translate_wrt_target=False)
-                p = push.get_init_pos()
 
-                # from mpl_toolkits.mplot3d import Axes3D
-                # fig = plt.figure()
-                # ax = Axes3D(fig)
-                # ax.plot([p[0]], [p[1]], [0], color=[0, 0, 0], marker='o')
-                # state.plot(ax=ax)
-                # plt.show()
+                r = np.sqrt((10*x[i, j]) ** 2 + (10*y[i, j]) ** 2)
+                if r > 1:
+                    z[i, j] = 0
+                else:
+                    r = min_max_scale(r, range=[0, 1], target_range=[-1, 1])
+                    push = PushTargetRealWithObstacleAvoidance(data[scene_id], theta=theta, push_distance=-1, distance=r,
+                                                               push_distance_range=params['env']['params']['push'][
+                                                                   'distance'],
+                                                               init_distance_range=params['env']['params']['push'][
+                                                                   'target_init_distance'],
+                                                               translate_wrt_target=False)
+                    p = push.get_init_pos()
+                    z[i, j] = reward(data[scene_id], np.array([x[i, j], y[i, j]]) + data[scene_id]['object_poses'][0, 0:2], r)
+                    # z[i, j] = critic.predict(np.append(state.array(), r))
 
-                dataset_x[sample] = np.append(state.array(), r[i, j])
-                rewardd = reward(scene, p, r[i, j])
-                dataset_y[sample] = rewardd
-                sample += 1
-
-    with open(os.path.join(dir, 'dataset.pkl'), 'wb') as file:
-        pickle.dump([dataset_x, dataset_y], file)
-
-
+        co = axs.contourf(x, y, z)
+        fig.colorbar(co, ax=axs)
+        plt.savefig(os.path.join(scenes_dir, 'screenshots/' + str(scene_id) + '_prediction.png'))
+        plt.close()
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
@@ -307,5 +537,12 @@ if __name__ == '__main__':
     # visualize_critic_predictions(os.path.join(params['world']['logging_dir'], exp_dir))
 
     # Supervised learning:
-    collect_scenes_real_state(params, os.path.join(logging_dir, 'scenes'), n_scenes=50)
-    # create_dataset_from_scenes(os.path.join(logging_dir, 'scenes'))
+    # collect_scenes_real_state(params, os.path.join(logging_dir, 'supervised_scenes/testing'), n_scenes=30)
+    # create_dataset_from_scenes(os.path.join(logging_dir, 'supervised_scenes/training'), 16, 16)
+    # create_dataset_from_scenes(os.path.join(logging_dir, 'supervised_scenes/training'), 16, 16)
+    # create_dataset_from_scenes(os.path.join(logging_dir, 'supervised_scenes/training'), 32, 32)
+    # train_supervised_critic(os.path.join(logging_dir, 'supervised_scenes/training'), 'dataset8x8.pkl')
+    # train_supervised_critic(os.path.join(logging_dir, 'supervised_scenes/training'), 'dataset16x16.pkl')
+    # train_supervised_critic(os.path.join(logging_dir, 'supervised_scenes/training'), 'dataset32x32.pkl')
+    visualize_supervised_output(model_dir=os.path.join(logging_dir, 'supervised_scenes/training/robamine_logs_triss_2020.05.24.15.32.16.980679'),
+                                scenes_dir=os.path.join(logging_dir, 'supervised_scenes/testing'))
