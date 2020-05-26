@@ -407,25 +407,59 @@ class SplitDDPG(RLAgent):
     def _transitions(self, transition):
         transitions = []
         heightmap_rotations = self.params.get('heightmap_rotations', 0)
+
+        what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_angle', 'max_n_objects']
+
+        # Create rotated states if needed
         if heightmap_rotations > 0:
-
-
+            angle = np.linspace(-1, 1, heightmap_rotations, endpoint=False)
             for j in range(heightmap_rotations):
-                angle = 2 / heightmap_rotations * j
+                state, next_state = {}, {}
+                for key in what_i_need:
+                    state[key] = transition.state[key].copy()
+                    next_state[key] = transition.next_state[key].copy()
 
-                # TODO this 360 might be different in grasp target
-                angle_deg = min_max_scale(angle, [-1, 1], [0, 360])
+                angle_rad = min_max_scale(angle[j], [-1, 1], [-np.pi, np.pi]) # TODO this 360 might be different in grasp target
 
-                state = obs_dict2feature(int(transition.action[0]), transition.state, angle=angle_deg, real_state=self.real_state).array()
-                next_state = np.zeros(get_observation_dim(int(transition.action[0]), self.real_state)[0])
+                # Rotate state
+                poses = state['object_poses'][state['object_above_table']]
+                # import matplotlib.pyplot as plt
+                # from mpl_toolkits.mplot3d import Axes3D
+                # from robamine.utils.viz import plot_boxes, plot_frames
+                # fig = plt.figure()
+                # ax = Axes3D(fig)
+                # plot_boxes(poses[:, 0:3], poses[:, 3:7], state['object_bounding_box'][state['object_above_table']], ax)
+                # plot_frames(poses[:, 0:3], poses[:, 3:7], 0.01, ax)
+                # plt.show()
+                target_pose = poses[0].copy()
+                poses = transform_poses(poses, target_pose)
+                rotz = np.zeros(7)
+                rotz[3:7] = Quaternion.from_rotation_matrix(rot_z(-angle_rad)).as_vector()
+                poses = transform_poses(poses, rotz)
+                poses = transform_poses(poses, target_pose, target_inv=True)
+                state['object_poses'][state['object_above_table']] = poses
+                state['surface_angle'] = angle_rad
+
+                # Rotate next state
                 if not transition.terminal:
-                    next_state = obs_dict2feature(int(transition.action[0]), transition.next_state, angle=angle_deg, real_state=self.real_state).array()
+                    poses = next_state['object_poses'][next_state['object_above_table']]
+                    target_pose = poses[0].copy()
+                    poses = transform_poses(poses, target_pose)
+                    rotz = np.zeros(7)
+                    rotz[3:7] = Quaternion.from_rotation_matrix(rot_z(-angle_rad)).as_vector()
+                    poses = transform_poses(poses, rotz)
+                    poses = transform_poses(poses, target_pose, target_inv=True)
+                    next_state['object_poses'][next_state['object_above_table']] = poses
+                    next_state['surface_angle'] = angle_rad
 
+                # Rotate action
                 # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
                 act = transition.action.copy()
-                act[1] += angle
+                act[1] += angle[j]
                 if act[1] > 1:
                     act[1] = -1 + abs(1 - act[1])
+                elif act[1] < -1:
+                    act[1] = 1 - abs(-1 - act[1])
 
                 tran = Transition(state=state.copy(),
                                   action=act.copy(),
@@ -434,14 +468,14 @@ class SplitDDPG(RLAgent):
                                   terminal=transition.terminal)
                 transitions.append(tran)
         else:
-            state = obs_dict2feature(int(transition.action[0]), transition.state, real_state=self.real_state).array()
-            next_state = np.zeros(get_observation_dim(int(transition.action[0]), real_state=self.real_state)[0])
-            if not transition.terminal:
-                next_state = obs_dict2feature(int(transition.action[0]), transition.next_state, real_state=self.real_state).array()
-            tran = Transition(state=state,
+            state, next_state = {}, {}
+            for key in what_i_need:
+                state[key] = transition.state[key]
+                next_state[key] = transition.next_state[key]
+            tran = Transition(state=state.copy(),
                               action=transition.action,
                               reward=transition.reward,
-                              next_state=next_state,
+                              next_state=next_state.copy(),
                               terminal=transition.terminal)
             transitions.append(tran)
 
