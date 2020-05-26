@@ -481,30 +481,30 @@ class SplitDDPG(RLAgent):
 
         return transitions
 
-
-def obstacle_avoidance_critic(action, distance_range, poses, bbox, bbox_aug, density,
+def obstacle_avoidance_critic(poses, bbox, action, distance_range, bbox_aug, density,
                               min_dist_range=[0.002, 0.1], device='cpu'):
 
-    # Translate the objects w.r.t. target
-    poses[:, :3] -= poses[0, :3]
-    workspace = [distance_range[1], distance_range[1]]
-    table_point_cloud = torch.from_numpy(get_table_point_cloud(poses, bbox, workspace, density, bbox_aug))
+    q_value = torch.zeros((len(poses), 1))
+    for i in range(len(poses)):
+        # Translate the objects w.r.t. target and gete point cloud of table w/o obstacles
+        poses[i][:, :3] -= poses[i][0, :3]
+        workspace = [distance_range[1], distance_range[1]]
+        table_point_cloud = torch.from_numpy(get_table_point_cloud(poses[i], bbox[i], workspace, density, bbox_aug).astype(np.float32))
 
-    theta = min_max_scale(action[:, 0], range=[-1, 1], target_range=[-pi, pi], lib='torch', device=device)
-    distance = min_max_scale(action[:, 1], range=[-1, 1], target_range=distance_range, lib='torch', device=device)
-    x_y = torch.zeros((theta.shape[0], 2))
-    x_y[:, 0] = distance * torch.cos(theta)
-    x_y[:, 1] = distance * torch.sin(theta)
+        # Transform the action to cartesian
+        theta = min_max_scale(action[i, 0], range=[-1, 1], target_range=[-pi, pi], lib='torch', device=device)
+        distance = min_max_scale(action[i, 1], range=[-1, 1], target_range=distance_range, lib='torch', device=device)
+        x_y = torch.FloatTensor([distance * torch.cos(theta), distance * torch.sin(theta)]).to(device)
 
-    x_y_ = x_y.reshape(x_y.shape[0], 1, x_y.shape[1]).repeat((1, table_point_cloud.shape[0], 1))
-    diff = x_y_ - table_point_cloud
-    min_dist = torch.min(torch.norm(diff, p=2, dim=2), dim=1)[0]
-    min_dist = torch.min(min_dist, min_dist_range[1] * torch.ones(min_dist.shape))
-    min_dist[min_dist < min_dist_range[0]] = 0
+        # x_y_ = x_y.reshape(x_y.shape[0], 1, x_y.shape[1]).repeat((1, table_point_cloud.shape[0], 1))
+        diff = x_y - table_point_cloud
+        min_dist = torch.min(torch.norm(diff, p=2, dim=1))
+        min_dist = torch.min(min_dist, torch.tensor(min_dist_range[1]).to(device))
 
-    min_dist[min_dist >= min_dist_range[0]] = -min_max_scale(min_dist[min_dist > min_dist_range[0]],
-                                                             range=[0, min_dist_range[1]], target_range=[0, 1],
-                                                             lib='torch', device=device)
+        if min_dist < min_dist_range[0]:
+            q_value[i] = 0
+        else:
+            q_value[i] = -min_max_scale(min_dist, range=[0, min_dist_range[1]], target_range=[0, 1], lib='torch', device=device)
     # import matplotlib.pyplot as plt
     # from mpl_toolkits.mplot3d import Axes3D
     # fig = plt.figure()
@@ -513,5 +513,5 @@ def obstacle_avoidance_critic(action, distance_range, poses, bbox, bbox_aug, den
     # # ax.axis('equal')
     # plt.show()
 
-    return min_dist
+    return q_value
 
