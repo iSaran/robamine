@@ -455,3 +455,26 @@ def transform_points(points, pos, quat, inv=False):
     transformed_points = np.transpose(np.matmul(matrix, np.transpose(
         np.concatenate((points, np.ones((points.shape[0], 1))), axis=1))))[:, :3]
     return transformed_points
+
+def transform_poses(poses, target_frame, target_inv=False):
+    """
+    Poses in Nx7 vectors with position & quaternion w.r.t. {A}.
+    target_frame {B} 7x1 vector the target frame to express poses (w.r.t. again {A}
+    """
+    matrix = np.eye(4)
+    matrix[0:3, 3] = target_frame[0:3]
+    matrix[0:3, 0:3] = Quaternion.from_vector(target_frame[3:7]).rotation_matrix()
+    transformed_poses = np.zeros((poses.shape[0], 7))
+    matrix = np.linalg.inv(matrix)
+    if target_inv:
+        matrix = np.linalg.inv(matrix)
+
+    for i in range(poses.shape[0]):
+        matrix2 = np.eye(4)
+        matrix2[0:3, 3] = poses[i, 0:3]
+        matrix2[0:3, 0:3] = Quaternion.from_vector(poses[i, 3:7]).rotation_matrix()
+        transformed = np.matmul(matrix, matrix2)
+        transformed_poses[i, 0:3] = transformed[0:3, 3]
+        transformed_poses[i, 3:7] = Quaternion.from_rotation_matrix(transformed[0:3, 0:3]).as_vector()
+    return transformed_poses
+
