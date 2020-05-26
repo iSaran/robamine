@@ -508,6 +508,75 @@ def visualize_supervised_output(model_dir, scenes_dir):
         fig.colorbar(co, ax=axs)
         plt.savefig(os.path.join(scenes_dir, 'screenshots/' + str(scene_id) + '_prediction.png'))
         plt.close()
+# Obstacle avoidance
+# ------------------
+
+def test_obstacle_avoidance_critic(params):
+    import matplotlib.pyplot as plt
+    from robamine.envs.clutter_utils import get_table_point_cloud
+
+    params['env']['params']['render'] = True
+    params['env']['params']['safe'] = False
+    env = gym.make(params['env']['name'], params=params['env']['params'])
+    seed = np.random.randint(100000000)
+    print('Seed:', seed)
+    obs = env.reset(seed=seed)
+
+    poses = obs['object_poses'][obs['object_above_table']]
+    poses[:, :3] -= obs['object_poses'][obs['object_above_table']][0, :3]
+
+
+    workspace = [.25, .25]
+    table_point_cloud = get_table_point_cloud(poses, obs['object_bounding_box'][obs['object_above_table']], workspace)
+
+    fig, ax = plt.subplots()
+    ax.scatter(table_point_cloud[:, 0], table_point_cloud[:, 1], marker='o')
+    plt.show()
+
+    density = 64
+    x = np.linspace(-.35, .35, density)
+    y = np.linspace(-.35, .35, density)
+    sizee = len(x)
+    x, y = np.meshgrid(x, y)
+    fig, axs = plt.subplots()
+    z = np.zeros((sizee, sizee))
+    max_min_dist = 0.1
+    for i in range(sizee):
+        for j in range(sizee):
+            k = np.array([x[i, j], y[i, j]])
+            diff = k - table_point_cloud
+            min_dist = min(np.min(np.linalg.norm(diff, axis=1)), max_min_dist)
+            if min_dist > 0.002 and abs(k[0]) <= workspace[0] and abs(k[1]) <= workspace[1]:
+                z[i, j] = - min_max_scale(min_dist, range=[0, max_min_dist], target_range=[0, 1])
+            else:
+                z[i, j] = 0
+
+    co = axs.contourf(x, y, z)
+    fig.colorbar(co, ax=axs)
+    plt.show()
+
+def test_obstacle_avoidance_critic_torch(params):
+    import matplotlib.pyplot as plt
+    from robamine.algo.splitddpg import obstacle_avoidance_critic
+    import torch
+
+
+    params['env']['params']['render'] = True
+    params['env']['params']['safe'] = False
+    env = gym.make(params['env']['name'], params=params['env']['params'])
+    seed = np.random.randint(100000000)
+    print('Seed:', seed)
+    obs = env.reset(seed=seed)
+    poses = obs['object_poses'][obs['object_above_table']]
+    bbox = obs['object_bounding_box'][obs['object_above_table']]
+
+    torch.manual_seed(seed)
+    batch_action = torch.FloatTensor(np.zeros((4096, 2))).uniform_(-1, 1)
+    print('batch_action', batch_action)
+    distance_range = [0, 0.1]
+
+    q_value = obstacle_avoidance_critic(batch_action, distance_range, poses, bbox, bbox_aug=0.008, density=128)
+    print('q value', q_value)
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
