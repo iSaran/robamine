@@ -7,10 +7,12 @@ import torch.nn as nn
 import torch.optim as optim
 
 from robamine.algo.core import RLAgent
-from robamine.utils.memory import ReplayBuffer
+from robamine.utils.memory import ReplayBuffer, get_batch_indices
 from robamine.utils.math import min_max_scale
+from robamine.utils.orientation import rot_z, Quaternion, transform_poses
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise, Transition
 from robamine.envs.clutter_utils import get_observation_dim, get_action_dim, obs_dict2feature, get_table_point_cloud
+from robamine.clutter.real_mdp import RealState
 
 import numpy as np
 import pickle
@@ -158,8 +160,6 @@ class SplitDDPG(RLAgent):
 
         self.device = self.params['device']
 
-
-
         # Create a list of actor-critics and their targets
         self.actor, self.target_actor, self.critic, self.target_critic = nn.ModuleList(), nn.ModuleList(), \
                                                                          nn.ModuleList(), nn.ModuleList()
@@ -295,27 +295,46 @@ class SplitDDPG(RLAgent):
             # self.replay_buffer[i].save(os.path.join(self.log_dir, 'split_ddpg_preloaded_buffer_' + str(i)))
 
         for _ in range(self.params['update_iter'][i]):
-            batch = self.replay_buffer[i].sample_batch(self.params['batch_size'][i])
-            self.update_net(i, batch)
+            batch = get_batch_indices(self.replay_buffer[i].size(), self.params['batch_size'][i])[0]
+            batch_ = []
+            for j in range(len(batch)):
+                batch_.append(self.replay_buffer[i](batch[j]))
+            self.update_net(i, batch_)
             self.results['network_iterations'] += 1
-
 
     def update_net(self, i, batch):
         self.info['critic_' + str(i) + '_loss'] = 0
         self.info['actor_' + str(i) + '_loss'] = 0
 
-        batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
-        batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
+        terminal = torch.FloatTensor(np.array([_.terminal for _ in batch]).reshape((-1, 1))).to(self.device)
+        reward = torch.FloatTensor(np.array([_.reward for _ in batch]).reshape((-1, 1))).to(self.device)
 
-        state = torch.FloatTensor(batch.state).to(self.device)
-        _, action_ = self.get_low_level_action(batch.action)
-        action = torch.FloatTensor(action_).to(self.device)
-        reward = torch.FloatTensor(batch.reward).to(self.device)
-        next_state = torch.FloatTensor(batch.next_state).to(self.device)
-        terminal = torch.FloatTensor(batch.terminal).to(self.device)
+        _, action = self.get_low_level_action(np.array([_.action for _ in batch]))
+        action = torch.FloatTensor(action).to(self.device)
+
+        state_next = torch.zeros((len(batch), RealState.dim()))
+        state = torch.zeros((len(batch), RealState.dim()))
+        poses = []
+        bbox = []
+        for j in range(len(batch)):
+            state[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True,
+                                                         translate_wrt_target=True).array()).to(self.device)
+            if not terminal[j]:
+                state_next[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True,
+                                                                  translate_wrt_target=True).array()).to(self.device)
+
+            # # TODO: rotation invariance with torch with different state for critic
+            # critic_state[i] = torch.FloatTensor(RealState(batch[i].state, angle=0, sort=True, normalize=True,
+            #                                     translate_wrt_target=True).array()).to(self.device)
+            # critic_state_next[i] = torch.FloatTensor(RealState(batch[i].next_state, angle=0, sort=True, normalize=True,
+            #                                          translate_wrt_target=True).array()).to(self.device)
+
+
+            poses.append(batch[j].state['object_poses'][batch[j].state['object_above_table']])
+            bbox.append(batch[j].state['object_bounding_box'][batch[j].state['object_above_table']])
 
         # Compute the target Q-value
-        target_q = self.target_critic[i](next_state, self.target_actor[i](next_state))
+        target_q = self.target_critic[i](state_next, self.target_actor[i](state_next))
         target_q = reward + ((1 - terminal) * self.params['gamma'] * target_q).detach()
 
         # Get the current q estimate
@@ -330,13 +349,21 @@ class SplitDDPG(RLAgent):
         critic_loss.backward()
         self.critic_optimizer[i].step()
 
+        obs_avoidance_q_value = obstacle_avoidance_critic(poses, bbox, action, [0, 0.1],
+                                                          self.params['critic_obs_avoid']['bbox_augmentation'],
+                                                          self.params['critic_obs_avoid']['density'],
+                                                          self.params['critic_obs_avoid']['min_dist_range'],
+                                                          self.device)
+
         # Compute actor loss
         state_abs_mean = self.actor[i].forward2(state).abs().mean()
         preactivation = (state_abs_mean - torch.tensor(1.0)).pow(2)
         if state_abs_mean < torch.tensor(1.0):
             preactivation = torch.tensor(0.0)
         weight = self.params['actor'].get('preactivation_weight', .05)
-        actor_loss = -self.critic[i](state, self.actor[i](state)).mean() + weight * preactivation
+        critic_out = self.critic[i](state, self.actor[i](state))
+        critic_out[obs_avoidance_q_value < 0] = obs_avoidance_q_value[obs_avoidance_q_value < 0]
+        actor_loss = - critic_out.mean() + weight * preactivation
 
         self.info['actor_' + str(i) + '_loss'] = float(actor_loss.detach().cpu().numpy())
 
