@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from scipy.spatial import Delaunay
+import torch
 
 def sigmoid(x, a=1, b=1, c=0, d=0):
     return a / (1 + exp(-b * x + c)) + d;
@@ -32,15 +33,20 @@ def rescale_array(x, min=None, max=None, range=[0, 1], axis=None, reverse=False)
     return range_0 + ((x - _min) * (range_1 - range_0)) / (_max - _min)
 
 
-def min_max_scale(x, range, target_range):
+def min_max_scale(x, range, target_range, lib='np', device='cpu'):
     assert range[1] > range[0]
     assert target_range[1] > target_range[0]
 
-    if isinstance(x, np.ndarray):
+    if lib == 'np' and isinstance(x, np.ndarray):
         range_min = range[0] * np.ones(x.shape)
         range_max = range[1] * np.ones(x.shape)
         target_min = target_range[0] * np.ones(x.shape)
         target_max = target_range[1] * np.ones(x.shape)
+    elif lib == 'torch' and torch.is_tensor(x):
+        range_min = range[0] * torch.ones(x.shape).to(device)
+        range_max = range[1] * torch.ones(x.shape).to(device)
+        target_min = target_range[0] * torch.ones(x.shape).to(device)
+        target_max = target_range[1] * torch.ones(x.shape).to(device)
     else:
         range_min = range[0]
         range_max = range[1]
