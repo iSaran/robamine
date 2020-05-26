@@ -1,14 +1,14 @@
 agent:
   name: SplitDDPG
   params:
-    batch_size: [64]
+    batch_size: [32]
     device: cpu
     gamma: 0.0
     load_buffers: ''
     load_nets: ''
     replay_buffer_size: 1000000
     tau: 0.001
-    update_iter: [5]
+    update_iter: [10]
     actor:
       hidden_units: [[400, 300]]
       learning_rate: 0.001
@@ -16,6 +16,10 @@ agent:
     critic:
       hidden_units: [[400, 300]]
       learning_rate: 0.001
+    critic_obs_avoid:
+      bbox_augmentation: 0.008
+      density: 128
+      min_dist_range: [0.002, 0.1]
     noise:
       name: Normal
       sigma: 0.2
@@ -23,7 +27,7 @@ agent:
       start: 0.9
       end: 0.05
       decay: 10000
-    heightmap_rotations: 0
+    heightmap_rotations: 16
     hardcoded_primitive: 0
     n_preloaded_buffer: [1000]
     real_state: True
