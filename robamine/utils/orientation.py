@@ -276,6 +276,15 @@ class Quaternion:
         return R;
 
     @classmethod
+    def from_vector(cls, vector, order='wxyz'):
+        if order == 'wxyz':
+            return cls(w=vector[0], x=vector[1], y=vector[2], z=vector[3])
+        elif order == 'xyzw':
+            return cls(w=vector[3], x=vector[0], y=vector[1], z=vector[2])
+        else:
+            raise ValueError('Order is not supported.')
+
+    @classmethod
     def from_rotation_matrix(cls, R):
         """
         Transforms a rotation matrix to a quaternion.
@@ -325,6 +334,7 @@ class Quaternion:
         self.x = new.x
         self.y = new.y
         self.z = new.z
+        return self
 
     def log(self):
         if abs(self.w - 1) < 1e-12:
