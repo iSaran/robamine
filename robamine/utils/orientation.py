@@ -441,3 +441,17 @@ def rotation_is_valid(R, eps=1e-8):
         raise ValueError('Rotation is not right handed (cross(y, z) != x for precision: ' + str(eps) + ')')
 
     return True
+
+def transform_points(points, pos, quat, inv=False):
+    '''Points are w.r.t. {A}. pos and quat is the frame {A} w.r.t {B}. Returns the list of points experssed w.r.t.
+    {B}.'''
+    assert points.shape[1] == 3
+    matrix = np.eye(4)
+    matrix[0:3, 3] = pos
+    matrix[0:3, 0:3] = quat.rotation_matrix()
+    if inv:
+        matrix = np.linalg.inv(matrix)
+
+    transformed_points = np.transpose(np.matmul(matrix, np.transpose(
+        np.concatenate((points, np.ones((points.shape[0], 1))), axis=1))))[:, :3]
+    return transformed_points
