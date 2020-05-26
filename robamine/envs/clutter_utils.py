@@ -677,6 +677,39 @@ def is_object_above_object(pose, bbox, pose_2, bbox_2, density=0.005, plot=False
         plt.show()
     return in_hull(point_cloud[:, 0:2], base_corners).any()
 
+def get_table_point_cloud(pose, bbox, workspace, density=128, bbox_aug=0.008, plot=False):
+    def in_hull(p, hull):
+        if not isinstance(hull, Delaunay):
+            hull = Delaunay(hull)
+
+        return hull.find_simplex(p) < 0
+
+    def get_corners(pose, bbox):
+        bbox_corners_object = np.array([[bbox[0], bbox[1], bbox[2]],
+                                        [bbox[0], -bbox[1], bbox[2]],
+                                        [bbox[0], bbox[1], -bbox[2]],
+                                        [bbox[0], -bbox[1], -bbox[2]],
+                                        [-bbox[0], bbox[1], bbox[2]],
+                                        [-bbox[0], -bbox[1], bbox[2]],
+                                        [-bbox[0], bbox[1], -bbox[2]],
+                                        [-bbox[0], -bbox[1], -bbox[2]]])
+        pos = pose[0:3]
+        quat = Quaternion(pose[3], pose[4], pose[5], pose[6])
+        return transform_list_of_points(bbox_corners_object, pos, quat)
+
+    x = np.linspace(-workspace[0], workspace[0], density)
+    y = np.linspace(-workspace[1], workspace[1], density)
+    x, y = np.meshgrid(x, y)
+    x_y = np.column_stack((x.ravel(), y.ravel()))
+
+    inhulls = np.ones((x_y.shape[0], pose.shape[0]), dtype=np.bool)
+    for object in range(pose.shape[0]):
+        corners = get_corners(pose[object], bbox[object] + bbox_aug)
+        hull = ConvexHull(corners[:, 0:2])
+        base_corners = corners[hull.vertices, 0:2]
+        inhulls[:, object] = in_hull(x_y, base_corners)
+
+    return x_y[inhulls.all(axis=1), :]
 
 def predict_collision(obs, x, y):
     n_objects = int(obs['n_objects'])
@@ -692,3 +725,4 @@ def predict_collision(obs, x, y):
         if is_object_above_object(object_pose, object_bbox, sphere_pose, sphere_bbox, density=0.0025):
             return True
     return False
+
