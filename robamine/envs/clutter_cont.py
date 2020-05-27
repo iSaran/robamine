@@ -918,6 +918,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'target_distances_from_limits': (4,),
                 'heightmap_mask': (2, 386, 386),
                 'surface_size': (2,),
+                'surface_angle': (1,),
                 'target_pos': (3,),
                 'object_poses': (max_n_obstacles, 7),
                 'object_bounding_box': (max_n_obstacles, 3),
@@ -957,7 +958,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'object_bounding_box': bounding_box,
             'object_above_table': above_table,
             'n_objects': np.array([self.xml_generator.n_obstacles + 1]),
-            'max_n_objects': np.array([shapes['object_poses'][0]])
+            'max_n_objects': np.array([shapes['object_poses'][0]]),
+            'surface_angle': np.array([0.0])
         }
 
         if not self._target_is_on_table():
