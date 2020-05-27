@@ -244,6 +244,34 @@ class PushTargetRealWithObstacleAvoidance(PushTargetWithObstacleAvoidance):
 
         return np.array([0, x_, y_, push_distance])
 
+class PushTargetReal(PushTarget2D):
+    def __init__(self, theta, push_distance, distance, push_distance_range, init_distance_range, object_height,
+                 finger_size):
+        self.push_distance_range = push_distance_range
+        self.init_distance_range = init_distance_range
+        theta = min_max_scale(theta, range=[-1, 1], target_range=[-np.pi, np.pi])
+        r = min_max_scale(distance, range=[-1, 1], target_range=init_distance_range)
+        push_distance_ = min_max_scale(push_distance, range=[-1, 1], target_range=push_distance_range)
+        p1 = np.array([r * np.cos(theta), r * np.sin(theta)])
+        p2 = - push_distance_ * np.array([cos(theta), sin(theta)])
+
+        # Calculate height (z) of the push
+        # --------------------------------
+        if object_height - finger_size > 0:
+            offset = object_height - finger_size
+        else:
+            offset = 0
+        z = float(finger_size + offset + 0.001)
+
+        super(PushTargetReal, self).__init__(p1, p2, z, push_distance_)
+
+    def array(self):
+        x_ = min_max_scale(self.p1[0], range=self.workspace, target_range=[-1, 1])
+        y_ = min_max_scale(self.p1[1], range=self.workspace, target_range=[-1, 1])
+        push_distance = min_max_scale(self.push_distance, range=self.push_distance_range, target_range=[-1, 1])
+        return np.array([0, x_, y_, push_distance])
+
+
 class PushTargetRealCartesian(PushTarget2D):
     '''Init pos if target is at zero and push distance. Then you can translate the push.'''
     def __init__(self, x_init, y_init, push_distance, push_distance_range, max_init_distance, object_height, finger_size):
