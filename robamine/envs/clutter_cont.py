@@ -1067,18 +1067,32 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 push_initial_pos_world = push.get_init_pos()
                 push_final_pos_world = push.get_final_pos()
 
-            if predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
-                self.push_stopped_ext_forces = True
-                print('Collision detected!')
-                return self.sim.data.time
+            if self.params['push'].get('predict_collision', True):
+                if predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
+                    self.push_stopped_ext_forces = True
+                    print('Collision detected!')
+                    return self.sim.data.time
 
-            self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push_initial_pos_world[2], 1, 0, 0, 0])
-            self.sim_step()
-            self.move_joint_to_target('finger1', [None, None, push_initial_pos_world[2]], 0.01)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
-            duration = push.get_duration()
+                self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push_initial_pos_world[2], 1, 0, 0, 0])
+                self.sim_step()
+                self.move_joint_to_target('finger1', [None, None, push_initial_pos_world[2]], 0.01)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+                duration = push.get_duration()
 
-            end = push_final_pos_world[:2]
-            self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
+                end = push_final_pos_world[:2]
+                self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
+            else:
+                init_z = 2 * self.target_bounding_box[2] + 0.05
+                self.sim.data.set_joint_qpos('finger1',
+                                             [push_initial_pos_world[0], push_initial_pos_world[1],
+                                              init_z, 1, 0, 0, 0])
+                self.sim_step()
+                duration = push.get_duration()
+
+                if self.move_joint_to_target('finger1', [None, None, push_initial_pos_world[2]], stop_external_forces=True):
+                    end = push_final_pos_world[:2]
+                    self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
+                else:
+                    self.push_stopped_ext_forces = True
 
         elif primitive == 2 or primitive == 3:
             if primitive == 2:
