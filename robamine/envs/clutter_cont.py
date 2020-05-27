@@ -40,7 +40,7 @@ from time import sleep
 import matplotlib.pyplot as plt
 from robamine.utils.cv_tools import Feature
 
-from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance, PushTargetRealCartesian
+from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance, PushTargetReal
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -1033,10 +1033,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     #                       self.params['push']['distance'],
                     #                       self.params['push']['target_init_distance'],
                     #                       translate_wrt_target=translate_wrt_target)
-                    push = PushTargetRealCartesian(action[1], action[2], action[3], self.params['push']['distance'],
-                                                   self.params['push']['target_init_distance'][1],
-                                                   object_height=self.target_bounding_box[2],
-                                                   finger_size=self.finger_height)
+                    # push = PushTargetRealCartesian(action[1], action[2], action[3], self.params['push']['distance'],
+                    #                                self.params['push']['target_init_distance'][1],
+                    #                                object_height=self.target_bounding_box[2],
+                    #                                finger_size=self.finger_height)
+                    push = PushTargetReal(theta=action[1], push_distance=action[2], distance=action[3],
+                                          push_distance_range=self.params['push']['distance'],
+                                          init_distance_range=self.params['push']['target_init_distance'],
+                                          object_height=self.target_bounding_box[2],
+                                          finger_size=self.finger_height)
                     push.translate(self.obs_dict['object_poses'][0, :2])
                 else:
                     push = PushTarget(theta=action[1],
