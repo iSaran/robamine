@@ -34,6 +34,8 @@ class RealState(Feature):
         # Append for table limits
         rot_2d = np.array([[cos(angle), -sin(angle)], [sin(angle), cos(angle)]])
         self.target_pos = np.matmul(rot_2d, self.poses[0, 0:2])
+        rot_2d = np.array([[cos(angle + obs_dict['surface_angle']), -sin(angle + obs_dict['surface_angle'])],
+                           [sin(angle + obs_dict['surface_angle']), cos(angle + obs_dict['surface_angle'])]])
         self.surface_edge = np.matmul(rot_2d, self.surface_size)
 
         if normalize:
