@@ -635,7 +635,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.convex_mask = None
         self.singulation_distance = 0.03
-        self.obs_dict = None
+        self.obs_dict, self.obs_dict_prev = None, None
         self.bgr = None
 
     def __del__(self):
@@ -975,6 +975,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         for key in list(shapes.keys()):
             assert obs_dict[key].shape == shapes[key]
+
+        if self.obs_dict is not None:
+            self.obs_dict_prev = self.obs_dict.copy()
         self.obs_dict = obs_dict
         return obs_dict
 
