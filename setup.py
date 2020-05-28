@@ -18,5 +18,6 @@ setup(name='robamine',
                         'PyQt5==5.12.3',\
                         'torch==1.1.0',\
                         'open3d-python==0.6.0.0',\
-                        'sklearn']
+                        'sklearn',
+                        'h5py==2.10.0']
 )
