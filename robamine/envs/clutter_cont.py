@@ -378,6 +378,9 @@ class ClutterXMLGenerator(XMLGenerator):
         distance = min(1, abs(self.rng.normal(0, 0.5))) * max_distance
         target_pos = [distance * math.cos(theta), distance * math.sin(theta), 0.0]
 
+        if not self.params['target'].get('randomize_pos', True):
+            target_pos = np.zeros(3)
+
         #   Randomize orientation
         theta = self.rng.uniform(0, 2 * math.pi)
         quat = Quaternion()
