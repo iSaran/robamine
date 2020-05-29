@@ -16,6 +16,7 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 from robamine.utils.math import min_max_scale
 from robamine.utils.memory import get_batch_indices
+from robamine.utils.orientation import transform_poses, Quaternion, rot_z
 from math import pi, floor, sqrt
 
 from robamine.envs.clutter_utils import get_table_point_cloud
@@ -164,12 +165,12 @@ class Actor(Agent):
 
         return prediction
 
-    def calc_losses(self, in_batches=False, batch_size=1000):
+    def calc_losses(self, in_batches=False, batch_size=500, ratio=1):
         if in_batches:
             # Calculate loss in train dataset
             loss_b = get_batch_indices(dataset_size=self.train_state.shape[0], batch_size=batch_size)
             train_loss = 0.0
-            for i in range(int(len(loss_b))):
+            for i in range(int(len(loss_b) / ratio)):
                 train_state = torch.FloatTensor(self.train_state[loss_b[i]]).to(self.device)
                 prediction = self.network(train_state)
                 point_clouds = torch.FloatTensor(self.train_point_clouds[loss_b[i]]).to(self.device)
@@ -179,7 +180,7 @@ class Actor(Agent):
 
             loss_b = get_batch_indices(dataset_size=self.test_state.shape[0], batch_size=batch_size)
             test_loss = 0.0
-            for i in range(int(len(loss_b))):
+            for i in range(int(len(loss_b) / ratio)):
                 test_state = torch.FloatTensor(self.test_state[loss_b[i]]).to(self.device)
                 prediction = self.network(test_state)
                 point_clouds = torch.FloatTensor(self.test_point_clouds[loss_b[i]]).to(self.device)
@@ -263,6 +264,7 @@ def collect_scenes(params, dir_to_save, n_scenes=1000):
 
     params['env']['params']['render'] = False
     params['env']['params']['push']['predict_collision'] = True
+    params['env']['params']['push']['target_init_distance'][1] = 0.15
     params['env']['params']['safe'] = False
     params['env']['params']['target']['randomize_pos'] = False
     env = ClutterContWrapper(params=params['env']['params'])
@@ -283,6 +285,7 @@ def collect_scenes(params, dir_to_save, n_scenes=1000):
         plt.imsave(os.path.join(dir_to_save, 'screenshots/' + str(i) + '_screenshot.png'), env.env.bgr)
         i += 1
 
+        print('Collecting scenes. Scene: ', i, 'out of', n_scenes)
         action = np.array([0, np.random.uniform(-1, 1), 1, 1])
         collision = True
         tries = 0
@@ -307,6 +310,8 @@ def collect_scenes(params, dir_to_save, n_scenes=1000):
             real_states.append(scene)
             plt.imsave(os.path.join(dir_to_save, 'screenshots/' + str(i) + '_screenshot.png'), env.env.bgr)
             i += 1
+        else:
+            print('Collecting scenes. Scene: ', i, 'failed, producing new')
 
     with open(os.path.join(dir_to_save, 'scenes.pkl'), 'wb') as file:
         pickle.dump([real_states, params], file)
@@ -328,7 +333,6 @@ def merge_collected_scenes(dir, names):
 
 
 def create_dataset_from_scenes(dir, rotations_augmentation=1, density=128):
-    from robamine.utils.orientation import transform_poses, Quaternion, rot_z
     from robamine.clutter.real_mdp import RealState
     import copy
     import h5py
@@ -369,7 +373,6 @@ def create_dataset_from_scenes(dir, rotations_augmentation=1, density=128):
     sample_counter = 0
     for scene in range(n_scenes):
         print('Creating dataset scenes. Scene: ', scene, 'out of', n_scenes)
-        scene += 1
 
         for j in range(rotations_augmentation):
             state = copy.deepcopy(data[scene])
@@ -438,6 +441,7 @@ def create_dataset_from_scenes(dir, rotations_augmentation=1, density=128):
             # plt.show()
 
             sample_counter += 1
+        scene += 1
 
     file_.close()
 
@@ -461,13 +465,31 @@ def visualize_actor_obs_output(model_dir, scenes_dir):
         data, par = pickle.load(file)
 
     max_init_distance = par['env']['params']['push']['target_init_distance'][1]
+    max_obs_bounding_box = np.max(par['env']['params']['obstacle']['max_bounding_box'])
     scenes_to_plot = len(data)
     for scene_id in range(scenes_to_plot):
         print('Processing scene', scene_id, 'out of', scenes_to_plot)
 #
         state = data[scene_id]
+
+        # Keep obstacles which are close to the object
+        poses = state['object_poses'][state['object_above_table']]
+        objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < (
+                    max_init_distance + max_obs_bounding_box + 0.01)
+        state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
+        state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
+        state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]
+
+        # Keep obstacles around target and rotate state
+        poses = state['object_poses'][state['object_above_table']]
+        target_pose = poses[0].copy()
+        target_pose[3:] = np.zeros(4)
+        target_pose[3] = 1
+        poses = transform_poses(poses, target_pose)
+        state['object_poses'][state['object_above_table']] = poses
         state['surface_angle'] = 0
-        real_state = RealState(data[scene_id], angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+
+        real_state = RealState(state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
                                translate_wrt_target=False).array()
 
         prediction = actor.predict(real_state)
@@ -538,11 +560,12 @@ if __name__ == '__main__':
 
     params['world']['logging_dir'] = logging_dir
 
-    # collect_scenes(params, os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes'), n_scenes=20)
-    # create_dataset_from_scenes(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes'),
-    #                                          rotations_augmentation=8)
-    # train_supervised_actor(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes'))
+    # collect_scenes(params, os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes_4'), n_scenes=4000)
+    # merge_collected_scenes(os.path.join(logging_dir, 'supervised_obstacle_avoidance'), ['scenes', 'scenes_2', 'scenes_3', 'scenes_4'])
+    # create_dataset_from_scenes(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes_merged'),
+                                             # rotations_augmentation=1)
+    train_supervised_actor(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes_merged'))
 
-    # visualize_actor_obs_output('/home/espa/robamine_logs/supervised_obstacle_avoidance/scenes/robamine_logs_dream_2020.05.29.01.49.17.553991',
-    # os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes'))
-    plot_obs_avoidance(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes'))
+    # visualize_actor_obs_output('/home/espa/robamine_logs/supervised_obstacle_avoidance/scenes_merged/robamine_logs_dream_2020.05.31.21.27.00.667786',
+    # os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes_merged'))
+    # plot_obs_avoidance(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes'))
