@@ -171,14 +171,15 @@ class SplitDDPG(RLAgent):
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         self.info['q_values'] = []
-        density = self.params['obs_avoid_loss']['density']
         for i in range(self.nr_network):
             self.critic_optimizer.append(optim.Adam(self.critic[i].parameters(), self.params['critic']['learning_rate']))
             self.actor_optimizer.append(optim.Adam(self.actor[i].parameters(), self.params['actor']['learning_rate']))
-            self.replay_buffer.append(LargeReplayBuffer(buffer_size=self.params['replay_buffer_size'],
-                                                        obs_dims={'real_state': [RealState.dim()], 'point_cloud': [density ** 2, 2]},
-                                                        action_dim=self.action_dim[i] + 1,
-                                                        path=os.path.join(self.params['log_dir'], 'buffer.hdf5')))
+            # self.replay_buffer.append(LargeReplayBuffer(buffer_size=self.params['replay_buffer_size'],
+            #                                             obs_dims={'real_state': [RealState.dim()], 'point_cloud': [density ** 2, 2]},
+            #                                             action_dim=self.action_dim[i] + 1,
+            #                                             path=os.path.join(self.params['log_dir'], 'buffer.hdf5')))
+            self.replay_buffer.append(ReplayBuffer(self.params['replay_buffer_size']))
+
             self.info['critic_' + str(i) + '_loss'] = 0
             self.info['actor_' + str(i) + '_loss'] = 0
             self.info['q_values'].append(0.0)
@@ -307,7 +308,9 @@ class SplitDDPG(RLAgent):
 
         for _ in range(self.params['update_iter'][i]):
             batch = get_batch_indices(self.replay_buffer[i].size(), self.params['batch_size'][i])[0]
-            batch_ = self.replay_buffer[i](batch)
+            batch_ = []
+            for j in range(len(batch)):
+                batch_.append(self.replay_buffer[i](batch[j]))
             self.update_net(i, batch_)
             self.results['network_iterations'] += 1
 
@@ -315,15 +318,36 @@ class SplitDDPG(RLAgent):
         self.info['critic_' + str(i) + '_loss'] = 0
         self.info['actor_' + str(i) + '_loss'] = 0
 
-        terminal = torch.FloatTensor(np.array([_.terminal for _ in batch]).reshape((-1, 1))).to(self.device)
-        reward = torch.FloatTensor(np.array([_.reward for _ in batch]).reshape((-1, 1))).to(self.device)
+        terminal = torch.zeros((len(batch), 1)).to(self.device)
+        reward = torch.zeros((len(batch), 1)).to(self.device)
+        action = torch.zeros((len(batch), self.action_dim[i])).to(self.device)
+        state_real = torch.zeros((len(batch), RealState.dim())).to(self.device)
+        next_state_real = torch.zeros((len(batch), RealState.dim())).to(self.device)
+        density = self.params['obs_avoid_loss']['density']
+        state_point_cloud = torch.zeros((len(batch), density ** 2, 2))
+        max_init_distance = self.params['env_params']['push']['target_init_distance'][1]
+        max_obs_bounding_box = np.max(self.params['env_params']['obstacle']['max_bounding_box'])
+        density = self.params['obs_avoid_loss']['density']
+        for j in range(len(batch)):
+            reward[j] = batch[j].reward
+            terminal[j] = batch[j].terminal
+            _, action_ = self.get_low_level_action(batch[j].action)
+            action[j] = torch.FloatTensor(action_).to(self.device)
 
-        _, action = self.get_low_level_action(np.array([_.action for _ in batch]))
-        action = torch.FloatTensor(action).to(self.device)
+            state_real[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+                                   translate_wrt_target=False).array()).to(self.device)
+            if not terminal[j]:
+                next_state_real[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+                                                            translate_wrt_target=False).array()).to(self.device)
+            point_cloud_ = get_table_point_cloud(batch[j].state['object_poses'][batch[j].state['object_above_table']],
+                                                 batch[j].state['object_bounding_box'][batch[j].state['object_above_table']],
+                                                 workspace=[max_init_distance, max_init_distance],
+                                                 density=density)
+            state_point_cloud[j, :point_cloud_.shape[0], :] = torch.FloatTensor(point_cloud_).to(self.device)
 
-        state_real = torch.FloatTensor([_.state['real_state'] for _ in batch]).to(self.device)
-        state_point_cloud = torch.FloatTensor([_.state['point_cloud'] for _ in batch]).to(self.device)
-        next_state_real = torch.FloatTensor([_.next_state['real_state'] for _ in batch]).to(self.device)
+        # state_real = torch.FloatTensor(batch.state['real_state']).to(self.device)
+        # state_point_cloud = torch.FloatTensor(batch.state['point_cloud']).to(self.device)
+        # next_state_real = torch.FloatTensor(batch.next_state['real_state']).to(self.device)
 
         # Compute the target Q-value
         target_q = self.target_critic[i](next_state_real, self.target_actor[i](next_state_real))
@@ -443,31 +467,32 @@ class SplitDDPG(RLAgent):
             state = self.preprocess_real_state(transition.state, angle[j])
 
             # Real state:
-            real_state = RealState(state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
-                                   translate_wrt_target=False).array()
-            # Point cloud:
-            point_cloud = max_init_distance * np.ones((density ** 2, 2))
-            point_cloud_ = get_table_point_cloud(state['object_poses'][state['object_above_table']],
-                                                 state['object_bounding_box'][state['object_above_table']],
-                                                 workspace=[max_init_distance, max_init_distance],
-                                                 density=density)
-            point_cloud[:point_cloud_.shape[0]] = point_cloud_
+            # real_state = RealState(state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+            #                        translate_wrt_target=False).array()
+            # # Point cloud:
+            # point_cloud = max_init_distance * np.ones((density ** 2, 2))
+            # point_cloud_ = get_table_point_cloud(state['object_poses'][state['object_above_table']],
+            #                                      state['object_bounding_box'][state['object_above_table']],
+            #                                      workspace=[max_init_distance, max_init_distance],
+            #                                      density=density)
+            # point_cloud[:point_cloud_.shape[0]] = point_cloud_
 
             # Rotate next state
-            real_state_next = np.zeros(RealState.dim())
-            point_cloud_next = max_init_distance * np.ones((density ** 2, 2))
-            if not transition.terminal:
-                next_state = self.preprocess_real_state(transition.next_state, angle[j])
+            # real_state_next = np.zeros(RealState.dim())
+            # point_cloud_next = max_init_distance * np.ones((density ** 2, 2))
+            next_state = self.preprocess_real_state(transition.next_state, angle[j])
+            # if not transition.terminal:
+            #     next_state = self.preprocess_real_state(transition.next_state, angle[j])
                 # Real state:
-                real_state_next = RealState(next_state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
-                                       translate_wrt_target=False).array()
-                # Point cloud:
-                point_cloud_next = max_init_distance * np.ones((density ** 2, 2))
-                point_cloud_next_ = get_table_point_cloud(next_state['object_poses'][next_state['object_above_table']],
-                                                     next_state['object_bounding_box'][next_state['object_above_table']],
-                                                     workspace=[max_init_distance, max_init_distance],
-                                                     density=density)
-                point_cloud_next[:point_cloud_next_.shape[0]] = point_cloud_next_
+                # real_state_next = RealState(next_state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+                #                        translate_wrt_target=False).array()
+                # # Point cloud:
+                # point_cloud_next = max_init_distance * np.ones((density ** 2, 2))
+                # point_cloud_next_ = get_table_point_cloud(next_state['object_poses'][next_state['object_above_table']],
+                #                                      next_state['object_bounding_box'][next_state['object_above_table']],
+                #                                      workspace=[max_init_distance, max_init_distance],
+                #                                      density=density)
+                # point_cloud_next[:point_cloud_next_.shape[0]] = point_cloud_next_
 
             # Rotate action
             # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
@@ -482,16 +507,16 @@ class SplitDDPG(RLAgent):
             elif act[1] < -1:
                 act[1] = 1 - abs(-1 - act[1])
 
-            statee = {}
-            statee['real_state'] = copy.deepcopy(real_state)
-            statee['point_cloud'] = copy.deepcopy(point_cloud)
-            next_statee = {}
-            next_statee['real_state'] = copy.deepcopy(real_state_next)
-            next_statee['point_cloud'] = copy.deepcopy(point_cloud_next)
-            tran = Transition(state=statee,
+            # statee = {}
+            # statee['real_state'] = copy.deepcopy(real_state)
+            # statee['point_cloud'] = copy.deepcopy(point_cloud)
+            # next_statee = {}
+            # next_statee['real_state'] = copy.deepcopy(real_state_next)
+            # next_statee['point_cloud'] = copy.deepcopy(point_cloud_next)
+            tran = Transition(state=copy.deepcopy(state),
                               action=act.copy(),
                               reward=transition.reward,
-                              next_state=next_statee,
+                              next_state=copy.deepcopy(next_state),
                               terminal=transition.terminal)
             transitions.append(tran)
         return transitions
@@ -508,6 +533,9 @@ class SplitDDPG(RLAgent):
 
         # Keep closest objects
         poses = state['object_poses'][state['object_above_table']]
+        if poses.shape[0] == 0:
+            return state
+
         objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < (
                 max_init_distance + max_obs_bounding_box + 0.01)
         state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
