@@ -49,6 +49,8 @@ def eval_with_render(dir):
             print(exc)
 
     config['env']['params']['render'] = True
+    config['env']['params']['push']['predict_collision'] = False
+    config['env']['params']['max_timesteps'] = 5
     config['env']['params']['safe'] = False
     config['env']['params']['log_dir'] = '/tmp'
     config['world']['episodes'] = 10
@@ -156,6 +158,7 @@ def visualize_critic_predictions(exp_dir, model_name='model.pkl'):
 
     params['env']['params']['render'] = True
     params['env']['params']['safe'] = False
+    params['env']['params']['push']['predict_collision'] = False
     env = gym.make(params['env']['name'], params=params['env']['params'])
     seed = np.random.randint(100000000)
     print('Seed:', seed)
