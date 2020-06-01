@@ -16,10 +16,11 @@ agent:
     critic:
       hidden_units: [[400, 300]]
       learning_rate: 0.001
-    critic_obs_avoid:
+    obs_avoid_loss:
       bbox_augmentation: 0.008
       density: 128
       min_dist_range: [0.002, 0.1]
+      distance_range: [0.0, 0.06]  # Should be the same as env/push/target_init_distance
     noise:
       name: Normal
       sigma: 0.2
@@ -27,11 +28,17 @@ agent:
       start: 0.9
       end: 0.05
       decay: 10000
-    heightmap_rotations: 16
-    hardcoded_primitive: 0
+    heightmap_rotations: 8
     n_preloaded_buffer: [1000]
     real_state: True
     rotation_invariant: False
+    env_params:
+      hardcoded_primitive: 0
+      obstacle:
+        max_bounding_box: [.03, .03, .020]
+      push:
+        target_init_distance: [0.0, 0.06]
+
     # load_actors:  # Uncomment to use pretrained actors. Comment-out for initialize actors from scratch it if want to initialize actors from scratch
     #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
     #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
