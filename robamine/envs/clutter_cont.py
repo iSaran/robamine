@@ -1040,7 +1040,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     #                                self.params['push']['target_init_distance'][1],
                     #                                object_height=self.target_bounding_box[2],
                     #                                finger_size=self.finger_height)
-                    push = PushTargetReal(theta=action[1], push_distance=action[2], distance=action[3],
+
+                    # push = PushTargetReal(theta=action[1], push_distance=action[2], distance=action[3],
+                    push = PushTargetReal(theta=action[1], push_distance=1, distance=action[2],
                                           push_distance_range=self.params['push']['distance'],
                                           init_distance_range=self.params['push']['target_init_distance'],
                                           object_height=self.target_bounding_box[2],
@@ -1169,7 +1171,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def get_reward(self, observation, action):
         if self.params.get('real_state', False):
             reward = self.get_reward_real_state_push_target(observation, action)
-        if self.hardcoded_primitive == 0:
+        elif self.hardcoded_primitive == 0:
             reward = self.get_reward_push_target(observation, action)
         elif self.hardcoded_primitive == 1:
             reward = self.get_reward_push_obstacle(observation, action)
