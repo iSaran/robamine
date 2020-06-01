@@ -1001,9 +1001,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # reward = self.get_shaped_reward_obs(obs, pcd, dim)
         # reward = self.get_reward_obs(obs, pcd, dim)
 
-        collision = self.push_stopped_ext_forces
         done = False
-        if self.terminal_state(obs):
+        terminal, reason = self.terminal_state(obs)
+        if terminal:
             done = True
         self.push_stopped_ext_forces = False
 
@@ -1013,6 +1013,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.heightmap_prev = self.heightmap.copy()
 
+        collision = False
+        if reason == 'collision':
+            collision = True
         return obs, reward, done, {'experience_time': experience_time,
                                    'success': self.success,
                                    'extra_data': extra_data,
@@ -1303,28 +1306,28 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def terminal_state_real_state_push_target(self, obs):
         if self.timesteps >= self.max_timesteps:
-            return True
+            return True, 'timesteps'
 
         # Terminal if collision is detected
         if self.push_stopped_ext_forces:
             self.push_stopped_ext_forces = False
-            return True
+            return True, 'collision'
 
         # Terminate if the target flips to its side, i.e. if target's z axis is
         # parallel to table, terminate.
         target_z = self.target_quat.rotation_matrix()[:,2]
         world_z = np.array([0, 0, 1])
         if np.dot(target_z, world_z) < 0.9:
-            return True
+            return True, 'flipped'
 
         # If the object has fallen from the table
         if obs['object_poses'][0][2] < 0:
-            return True
+            return True, 'fallen'
 
         if self.get_real_distance_from_closest_obstacle(obs) > self.singulation_distance:
-            return True
+            return True, 'singulation'
 
-        return False
+        return False, ''
 
     def get_real_distance_from_closest_obstacle(self, obs_dict):
         '''Returns the minimum distance of target from the obstacles'''

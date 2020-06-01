@@ -1147,7 +1147,7 @@ class Episode:
             self._update_stats_step(transition, info)
 
             state = next_state.copy()
-            if done:
+            if done and not info.get('collision', False):
                 break
 
         self._update_states_episode(info)
