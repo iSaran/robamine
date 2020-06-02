@@ -26,7 +26,7 @@ import glfw
 
 from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim, get_observation_dim,
                                          get_distance_of_two_bbox, transform_list_of_points, is_object_above_object,
-                                         predict_collision)
+                                         predict_collision, get_table_point_cloud, preprocess_real_state, ObstacleAvoidanceLoss)
 from robamine.algo.core import InvalidEnvError
 
 import xml.etree.ElementTree as ET
@@ -41,6 +41,7 @@ import matplotlib.pyplot as plt
 from robamine.utils.cv_tools import Feature
 
 from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance, PushTargetReal
+import torch
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -640,6 +641,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.singulation_distance = 0.03
         self.obs_dict, self.obs_dict_prev = None, None
         self.bgr = None
+        self.obs_avoider = ObstacleAvoidanceLoss(distance_range=self.params['push']['target_init_distance'])
 
     def __del__(self):
         if self.viewer is not None:
@@ -1279,7 +1281,46 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_reward_real_state_push_target(self, observation, action):
         if self.push_stopped_ext_forces:
-            return -10
+            max_init_distance = self.params['push']['target_init_distance'][1]
+            max_obs_bounding_box = np.max(self.params['obstacle']['max_bounding_box'])
+            preprocessed = preprocess_real_state(self.obs_dict_prev, max_init_distance, max_obs_bounding_box)
+
+            # import matplotlib.pyplot as plt
+            # from mpl_toolkits.mplot3d import Axes3D
+            # from robamine.utils.viz import plot_boxes, plot_frames
+            # fig = plt.figure()
+            # ax = Axes3D(fig)
+            # state = self.obs_dict_prev
+            # plot_boxes(state['object_poses'][state['object_above_table']][:, 0:3],
+            #            state['object_poses'][state['object_above_table']][:, 3:7],
+            #            state['object_bounding_box'][state['object_above_table']], ax)
+            # plot_frames(state['object_poses'][state['object_above_table']][:, 0:3],
+            #             state['object_poses'][state['object_above_table']][:, 3:7], 0.01, ax)
+            # ax.axis('equal')
+            # plt.show()
+            #
+            # fig = plt.figure()
+            # ax = Axes3D(fig)
+            # state = preprocessed
+            # plot_boxes(state['object_poses'][state['object_above_table']][:, 0:3],
+            #            state['object_poses'][state['object_above_table']][:, 3:7],
+            #            state['object_bounding_box'][state['object_above_table']], ax)
+            # plot_frames(state['object_poses'][state['object_above_table']][:, 0:3],
+            #             state['object_poses'][state['object_above_table']][:, 3:7], 0.01, ax)
+            # ax.axis('equal')
+            # plt.show()
+
+            point_cloud = get_table_point_cloud(preprocessed['object_poses'][preprocessed['object_above_table']],
+                                                 preprocessed['object_bounding_box'][preprocessed['object_above_table']],
+                                                 workspace=[max_init_distance, max_init_distance],
+                                                 density=128)
+            # fig, ax = plt.subplots()
+            # ax.scatter(point_cloud[:, 0], point_cloud[:, 1])
+            # plt.show()
+            # self.obs_avoider.plot(point_cloud)
+            # plt.show()
+            obs_avoid_signal = float(self.obs_avoider(torch.FloatTensor(point_cloud.reshape(1, -1, 2)), torch.FloatTensor(action[1:].reshape(1, -1))).detach().cpu().numpy())
+            return -5 * obs_avoid_signal - 3
 
         if observation['object_poses'][0][2] < 0:
             return -10
@@ -1291,14 +1332,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if dist > self.singulation_distance:
             return 10
 
-        return -1
 
-
-        # # extra_penalty = 0
+        extra_penalty = 0
         # # if int(action[0]) == 0:
         # #     extra_penalty = -min_max_scale(action[3], range=[-1, 1], target_range=[0, 5])
         #
-        # # extra_penalty += -min_max_scale(action[2], range=[-1, 1], target_range=[0, 1])
+        extra_penalty += -min_max_scale(action[2], range=[-1, 1], target_range=[0, 1])
+        return extra_penalty - 1
         #
         # # reward += extra_penalty
         # #

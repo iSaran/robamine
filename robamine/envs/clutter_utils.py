@@ -13,9 +13,10 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 
 from robamine.utils.math import LineSegment2D, triangle_area, min_max_scale, cartesian2spherical
-from robamine.utils.orientation import rot_x, rot_z, rot2angleaxis, Quaternion, rot_y
+from robamine.utils.orientation import rot_x, rot_z, rot2angleaxis, Quaternion, rot_y, transform_poses
 from robamine.utils.cv_tools import Feature
 from robamine.utils.info import get_now_timestamp
+import copy
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -26,6 +27,8 @@ from scipy.spatial.distance import cdist
 
 from robamine.algo.util import Transition
 from robamine.clutter.real_mdp import RealState
+import torch
+import torch.nn as nn
 
 class TargetObjectConvexHull:
     def __init__(self, masked_in_depth, log_dir='/tmp'):
@@ -726,3 +729,98 @@ def predict_collision(obs, x, y):
             return True
     return False
 
+def preprocess_real_state(obs_dict, max_init_distance, max_obs_bounding_box, angle=0):
+    what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_angle',
+                   'max_n_objects']
+
+    state = {}
+    for key in what_i_need:
+        state[key] = copy.deepcopy(obs_dict[key])
+
+    # Keep closest objects
+    poses = state['object_poses'][state['object_above_table']]
+    if poses.shape[0] == 0:
+        return state
+
+    objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < (
+            max_init_distance + max_obs_bounding_box + 0.01)
+    state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
+    state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
+    state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]
+    # Rotate
+    poses = state['object_poses'][state['object_above_table']]
+    target_pose = poses[0].copy()
+    poses = transform_poses(poses, target_pose)
+    rotz = np.zeros(7)
+    rotz[3:7] = Quaternion.from_rotation_matrix(rot_z(-angle)).as_vector()
+    poses = transform_poses(poses, rotz)
+    poses = transform_poses(poses, target_pose, target_inv=True)
+    target_pose[3:] = np.zeros(4)
+    target_pose[3] = 1
+    poses = transform_poses(poses, target_pose)
+    state['object_poses'][state['object_above_table']] = poses
+    state['surface_angle'] = angle
+    return state
+
+class ObstacleAvoidanceLoss(nn.Module):
+    def __init__(self, distance_range, min_dist_range=[0.002, 0.1], device='cpu'):
+        super(ObstacleAvoidanceLoss, self).__init__()
+        self.distance_range = distance_range
+        self.min_dist_range = min_dist_range
+        self.device = device
+
+    def forward(self, point_clouds, actions):
+        # Transform the action to cartesian
+        theta = min_max_scale(actions[:, 0], range=[-1, 1], target_range=[-pi, pi], lib='torch', device=self.device)
+        distance = min_max_scale(actions[:, 1], range=[-1, 1], target_range=self.distance_range, lib='torch',
+                                 device=self.device)
+        # TODO: Assumes 2 actions!
+        x_y = torch.zeros(actions.shape).to(self.device)
+        x_y[:, 0] = distance * torch.cos(theta)
+        x_y[:, 1] = distance * torch.sin(theta)
+        x_y = x_y.reshape(x_y.shape[0], 1, x_y.shape[1]).repeat((1, point_clouds.shape[1], 1))
+        diff = x_y - point_clouds
+        min_dist = torch.min(torch.norm(diff, p=2, dim=2), dim=1)[0]
+        threshold = torch.nn.Threshold(threshold=- self.min_dist_range[1], value= - self.min_dist_range[1])
+        min_dist = - threshold(- min_dist)
+        # hard_shrink = torch.nn.Hardshrink(lambd=self.min_dist_range[0])
+        # min_dist = hard_shrink(min_dist)
+        # print('mindist', min_dist)
+        obstacle_avoidance_signal = - min_max_scale(min_dist, range=self.min_dist_range, target_range=[0.0, 5],
+                                                    lib='torch', device=self.device)
+        # print('signal: ', obstacle_avoidance_signal)
+        close_center_signal = 0.5 - min_max_scale(distance, range=self.distance_range, target_range=[0, .5], lib='torch',
+                                                  device=self.device)
+        # final_signal = close_center_signal
+        final_signal = obstacle_avoidance_signal
+        return - final_signal.mean()
+
+    def plot(self, point_cloud, density=64):
+        from mpl_toolkits.mplot3d import Axes3D
+        x_min = np.min(point_cloud[:, 0])
+        x_max = np.max(point_cloud[:, 0])
+        y_min = np.min(point_cloud[:, 1])
+        y_max = np.max(point_cloud[:, 1])
+        print(x_min, x_max, y_min, y_max)
+        point_cloud = torch.FloatTensor(point_cloud).to(self.device)
+
+        x = np.linspace(x_min, x_max, density)
+        y = np.linspace(y_min, y_max, density)
+        x_, y_ = np.meshgrid(x, y)
+        z = np.zeros((len(x), len(y)))
+        for i in range(len(x)):
+            for j in range(len(y)):
+                theta = min_max_scale(np.arctan2(y_[i, j], x_[i, j]), range=[-np.pi, np.pi], target_range=[-1, 1])
+                distance = min_max_scale(np.sqrt(y_[i, j] ** 2 + x_[i, j] ** 2), range=[0, max(x_max, y_max)],
+                                         target_range=[-1, 1])
+                z[i, j] = self.forward(point_cloud.reshape((1, point_cloud.shape[0], -1)),
+                                       torch.FloatTensor([theta, distance]).reshape(1, -1))
+
+        # Uncomment to print min value
+        # ij = np.argwhere(z == np.min(z))
+        # print(':', x_[ij[0,0], ij[0,1]], y_[ij[0, 0], ij[0, 1]])
+        fig = plt.figure()
+        axs = Axes3D(fig)
+        mycmap = plt.get_cmap('winter')
+        surf1 = axs.plot_surface(x_, y_, z, cmap=mycmap)
+        fig.colorbar(surf1, ax=axs, shrink=0.5, aspect=5)

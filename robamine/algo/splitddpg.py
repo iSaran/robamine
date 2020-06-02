@@ -324,7 +324,7 @@ class SplitDDPG(RLAgent):
         state_real = torch.zeros((len(batch), RealState.dim())).to(self.device)
         next_state_real = torch.zeros((len(batch), RealState.dim())).to(self.device)
         density = self.params['obs_avoid_loss']['density']
-        state_point_cloud = torch.zeros((len(batch), density ** 2, 2))
+        # state_point_cloud = torch.zeros((len(batch), density ** 2, 2))
         max_init_distance = self.params['env_params']['push']['target_init_distance'][1]
         max_obs_bounding_box = np.max(self.params['env_params']['obstacle']['max_bounding_box'])
         density = self.params['obs_avoid_loss']['density']
@@ -339,11 +339,11 @@ class SplitDDPG(RLAgent):
             if not terminal[j]:
                 next_state_real[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
                                                             translate_wrt_target=False).array()).to(self.device)
-            point_cloud_ = get_table_point_cloud(batch[j].state['object_poses'][batch[j].state['object_above_table']],
-                                                 batch[j].state['object_bounding_box'][batch[j].state['object_above_table']],
-                                                 workspace=[max_init_distance, max_init_distance],
-                                                 density=density)
-            state_point_cloud[j, :point_cloud_.shape[0], :] = torch.FloatTensor(point_cloud_).to(self.device)
+            # point_cloud_ = get_table_point_cloud(batch[j].state['object_poses'][batch[j].state['object_above_table']],
+            #                                      batch[j].state['object_bounding_box'][batch[j].state['object_above_table']],
+            #                                      workspace=[max_init_distance, max_init_distance],
+            #                                      density=density)
+            # state_point_cloud[j, :point_cloud_.shape[0], :] = torch.FloatTensor(point_cloud_).to(self.device)
 
         # state_real = torch.FloatTensor(batch.state['real_state']).to(self.device)
         # state_point_cloud = torch.FloatTensor(batch.state['point_cloud']).to(self.device)
@@ -377,9 +377,10 @@ class SplitDDPG(RLAgent):
 
         critic_loss = - self.critic[i](state_real, actor_action).mean()
 
-        obs_avoidance = self.obstacle_avoidance_loss(state_point_cloud, actor_action)
+        # obs_avoidance = self.obstacle_avoidance_loss(state_point_cloud, actor_action)
 
-        actor_loss = obs_avoidance + critic_loss
+        # actor_loss = obs_avoidance + critic_loss
+        actor_loss = critic_loss
 
         self.info['actor_' + str(i) + '_loss'] = float(actor_loss.detach().cpu().numpy())
 
