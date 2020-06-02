@@ -322,6 +322,8 @@ class SplitDDPG(RLAgent):
         reward = torch.zeros((len(batch), 1)).to(self.device)
         action = torch.zeros((len(batch), self.action_dim[i])).to(self.device)
         state_real = torch.zeros((len(batch), RealState.dim())).to(self.device)
+        state_real_actor = torch.zeros((len(batch), RealState.dim())).to(self.device)
+        next_state_real_actor = torch.zeros((len(batch), RealState.dim())).to(self.device)
         next_state_real = torch.zeros((len(batch), RealState.dim())).to(self.device)
         density = self.params['obs_avoid_loss']['density']
         # state_point_cloud = torch.zeros((len(batch), density ** 2, 2))
@@ -336,9 +338,17 @@ class SplitDDPG(RLAgent):
 
             state_real[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
                                    translate_wrt_target=False).array()).to(self.device)
+            state_real_actor[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+                                                        translate_wrt_target=False).array()).to(self.device)
+
             if not terminal[j]:
                 next_state_real[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
-                                                            translate_wrt_target=False).array()).to(self.device)
+                                                                 translate_wrt_target=False).array()).to(self.device)
+                next_state_real_actor[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+                                                                 translate_wrt_target=False).array()).to(self.device)
+
+            next_state_real_actor[j, -1] = 0.0
+            state_real_actor[j, -1] = 0.0
             # point_cloud_ = get_table_point_cloud(batch[j].state['object_poses'][batch[j].state['object_above_table']],
             #                                      batch[j].state['object_bounding_box'][batch[j].state['object_above_table']],
             #                                      workspace=[max_init_distance, max_init_distance],
@@ -350,7 +360,7 @@ class SplitDDPG(RLAgent):
         # next_state_real = torch.FloatTensor(batch.next_state['real_state']).to(self.device)
 
         # Compute the target Q-value
-        target_q = self.target_critic[i](next_state_real, self.target_actor[i](next_state_real))
+        target_q = self.target_critic[i](next_state_real, self.target_actor[i](next_state_real_actor))
         target_q = reward + ((1 - terminal) * self.params['gamma'] * target_q).detach()
 
         # Get the current q estimate
@@ -366,21 +376,21 @@ class SplitDDPG(RLAgent):
         self.critic_optimizer[i].step()
 
         # Compute preactivation
-        state_abs_mean = self.actor[i].forward2(state_real).abs().mean()
+        state_abs_mean = self.actor[i].forward2(state_real_actor).abs().mean()
         preactivation = (state_abs_mean - torch.tensor(1.0)).pow(2)
         if state_abs_mean < torch.tensor(1.0):
             preactivation = torch.tensor(0.0)
         weight = self.params['actor'].get('preactivation_weight', .05)
         preactivation = weight * preactivation
 
-        actor_action = self.actor[i](state_real)
+        actor_action = self.actor[i](state_real_actor)
 
         critic_loss = - self.critic[i](state_real, actor_action).mean()
 
         # obs_avoidance = self.obstacle_avoidance_loss(state_point_cloud, actor_action)
 
         # actor_loss = obs_avoidance + critic_loss
-        actor_loss = critic_loss
+        actor_loss = critic_loss + preactivation
 
         self.info['actor_' + str(i) + '_loss'] = float(actor_loss.detach().cpu().numpy())
 
@@ -465,6 +475,7 @@ class SplitDDPG(RLAgent):
         # Create rotated states if needed
         angle = np.linspace(0, 2 * np.pi, heightmap_rotations, endpoint=False)
         for j in range(heightmap_rotations):
+            transition.state['init_distance_from_target'] = transition.next_state['init_distance_from_target']
             state = self.preprocess_real_state(transition.state, angle[j])
 
             # Real state:
@@ -524,7 +535,7 @@ class SplitDDPG(RLAgent):
 
     def preprocess_real_state(self, obs_dict, angle):
         what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_angle',
-                       'max_n_objects']
+                       'max_n_objects', 'init_distance_from_target']
         max_init_distance = self.params['env_params']['push']['target_init_distance'][1]
         max_obs_bounding_box = np.max(self.params['env_params']['obstacle']['max_bounding_box'])
 
@@ -537,8 +548,9 @@ class SplitDDPG(RLAgent):
         if poses.shape[0] == 0:
             return state
 
-        objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < (
-                max_init_distance + max_obs_bounding_box + 0.01)
+        threshold = max(max_init_distance, obs_dict['push_distance_range'][1]) + np.max(state['object_bounding_box'][0]) + obs_dict['singulation_distance'][0]
+        objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < threshold
+
         state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
         state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
         state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]

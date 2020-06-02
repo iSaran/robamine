@@ -1,10 +1,12 @@
 import numpy as np
 from math import cos, sin, pi, acos, atan2
 from robamine.utils.math import min_max_scale, cartesian2spherical
-from robamine.utils.orientation import rot_z, Quaternion
+from robamine.utils.orientation import rot_z, Quaternion, transform_poses, transform_points
 import matplotlib.pyplot as plt
 from robamine.clutter.mdp import Feature, PushTargetWithObstacleAvoidance, PushAction2D, PushTarget2D
 from robamine.utils.math import LineSegment2D
+import copy
+from scipy.spatial import ConvexHull, Delaunay
 
 class RealState(Feature):
     def __init__(self, obs_dict, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
@@ -37,6 +39,8 @@ class RealState(Feature):
         rot_2d = np.array([[cos(angle + obs_dict['surface_angle']), -sin(angle + obs_dict['surface_angle'])],
                            [sin(angle + obs_dict['surface_angle']), cos(angle + obs_dict['surface_angle'])]])
         self.surface_edge = np.matmul(rot_2d, self.surface_size)
+
+        self.init_distance_from_target = obs_dict['init_distance_from_target'][0]
 
         if normalize:
             self.normalize()
@@ -150,6 +154,7 @@ class RealState(Feature):
             (int(self.max_n_objects - self.principal_corners.shape[0]), 4, 3)))).flatten()
         array = np.append(array, self.target_pos)
         array = np.append(array, self.surface_edge)
+        array = np.append(array, self.init_distance_from_target)
 
 
         # assert (array <= 1).all()
@@ -206,7 +211,7 @@ class RealState(Feature):
 
     @staticmethod
     def dim():
-        return 10 * 4 * 3 + 4 # TODO: hardcoded max n objects
+        return 10 * 4 * 3 + 4 + 1 # TODO: hardcoded max n objects
 
 class PushTargetRealWithObstacleAvoidance(PushTargetWithObstacleAvoidance):
     def __init__(self, obs_dict, theta, push_distance, distance, push_distance_range, init_distance_range,
@@ -274,12 +279,11 @@ class PushTargetReal(PushTarget2D):
 
 class PushTargetRealCartesian(PushTarget2D):
     '''Init pos if target is at zero and push distance. Then you can translate the push.'''
-    def __init__(self, x_init, y_init, push_distance, push_distance_range, max_init_distance, object_height, finger_size):
-        self.push_distance_range = push_distance_range
-        self.workspace = [-max_init_distance, max_init_distance]
-        x_ = min_max_scale(x_init, range=[-1, 1], target_range=self.workspace)
-        y_ = min_max_scale(y_init, range=[-1, 1], target_range=self.workspace)
-        push_distance_ = min_max_scale(push_distance, range=[-1, 1], target_range=push_distance_range)
+
+    def __init__(self, x_init, y_init, push_distance, object_height, finger_size):
+        x_ = x_init
+        y_ = y_init
+        push_distance_ = push_distance
         p1 = np.array([x_, y_])
         theta = np.arctan2(y_, x_)
         p2 = - push_distance_ * np.array([cos(theta), sin(theta)])
@@ -294,6 +298,18 @@ class PushTargetRealCartesian(PushTarget2D):
 
         super(PushTargetRealCartesian, self).__init__(p1, p2, z, push_distance_)
 
+class PushTargetRealCartesianNormalized(PushTarget2D):
+    '''Init pos if target is at zero and push distance. Then you can translate the push.'''
+
+    def __init__(self, x_init, y_init, push_distance, push_distance_range, max_init_distance, object_height,
+                 finger_size):
+        self.push_distance_range = push_distance_range
+        self.workspace = [-max_init_distance, max_init_distance]
+        x_ = min_max_scale(x_init, range=[-1, 1], target_range=self.workspace)
+        y_ = min_max_scale(y_init, range=[-1, 1], target_range=self.workspace)
+        push_distance_ = min_max_scale(push_distance, range=[-1, 1], target_range=push_distance_range)
+        super(PushTargetRealCartesianNormalized, self).__init__(x_, y_, push_distance_, object_height, finger_size)
+
     def array(self):
         x_ = min_max_scale(self.p1[0], range=self.workspace, target_range=[-1, 1])
         y_ = min_max_scale(self.p1[1], range=self.workspace, target_range=[-1, 1])
@@ -301,9 +317,117 @@ class PushTargetRealCartesian(PushTarget2D):
         return np.array([0, x_, y_, push_distance])
 
 
+class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
+    def __init__(self, obs_dict, angle, push_distance, push_distance_range, init_distance_range, max_obs_bounding_box, target_height, finger_size, eps=0.05):
+        angle_ = min_max_scale(angle, range=[-1, 1], target_range=[-np.pi, np.pi])
+        push_distance_ = min_max_scale(push_distance, range=[-1, 1], target_range=push_distance_range)
+        eps_ = min_max_scale(eps, range=[-1, 1], target_range=[-np.pi, np.pi])
 
+        max_init_distance = init_distance_range[1]
+        x_init = max_init_distance * np.cos(angle_)
+        y_init = max_init_distance * np.sin(angle_)
+        preprocessed = self.preprocess_real_state(obs_dict, max_init_distance, max_obs_bounding_box)
 
+        point_cloud = self.get_table_point_cloud(preprocessed['object_poses'][preprocessed['object_above_table']],
+                                            preprocessed['object_bounding_box'][preprocessed['object_above_table']],
+                                            workspace=[max_init_distance, max_init_distance],
+                                            density=128)
 
+        point_cloud_cylindrical = np.zeros(point_cloud.shape)
+        point_cloud_cylindrical[:, 0] = np.sqrt(point_cloud[:, 0] ** 2 + point_cloud[:, 1] ** 2)
+        point_cloud_cylindrical[:, 1] = np.arctan2(point_cloud[:, 1], point_cloud[:, 0])
 
+        error = np.abs(angle_ - point_cloud_cylindrical[:, 1]) < eps_
+        point_cloud_cylindrical = point_cloud_cylindrical[error]
+        arr = point_cloud_cylindrical[:, 0]
+        if arr.size != 0:
+            result = np.where(arr == np.min(arr))[0]
+
+            point_cloud_ = np.zeros(point_cloud_cylindrical.shape)
+            point_cloud_[:, 0] = point_cloud_cylindrical[:, 0] * np.cos(point_cloud_cylindrical[:, 1])
+            point_cloud_[:, 1] = point_cloud_cylindrical[:, 0] * np.sin(point_cloud_cylindrical[:, 1])
+            minn = point_cloud_[result[0], :]
+
+            x_init = minn[0]
+            y_init = minn[1]
+
+        push_avoid = PushTargetRealWithObstacleAvoidance(obs_dict, angle, push_distance=-1, distance=-1, push_distance_range=[0, 0.1], init_distance_range=[0, 0.1])
+        dist_from_target = np.linalg.norm(np.array([x_init, y_init]) - push_avoid.get_init_pos()[:2])
+        self.init_distance_from_target = min_max_scale(dist_from_target, range=[0, max_init_distance],
+                                                       target_range=[-1, 1])
+        # Uncomment to plot
+        # fig, ax = plt.subplots()
+        # ax.scatter(point_cloud[:, 0], point_cloud[:, 1])
+        # ax.scatter(point_cloud_[:10, 0], point_cloud_[:10, 1], color='r')
+        # ax.scatter(minn[0], minn[1], color='b')
+        # plt.show()
+        super(PushTargetRealObjectAvoidance, self).__init__(x_init=x_init, y_init=y_init, push_distance=push_distance_,
+                                                            object_height=target_height, finger_size=finger_size)
+
+    def preprocess_real_state(self, obs_dict, max_init_distance, max_obs_bounding_box, angle=0):
+        what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_angle',
+                       'max_n_objects']
+        state = {}
+        for key in what_i_need:
+            state[key] = copy.deepcopy(obs_dict[key])
+
+        # Keep closest objects
+        poses = state['object_poses'][state['object_above_table']]
+        if poses.shape[0] == 0:
+            return state
+
+        threshold = max(max_init_distance, obs_dict['push_distance_range'][1]) + np.max(state['object_bounding_box'][0]) + obs_dict['singulation_distance'][0]
+        objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < threshold
+        state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
+        state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
+        state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]
+        # Rotate
+        poses = state['object_poses'][state['object_above_table']]
+        target_pose = poses[0].copy()
+        poses = transform_poses(poses, target_pose)
+        rotz = np.zeros(7)
+        rotz[3:7] = Quaternion.from_rotation_matrix(rot_z(-angle)).as_vector()
+        poses = transform_poses(poses, rotz)
+        poses = transform_poses(poses, target_pose, target_inv=True)
+        target_pose[3:] = np.zeros(4)
+        target_pose[3] = 1
+        poses = transform_poses(poses, target_pose)
+        state['object_poses'][state['object_above_table']] = poses
+        state['surface_angle'] = angle
+        return state
+
+    def get_table_point_cloud(self, pose, bbox, workspace, density=128, bbox_aug=0.008, plot=False):
+        def in_hull(p, hull):
+            if not isinstance(hull, Delaunay):
+                hull = Delaunay(hull)
+
+            return hull.find_simplex(p) < 0
+
+        def get_corners(pose, bbox):
+            bbox_corners_object = np.array([[bbox[0], bbox[1], bbox[2]],
+                                            [bbox[0], -bbox[1], bbox[2]],
+                                            [bbox[0], bbox[1], -bbox[2]],
+                                            [bbox[0], -bbox[1], -bbox[2]],
+                                            [-bbox[0], bbox[1], bbox[2]],
+                                            [-bbox[0], -bbox[1], bbox[2]],
+                                            [-bbox[0], bbox[1], -bbox[2]],
+                                            [-bbox[0], -bbox[1], -bbox[2]]])
+            pos = pose[0:3]
+            quat = Quaternion(pose[3], pose[4], pose[5], pose[6])
+            return transform_points(bbox_corners_object, pos, quat)
+
+        x = np.linspace(-workspace[0], workspace[0], density)
+        y = np.linspace(-workspace[1], workspace[1], density)
+        x, y = np.meshgrid(x, y)
+        x_y = np.column_stack((x.ravel(), y.ravel()))
+
+        inhulls = np.ones((x_y.shape[0], pose.shape[0]), dtype=np.bool)
+        for object in range(pose.shape[0]):
+            corners = get_corners(pose[object], bbox[object] + bbox_aug)
+            hull = ConvexHull(corners[:, 0:2])
+            base_corners = corners[hull.vertices, 0:2]
+            inhulls[:, object] = in_hull(x_y, base_corners)
+
+        return x_y[inhulls.all(axis=1), :]
 
 

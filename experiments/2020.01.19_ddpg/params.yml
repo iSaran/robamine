@@ -3,7 +3,7 @@ agent:
   params:
     batch_size: [32]
     device: cpu
-    gamma: 0.9
+    gamma: 0.99
     load_buffers: ''
     load_nets: ''
     replay_buffer_size: 1000000
@@ -37,7 +37,7 @@ agent:
       obstacle:
         max_bounding_box: [.03, .03, .020]
       push:
-        target_init_distance: [0.0, 0.06]
+        target_init_distance: [0.0, 0.15]
 
     # load_actors:  # Uncomment to use pretrained actors. Comment-out for initialize actors from scratch it if want to initialize actors from scratch
     #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
@@ -47,14 +47,14 @@ env:
   name: ClutterContWrapper-v0
   params:
     hardcoded_primitive: 0
-    max_timesteps: 10
+    max_timesteps: 5
     real_state: True
     all_equal_height_prob: 0.0
     finger_size:
       - 0.005
       - 0.005
     nr_of_obstacles:
-      - 1
+      - 5
       - 8
     render: false
     target:
@@ -69,7 +69,7 @@ env:
       probability_box: 1.0
     push:
       distance: [0.02, 0.10]
-      target_init_distance: [0.0, 0.06]
+      target_init_distance: [0.0, 0.15]
       predict_collision: True
     grasp:
       spread: [0.05, 0.05]

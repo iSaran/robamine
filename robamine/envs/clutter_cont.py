@@ -40,7 +40,7 @@ from time import sleep
 import matplotlib.pyplot as plt
 from robamine.utils.cv_tools import Feature
 
-from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance, PushTargetReal
+from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance, PushTargetReal, PushTargetRealObjectAvoidance
 import torch
 
 def exp_reward(x, max_penalty, min, max):
@@ -643,6 +643,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.bgr = None
         self.obs_avoider = ObstacleAvoidanceLoss(distance_range=self.params['push']['target_init_distance'])
 
+        self.init_distance_from_target = 0.0
+
     def __del__(self):
         if self.viewer is not None:
             glfw.make_context_current(self.viewer.window)
@@ -929,7 +931,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'object_bounding_box': (max_n_obstacles, 3),
                 'object_above_table': (max_n_obstacles,),
                 'n_objects': (1,),
-                'max_n_objects': (1,)}
+                'max_n_objects': (1,),
+                'init_distance_from_target': (1,),
+                'singulation_distance': (1,),
+                'push_distance_range': (2,)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
@@ -964,7 +969,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'object_above_table': above_table,
             'n_objects': np.array([self.xml_generator.n_obstacles + 1]),
             'max_n_objects': np.array([shapes['object_poses'][0]]),
-            'surface_angle': np.array([0.0])
+            'surface_angle': np.array([0.0]),
+            'init_distance_from_target': np.array([self.init_distance_from_target]),
+            'singulation_distance': np.array([self.singulation_distance]),
+            'push_distance_range': np.array(self.params['push']['distance']),
         }
 
         if not self._target_is_on_table():
@@ -1047,12 +1055,23 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     #                                finger_size=self.finger_height)
 
                     # push = PushTargetReal(theta=action[1], push_distance=action[2], distance=action[3],
-                    push = PushTargetReal(theta=action[1], push_distance=1, distance=action[2],
-                                          push_distance_range=self.params['push']['distance'],
-                                          init_distance_range=self.params['push']['target_init_distance'],
-                                          object_height=self.target_bounding_box[2],
-                                          finger_size=self.finger_height)
+
+                    # push = PushTargetReal(theta=action[1], push_distance=1, distance=action[2],
+                    #                       push_distance_range=self.params['push']['distance'],
+                    #                       init_distance_range=self.params['push']['target_init_distance'],
+                    #                       object_height=self.target_bounding_box[2],
+                    #                       finger_size=self.finger_height)
+                    # push.translate(self.obs_dict['object_poses'][0, :2])
+
+                    max_obs_bb = np.max(self.params['obstacle']['max_bounding_box'])
+                    push = PushTargetRealObjectAvoidance(self.obs_dict, angle=action[1], push_distance=1,
+                                                         push_distance_range=self.params['push']['distance'],
+                                                         finger_size=self.finger_height,
+                                                         target_height=self.target_bounding_box[2],
+                                                         max_obs_bounding_box=max_obs_bb)
+                    self.init_distance_from_target = push.init_distance_from_target
                     push.translate(self.obs_dict['object_poses'][0, :2])
+
                 else:
                     push = PushTarget(theta=action[1],
                                       push_distance=action[2],
@@ -1087,6 +1106,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             if self.params['push'].get('predict_collision', True):
                 if predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
+                    raise InvalidEnvError('Unexpected collision')
                     self.push_stopped_ext_forces = True
                     print('Collision detected!')
                     return self.sim.data.time
@@ -1184,7 +1204,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             reward = self.get_reward_grasp_target()
         elif self.hardcoded_primitive == -1:
             reward = self.get_reward_all(observation, action)
-        reward = rescale(reward, -30, 10, range=[-1, 1])
+        reward = rescale(reward, -10, 10, range=[-1, 1])
         return reward
 
     def get_reward_all(self, observation, action):
@@ -1280,47 +1300,47 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return 0
 
     def get_reward_real_state_push_target(self, observation, action):
-        if self.push_stopped_ext_forces:
-            max_init_distance = self.params['push']['target_init_distance'][1]
-            max_obs_bounding_box = np.max(self.params['obstacle']['max_bounding_box'])
-            preprocessed = preprocess_real_state(self.obs_dict_prev, max_init_distance, max_obs_bounding_box)
-
-            # import matplotlib.pyplot as plt
-            # from mpl_toolkits.mplot3d import Axes3D
-            # from robamine.utils.viz import plot_boxes, plot_frames
-            # fig = plt.figure()
-            # ax = Axes3D(fig)
-            # state = self.obs_dict_prev
-            # plot_boxes(state['object_poses'][state['object_above_table']][:, 0:3],
-            #            state['object_poses'][state['object_above_table']][:, 3:7],
-            #            state['object_bounding_box'][state['object_above_table']], ax)
-            # plot_frames(state['object_poses'][state['object_above_table']][:, 0:3],
-            #             state['object_poses'][state['object_above_table']][:, 3:7], 0.01, ax)
-            # ax.axis('equal')
-            # plt.show()
-            #
-            # fig = plt.figure()
-            # ax = Axes3D(fig)
-            # state = preprocessed
-            # plot_boxes(state['object_poses'][state['object_above_table']][:, 0:3],
-            #            state['object_poses'][state['object_above_table']][:, 3:7],
-            #            state['object_bounding_box'][state['object_above_table']], ax)
-            # plot_frames(state['object_poses'][state['object_above_table']][:, 0:3],
-            #             state['object_poses'][state['object_above_table']][:, 3:7], 0.01, ax)
-            # ax.axis('equal')
-            # plt.show()
-
-            point_cloud = get_table_point_cloud(preprocessed['object_poses'][preprocessed['object_above_table']],
-                                                 preprocessed['object_bounding_box'][preprocessed['object_above_table']],
-                                                 workspace=[max_init_distance, max_init_distance],
-                                                 density=128)
-            # fig, ax = plt.subplots()
-            # ax.scatter(point_cloud[:, 0], point_cloud[:, 1])
-            # plt.show()
-            # self.obs_avoider.plot(point_cloud)
-            # plt.show()
-            obs_avoid_signal = float(self.obs_avoider(torch.FloatTensor(point_cloud.reshape(1, -1, 2)), torch.FloatTensor(action[1:].reshape(1, -1))).detach().cpu().numpy())
-            return -5 * obs_avoid_signal - 20
+        # if self.push_stopped_ext_forces:
+        #     max_init_distance = self.params['push']['target_init_distance'][1]
+        #     max_obs_bounding_box = np.max(self.params['obstacle']['max_bounding_box'])
+        #     preprocessed = preprocess_real_state(self.obs_dict_prev, max_init_distance, max_obs_bounding_box)
+        #
+        #     # import matplotlib.pyplot as plt
+        #     # from mpl_toolkits.mplot3d import Axes3D
+        #     # from robamine.utils.viz import plot_boxes, plot_frames
+        #     # fig = plt.figure()
+        #     # ax = Axes3D(fig)
+        #     # state = self.obs_dict_prev
+        #     # plot_boxes(state['object_poses'][state['object_above_table']][:, 0:3],
+        #     #            state['object_poses'][state['object_above_table']][:, 3:7],
+        #     #            state['object_bounding_box'][state['object_above_table']], ax)
+        #     # plot_frames(state['object_poses'][state['object_above_table']][:, 0:3],
+        #     #             state['object_poses'][state['object_above_table']][:, 3:7], 0.01, ax)
+        #     # ax.axis('equal')
+        #     # plt.show()
+        #     #
+        #     # fig = plt.figure()
+        #     # ax = Axes3D(fig)
+        #     # state = preprocessed
+        #     # plot_boxes(state['object_poses'][state['object_above_table']][:, 0:3],
+        #     #            state['object_poses'][state['object_above_table']][:, 3:7],
+        #     #            state['object_bounding_box'][state['object_above_table']], ax)
+        #     # plot_frames(state['object_poses'][state['object_above_table']][:, 0:3],
+        #     #             state['object_poses'][state['object_above_table']][:, 3:7], 0.01, ax)
+        #     # ax.axis('equal')
+        #     # plt.show()
+        #
+        #     point_cloud = get_table_point_cloud(preprocessed['object_poses'][preprocessed['object_above_table']],
+        #                                          preprocessed['object_bounding_box'][preprocessed['object_above_table']],
+        #                                          workspace=[max_init_distance, max_init_distance],
+        #                                          density=128)
+        #     # fig, ax = plt.subplots()
+        #     # ax.scatter(point_cloud[:, 0], point_cloud[:, 1])
+        #     # plt.show()
+        #     # self.obs_avoider.plot(point_cloud)
+        #     # plt.show()
+        #     obs_avoid_signal = float(self.obs_avoider(torch.FloatTensor(point_cloud.reshape(1, -1, 2)), torch.FloatTensor(action[1:].reshape(1, -1))).detach().cpu().numpy())
+        #     return -5 * obs_avoid_signal - 20
 
         if observation['object_poses'][0][2] < 0:
             return -10
@@ -1333,16 +1353,18 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return 10
 
 
-        extra_penalty = 0
-        # # if int(action[0]) == 0:
-        # #     extra_penalty = -min_max_scale(action[3], range=[-1, 1], target_range=[0, 5])
-        #
-        extra_penalty += -min_max_scale(action[2], range=[-1, 1], target_range=[0, 1])
-        return extra_penalty - 1
+        # extra_penalty = 0
+        # # # if int(action[0]) == 0:
+        # # #     extra_penalty = -min_max_scale(action[3], range=[-1, 1], target_range=[0, 5])
+        # #
+        # extra_penalty += -min_max_scale(action[2], range=[-1, 1], target_range=[0, 1])
+        # return extra_penalty - 1
         #
         # # reward += extra_penalty
         # #
         # return min_max_scale(reward, range=[-10, 10], target_range=[-1, 1])
+
+        return -1
 
     def terminal_state_real_state_push_target(self, obs):
         if self.timesteps >= self.max_timesteps:
@@ -1365,6 +1387,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return True, 'fallen'
 
         if self.get_real_distance_from_closest_obstacle(obs) > self.singulation_distance:
+            self.success = True
             return True, 'singulation'
 
         return False, ''
