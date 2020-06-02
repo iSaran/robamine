@@ -1184,7 +1184,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             reward = self.get_reward_grasp_target()
         elif self.hardcoded_primitive == -1:
             reward = self.get_reward_all(observation, action)
-        reward = rescale(reward, -10, 10, range=[-1, 1])
+        reward = rescale(reward, -30, 10, range=[-1, 1])
         return reward
 
     def get_reward_all(self, observation, action):
@@ -1320,7 +1320,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             # self.obs_avoider.plot(point_cloud)
             # plt.show()
             obs_avoid_signal = float(self.obs_avoider(torch.FloatTensor(point_cloud.reshape(1, -1, 2)), torch.FloatTensor(action[1:].reshape(1, -1))).detach().cpu().numpy())
-            return -5 * obs_avoid_signal - 3
+            return -5 * obs_avoid_signal - 20
 
         if observation['object_poses'][0][2] < 0:
             return -10
