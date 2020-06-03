@@ -925,7 +925,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'target_distances_from_limits': (4,),
                 'heightmap_mask': (2, 386, 386),
                 'surface_size': (2,),
-                'surface_angle': (1,),
                 'target_pos': (3,),
                 'object_poses': (max_n_obstacles, 7),
                 'object_bounding_box': (max_n_obstacles, 3),
@@ -934,7 +933,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'max_n_objects': (1,),
                 'init_distance_from_target': (1,),
                 'singulation_distance': (1,),
-                'push_distance_range': (2,)}
+                'push_distance_range': (2,),
+                'surface_edge': (2,)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
@@ -969,10 +969,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'object_above_table': above_table,
             'n_objects': np.array([self.xml_generator.n_obstacles + 1]),
             'max_n_objects': np.array([shapes['object_poses'][0]]),
-            'surface_angle': np.array([0.0]),
             'init_distance_from_target': np.array([self.init_distance_from_target]),
             'singulation_distance': np.array([self.singulation_distance]),
             'push_distance_range': np.array(self.params['push']['distance']),
+            'surface_edge': np.array(self.surface_size.copy()),
         }
 
         if not self._target_is_on_table():
@@ -1063,13 +1063,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     #                       finger_size=self.finger_height)
                     # push.translate(self.obs_dict['object_poses'][0, :2])
 
-                    max_obs_bb = np.max(self.params['obstacle']['max_bounding_box'])
                     push = PushTargetRealObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
                                                          push_distance_range=self.params['push']['distance'],
                                                          init_distance_range=self.params['push']['target_init_distance'],
                                                          finger_size=self.finger_height,
-                                                         target_height=self.target_bounding_box[2],
-                                                         max_obs_bounding_box=max_obs_bb)
+                                                         target_height=self.target_bounding_box[2])
                     self.init_distance_from_target = push.init_distance_from_target
                     push.translate(self.obs_dict['object_poses'][0, :2])
 

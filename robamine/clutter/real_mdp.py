@@ -25,22 +25,25 @@ class RealState(Feature):
         self.rotate(angle)
         self.principal_corners_plot = self.principal_corners.copy()
         self.surface_size = obs_dict['surface_size']
+        self.surface_edge = obs_dict['surface_edge']
         self.coordinates = 'cartesian'
+        # Append for table limits
+        rot_2d = np.array([[cos(angle), -sin(angle)], [sin(angle), cos(angle)]])
+        rot_2d = np.array([[cos(angle), -sin(angle)],
+                           [sin(angle), cos(angle)]])
+        self.surface_edge = np.matmul(rot_2d, self.surface_edge)
+
+        self.init_distance_from_target = obs_dict['init_distance_from_target'][0]
+
         if spherical:
             self.coordinates = 'spherical'
             init_shape = self.principal_corners.shape
             self.principal_corners = cartesian2spherical(self.principal_corners.reshape(-1, 3)).reshape(init_shape)
+            self.surface_edge[0] = np.sqrt(self.surface_edge[0] ** 2 + self.surface_edge[1] ** 2)
+            self.surface_edge[1] = np.arctan2(self.surface_edge[1], self.surface_edge[0])
+
         if sort:
             self.sort()
-
-        # Append for table limits
-        rot_2d = np.array([[cos(angle), -sin(angle)], [sin(angle), cos(angle)]])
-        self.target_pos = np.matmul(rot_2d, self.poses[0, 0:2])
-        rot_2d = np.array([[cos(angle + obs_dict['surface_angle']), -sin(angle + obs_dict['surface_angle'])],
-                           [sin(angle + obs_dict['surface_angle']), cos(angle + obs_dict['surface_angle'])]])
-        self.surface_edge = np.matmul(rot_2d, self.surface_size)
-
-        self.init_distance_from_target = obs_dict['init_distance_from_target'][0]
 
         if normalize:
             self.normalize()
@@ -133,26 +136,29 @@ class RealState(Feature):
             range_ = [[-self.surface_size[0] - eps, self.surface_size[0] + eps],
                       [-self.surface_size[1] - eps, self.surface_size[1] + eps],
                       [0, 0.2]]
+            max_surface_range = [[-2 * np.linalg.norm(self.surface_size) + eps,
+                                  2 * np.linalg.norm(self.surface_size) + eps],
+                                 [-2 * np.linalg.norm(self.surface_size) + eps,
+                                  2 * np.linalg.norm(self.surface_size) + eps]]
         elif self.coordinates == 'spherical':
             range_ = [[0, np.linalg.norm(self.surface_size) + eps],
                       [-np.pi, np.pi],
                       [-np.pi, np.pi]]
+            max_surface_range = [[0, 2 * np.linalg.norm(self.surface_size) + eps],
+                                 [-np.pi, np.pi]]
 
         for i in range(3):
             self.principal_corners[:, :, i] = min_max_scale(self.principal_corners[:, :, i],
                                                             range=range_[i],
                                                             target_range=self.range_norm)
 
-        max_surface_edge = np.linalg.norm(self.surface_size) + eps
-        self.target_pos = min_max_scale(self.target_pos, range=[-max_surface_edge, max_surface_edge],
-                                        target_range=self.range_norm)
-        self.surface_edge = min_max_scale(self.surface_edge, range=[-max_surface_edge, max_surface_edge],
-                                          target_range=self.range_norm)
+        for i in range(2):
+            self.surface_edge[i] = min_max_scale(self.surface_edge[i], range=max_surface_range[i],
+                                              target_range=self.range_norm)
 
     def array(self):
         array = np.concatenate((self.principal_corners, self.range_norm[0] * np.ones(
             (int(self.max_n_objects - self.principal_corners.shape[0]), 4, 3)))).flatten()
-        array = np.append(array, self.target_pos)
         array = np.append(array, self.surface_edge)
         array = np.append(array, self.init_distance_from_target)
 
@@ -211,7 +217,7 @@ class RealState(Feature):
 
     @staticmethod
     def dim():
-        return 10 * 4 * 3 + 4 + 1 # TODO: hardcoded max n objects
+        return 10 * 4 * 3 + 2 + 1 # TODO: hardcoded max n objects
 
 class PushTargetRealWithObstacleAvoidance(PushTargetWithObstacleAvoidance):
     def __init__(self, obs_dict, theta, push_distance, distance, push_distance_range, init_distance_range,
@@ -318,7 +324,7 @@ class PushTargetRealCartesianNormalized(PushTarget2D):
 
 
 class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
-    def __init__(self, obs_dict, angle, push_distance, push_distance_range, init_distance_range, max_obs_bounding_box, target_height, finger_size, eps=0.05):
+    def __init__(self, obs_dict, angle, push_distance, push_distance_range, init_distance_range, target_height, finger_size, eps=0.05):
         angle_ = min_max_scale(angle, range=[-1, 1], target_range=[-np.pi, np.pi])
         push_distance_ = min_max_scale(push_distance, range=[-1, 1], target_range=push_distance_range)
         eps_ = min_max_scale(eps, range=[-1, 1], target_range=[-np.pi, np.pi])
@@ -326,7 +332,7 @@ class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
         max_init_distance = init_distance_range[1]
         x_init = max_init_distance * np.cos(angle_)
         y_init = max_init_distance * np.sin(angle_)
-        preprocessed = self.preprocess_real_state(obs_dict, max_init_distance, max_obs_bounding_box)
+        preprocessed = preprocess_real_state(obs_dict, max_init_distance, 0)
 
         point_cloud = self.get_table_point_cloud(preprocessed['object_poses'][preprocessed['object_above_table']],
                                             preprocessed['object_bounding_box'][preprocessed['object_above_table']],
@@ -364,38 +370,6 @@ class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
         super(PushTargetRealObjectAvoidance, self).__init__(x_init=x_init, y_init=y_init, push_distance=push_distance_,
                                                             object_height=target_height, finger_size=finger_size)
 
-    def preprocess_real_state(self, obs_dict, max_init_distance, max_obs_bounding_box, angle=0):
-        what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_angle',
-                       'max_n_objects']
-        state = {}
-        for key in what_i_need:
-            state[key] = copy.deepcopy(obs_dict[key])
-
-        # Keep closest objects
-        poses = state['object_poses'][state['object_above_table']]
-        if poses.shape[0] == 0:
-            return state
-
-        threshold = max(max_init_distance, obs_dict['push_distance_range'][1]) + np.max(state['object_bounding_box'][0]) + obs_dict['singulation_distance'][0]
-        objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < threshold
-        state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
-        state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
-        state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]
-        # Rotate
-        poses = state['object_poses'][state['object_above_table']]
-        target_pose = poses[0].copy()
-        poses = transform_poses(poses, target_pose)
-        rotz = np.zeros(7)
-        rotz[3:7] = Quaternion.from_rotation_matrix(rot_z(-angle)).as_vector()
-        poses = transform_poses(poses, rotz)
-        poses = transform_poses(poses, target_pose, target_inv=True)
-        target_pose[3:] = np.zeros(4)
-        target_pose[3] = 1
-        poses = transform_poses(poses, target_pose)
-        state['object_poses'][state['object_above_table']] = poses
-        state['surface_angle'] = angle
-        return state
-
     def get_table_point_cloud(self, pose, bbox, workspace, density=128, bbox_aug=0.008, plot=False):
         def in_hull(p, hull):
             if not isinstance(hull, Delaunay):
@@ -429,5 +403,40 @@ class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
             inhulls[:, object] = in_hull(x_y, base_corners)
 
         return x_y[inhulls.all(axis=1), :]
+
+def preprocess_real_state(obs_dict, max_init_distance, angle=0):
+    what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_edge',
+                   'max_n_objects', 'init_distance_from_target']
+    state = {}
+    for key in what_i_need:
+        state[key] = copy.deepcopy(obs_dict[key])
+
+    # Keep closest objects
+    poses = state['object_poses'][state['object_above_table']]
+    if poses.shape[0] == 0:
+        return state
+
+    surface_edge = np.array([state['surface_edge'][0], state['surface_edge'][1], 0, 1, 0, 0, 0]).reshape((1, 7))
+    threshold = max(max_init_distance, obs_dict['push_distance_range'][1]) + np.max(state['object_bounding_box'][0]) + obs_dict['singulation_distance'][0]
+    objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < threshold
+    state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
+    state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
+    state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]
+    # Rotate
+    poses = state['object_poses'][state['object_above_table']]
+    target_pose = poses[0].copy()
+    poses = transform_poses(poses, target_pose)
+    rotz = np.zeros(7)
+    rotz[3:7] = Quaternion.from_rotation_matrix(rot_z(-angle)).as_vector()
+    poses = transform_poses(poses, rotz)
+    surface_edge = transform_poses(surface_edge, rotz)
+    poses = transform_poses(poses, target_pose, target_inv=True)
+    target_pose[3:] = np.zeros(4)
+    target_pose[3] = 1
+    poses = transform_poses(poses, target_pose)
+    surface_edge = transform_poses(surface_edge, target_pose)
+    state['surface_edge'] = surface_edge[0][:2].copy()
+    state['object_poses'][state['object_above_table']] = poses
+    return state
 
 

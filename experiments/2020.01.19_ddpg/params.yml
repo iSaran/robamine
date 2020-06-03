@@ -62,7 +62,7 @@ env:
       max_bounding_box: [.03, .03, .010]
       probability_box: 1.0
       enforce_convex_hull: 15
-      randomize_pos: False
+      randomize_pos: True
     obstacle:
       min_bounding_box: [.01, .01, .005]
       max_bounding_box: [.03, .03, .020]

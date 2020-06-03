@@ -12,7 +12,7 @@ from robamine.utils.math import min_max_scale
 from robamine.utils.orientation import rot_z, Quaternion, transform_poses
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise, Transition
 from robamine.envs.clutter_utils import get_observation_dim, get_action_dim, obs_dict2feature, get_table_point_cloud
-from robamine.clutter.real_mdp import RealState
+from robamine.clutter.real_mdp import RealState, preprocess_real_state
 
 import numpy as np
 import pickle
@@ -223,6 +223,8 @@ class SplitDDPG(RLAgent):
         for i in range(self.nr_network):
             self.results['replay_buffer_size'].append(0)
 
+        self.max_init_distance = self.params['env_params']['push']['target_init_distance'][1]
+
     def predict(self, state):
         output = np.zeros(max(self.action_dim) + 1)
         max_q = -1e10
@@ -232,7 +234,7 @@ class SplitDDPG(RLAgent):
                 k = i
             else:
                 k = self.hardcoded_primitive
-            state_ = self.preprocess_real_state(state, 0)
+            state_ = preprocess_real_state(state, self.max_init_distance, 0)
             real_state = RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                    translate_wrt_target=False).array()
             s = torch.FloatTensor(real_state).to(self.device)
@@ -412,7 +414,7 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        state_ = self.preprocess_real_state(state, 0)
+        state_ = preprocess_real_state(state, self.max_init_distance, 0)
         real_state = RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                translate_wrt_target=False).array()
         s = torch.FloatTensor(real_state).to(self.device)
@@ -478,7 +480,7 @@ class SplitDDPG(RLAgent):
         angle = np.linspace(0, 2 * np.pi, heightmap_rotations, endpoint=False)
         for j in range(heightmap_rotations):
             transition.state['init_distance_from_target'] = transition.next_state['init_distance_from_target']
-            state = self.preprocess_real_state(transition.state, angle[j])
+            state = preprocess_real_state(transition.state, self.max_init_distance, angle[j])
 
             # Real state:
             # real_state = RealState(state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
@@ -494,7 +496,7 @@ class SplitDDPG(RLAgent):
             # Rotate next state
             # real_state_next = np.zeros(RealState.dim())
             # point_cloud_next = max_init_distance * np.ones((density ** 2, 2))
-            next_state = self.preprocess_real_state(transition.next_state, angle[j])
+            next_state = preprocess_real_state(transition.next_state, self.max_init_distance, angle[j])
             # if not transition.terminal:
             #     next_state = self.preprocess_real_state(transition.next_state, angle[j])
                 # Real state:
@@ -534,43 +536,6 @@ class SplitDDPG(RLAgent):
                               terminal=transition.terminal)
             transitions.append(tran)
         return transitions
-
-    def preprocess_real_state(self, obs_dict, angle):
-        what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_angle',
-                       'max_n_objects', 'init_distance_from_target']
-        max_init_distance = self.params['env_params']['push']['target_init_distance'][1]
-        max_obs_bounding_box = np.max(self.params['env_params']['obstacle']['max_bounding_box'])
-
-        state = {}
-        for key in what_i_need:
-            state[key] = copy.deepcopy(obs_dict[key])
-
-        # Keep closest objects
-        poses = state['object_poses'][state['object_above_table']]
-        if poses.shape[0] == 0:
-            return state
-
-        threshold = max(max_init_distance, obs_dict['push_distance_range'][1]) + np.max(state['object_bounding_box'][0]) + obs_dict['singulation_distance'][0]
-        objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < threshold
-
-        state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
-        state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
-        state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]
-        # Rotate
-        poses = state['object_poses'][state['object_above_table']]
-        target_pose = poses[0].copy()
-        poses = transform_poses(poses, target_pose)
-        rotz = np.zeros(7)
-        rotz[3:7] = Quaternion.from_rotation_matrix(rot_z(-angle)).as_vector()
-        poses = transform_poses(poses, rotz)
-        poses = transform_poses(poses, target_pose, target_inv=True)
-        target_pose[3:] = np.zeros(4)
-        target_pose[3] = 1
-        poses = transform_poses(poses, target_pose)
-        state['object_poses'][state['object_above_table']] = poses
-        state['surface_angle'] = angle
-        return state
-
 
 class ObstacleAvoidanceLoss(nn.Module):
     def __init__(self, distance_range, min_dist_range=[0.002, 0.1], device='cpu'):
