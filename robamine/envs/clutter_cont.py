@@ -1064,8 +1064,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     # push.translate(self.obs_dict['object_poses'][0, :2])
 
                     max_obs_bb = np.max(self.params['obstacle']['max_bounding_box'])
-                    push = PushTargetRealObjectAvoidance(self.obs_dict, angle=action[1], push_distance=1,
+                    push = PushTargetRealObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
                                                          push_distance_range=self.params['push']['distance'],
+                                                         init_distance_range=self.params['push']['target_init_distance'],
                                                          finger_size=self.finger_height,
                                                          target_height=self.target_bounding_box[2],
                                                          max_obs_bounding_box=max_obs_bb)

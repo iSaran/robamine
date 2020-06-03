@@ -331,7 +331,7 @@ def rotated_to_regular_transitions(transitions, heightmap_rotations=0):
 
 
 def get_action_dim(primitive):
-    action_dim_all = [1, 1, 1]
+    action_dim_all = [2, 1, 1]
 
     if primitive >= 0:
         action_dim = [action_dim_all[primitive]]
