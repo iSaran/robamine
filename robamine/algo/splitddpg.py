@@ -65,12 +65,14 @@ class Critic(nn.Module):
         self.hidden_layers.append(nn.Linear(state_dim + action_dim, hidden_units[0]))
         for i in range(1, len(hidden_units)):
             self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
-            self.hidden_layers[i].weight.data.uniform_(-0.003, 0.003)
-            self.hidden_layers[i].bias.data.uniform_(-0.003, 0.003)
+            stdv = 1. / math.sqrt(self.hidden_layers[i].weight.size(1))
+            self.hidden_layers[i].weight.data.uniform_(-stdv, stdv)
+            self.hidden_layers[i].bias.data.uniform_(-stdv, stdv)
 
         self.out = nn.Linear(hidden_units[-1], 1)
-        self.out.weight.data.uniform_(-0.003, 0.003)
-        self.out.bias.data.uniform_(-0.003, 0.003)
+        stdv = 1. / math.sqrt(self.out.weight.size(1))
+        self.out.weight.data.uniform_(-stdv, stdv)
+        self.out.bias.data.uniform_(-stdv, stdv)
 
     def forward(self, x, u):
         # Clone an reshape in case of single input in order to have a "batch" shape
