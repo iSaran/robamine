@@ -1109,9 +1109,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     print('Collision detected!')
                     return self.sim.data.time
 
-                self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push_initial_pos_world[2], 1, 0, 0, 0])
+                self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push_initial_pos_world[2] + 0.01, 1, 0, 0, 0])
                 self.sim_step()
-                self.move_joint_to_target('finger1', [None, None, push_initial_pos_world[2]], 0.01)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+                self.move_joint_to_target('finger1', [None, None, push_initial_pos_world[2]], 0.1)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
                 duration = push.get_duration()
 
                 end = push_final_pos_world[:2]
