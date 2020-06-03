@@ -1107,7 +1107,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             if self.params['push'].get('predict_collision', True):
                 if predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
-                    raise InvalidEnvError('Unexpected collision')
                     self.push_stopped_ext_forces = True
                     print('Collision detected!')
                     return self.sim.data.time
@@ -1342,6 +1341,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         #     # plt.show()
         #     obs_avoid_signal = float(self.obs_avoider(torch.FloatTensor(point_cloud.reshape(1, -1, 2)), torch.FloatTensor(action[1:].reshape(1, -1))).detach().cpu().numpy())
         #     return -5 * obs_avoid_signal - 20
+
+        if self.push_stopped_ext_forces:
+            return -10
 
         if observation['object_poses'][0][2] < 0:
             return -10
