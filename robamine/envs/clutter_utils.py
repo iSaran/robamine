@@ -715,7 +715,7 @@ def get_table_point_cloud(pose, bbox, workspace, density=128, bbox_aug=0.008, pl
     return x_y[inhulls.all(axis=1), :]
 
 def predict_collision(obs, x, y):
-    n_objects = int(obs['n_objects'])
+    n_objects = int(len(obs['object_poses'][obs['object_above_table']]))
     sphere_pose = np.zeros(7)
     sphere_pose[0] = x
     sphere_pose[1] = y
@@ -723,8 +723,8 @@ def predict_collision(obs, x, y):
     sphere_pose[3] = 1  # identity orientation
     sphere_bbox = obs['finger_height'][0] * np.ones(3)
     for i in range(0, n_objects):
-        object_pose = obs['object_poses'][i]
-        object_bbox = obs['object_bounding_box'][i]
+        object_pose = obs['object_poses'][obs['object_above_table']][i]
+        object_bbox = obs['object_bounding_box'][obs['object_above_table']][i]
         if is_object_above_object(object_pose, object_bbox, sphere_pose, sphere_bbox, density=0.0025):
             return True
     return False
