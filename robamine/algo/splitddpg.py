@@ -233,7 +233,7 @@ class SplitDDPG(RLAgent):
             else:
                 k = self.hardcoded_primitive
             state_ = self.preprocess_real_state(state, 0)
-            real_state = RealState(state_, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+            real_state = RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                    translate_wrt_target=False).array()
             s = torch.FloatTensor(real_state).to(self.device)
             a = self.actor[i](s)
@@ -338,15 +338,15 @@ class SplitDDPG(RLAgent):
             _, action_ = self.get_low_level_action(batch[j].action)
             action[j] = torch.FloatTensor(action_).to(self.device)
 
-            state_real[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+            state_real[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                    translate_wrt_target=False).array()).to(self.device)
-            state_real_actor[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+            state_real_actor[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                                         translate_wrt_target=False).array()).to(self.device)
 
             if not terminal[j]:
-                next_state_real[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+                next_state_real[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                                                  translate_wrt_target=False).array()).to(self.device)
-                next_state_real_actor[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+                next_state_real_actor[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                                                  translate_wrt_target=False).array()).to(self.device)
 
             next_state_real_actor[j, -1] = 0.0
@@ -413,7 +413,7 @@ class SplitDDPG(RLAgent):
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
         state_ = self.preprocess_real_state(state, 0)
-        real_state = RealState(state_, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+        real_state = RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                translate_wrt_target=False).array()
         s = torch.FloatTensor(real_state).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
