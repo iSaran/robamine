@@ -25,13 +25,12 @@ class RealState(Feature):
         self.rotate(angle)
         self.principal_corners_plot = self.principal_corners.copy()
         self.surface_size = obs_dict['surface_size']
-        self.surface_edge = obs_dict['surface_edge']
+        self.surface_edges = obs_dict['surface_edges']
         self.coordinates = 'cartesian'
         # Append for table limits
-        rot_2d = np.array([[cos(angle), -sin(angle)], [sin(angle), cos(angle)]])
         rot_2d = np.array([[cos(angle), -sin(angle)],
                            [sin(angle), cos(angle)]])
-        self.surface_edge = np.matmul(rot_2d, self.surface_edge)
+        self.surface_edges = np.transpose(np.matmul(rot_2d, np.transpose(self.surface_edges)))
 
         self.init_distance_from_target = obs_dict['init_distance_from_target'][0]
 
@@ -39,8 +38,8 @@ class RealState(Feature):
             self.coordinates = 'spherical'
             init_shape = self.principal_corners.shape
             self.principal_corners = cartesian2spherical(self.principal_corners.reshape(-1, 3)).reshape(init_shape)
-            self.surface_edge[0] = np.sqrt(self.surface_edge[0] ** 2 + self.surface_edge[1] ** 2)
-            self.surface_edge[1] = np.arctan2(self.surface_edge[1], self.surface_edge[0])
+            self.surface_edges[:, 0] = np.sqrt(self.surface_edges[:, 0] ** 2 + self.surface_edges[:, 1] ** 2)
+            self.surface_edges[:, 1] = np.arctan2(self.surface_edges[:, 1], self.surface_edges[:, 0])
 
         if sort:
             self.sort()
@@ -153,13 +152,13 @@ class RealState(Feature):
                                                             target_range=self.range_norm)
 
         for i in range(2):
-            self.surface_edge[i] = min_max_scale(self.surface_edge[i], range=max_surface_range[i],
+            self.surface_edges[:, i] = min_max_scale(self.surface_edges[:, i], range=max_surface_range[i],
                                               target_range=self.range_norm)
 
     def array(self):
         array = np.concatenate((self.principal_corners, self.range_norm[0] * np.ones(
             (int(self.max_n_objects - self.principal_corners.shape[0]), 4, 3)))).flatten()
-        array = np.append(array, self.surface_edge)
+        array = np.append(array, self.surface_edges.flatten())
         array = np.append(array, self.init_distance_from_target)
 
 
@@ -217,7 +216,7 @@ class RealState(Feature):
 
     @staticmethod
     def dim():
-        return 10 * 4 * 3 + 2 + 1 # TODO: hardcoded max n objects
+        return 10 * 4 * 3 + 8 + 1 # TODO: hardcoded max n objects
 
 class PushTargetRealWithObstacleAvoidance(PushTargetWithObstacleAvoidance):
     def __init__(self, obs_dict, theta, push_distance, distance, push_distance_range, init_distance_range,
@@ -404,8 +403,8 @@ class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
 
         return x_y[inhulls.all(axis=1), :]
 
-def preprocess_real_state(obs_dict, max_init_distance, angle=0):
-    what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_edge',
+def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0):
+    what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_edges',
                    'max_n_objects', 'init_distance_from_target']
     state = {}
     for key in what_i_need:
@@ -416,7 +415,9 @@ def preprocess_real_state(obs_dict, max_init_distance, angle=0):
     if poses.shape[0] == 0:
         return state
 
-    surface_edge = np.array([state['surface_edge'][0], state['surface_edge'][1], 0, 1, 0, 0, 0]).reshape((1, 7))
+    app = np.zeros((4, 5))
+    app[:, 1] = 1
+    surface_edges = np.append(state['surface_edges'], app, axis=1)
     threshold = max(max_init_distance, obs_dict['push_distance_range'][1]) + np.max(state['object_bounding_box'][0]) + obs_dict['singulation_distance'][0]
     objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < threshold
     state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
@@ -426,17 +427,32 @@ def preprocess_real_state(obs_dict, max_init_distance, angle=0):
     poses = state['object_poses'][state['object_above_table']]
     target_pose = poses[0].copy()
     poses = transform_poses(poses, target_pose)
+    surface_edges = transform_poses(surface_edges, target_pose)
     rotz = np.zeros(7)
     rotz[3:7] = Quaternion.from_rotation_matrix(rot_z(-angle)).as_vector()
     poses = transform_poses(poses, rotz)
-    surface_edge = transform_poses(surface_edge, rotz)
+    surface_edges = transform_poses(surface_edges, rotz)
     poses = transform_poses(poses, target_pose, target_inv=True)
+    surface_edges = transform_poses(surface_edges, target_pose, target_inv=True)
     target_pose[3:] = np.zeros(4)
     target_pose[3] = 1
     poses = transform_poses(poses, target_pose)
-    surface_edge = transform_poses(surface_edge, target_pose)
-    state['surface_edge'] = surface_edge[0][:2].copy()
+    surface_edges = transform_poses(surface_edges, target_pose)
+    state['surface_edges'] = surface_edges[:, :2].copy()
     state['object_poses'][state['object_above_table']] = poses
     return state
 
-
+def plot_real_state(state):
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    from robamine.utils.viz import plot_boxes, plot_frames
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    plot_boxes(state['object_poses'][state['object_above_table']][:, 0:3],
+               state['object_poses'][state['object_above_table']][:, 3:7],
+               state['object_bounding_box'][state['object_above_table']], ax)
+    plot_frames(state['object_poses'][state['object_above_table']][:, 0:3],
+                state['object_poses'][state['object_above_table']][:, 3:7], 0.01, ax)
+    ax.scatter(state['surface_edges'][:, 0], state['surface_edges'][:, 1])
+    ax.axis('equal')
+    plt.show()
