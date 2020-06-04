@@ -391,7 +391,9 @@ class PointCloud:
         super(PointCloud, self).__init__()
         self.points = []
 
-    def from_depth(self, depth, camera):
+    @classmethod
+    def from_depth(cls, depth, camera):
+        cls = PointCloud()
         depth = depth
         width, height = depth.shape
         c, r = np.meshgrid(np.arange(height), np.arange(width), sparse=True)
@@ -400,7 +402,8 @@ class PointCloud:
         x = np.where(valid, z * (c - camera.cx) / camera.f, 0)
         y = np.where(valid, z * (r - camera.cy) / camera.f, 0)
         pcd = np.dstack((x, y, z))
-        self.points = pcd.reshape(-1, 3)
+        cls.points = pcd.reshape(-1, 3)
+        return cls
 
     def transform(self, tr_matrix):
         """
@@ -419,6 +422,9 @@ class PointCloud:
         w = self.points[:, 3]
         self.points /= w[:, np.newaxis]
         self.points = self.points[:, 0:3]
+
+    def size(self):
+        return self.points.shape[0]
 
     def generate_height_map(self, size=(100, 100), grid_step=0.0025, rotations=0, plot=False):
         """
