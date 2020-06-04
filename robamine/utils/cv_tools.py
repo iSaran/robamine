@@ -325,45 +325,45 @@ class Feature:
         return Feature(normalized)
 
 
-
 class PointCloud:
-    def __init__(self, depth, camera):
+    def __init__(self):
         super(PointCloud, self).__init__()
+        self.points = []
 
-        self.depth = depth
-        self.point_cloud = self.depth2pcd(depth, camera)
-
-    @staticmethod
-    def depth2pcd(self, depth, camera):
+    @classmethod
+    def from_depth(cls, depth, camera):
+        cls = PointCloud()
+        depth = depth
         width, height = depth.shape
-
-        c, r = np.meshgrid(np.arange(width), np.arange(height), sparse=True)
+        c, r = np.meshgrid(np.arange(height), np.arange(width), sparse=True)
         valid = (depth > 0)
-
         z = np.where(valid, depth, 0)
         x = np.where(valid, z * (c - camera.cx) / camera.f, 0)
         y = np.where(valid, z * (r - camera.cy) / camera.f, 0)
         pcd = np.dstack((x, y, z))
-
-        return pcd.reshape(-1, 3)
+        cls.points = pcd.reshape(-1, 3)
+        return cls
 
     def transform(self, tr_matrix):
         """
-        Apply an affine transformation to the point cloud
+        Applies an affine transformation to the point cloud
         tr_matrix: 4x4 matrix that describes the affine transformation [R|t]
         """
         # Convert cartesian to homogeneous coordinates
-        ones = np.ones((self.point_cloud.shape[0], 1), dtype=np.float32)
-        self.point_cloud = np.concatenate((self.point_cloud, ones), axis=1)
+        ones = np.ones((self.points.shape[0], 1), dtype=np.float32)
+        self.points = np.concatenate((self.points, ones), axis=1)
 
         # Transform cloud
-        for i in range(self.point_cloud.shape[0]):
-            self.point_cloud[i] = np.matmul(tr_matrix, self.point_cloud[i])
+        for i in range(self.points.shape[0]):
+            self.points[i] = np.matmul(tr_matrix, self.points[i])
 
         # Convert homogeneous to cartesian
-        w = self.point_cloud[:, 3]
-        self.point_cloud /= w[:, np.newaxis]
-        self.point_cloud = self.point_cloud[:, 0:3]
+        w = self.points[:, 3]
+        self.points /= w[:, np.newaxis]
+        self.points = self.points[:, 0:3]
+
+    def size(self):
+        return self.points.shape[0]
 
     def generate_height_map(self, size=(100, 100), grid_step=0.0025, rotations=0, plot=False):
         """
@@ -378,10 +378,10 @@ class PointCloud:
 
         height_grid = np.zeros((height, width), dtype=np.float32)
 
-        for i in range(self.point_cloud.shape[0]):
-            x = self.point_cloud[i][0]
-            y = self.point_cloud[i][1]
-            z = self.point_cloud[i][2]
+        for i in range(self.points.shape[0]):
+            x = self.points[i][0]
+            y = self.points[i][1]
+            z = self.points[i][2]
 
             idx_x = int(np.floor(x / grid_step)) + int(width / 2)
             idx_y = int(np.floor(y / grid_step)) + int(height / 2)
@@ -409,6 +409,7 @@ class PointCloud:
 
     def plot(self):
         pcd = open3d.PointCloud()
-        pcd.points = open3d.Vector3dVector(self.point_cloud)
+        pcd.points = open3d.Vector3dVector(self.points)
         frame = open3d.create_mesh_coordinate_frame(size=0.1)
         open3d.draw_geometries([pcd, frame])
+

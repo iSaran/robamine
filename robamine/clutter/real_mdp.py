@@ -333,7 +333,7 @@ class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
         y_init = max_init_distance * np.sin(angle_)
         preprocessed = preprocess_real_state(obs_dict, max_init_distance, 0)
 
-        point_cloud = self.get_table_point_cloud(preprocessed['object_poses'][preprocessed['object_above_table']],
+        point_cloud = get_table_point_cloud(preprocessed['object_poses'][preprocessed['object_above_table']],
                                             preprocessed['object_bounding_box'][preprocessed['object_above_table']],
                                             workspace=[max_init_distance, max_init_distance],
                                             density=128)
@@ -369,39 +369,90 @@ class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
         super(PushTargetRealObjectAvoidance, self).__init__(x_init=x_init, y_init=y_init, push_distance=push_distance_,
                                                             object_height=target_height, finger_size=finger_size)
 
-    def get_table_point_cloud(self, pose, bbox, workspace, density=128, bbox_aug=0.008, plot=False):
-        def in_hull(p, hull):
-            if not isinstance(hull, Delaunay):
-                hull = Delaunay(hull)
+class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
+    def __init__(self, obs_dict, angle, push_distance, push_distance_range, init_distance_range, target_height,
+                 finger_size, pixels_to_m, camera, rgb_to_camera_frame, camera_pose):
+        angle_ = min_max_scale(angle, range=[-1, 1], target_range=[-np.pi, np.pi])
+        push_distance_ = min_max_scale(push_distance, range=[-1, 1], target_range=push_distance_range)
 
-            return hull.find_simplex(p) < 0
+        max_init_distance = init_distance_range[1]
+        x_init = max_init_distance * np.cos(angle_)
+        y_init = max_init_distance * np.sin(angle_)
 
-        def get_corners(pose, bbox):
-            bbox_corners_object = np.array([[bbox[0], bbox[1], bbox[2]],
-                                            [bbox[0], -bbox[1], bbox[2]],
-                                            [bbox[0], bbox[1], -bbox[2]],
-                                            [bbox[0], -bbox[1], -bbox[2]],
-                                            [-bbox[0], bbox[1], bbox[2]],
-                                            [-bbox[0], -bbox[1], bbox[2]],
-                                            [-bbox[0], bbox[1], -bbox[2]],
-                                            [-bbox[0], -bbox[1], -bbox[2]]])
-            pos = pose[0:3]
-            quat = Quaternion(pose[3], pose[4], pose[5], pose[6])
-            return transform_points(bbox_corners_object, pos, quat)
+        raw_depth_ = obs_dict['raw_depth'].copy()
+        table_depth = np.max(raw_depth_)
 
-        x = np.linspace(-workspace[0], workspace[0], density)
-        y = np.linspace(-workspace[1], workspace[1], density)
-        x, y = np.meshgrid(x, y)
-        x_y = np.column_stack((x.ravel(), y.ravel()))
+        patch_size = 2 * int(finger_size / pixels_to_m) + 2
+        centroid_pxl = np.zeros(2, dtype=np.int32)
+        centroid_pxl[0] = obs_dict['centroid_pxl'][1]
+        centroid_pxl[1] = obs_dict['centroid_pxl'][0]
+        r = 0
+        step = 2
+        while True:
+            c = np.array([r * np.sin(-angle_), r * cos(-angle_)]).astype(np.int32)
+            patch_center = centroid_pxl + c
+            # calc patch position and extract the patch
+            patch_x = int(patch_center[0] - patch_size / 2.)
+            patch_y = int(patch_center[1] - patch_size / 2.)
+            patch_image = raw_depth_[patch_x:patch_x + patch_size, patch_y:patch_y + patch_size]
+            if (np.abs(patch_image - table_depth) < 1e-6).all():
+                z = raw_depth_[patch_center[0], patch_center[1]]
+                patch_center_ = patch_center.copy()
+                patch_center_[0] = patch_center[1]
+                patch_center_[1] = patch_center[0]
+                patch_center_image = camera.back_project(patch_center_, z)
+                patch_center_camera = np.matmul(rgb_to_camera_frame, patch_center_image)
+                # patch_center_camera = patch_center_image
+                patch_center__ = np.matmul(camera_pose, np.array(
+                    [patch_center_camera[0], patch_center_camera[1], 0, 1.0]))[:2]
+                x_init_ = patch_center__[0] - obs_dict['object_poses'][0, 0]
+                y_init_ = patch_center__[1] - obs_dict['object_poses'][0, 1]
+                if np.linalg.norm([x_init_, y_init_]) < np.linalg.norm([x_init, y_init]):
+                    x_init = x_init_
+                    y_init = y_init_
+                break
+            r += step
 
-        inhulls = np.ones((x_y.shape[0], pose.shape[0]), dtype=np.bool)
-        for object in range(pose.shape[0]):
-            corners = get_corners(pose[object], bbox[object] + bbox_aug)
-            hull = ConvexHull(corners[:, 0:2])
-            base_corners = corners[hull.vertices, 0:2]
-            inhulls[:, object] = in_hull(x_y, base_corners)
+        push_avoid = PushTargetRealWithObstacleAvoidance(obs_dict, angle, push_distance=-1, distance=-1, push_distance_range=[0, 0.1], init_distance_range=[0, 0.1])
+        dist_from_target = np.linalg.norm(np.array([x_init, y_init]) - push_avoid.get_init_pos()[:2])
+        self.init_distance_from_target = min_max_scale(dist_from_target, range=[0, max_init_distance],
+                                                       target_range=[-1, 1])
+        super(PushTargetDepthObjectAvoidance, self).__init__(x_init=x_init, y_init=y_init, push_distance=push_distance_,
+                                                            object_height=target_height, finger_size=finger_size)
 
-        return x_y[inhulls.all(axis=1), :]
+def get_table_point_cloud(pose, bbox, workspace, density=128, bbox_aug=0.008, plot=False):
+    def in_hull(p, hull):
+        if not isinstance(hull, Delaunay):
+            hull = Delaunay(hull)
+
+        return hull.find_simplex(p) < 0
+
+    def get_corners(pose, bbox):
+        bbox_corners_object = np.array([[bbox[0], bbox[1], bbox[2]],
+                                        [bbox[0], -bbox[1], bbox[2]],
+                                        [bbox[0], bbox[1], -bbox[2]],
+                                        [bbox[0], -bbox[1], -bbox[2]],
+                                        [-bbox[0], bbox[1], bbox[2]],
+                                        [-bbox[0], -bbox[1], bbox[2]],
+                                        [-bbox[0], bbox[1], -bbox[2]],
+                                        [-bbox[0], -bbox[1], -bbox[2]]])
+        pos = pose[0:3]
+        quat = Quaternion(pose[3], pose[4], pose[5], pose[6])
+        return transform_points(bbox_corners_object, pos, quat)
+
+    x = np.linspace(-workspace[0], workspace[0], density)
+    y = np.linspace(-workspace[1], workspace[1], density)
+    x, y = np.meshgrid(x, y)
+    x_y = np.column_stack((x.ravel(), y.ravel()))
+
+    inhulls = np.ones((x_y.shape[0], pose.shape[0]), dtype=np.bool)
+    for object in range(pose.shape[0]):
+        corners = get_corners(pose[object], bbox[object] + bbox_aug)
+        hull = ConvexHull(corners[:, 0:2])
+        base_corners = corners[hull.vertices, 0:2]
+        inhulls[:, object] = in_hull(x_y, base_corners)
+
+    return x_y[inhulls.all(axis=1), :]
 
 def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0):
     what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_edges',

@@ -1,5 +1,5 @@
 from robamine.algo.core import TrainWorld, EvalWorld, SupervisedTrainWorld
-from robamine.clutter.real_mdp import RealState
+from robamine.clutter.real_mdp import RealState, preprocess_real_state, plot_real_state
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG, Critic
 from robamine.algo.util import EpisodeListData
@@ -26,7 +26,6 @@ from robamine.utils.memory import get_batch_indices
 from math import pi
 from math import floor
 
-from robamine.envs.clutter_utils import get_table_point_cloud
 
 logger = logging.getLogger('robamine')
 

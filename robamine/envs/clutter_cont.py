@@ -26,7 +26,7 @@ import glfw
 
 from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim, get_observation_dim,
                                          get_distance_of_two_bbox, transform_list_of_points, is_object_above_object,
-                                         predict_collision, get_table_point_cloud, ObstacleAvoidanceLoss)
+                                         predict_collision, ObstacleAvoidanceLoss)
 from robamine.algo.core import InvalidEnvError
 
 import xml.etree.ElementTree as ET
@@ -40,7 +40,9 @@ from time import sleep
 import matplotlib.pyplot as plt
 from robamine.utils.cv_tools import Feature
 
-from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance, PushTargetReal, PushTargetRealObjectAvoidance
+from robamine.clutter.real_mdp import (PushTargetRealWithObstacleAvoidance, PushTargetReal,
+                                       PushTargetRealObjectAvoidance, get_table_point_cloud,
+                                       PushTargetDepthObjectAvoidance)
 import torch
 
 def exp_reward(x, max_penalty, min, max):
@@ -644,6 +646,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.obs_avoider = ObstacleAvoidanceLoss(distance_range=self.params['push']['target_init_distance'])
 
         self.init_distance_from_target = 0.0
+        self.raw_depth = None
+        self.centroid_pxl = None
 
     def __del__(self):
         if self.viewer is not None:
@@ -838,6 +842,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             counter += 1
 
+        self.raw_depth = depth
 
         # Calculate masks
         color_detector = cv_tools.ColorDetector('red')
@@ -853,6 +858,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Calculate the centroid w.r.t. initial image (640x480) in pixels
         target_object = TargetObjectConvexHull(mask)
         centroid_pxl = target_object.centroid.astype(np.int32)
+        self.centroid_pxl = centroid_pxl
         target_object.plot(blocking=False, path=self.log_dir)
 
         # Calculate the centroid and the target pos w.r.t. world
@@ -944,11 +950,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'init_distance_from_target': (1,),
                 'singulation_distance': (1,),
                 'push_distance_range': (2,),
-                'surface_edges': (4, 2)}
+                'surface_edges': (4, 2),
+                'raw_depth': (480, 640),
+                'centroid_pxl': (2,)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
 
+        # Calculate object poses, bounding boxes and which are above the table
         n_obstacles = self.xml_generator.n_obstacles
         assert n_obstacles <= shapes['object_poses'][0]
         poses, bounding_box, above_table = np.zeros(shapes['object_poses']), np.zeros(
@@ -956,7 +965,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         names = ["target"]
         for i in range(1, n_obstacles + 1):
             names.append("object" + str(i))
-
         for i in range(n_obstacles + 1):
             body_id = get_body_names(self.sim.model).index(names[i])
             poses[i, 0:3] = self.sim.data.body_xpos[body_id]
@@ -986,6 +994,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                      [-self.surface_size[0], self.surface_size[1]],
                                      [self.surface_size[0], -self.surface_size[1]],
                                      [-self.surface_size[0], -self.surface_size[1]]]),
+            'raw_depth': np.zeros(shapes['raw_depth']),
+            'centroid_pxl': np.zeros(shapes['centroid_pxl'])
         }
 
         if not self._target_is_on_table():
@@ -996,6 +1006,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.get_heightmap()
         obs_dict['heightmap_mask'][0, :] = self.heightmap
         obs_dict['heightmap_mask'][1, :] = self.convex_mask
+        obs_dict['raw_depth'] = self.raw_depth
+        obs_dict['centroid_pxl'] = self.centroid_pxl
 
         assert set(obs_dict.keys()) == set(shapes.keys())
 
@@ -1076,11 +1088,23 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     #                       finger_size=self.finger_height)
                     # push.translate(self.obs_dict['object_poses'][0, :2])
 
-                    push = PushTargetRealObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
-                                                         push_distance_range=self.params['push']['distance'],
-                                                         init_distance_range=self.params['push']['target_init_distance'],
-                                                         finger_size=self.finger_height,
-                                                         target_height=self.target_bounding_box[2])
+                    # push = PushTargetRealObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
+                    #                                       push_distance_range=self.params['push']['distance'],
+                    #                                       init_distance_range=self.params['push']['target_init_distance'],
+                    #                                       finger_size=self.finger_height,
+                    #                                       target_height=self.target_bounding_box[2])
+                    # self.init_distance_from_target = push.init_distance_from_target
+                    # push.translate(self.obs_dict['object_poses'][0, :2])
+
+                    push = PushTargetDepthObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
+                                                          push_distance_range=self.params['push']['distance'],
+                                                          init_distance_range=self.params['push']['target_init_distance'],
+                                                          finger_size=self.finger_height,
+                                                          target_height=self.target_bounding_box[2],
+                                                          camera=self.camera,
+                                                          pixels_to_m=self.pixels_to_m,
+                                                          rgb_to_camera_frame=self.rgb_to_camera_frame,
+                                                          camera_pose=get_camera_pose(self.sim, 'xtion'))
                     self.init_distance_from_target = push.init_distance_from_target
                     push.translate(self.obs_dict['object_poses'][0, :2])
 
