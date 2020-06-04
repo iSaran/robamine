@@ -26,7 +26,7 @@ import glfw
 
 from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim, get_observation_dim,
                                          get_distance_of_two_bbox, transform_list_of_points, is_object_above_object,
-                                         predict_collision, get_table_point_cloud, preprocess_real_state, ObstacleAvoidanceLoss)
+                                         predict_collision, get_table_point_cloud, ObstacleAvoidanceLoss)
 from robamine.algo.core import InvalidEnvError
 
 import xml.etree.ElementTree as ET
@@ -934,7 +934,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'init_distance_from_target': (1,),
                 'singulation_distance': (1,),
                 'push_distance_range': (2,),
-                'surface_edge': (2,)}
+                'surface_edges': (4, 2)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
@@ -972,7 +972,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'init_distance_from_target': np.array([self.init_distance_from_target]),
             'singulation_distance': np.array([self.singulation_distance]),
             'push_distance_range': np.array(self.params['push']['distance']),
-            'surface_edge': np.array(self.surface_size.copy()),
+            'surface_edges': np.array([[self.surface_size[0], self.surface_size[1]],
+                                     [-self.surface_size[0], self.surface_size[1]],
+                                     [self.surface_size[0], -self.surface_size[1]],
+                                     [-self.surface_size[0], -self.surface_size[1]]]),
         }
 
         if not self._target_is_on_table():

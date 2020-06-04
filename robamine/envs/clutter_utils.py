@@ -729,38 +729,6 @@ def predict_collision(obs, x, y):
             return True
     return False
 
-def preprocess_real_state(obs_dict, max_init_distance, max_obs_bounding_box, angle=0):
-    what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_angle',
-                   'max_n_objects']
-
-    state = {}
-    for key in what_i_need:
-        state[key] = copy.deepcopy(obs_dict[key])
-
-    # Keep closest objects
-    poses = state['object_poses'][state['object_above_table']]
-    if poses.shape[0] == 0:
-        return state
-
-    objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < (
-            max_init_distance + max_obs_bounding_box + 0.01)
-    state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
-    state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
-    state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]
-    # Rotate
-    poses = state['object_poses'][state['object_above_table']]
-    target_pose = poses[0].copy()
-    poses = transform_poses(poses, target_pose)
-    rotz = np.zeros(7)
-    rotz[3:7] = Quaternion.from_rotation_matrix(rot_z(-angle)).as_vector()
-    poses = transform_poses(poses, rotz)
-    poses = transform_poses(poses, target_pose, target_inv=True)
-    target_pose[3:] = np.zeros(4)
-    target_pose[3] = 1
-    poses = transform_poses(poses, target_pose)
-    state['object_poses'][state['object_above_table']] = poses
-    state['surface_angle'] = angle
-    return state
 
 class ObstacleAvoidanceLoss(nn.Module):
     def __init__(self, distance_range, min_dist_range=[0.002, 0.1], device='cpu'):
@@ -824,3 +792,4 @@ class ObstacleAvoidanceLoss(nn.Module):
         mycmap = plt.get_cmap('winter')
         surf1 = axs.plot_surface(x_, y_, z, cmap=mycmap)
         fig.colorbar(surf1, ax=axs, shrink=0.5, aspect=5)
+
