@@ -1,5 +1,5 @@
 from robamine.algo.core import TrainWorld, EvalWorld, SupervisedTrainWorld
-from robamine.clutter.real_mdp import RealState
+from robamine.clutter.real_mdp import RealState, preprocess_real_state, plot_real_state
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG, Critic
 from robamine.algo.util import EpisodeListData
@@ -55,7 +55,7 @@ def eval_with_render(dir):
     config['env']['params']['log_dir'] = '/tmp'
     config['world']['episodes'] = 10
     world = EvalWorld.load(dir, overwrite_config=config)
-    world.seed_list = np.arange(33, 40, 1).tolist()
+    # world.seed_list = np.arange(33, 40, 1).tolist()
     world.run()
 
 def eval_in_scenes(params, dir, n_scenes=1000):
@@ -89,6 +89,7 @@ def check_transition(params):
 
     params['env']['params']['render'] = True
     params['env']['params']['safe'] = False
+    params['env']['params']['push']['predict_collision'] = True
     env = gym.make(params['env']['name'], params=params['env']['params'])
 
     # seed = 39574883  # seed for scene with obstacles visible
@@ -113,6 +114,7 @@ def check_transition(params):
         # seed = 77269035
         # seed = 17176674
         # seed = 16193743
+        seed = 42736398
         print('Seed:', seed)
         rng = np.random.RandomState()
         rng.seed(seed)
@@ -122,6 +124,14 @@ def check_transition(params):
         while True:
             action = rng.uniform(-1, 1, 4)
             action[0] = 0
+            action = np.array([0, -1, 1])
+            # print('obs_surface egsts', obs['surface_edges'])
+            # new_obs = preprocess_real_state(obs, angle=0.0)
+            # plot_real_state(new_obs)
+            # print('obs_surface egsts new', new_obs['surface_edges'])
+            # new_obs = preprocess_real_state(obs, angle=0.7)
+            # plot_real_state(new_obs)
+            # print('obs_surface egsts new', new_obs['surface_edges'])
             # action_ = np.zeros(action.shape)
             # action_[1] = min_max_scale(action[1], range=[-1, 1], target_range=[-pi, pi])
             # action_[2] = min_max_scale(action[2], range=[-1, 1], target_range=params['env']['params']['push']['distance'])
@@ -198,6 +208,28 @@ def visualize_critic_predictions(exp_dir, model_name='model.pkl'):
 
         plt.show()
 
+        obs, _, _, _ = env.step(action=action)
+
+def visualize_critic_predictions_2d(exp_dir, model_name='model.pkl'):
+    # from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
+
+    params['env']['params']['render'] = True
+    params['env']['params']['safe'] = False
+    params['env']['params']['push']['predict_collision'] = False
+    env = gym.make(params['env']['name'], params=params['env']['params'])
+    seed = np.random.randint(100000000)
+    print('Seed:', seed)
+    obs = env.reset(seed=seed)
+    import math
+
+    splitddpg = SplitDDPG.load(os.path.join(exp_dir, model_name))
+
+    angle = np.linspace(-1, 1, 32)
+    for _ in range(3):
+        for i in range(len(angle)):
+            print('critic value: ', angle[i], ':', splitddpg.q_value(obs, np.array([0, angle[i]])))
+        action = splitddpg.predict(obs)
+        print('action:', action)
         obs, _, _, _ = env.step(action=action)
 
 
@@ -591,7 +623,7 @@ def test_obstacle_avoidance_critic_torch(params):
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
-    exp_dir = 'test'
+    exp_dir = 'robamine_logs_triss_2020.06.03.21.05.03.91297'
 
     yml_name = 'params.yml'
     if hostname == 'dream':
@@ -603,6 +635,7 @@ if __name__ == '__main__':
     with open(yml_name, 'r') as stream:
         params = yaml.safe_load(stream)
 
+    # logging_dir = '/tmp'
     params['world']['logging_dir'] = logging_dir
 
     # Run sth
@@ -612,8 +645,9 @@ if __name__ == '__main__':
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
 
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
-    # check_transition(params)
+    check_transition(params)
     # test(params)
+    # visualize_critic_predictions_2d(os.path.join(params['world']['logging_dir'], exp_dir))
     # visualize_critic_predictions(os.path.join(params['world']['logging_dir'], exp_dir))
 
     # Supervised learning:

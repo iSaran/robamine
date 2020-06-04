@@ -564,8 +564,8 @@ if __name__ == '__main__':
     # merge_collected_scenes(os.path.join(logging_dir, 'supervised_obstacle_avoidance'), ['scenes', 'scenes_2', 'scenes_3', 'scenes_4'])
     # create_dataset_from_scenes(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes_merged'),
                                              # rotations_augmentation=1)
-    train_supervised_actor(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes_merged'))
+    # train_supervised_actor(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes_merged'))
 
     # visualize_actor_obs_output('/home/espa/robamine_logs/supervised_obstacle_avoidance/scenes_merged/robamine_logs_dream_2020.05.31.21.27.00.667786',
     # os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes_merged'))
-    # plot_obs_avoidance(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes'))
+    plot_obs_avoidance(os.path.join(logging_dir, 'supervised_obstacle_avoidance/scenes'))

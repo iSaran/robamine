@@ -25,13 +25,12 @@ class RealState(Feature):
         self.rotate(angle)
         self.principal_corners_plot = self.principal_corners.copy()
         self.surface_size = obs_dict['surface_size']
-        self.surface_edge = obs_dict['surface_edge']
+        self.surface_edges = obs_dict['surface_edges']
         self.coordinates = 'cartesian'
         # Append for table limits
-        rot_2d = np.array([[cos(angle), -sin(angle)], [sin(angle), cos(angle)]])
         rot_2d = np.array([[cos(angle), -sin(angle)],
                            [sin(angle), cos(angle)]])
-        self.surface_edge = np.matmul(rot_2d, self.surface_edge)
+        self.surface_edges = np.transpose(np.matmul(rot_2d, np.transpose(self.surface_edges)))
 
         self.init_distance_from_target = obs_dict['init_distance_from_target'][0]
 
@@ -39,8 +38,8 @@ class RealState(Feature):
             self.coordinates = 'spherical'
             init_shape = self.principal_corners.shape
             self.principal_corners = cartesian2spherical(self.principal_corners.reshape(-1, 3)).reshape(init_shape)
-            self.surface_edge[0] = np.sqrt(self.surface_edge[0] ** 2 + self.surface_edge[1] ** 2)
-            self.surface_edge[1] = np.arctan2(self.surface_edge[1], self.surface_edge[0])
+            self.surface_edges[:, 0] = np.sqrt(self.surface_edges[:, 0] ** 2 + self.surface_edges[:, 1] ** 2)
+            self.surface_edges[:, 1] = np.arctan2(self.surface_edges[:, 1], self.surface_edges[:, 0])
 
         if sort:
             self.sort()
@@ -153,13 +152,13 @@ class RealState(Feature):
                                                             target_range=self.range_norm)
 
         for i in range(2):
-            self.surface_edge[i] = min_max_scale(self.surface_edge[i], range=max_surface_range[i],
+            self.surface_edges[:, i] = min_max_scale(self.surface_edges[:, i], range=max_surface_range[i],
                                               target_range=self.range_norm)
 
     def array(self):
         array = np.concatenate((self.principal_corners, self.range_norm[0] * np.ones(
             (int(self.max_n_objects - self.principal_corners.shape[0]), 4, 3)))).flatten()
-        array = np.append(array, self.surface_edge)
+        array = np.append(array, self.surface_edges.flatten())
         array = np.append(array, self.init_distance_from_target)
 
 
