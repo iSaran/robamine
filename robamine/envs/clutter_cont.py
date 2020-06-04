@@ -800,6 +800,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_heightmap(self):
         self._move_finger_outside_the_table()
+        self.throw_fallen_obstacles_away()
 
         # Grab RGB and depth
         empty_grab = True
@@ -810,13 +811,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.offscreen.render(640, 480, 0)  # TODO: xtion id is hardcoded
             rgb, depth = self.offscreen.read_pixels(640, 480, depth=True)
 
-            rgb = Feature(rgb).crop(193, 193).increase_canvas_size(480, 640).array()
+            rgb = Feature(rgb).array()
 
             # Convert depth (distance from camera) to heightmap (distance from table)
             depth = cv_tools.gl2cv(depth, z_near, z_far)
-            depth = Feature(depth).crop(193, 193).array()
             max_depth = np.max(depth)
-            depth = Feature(depth).increase_canvas_size(480, 640).array()
             depth[depth == 0] = max_depth
             heightmap = max_depth - depth
 
@@ -910,6 +909,17 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         print('Target fell off the table.')
         return False
+
+    def throw_fallen_obstacles_away(self):
+        names = ["target"]
+        n_obstacles = self.xml_generator.n_obstacles
+        for i in range(1, n_obstacles + 1):
+            names.append("object" + str(i))
+        for i in range(n_obstacles + 1):
+            body_id = get_body_names(self.sim.model).index(names[i])
+            if self.sim.data.body_xpos[body_id][2] < 0:
+                self.sim.data.set_joint_qpos(names[i], [100, 100, -100, 1, 0, 0, 0])
+        self.sim_step()
 
     @staticmethod
     def get_obs_shapes():
