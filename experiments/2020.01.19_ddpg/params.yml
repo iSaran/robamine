@@ -1,6 +1,7 @@
 agent:
   name: SplitDDPG
   params:
+    save_heightmaps_disk: False
     batch_size: [32]
     device: cpu
     gamma: 0.9

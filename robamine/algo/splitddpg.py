@@ -53,7 +53,7 @@ default_params = {
         'decay' : 10000,
     }
 }
-
+import h5py
 
 
 class Critic(nn.Module):
@@ -224,6 +224,10 @@ class SplitDDPG(RLAgent):
             self.results['replay_buffer_size'].append(0)
 
         self.max_init_distance = self.params['env_params']['push']['target_init_distance'][1]
+        if self.params.get('save_heightmaps_disk', False):
+            self.file_heightmaps = h5py.File(os.path.join(self.log_dir, 'heightmaps_dataset.h5py'), "a")
+            self.file_heightmaps.create_dataset('heightmap_mask', (5000, 2, 386, 386), dtype='f')
+            self.file_heightmaps_counter = 0
 
     def predict(self, state):
         output = np.zeros(max(self.action_dim) + 1)
@@ -299,6 +303,14 @@ class SplitDDPG(RLAgent):
         else:
             i = 0
         transitions = self._transitions(transition)
+        h = transition.state['heightmap_mask'][0]
+        m = transition.state['heightmap_mask'][1]
+        if self.params.get('save_heightmaps_disk', False):
+            if self.file_heightmaps_counter < 5000:
+                self.file_heightmaps['heightmap_mask'][self.file_heightmaps_counter, :, :, :] = transition.state[
+                    'heightmap_mask'].copy()
+                self.file_heightmaps_counter += 1
+
         for t in transitions:
             self.replay_buffer[i].store(t)
 
