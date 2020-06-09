@@ -28,7 +28,7 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          get_distance_of_two_bbox, transform_list_of_points, is_object_above_object,
                                          predict_collision, ObstacleAvoidanceLoss, PushTargetRealWithObstacleAvoidance,
                                          PushTargetReal, PushTargetRealObjectAvoidance, get_table_point_cloud,
-                                         PushTargetDepthObjectAvoidance, PushObstacle)
+                                         PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -648,6 +648,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.init_distance_from_target = 0.0
         self.raw_depth = None
         self.centroid_pxl = None
+        self.singulation_condition = None
 
     def __del__(self):
         if self.viewer is not None:
@@ -750,6 +751,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         if self.feature_normalization_per == 'episode':
             self.max_object_height = np.max(self.heightmap)
+
+        self.singulation_condition = SingulationCondition(self.finger_length, self.pixels_to_m, finger_max_spread=0.1)
 
         return self.get_obs()
 
@@ -1422,6 +1425,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if obs['object_poses'][0][2] < 0:
             return True, 'fallen'
 
+        # if self.singulation_condition(self.heightmap, self.mask):
         if self.get_real_distance_from_closest_obstacle(obs) > self.singulation_distance:
             self.success = True
             return True, 'singulation'

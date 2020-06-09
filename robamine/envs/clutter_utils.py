@@ -1125,6 +1125,81 @@ class PushObstacle(PushAction2D):
 # Various utils methods
 # ---------------------
 
+class SingulationCondition:
+    def __init__(self, finger_size, pixels_to_m, finger_max_spread, step=2, theta_steps=16):
+        self.patch_size = 2 * int(finger_size / pixels_to_m) + 2
+        self.finger_max_spread = int(finger_max_spread / pixels_to_m)
+        self.step = step
+        self.theta_steps = theta_steps
+
+    def __call__(self, heightmap, mask, plot=False):
+        heightmap_ = np.ones(heightmap.shape, dtype=np.bool)
+        heightmap_[heightmap > 0] = False
+        mask_ = np.ones(mask.shape, dtype=np.bool)
+        mask_[mask > 0] = False
+        # plt.imshow(heightmap_, cmap='gray', vmin=np.min(heightmap_), vmax=np.max(heightmap_))
+        # plt.show()
+        # plt.imshow(mask_, cmap='gray', vmin=np.min(mask_), vmax=np.max(mask_))
+        # plt.show()
+
+        theta = 0
+        theta_ = None
+        while theta < np.pi:
+            center_1 = self._get_obstacle_free_position(mask_, theta)
+            center_2 = self._get_obstacle_free_position(mask_, np.pi + theta)
+            theta += np.pi / self.theta_steps
+            if np.linalg.norm(center_1 - center_2) < self.finger_max_spread:
+                if self.patch(heightmap_, center_1).all() and self.patch(heightmap_, center_2).all():
+                    theta_ = theta
+                    break
+
+        if plot:
+            fig, ax = plt.subplots(1)
+            ax.imshow(heightmap, cmap='gray', vmin=np.min(heightmap), vmax=np.max(heightmap))
+            if theta_ is not None:
+                patch_x = int(center_1[0] - self.patch_size / 2.)
+                patch_y = int(center_1[1] - self.patch_size / 2.)
+                rect = patches.Rectangle((patch_y, patch_x), self.patch_size, self.patch_size, linewidth=1, edgecolor='r', facecolor='none')
+                ax.add_patch(rect)
+                patch_x = int(center_2[0] - self.patch_size / 2.)
+                patch_y = int(center_2[1] - self.patch_size / 2.)
+                rect = patches.Rectangle((patch_y, patch_x), self.patch_size, self.patch_size, linewidth=1, edgecolor='r', facecolor='none')
+                ax.add_patch(rect)
+            plt.show()
+
+        return theta_
+
+    def _get_obstacle_free_position(self, image, theta):
+        center = np.array((int(image.shape[0] / 2), int(image.shape[1] / 2)))
+        r = 0
+        patch_center_result = None
+        while True:
+            patch_center = (center + r * np.array([np.sin(-theta), cos(-theta)])).astype(np.int32)
+            try:
+                if self.patch(image, patch_center).all():
+                    patch_center_result = patch_center
+                    break
+            except AssertionError:
+                break
+            r += self.step
+        return patch_center_result
+
+    def patch(self, map, center, plot=False):
+        """Check if the patch on the image is free from objects"""
+        patch_x = int(center[0] - self.patch_size / 2.)
+        patch_y = int(center[1] - self.patch_size / 2.)
+        assert patch_x >= 0 and patch_y >= 0, 'Patch out of limits.'
+        assert patch_x + self.patch_size < map.shape[1] and patch_y + self.patch_size < map.shape[0], 'Patch out of limits.'
+        patch_image = map[patch_x:patch_x + self.patch_size, patch_y:patch_y + self.patch_size]
+        if plot:
+            fig, ax = plt.subplots(2)
+            ax[0].imshow(patch_image, cmap='gray', vmin=np.min(patch_image), vmax=np.max(patch_image))
+            ax[1].imshow(map, cmap='gray', vmin=np.min(map), vmax=np.max(map))
+            rect = patches.Rectangle((patch_y, patch_x), self.patch_size, self.patch_size, linewidth=1, edgecolor='r', facecolor='none')
+            ax[1].add_patch(rect)
+            plt.show()
+        return patch_image
+
 def get_table_point_cloud(pose, bbox, workspace, density=128, bbox_aug=0.008, plot=False):
     def in_hull(p, hull):
         if not isinstance(hull, Delaunay):
