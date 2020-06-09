@@ -4,7 +4,7 @@ agent:
     actions: [3]
     batch_size: [64, 64]
     device: cpu
-    gamma: 0.95
+    gamma: 0.9
     load_buffers: ''
     load_nets: ''
     replay_buffer_size: 100000
@@ -14,7 +14,7 @@ agent:
       hidden_units: [[400, 300]]
       learning_rate: 0.001
     critic:
-      hidden_units: [[400, 300]]
+      hidden_units: [[500, 500, 500]]
       learning_rate: 0.001
     noise:
       name: Normal
@@ -51,9 +51,9 @@ env:
 #      min_bounding_box: [.02, .02, .005]
 #      max_bounding_box: [.02, .02, .020]
       probability_box: 1.0
-    max_timesteps: 10
+    max_timesteps: 5
     push:
-      distance: [0.05, 0.10]
+      distance: [0.05, 0.07]
       target_init_distance: [0.0, 0.06]
     grasp:
       spread: [0.05, 0.05]

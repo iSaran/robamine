@@ -398,7 +398,7 @@ class PointCloud:
         width, height = depth.shape
         c, r = np.meshgrid(np.arange(height), np.arange(width), sparse=True)
         valid = (depth > 0)
-        z = np.where(valid, depth, 0)
+        z = np.where(valid, -depth, 0)
         x = np.where(valid, z * (c - camera.cx) / camera.f, 0)
         y = np.where(valid, z * (r - camera.cy) / camera.f, 0)
         pcd = np.dstack((x, y, z))

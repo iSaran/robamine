@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.spatial import ConvexHull, Delaunay
 from robamine.utils.orientation import Quaternion, rot_x, rot_y, rot_z
+import matplotlib.pyplot as plt
 
 
 def get_distance_of_two_bbox(pose_1, bbox_1, pose_2, bbox_2, density=0.005):
@@ -63,10 +64,10 @@ def discretize_3d_box(x, y, z, density):
         face = discretize_2d_box(combo[0], combo[1], density)
         face[:, 2] = combo[2]
         if combo[3] == 'y':
-            rot = rot_y(pi / 2)
+            rot = rot_y(np.pi / 2)
             face = np.transpose(np.matmul(rot, np.transpose(face)))
         elif combo[3] == 'x':
-            rot = rot_x(pi / 2)
+            rot = rot_x(np.pi / 2)
             face = np.transpose(np.matmul(rot, np.transpose(face)))
         faces.append(face)
     result = np.concatenate(faces, axis=0)

@@ -508,6 +508,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         finger_mass = get_body_mass(self.sim.model, 'finger1')
         self.pd = PDController.from_mass(mass = finger_mass)
 
+
+
+
+
         moment_of_inertia = get_body_inertia(self.sim.model, 'finger1')
         self.pd_rot = []
         self.pd_rot.append(PDController.from_mass(mass = moment_of_inertia[0], step_response=0.005))
@@ -769,6 +773,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
+        # camera_pose = get_camera_pose(self.sim, 'xtion')
+        # point_cloud = cv_tools.PointCloud().from_depth(depth, self.camera)
+        # point_cloud.transform(np.linalg.inv(camera_pose))
+        # point_cloud.plot()
+
         cv2.imwrite(os.path.join(self.log_dir, 'bgr.png'), bgr)
         cv2.imwrite(os.path.join(self.log_dir, 'heightmap.png'), cv_tools.normalize(heightmap))
         cv2.imwrite(os.path.join(self.log_dir, 'mask.png'), mask)
@@ -839,8 +848,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         translation_pose = target_pose.copy()
         translation_pose[0:3, 0:3] = np.eye(3)
 
-        target_pose[0, 3] = 0.25
-        target_pose[1, 3] = 0.25
+        # target_pose[0, 3] = 0.25
+        # target_pose[1, 3] = 0.25
         target_pose[2, 3] = 0
 
         self.obs_above_table = 0
@@ -860,7 +869,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             for w in range(rotations):
 
-                if plot:
+                if plot and w == 0:
                     fig = plt.figure()
                     ax = fig.add_subplot(111, projection='3d')
                     color = iter(plt.cm.rainbow(np.linspace(0, 1, 10)))
@@ -870,8 +879,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 # rotated_state = np.zeros((self.params['nr_of_obstacles'][1] + 1, 3))
                 for j in range(0, self.obs_above_table + 1):
                     centroid = np.matmul(rot_z(w * step_angle), state[j, 0:3].transpose())
-                    # centroid = np.matmul(np.linalg.inv(target_pose), np.append(centroid, 1.0))[:3]  # transform w.r.t. target
-                    centroid_spehrical = cartesian2shperical(centroid)
+                    # centroid = np.matmul(np.linalg.inv(translation_pose), np.append(centroid, 1.0))[:3]
+                    # if np.linalg.norm(centroid) > 0.1:
+                    #     continue
 
                     bbox = state[j, 7:10]
                     bbox_corners = np.array([[bbox[0], bbox[1], bbox[2]],
@@ -895,8 +905,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                         # bbox_corners_spherical[k] = cartesian2shperical(bbox_corners[k])
 
                     min_id = np.argmin(np.linalg.norm(world_bbox_corners, axis=1))
-                    # if j == 0:
-                    #     min_id = 2
+                    if j == 0:
+                        min_id = 2
                     principal_corners = np.zeros((4, 3))
                     principal_corners[0] = bbox_corners[min_id]
                     principal_corners[1] = np.array([-bbox_corners[min_id][0],
@@ -909,6 +919,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                                      bbox_corners[min_id][1],
                                                      -bbox_corners[min_id][2]])
 
+                    if np.min(np.linalg.norm(world_bbox_corners, axis=1)) > 0.1:
+                        continue
+
                     principal_corners_plot = principal_corners.copy()
 
                     for k in range(principal_corners.shape[0]):
@@ -920,7 +933,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                         principal_corners_plot[k] = principal_corners[k]
                         # principal_corners[k] = cartesian2shperical(principal_corners[k])
 
-                    if plot:
+                    # if np.linalg.norm(principal_corners[0]) > 0.1:
+                    #     continue
+
+                    if plot and w == 0:
                         c = next(color)
                         # ax.scatter(state[j, 0], state[j, 1], state[j, 2], color=c)
 
@@ -932,7 +948,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     rotated_state[j, :] = principal_corners.flatten()
                     # rotated_state[j, :] = centroid
 
-                if plot:
+                if plot and w == 0:
                     ax.axis('equal')
                     plt.show()
 
@@ -961,10 +977,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     # rotated_state[0:self.n_obstacles + 1, 10:12] = (rotated_state[0:self.n_obstacles + 1,
                     #                                               10:12] + np.pi) / (2 * np.pi)
                     # for i in [0, 3, 6, 9]:
-                        # rotated_state[0:self.n_obstacles + 1, i] = min_max_scale(rotated_state[0:self.n_obstacles + 1, i],
-                        #                                                          range=[0, 0.6], target_range=[0, 1])
-                        # rotated_state[0:self.n_obstacles + 1, (i+1):(i+3)] = min_max_scale(rotated_state[0:self.n_obstacles + 1, (i+1):(i+3)],
-                        #                                                          range=[-np.pi, np.pi], target_range=[0, 1])
+                    #     rotated_state[0:self.n_obstacles + 1, i] = min_max_scale(rotated_state[0:self.n_obstacles + 1, i],
+                    #                                                              range=[0, 0.6], target_range=[0, 1])
+                    #     rotated_state[0:self.n_obstacles + 1, (i+1):(i+3)] = min_max_scale(rotated_state[0:self.n_obstacles + 1, (i+1):(i+3)],
+                    #                                                              range=[-np.pi, np.pi], target_range=[0, 1])
                     for i in range(12):
                         if i == 2 or i == 5 or i == 8 or i == 11:
                             rotated_state[0:self.obs_above_table + 1, i] = min_max_scale(
@@ -1142,17 +1158,29 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             push_initial_pos_world = push.get_init_pos() + self.target_pos_vision
             push_final_pos_world = push.get_final_pos() + self.target_pos_vision
 
-            if self.predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
-                self.push_stopped_ext_forces = True
-                return self.sim.data.time
+            # if self.predict_collision(push_initial_pos_world[0], push_initial_pos_world[1]):
+            #     self.push_stopped_ext_forces = True
+            #     return self.sim.data.time
+            #
+            # self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push.z, 1, 0, 0, 0])
+            # self.sim_step()
+            # self.move_joint_to_target('finger1', [None, None, push.z], 0.01)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+            # duration = push.get_duration()
+            #
+            # end = push_final_pos_world[:2]
+            # self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
 
-            self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push.z, 1, 0, 0, 0])
+            init_z = 2 * self.target_bounding_box[2] + 0.05
+            self.sim.data.set_joint_qpos('finger1',
+                                         [push_initial_pos_world[0], push_initial_pos_world[1], init_z, 1, 0, 0, 0])
             self.sim_step()
-            self.move_joint_to_target('finger1', [None, None, push.z], 0.01)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
             duration = push.get_duration()
 
-            end = push_final_pos_world[:2]
-            self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
+            if self.move_joint_to_target('finger1', [None, None, push.z], stop_external_forces=True):
+                end = push_final_pos_world[:2]
+                self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
+            else:
+                self.push_stopped_ext_forces = True
 
         elif primitive == 2 or primitive == 3:
             if primitive == 2:
@@ -1217,7 +1245,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # reward = rescale(reward, 0, 10, range=[-1, 1])
         # reward = self.get_reward_push_target(state, action)
         reward = self.get_reward_real_state_push_target(state, action)
-        reward = rescale(reward, -10, 10, range=[-1, 1])
+        reward = rescale(reward, -30, 10, range=[-1, 1])
         # reward = 0.1 * reward
         if reward > 1 or reward < -1:
             print('reward out of bounds. R =', reward)
@@ -1309,42 +1337,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return reward + extra_penalty
 
-    def get_reward_real_state_push_target(self, observation, action):
-        if self.push_stopped_ext_forces:
-            return -1
-
-        if observation['object_poses'][0][2] < 0:
-            return -1
-
-        dist = self.get_real_distance_from_closest_obstacle(observation)
-        reward = min_max_scale(min(dist, self.singulation_distance), range=[0, self.singulation_distance],
-                               target_range=[-5, 10])
-
-        extra_penalty = 0
-        if int(action[0]) == 0:
-            extra_penalty = -min_max_scale(action[3], range=[-1, 1], target_range=[0, 5])
-
-        extra_penalty += -min_max_scale(action[2], range=[-1, 1], target_range=[0, 1])
-
-        reward += extra_penalty
-
-        return min_max_scale(reward, range=[-10, 10], target_range=[-1, 1])
-
-    # def get_real_distance_from_closest_obstacle(self):
-    #     '''Returns the minimum distance of target from the obstacles'''
-    #     n_objects = int(obs_dict['n_objects'])
-    #     target_pose = obs_dict['object_poses'][0]
-    #     target_bbox = obs_dict['object_bounding_box'][0]
-    #
-    #     distances = 100 * np.ones((int(n_objects),))
-    #     for i in range(1, n_objects):
-    #         obstacle_pose = obs_dict['object_poses'][i]
-    #         obstacle_bbox = obs_dict['object_bounding_box'][i]
-    #
-    #         distances[i] = get_distance_of_two_bbox(target_pose, target_bbox, obstacle_pose, obstacle_bbox)
-    #
-    #     return np.min(distances)
-
     def get_reward_push_target(self, observation, action):
         # Penalize external forces during going downwards
         if self.push_stopped_ext_forces:
@@ -1388,6 +1380,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return reward
 
     def real_terminal_state(self, state):
+        if self.get_real_distance_from_closest_obstacle() > self.singulation_distance:
+            return True
+
         if self.timesteps >= self.max_timesteps:
             return True
 
@@ -1405,16 +1400,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return False
 
-    def get_reward_real_state_push_target(self, observation, action):
+    def get_reward_real_state_push_target(self, state, action):
         if self.push_stopped_ext_forces:
-            return -1
+            return -30
 
-        if observation['object_poses'][0][2] < 0:
-            return -1
+        if state[0][2] < 0:
+            return -10
 
-        dist = self.get_real_distance_from_closest_obstacle(observation)
-        reward = min_max_scale(min(dist, self.singulation_distance), range=[0, self.singulation_distance],
-                               target_range=[-5, 10])
+        # dist = self.get_real_distance_from_closest_obstacle()
+        # reward = min_max_scale(min(dist, self.singulation_distance), range=[0, self.singulation_distance],
+        #                        target_range=[0, 10])
 
         extra_penalty = 0
         if int(action[0]) == 0:
@@ -1422,20 +1417,33 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         extra_penalty += -min_max_scale(action[2], range=[-1, 1], target_range=[0, 1])
 
-        reward += extra_penalty
+        if self.get_real_distance_from_closest_obstacle() > self.singulation_distance:
+            return 10 + extra_penalty
 
-        return min_max_scale(reward, range=[-10, 10], target_range=[-1, 1])
+        # reward += extra_penalty
+        # return -1 + reward
+        return -1 + extra_penalty
 
-    def get_real_distance_from_closest_obstacle(self, obs_dict):
+    def get_real_distance_from_closest_obstacle(self):
         '''Returns the minimum distance of target from the obstacles'''
-        n_objects = int(obs_dict['n_objects'])
-        target_pose = obs_dict['object_poses'][0]
-        target_bbox = obs_dict['object_bounding_box'][0]
+        n_obstacles = self.xml_generator.n_obstacles
+        names = []
+        for i in range(n_obstacles):
+            names.append("object" + str(i + 1))
 
-        distances = 100 * np.ones((int(n_objects),))
-        for i in range(1, n_objects):
-            obstacle_pose = obs_dict['object_poses'][i]
-            obstacle_bbox = obs_dict['object_bounding_box'][i]
+        body_id = get_body_names(self.sim.model).index('target')
+        target_pose = np.zeros(7)
+        target_pose[0:3] = self.sim.data.body_xpos[body_id]
+        target_pose[3:] = self.sim.data.body_xquat[body_id]
+        target_bbox = get_geom_size(self.sim.model, 'target') - 0.003
+
+        distances = 100 * np.ones((int(n_obstacles),))
+        for i in range(0, n_obstacles):
+            body_id = get_body_names(self.sim.model).index(names[i])
+            obstacle_pose = np.zeros(7)
+            obstacle_pose[0:3] = self.sim.data.body_xpos[body_id]
+            obstacle_pose[3:] = self.sim.data.body_xquat[body_id]
+            obstacle_bbox = get_geom_size(self.sim.model, names[i])
 
             distances[i] = get_distance_of_two_bbox(target_pose, target_bbox, obstacle_pose, obstacle_bbox)
 
@@ -1469,7 +1477,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if state[0, 2] < 0:
             return True
 
-        if self.get_real_distance_from_closest_obstacle(state) > self.singulation_distance:
+        if self.get_real_distance_from_closest_obstacle() > self.singulation_distance:
+            self.success = True
             return True
         #
         # if cv_tools.Feature(self.mask_obstacles).crop(self.singulation_area[0], self.singulation_area[1])\
@@ -1825,19 +1834,35 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         else:
             state = None
 
-    def predict_collision(self, obs, x, y):
-        n_objects = int(obs['n_objects'])
+    def predict_collision(self, x, y):
         sphere_pose = np.zeros(7)
         sphere_pose[0] = x
         sphere_pose[1] = y
         sphere_pose[2] = 0.5
         sphere_pose[3] = 1  # identity orientation
-        sphere_bbox = obs['finger_height'][0] * np.ones(3)
-        for i in range(0, n_objects):
-            object_pose = obs['object_poses'][i]
-            object_bbox = obs['object_bounding_box'][i]
-            if is_object_above_object(object_pose, object_bbox, sphere_pose, sphere_bbox, density=0.0025):
-                return True
+        sphere_bbox = self.finger_height * np.ones(3)
+
+        n_obstacles = self.xml_generator.n_obstacles
+        names = []
+        for i in range(n_obstacles):
+            names.append("object" + str(i + 1))
+
+        body_id = get_body_names(self.sim.model).index('target')
+        target_pose = np.zeros(7)
+        target_pose[0:3] = self.sim.data.body_xpos[body_id]
+        target_pose[3:] = self.sim.data.body_xquat[body_id]
+        target_bbox = get_geom_size(self.sim.model, 'target') - 0.003
+        if is_object_above_object(target_pose, target_bbox, sphere_pose, sphere_bbox, density=0.0025):
+            return True
+
+        for i in range(0, n_obstacles):
+            body_id = get_body_names(self.sim.model).index(names[i])
+            obstacle_pose = np.zeros(7)
+            obstacle_pose[0:3] = self.sim.data.body_xpos[body_id]
+            obstacle_pose[3:] = self.sim.data.body_xquat[body_id]
+            obstacle_bbox = get_geom_size(self.sim.model, names[i])
+            if is_object_above_object(obstacle_pose, obstacle_bbox, sphere_pose, sphere_bbox, density=0.0025):
+                    return True
         return False
 
     def check_target_occlusion_2(self, eps=0.003):

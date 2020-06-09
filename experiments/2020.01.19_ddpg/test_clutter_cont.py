@@ -16,7 +16,7 @@ def run():
     # -----------
     action = np.array([0, -0.5, 0, -1])
     # env.reset()
-    env.reset()
+    env.reset(seed=0)
     env.step(action)
 
     action = np.array([0, -0.5, 0, -1])
