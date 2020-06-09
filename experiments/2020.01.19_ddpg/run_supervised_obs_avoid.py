@@ -1,5 +1,4 @@
 from robamine.algo.core import SupervisedTrainWorld
-from robamine.clutter.real_mdp import RealState
 from robamine.algo.core import Agent
 from robamine import rb_logging
 import logging
@@ -19,7 +18,7 @@ from robamine.utils.memory import get_batch_indices
 from robamine.utils.orientation import transform_poses, Quaternion, rot_z
 from math import pi, floor, sqrt
 
-from robamine.envs.clutter_utils import get_table_point_cloud
+from robamine.envs.clutter_utils import get_table_point_cloud, RealState
 
 logger = logging.getLogger('robamine')
 import h5py
@@ -333,7 +332,6 @@ def merge_collected_scenes(dir, names):
 
 
 def create_dataset_from_scenes(dir, rotations_augmentation=1, density=128):
-    from robamine.clutter.real_mdp import RealState
     import copy
     import h5py
     import matplotlib.pyplot as plt

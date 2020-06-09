@@ -26,7 +26,10 @@ import glfw
 
 from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim, get_observation_dim,
                                          get_distance_of_two_bbox, transform_list_of_points, is_object_above_object,
-                                         predict_collision, ObstacleAvoidanceLoss)
+                                         predict_collision, ObstacleAvoidanceLoss, PushTargetRealWithObstacleAvoidance,
+                                         PushTargetReal, PushTargetRealObjectAvoidance, get_table_point_cloud,
+                                         PushTargetDepthObjectAvoidance)
+
 from robamine.algo.core import InvalidEnvError
 
 import xml.etree.ElementTree as ET
@@ -40,9 +43,6 @@ from time import sleep
 import matplotlib.pyplot as plt
 from robamine.utils.cv_tools import Feature
 
-from robamine.clutter.real_mdp import (PushTargetRealWithObstacleAvoidance, PushTargetReal,
-                                       PushTargetRealObjectAvoidance, get_table_point_cloud,
-                                       PushTargetDepthObjectAvoidance)
 import torch
 
 def exp_reward(x, max_penalty, min, max):

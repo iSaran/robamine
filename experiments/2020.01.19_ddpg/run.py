@@ -1,5 +1,4 @@
 from robamine.algo.core import TrainWorld, EvalWorld, SupervisedTrainWorld
-from robamine.clutter.real_mdp import RealState, preprocess_real_state, plot_real_state
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG, Critic
 from robamine.algo.util import EpisodeListData
@@ -19,7 +18,8 @@ import torch.nn as nn
 import torch.optim as optim
 
 from robamine.algo.util import get_agent_handle
-from robamine.envs.clutter_utils import plot_point_cloud_of_scene, discretize_2d_box
+from robamine.envs.clutter_utils import (plot_point_cloud_of_scene, discretize_2d_box, PushTargetFeature, RealState,
+                                         preprocess_real_state, plot_real_state, PushTargetRealWithObstacleAvoidance)
 import matplotlib.pyplot as plt
 from robamine.utils.math import min_max_scale
 from robamine.utils.memory import get_batch_indices
@@ -380,7 +380,6 @@ def collect_scenes_real_state(params, dir_to_save, n_scenes=1000):
 
 def create_dataset_from_scenes(dir, n_x=16, n_y=16):
     from robamine.envs.clutter_utils import predict_collision
-    from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance
 
     def reward(obs_dict, p, distance):
         if predict_collision(obs_dict, p[0], p[1]):
@@ -389,7 +388,6 @@ def create_dataset_from_scenes(dir, n_x=16, n_y=16):
         reward = 1 - min_max_scale(distance, range=[-1, 1], target_range=[0, 1])
         return reward
 
-    from robamine.clutter.real_mdp import RealState
     with open(os.path.join(dir, 'scenes.pkl'), 'rb') as file:
         data, params = pickle.load(file)
 
@@ -464,7 +462,6 @@ def train_supervised_critic(dir, dataset_name):
 
 def visualize_supervised_output(model_dir, scenes_dir):
     from robamine.envs.clutter_utils import predict_collision
-    from robamine.clutter.real_mdp import PushTargetRealWithObstacleAvoidance
     def reward(obs_dict, p, distance):
         if predict_collision(obs_dict, p[0], p[1]):
             return -1
