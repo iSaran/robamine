@@ -585,6 +585,78 @@ def test_obstacle_avoidance_critic_torch(params):
     q_value = obstacle_avoidance_critic(batch_action, distance_range, poses, bbox, bbox_aug=0.008, density=128)
     print('q value', q_value)
 
+# Train VAE for visual observation dimensionality reduction
+
+
+def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
+    print('Collecting heightmaps of scenes...')
+    from robamine.envs.clutter_cont import ClutterContWrapper
+    from robamine.envs.clutter_utils import InvalidEnvError
+    import copy
+
+    def safe_reset(env):
+        seed = np.random.randint(1000000000)
+        try:
+            obs = env.reset(seed=seed)
+        except InvalidEnvError as e:
+            print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
+            return safe_reset(env)
+        return obs, seed
+
+    params['env']['params']['render'] = False
+    params['env']['params']['push']['predict_collision'] = True
+    params['env']['params']['push']['target_init_distance'][1] = 0.15
+    params['env']['params']['safe'] = False
+    params['env']['params']['target']['randomize_pos'] = False
+    env = ClutterContWrapper(params=params['env']['params'])
+
+    real_states = []
+    keywords = ['heightmap_mask']
+
+    i = 0
+    while i < n_scenes:
+        print('Collecting scenes. Scene: ', i, 'out of', n_scenes)
+        scene = {}
+        obs, seed = safe_reset(env)
+        scene['seed'] = seed
+        for key in keywords:
+            scene[key] = copy.deepcopy(obs[key])
+        real_states.append(scene)
+        plt.imsave(os.path.join(dir_to_save, 'screenshots/' + str(i) + '_screenshot.png'), env.env.bgr)
+        i += 1
+
+        print('Collecting scenes. Scene: ', i, 'out of', n_scenes)
+        action = np.array([0, np.random.uniform(-1, 1), 1, 1])
+        collision = True
+        tries = 0
+        failed = False
+        while collision:
+            try:
+                obs, _, done, info = env.step(action)
+            except InvalidEnvError as e:
+                failed = True
+                break
+            tries += 1
+            collision = info['collision']
+            if tries > 10:
+                failed = True
+                break
+
+        if not failed:
+            scene = {}
+            scene['seed'] = seed
+            for key in keywords:
+                scene[key] = copy.deepcopy(obs[key])
+            real_states.append(scene)
+            plt.imsave(os.path.join(dir_to_save, 'screenshots/' + str(i) + '_screenshot.png'), env.env.bgr)
+            i += 1
+        else:
+            print('Collecting scenes. Scene: ', i, 'failed, producing new')
+
+    with open(os.path.join(dir_to_save, 'scenes.pkl'), 'wb') as file:
+        pickle.dump([real_states, params], file)
+
+
 if __name__ == '__main__':
     hostname = socket.gethostname()
     exp_dir = 'test'
