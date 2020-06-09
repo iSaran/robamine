@@ -56,9 +56,9 @@ env:
     max_timesteps: 5
     real_state: True
     all_equal_height_prob: 0.0
-    finger_size:
-      - 0.005
-      - 0.005
+    finger:
+      size: 0.005
+      type: sphere
     nr_of_obstacles:
       - 5
       - 8
