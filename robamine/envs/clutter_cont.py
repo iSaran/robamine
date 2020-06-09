@@ -28,7 +28,7 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          get_distance_of_two_bbox, transform_list_of_points, is_object_above_object,
                                          predict_collision, ObstacleAvoidanceLoss, PushTargetRealWithObstacleAvoidance,
                                          PushTargetReal, PushTargetRealObjectAvoidance, get_table_point_cloud,
-                                         PushTargetDepthObjectAvoidance)
+                                         PushTargetDepthObjectAvoidance, PushObstacle)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -169,21 +169,21 @@ class PushTarget(Push):
 
         return fig, ax
 
-class PushObstacle(Push):
-    def __init__(self, theta, push_distance, heightmap, mask, observation_boundaries, push_distance_limits, finger_size = 0.02, pixels_to_m=1):
-        super().__init__(theta=theta, push_distance=push_distance, heightmap=heightmap, mask=mask,
-                         push_distance_limits=push_distance_limits, observation_boundaries=observation_boundaries,
-                         pixels_to_m=pixels_to_m)
-
-        self.push_distance = push_distance
-        self.theta = min_max_scale(theta, range=[-1, 1], target_range=[-math.pi, math.pi])
-        object_height = self.target_object.get_bounding_box()[2]
-        self.z = 2 * object_height + finger_size + 0.004
-        self.push_line_segment = self._get_push_line_segment(push_distance_limits)
-
-    def get_init_pos(self):
-        return np.array([0.0, 0.0, self.z])
-
+# class PushObstacle(Push):
+#     def __init__(self, theta, push_distance, heightmap, mask, observation_boundaries, push_distance_limits, finger_size = 0.02, pixels_to_m=1):
+#         super().__init__(theta=theta, push_distance=push_distance, heightmap=heightmap, mask=mask,
+#                          push_distance_limits=push_distance_limits, observation_boundaries=observation_boundaries,
+#                          pixels_to_m=pixels_to_m)
+#
+#         self.push_distance = push_distance
+#         self.theta = min_max_scale(theta, range=[-1, 1], target_range=[-math.pi, math.pi])
+#         object_height = self.target_object.get_bounding_box()[2]
+#         self.z = 2 * object_height + finger_size + 0.004
+#         self.push_line_segment = self._get_push_line_segment(push_distance_limits)
+#
+#     def get_init_pos(self):
+#         return np.array([0.0, 0.0, self.z])
+#
 class GraspTarget(Primitive):
     def __init__(self, theta, heightmap, mask, finger_size, pixels_to_m):
         theta_ = min_max_scale(theta, range=[-1, 1], target_range=[0, math.pi])
@@ -1123,12 +1123,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             elif primitive == 1:
                 push = PushObstacle(theta=action[1],
                                     push_distance=1,  # use maximum distance for now
-                                    heightmap=self.heightmap,
-                                    mask=self.mask,
-                                    observation_boundaries=np.array(self.max_singulation_area) * self.pixels_to_m,
-                                    push_distance_limits=self.params['push']['distance'],
-                                    finger_size=self.finger_length,
-                                    pixels_to_m=self.pixels_to_m)
+                                    push_distance_range=self.params['push']['distance'],
+                                    object_height=2 * self.target_bounding_box[2],
+                                    finger_height=self.finger_height)
+                push.translate(self.obs_dict['object_poses'][0, :2])
 
             # Transform pushing from target frame to world frame
 
@@ -1141,7 +1139,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 push_final_pos_world = push.get_final_pos()
 
             if self.params['push'].get('predict_collision', True):
-                if predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
+                if primitive == 0 and predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
                     self.push_stopped_ext_forces = True
                     print('Collision detected!')
                     return self.sim.data.time

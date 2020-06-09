@@ -1103,6 +1103,25 @@ class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
                                                              object_height=target_height, finger_size=finger_size)
 
 
+
+class PushObstacle(PushAction2D):
+    def __init__(self, theta, push_distance, push_distance_range, object_height, finger_height):
+        self.push_distance_range = push_distance_range
+        theta = min_max_scale(theta, range=[-1, 1], target_range=[-np.pi, np.pi])
+        self.push_distance = min_max_scale(push_distance, range=[-1, 1], target_range=push_distance_range)
+        p1 = np.zeros(2)
+        p2 = self.push_distance * np.array([cos(theta), sin(theta)])
+
+        # Calculate height (z) of the push
+        # --------------------------------
+        if object_height - finger_height > 0:
+            offset = object_height - finger_height
+        else:
+            offset = 0
+        z = float(finger_height + offset + 0.005)
+
+        super(PushObstacle, self).__init__(p1, p2, z)
+
 # Various utils methods
 # ---------------------
 
