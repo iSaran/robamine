@@ -666,6 +666,8 @@ if __name__ == '__main__':
         logging_dir = '/home/espa/robamine_logs/'
     elif hostname == 'triss':
         logging_dir = '/home/iason/robamine_logs/2020.01.16.split_ddpg'
+    elif hostname == 'iti-479':
+        logging_dir = '/home/mkiatos/robamine/logs/'
     else:
         raise ValueError()
     with open(yml_name, 'r') as stream:
