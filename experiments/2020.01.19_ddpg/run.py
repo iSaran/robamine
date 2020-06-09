@@ -673,20 +673,23 @@ if __name__ == '__main__':
     with open(yml_name, 'r') as stream:
         params = yaml.safe_load(stream)
 
+    # logging_dir = '/tmp'
     params['world']['logging_dir'] = logging_dir
 
-    # Run sth
-#
-    # train(params)
-    #
-    # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
+    # Basic runs
+    # ----------
 
+    # train(params)
+    # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
     # test(params)
+    # visualize_critic_predictions_2d(os.path.join(params['world']['logging_dir'], exp_dir))
     # visualize_critic_predictions(os.path.join(params['world']['logging_dir'], exp_dir))
 
-    # Supervised learning:
+    # Supervised learning
+    # -------------------
+
     # collect_scenes_real_state(params, os.path.join(logging_dir, 'supervised_scenes/testing'), n_scenes=30)
     # create_dataset_from_scenes(os.path.join(logging_dir, 'supervised_scenes/training'), 16, 16)
     # create_dataset_from_scenes(os.path.join(logging_dir, 'supervised_scenes/training'), 16, 16)
@@ -697,3 +700,11 @@ if __name__ == '__main__':
     # visualize_supervised_output(model_dir=os.path.join(logging_dir, 'supervised_scenes/training/robamine_logs_triss_2020.05.24.15.32.16.980679'),
     #                             scenes_dir=os.path.join(logging_dir, 'supervised_scenes/testing'))
 
+
+    # VAE training
+    # ------------
+
+    VAE_collect_scenes(params,
+                       dir_to_save='/home/iason/robamine_logs/2020.01.16.split_ddpg/VAE',
+                       n_scenes=50)
+    # VAE_create_dataset('/home/iason/robamine_logs/2020.01.16.split_ddpg/VAE')
