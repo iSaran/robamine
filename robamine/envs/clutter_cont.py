@@ -295,10 +295,10 @@ class ClutterXMLGenerator(XMLGenerator):
         # Auxiliary variables
         self.surface_size = np.zeros(2)
 
-    def get_object(self, name, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.4, 0.6, 1.0], size=[0.01, 0.01, 0.01], mass=None):
+    def get_object(self, name, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.4, 0.6, 1.0], size=[0.01, 0.01, 0.01], mass=None, geom_pos=[0.0, 0.0, 0.0]):
         body = self.get_body(name=name, pos=pos, quat=quat)
         joint = self.get_joint(name=name, type='free')
-        geom = self.get_geom(name=name, type=type, size=size, rgba=rgba, mass=mass)
+        geom = self.get_geom(name=name, pos=geom_pos, type=type, size=size, rgba=rgba, mass=mass)
         body.append(joint)
         body.append(geom)
         return body
@@ -309,8 +309,15 @@ class ClutterXMLGenerator(XMLGenerator):
     def get_obstacle(self, index, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.0, 1.0, 1.0], size=[0.01, 0.01, 0.01]):
         return self.get_object(name='object' + str(index), type=type, pos=pos, quat=quat, rgba=rgba, size=size, mass=0.05)
 
-    def get_finger(self, index, type='sphere', rgba=[0.3, 0.3, 0.3, 1.0], size=[0.005, 0.005, 0.005]):
-        return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size, mass=0.1)
+    def get_finger(self, index, type='sphere', rgba=[0.3, 0.3, 0.3, 1.0], size=0.005):
+        pos_ = [0.0, 0.0, 0.0]
+        if type == 'sphere':
+            size_ = [size, size, size]
+        elif type == 'box':
+            height = 0.04
+            size_ = [size, size, height]
+            pos_ = [0.0, 0.0, height - size]
+        return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size_, mass=0.1)
 
     def get_table(self, rgba=[0.2, 0.2, 0.2, 1.0], size=[0.25, 0.25, 0.01], walls=False):
         body = self.get_body(name='table', pos=[0.0, 0.0, -size[2]])
@@ -343,12 +350,11 @@ class ClutterXMLGenerator(XMLGenerator):
         # Setup fingers
         # -------------
 
-        finger_size = self.rng.uniform(self.params['finger_size'][0], self.params['finger_size'][1])
-        finger = self.get_finger(1, size=[finger_size, finger_size, finger_size])
+        finger_size = self.params['finger']['size']
+        finger = self.get_finger(1, type=self.params['finger']['type'], size=self.params['finger']['size'])
         self.worldbody.append(finger)
 
-        finger_size = self.rng.uniform(self.params['finger_size'][0], self.params['finger_size'][1])
-        finger = self.get_finger(2, size=[finger_size, finger_size, finger_size])
+        finger = self.get_finger(2, type=self.params['finger']['type'], size=self.params['finger']['size'])
         self.worldbody.append(finger)
 
         # Setup surface
@@ -752,7 +758,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Update state variables that need to be updated only once
         self.finger_length = get_geom_size(self.sim.model, 'finger1')[0]
-        self.finger_height = get_geom_size(self.sim.model, 'finger1')[0]  # same as length, its a sphere
+        self.finger_height = get_geom_size(self.sim.model, 'finger1')[2]  # same as length, its a sphere
         self.target_bounding_box = get_geom_size(self.sim.model, 'target')
         self.surface_size = np.array([get_geom_size(self.sim.model, 'table')[0], get_geom_size(self.sim.model, 'table')[1]])
 
@@ -957,6 +963,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         max_n_obstacles = 10  # TODO: the maximum possible number of obstacles is hardcoded.
         return {'target_bounding_box': (3,),
                 'finger_height': (1,),
+                'finger_length': (1,),
                 'observation_area': (2,),
                 'max_singulation_area': (2,),
                 'target_distances_from_limits': (4,),
@@ -997,6 +1004,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         obs_dict = {
             'target_bounding_box': self.target_bounding_box_vision,
             'finger_height': np.array([self.finger_height]),
+            'finger_length': np.array([self.finger_length]),
             'observation_area': np.array(self.observation_area),
             'max_singulation_area': np.array(self.max_singulation_area),
             'target_distances_from_limits': np.array(self.target_distances_from_limits_vision),
@@ -1123,7 +1131,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     push = PushTargetDepthObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
                                                           push_distance_range=self.params['push']['distance'],
                                                           init_distance_range=self.params['push']['target_init_distance'],
-                                                          finger_size=self.finger_height,
+                                                          finger_length=self.finger_length,
+                                                          finger_height=self.finger_height,
                                                           target_height=self.target_bounding_box[2],
                                                           camera=self.camera,
                                                           pixels_to_m=self.pixels_to_m,
@@ -1602,6 +1611,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim.data.ctrl[i] = self.pd.get_control(trajectory[i].pos(self.time) - self.finger_pos[i], trajectory[i].vel(self.time) - self.finger_vel[i])
                 self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
+            # Overwrite orientation of the finger to avoid the initial instability in orientation control
+            current_qpos = self.sim.data.qpos
+            index = self.sim.model.get_joint_qpos_addr('finger1')
+            current_qpos[index[0] + 3] = desired_quat.w
+            current_qpos[index[0] + 4] = desired_quat.x
+            current_qpos[index[0] + 5] = desired_quat.y
+            current_qpos[index[0] + 6] = desired_quat.z
             self.sim_step()
 
             if stop_external_forces and (self.finger_external_force_norm > 0.01):
@@ -1630,6 +1646,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     self.sim.data.ctrl[i] = self.pd.get_control(new_trajectory[i].pos(self.time) - self.finger_pos[i], new_trajectory[i].vel(self.time) - self.finger_vel[i])
                     self.sim.data.ctrl[i + 3] = self.pd_rot[i].get_control(quat_error[i], - self.finger_vel[i + 3])
 
+                current_qpos = self.sim.data.qpos
+                index = self.sim.model.get_joint_qpos_addr('finger1')
+                current_qpos[index[0] + 3] = desired_quat.w
+                current_qpos[index[0] + 4] = desired_quat.x
+                current_qpos[index[0] + 5] = desired_quat.y
+                current_qpos[index[0] + 6] = desired_quat.z
                 self.sim_step()
 
             return False

@@ -1106,7 +1106,7 @@ class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
 
 class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
     def __init__(self, obs_dict, angle, push_distance, push_distance_range, init_distance_range, target_height,
-                 finger_size, pixels_to_m, camera, rgb_to_camera_frame, camera_pose):
+                 finger_length, finger_height, pixels_to_m, camera, rgb_to_camera_frame, camera_pose):
         angle_ = min_max_scale(angle, range=[-1, 1], target_range=[-np.pi, np.pi])
         push_distance_ = min_max_scale(push_distance, range=[-1, 1], target_range=push_distance_range)
 
@@ -1117,7 +1117,7 @@ class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
         raw_depth_ = obs_dict['raw_depth'].copy()
         table_depth = np.max(raw_depth_)
 
-        patch_size = 2 * int(finger_size / pixels_to_m) + 2
+        patch_size = 2 * int(finger_length / pixels_to_m) + 2
         centroid_pxl = np.zeros(2, dtype=np.int32)
         centroid_pxl[0] = obs_dict['centroid_pxl'][1]
         centroid_pxl[1] = obs_dict['centroid_pxl'][0]
@@ -1154,7 +1154,7 @@ class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
         self.init_distance_from_target = min_max_scale(dist_from_target, range=[0, max_init_distance],
                                                        target_range=[-1, 1])
         super(PushTargetDepthObjectAvoidance, self).__init__(x_init=x_init, y_init=y_init, push_distance=push_distance_,
-                                                             object_height=target_height, finger_size=finger_size)
+                                                             object_height=target_height, finger_size=finger_height)
 
 
 
@@ -1567,7 +1567,7 @@ def predict_collision(obs, x, y):
     sphere_pose[1] = y
     sphere_pose[2] = 0.5
     sphere_pose[3] = 1  # identity orientation
-    sphere_bbox = obs['finger_height'][0] * np.ones(3)
+    sphere_bbox = obs['finger_length'][0] * np.ones(3)
     for i in range(0, n_objects):
         object_pose = obs['object_poses'][obs['object_above_table']][i]
         object_bbox = obs['object_bounding_box'][obs['object_above_table']][i]
