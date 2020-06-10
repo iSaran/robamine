@@ -2,7 +2,7 @@ from robamine.algo.core import TrainWorld, EvalWorld, SupervisedTrainWorld
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG, Critic
 from robamine.algo.util import EpisodeListData
-from robamine.algo.core import Agent
+from robamine.algo.core import Agent, RLAgent
 from robamine import rb_logging
 import logging
 import yaml
@@ -585,7 +585,59 @@ def test_obstacle_avoidance_critic_torch(params):
     q_value = obstacle_avoidance_critic(batch_action, distance_range, poses, bbox, bbox_aug=0.008, density=128)
     print('q value', q_value)
 
+
+# Eval clutter in random policy
+# -----------------------------
+
+class RandomPolicy(RLAgent):
+    def __init__(self):
+        super(RandomPolicy, self).__init__(state_dim=None, action_dim=None, name='RandomPolicy')
+        self.params = params
+        self.rng = np.random.RandomState()
+        self.actions = [2]
+
+    def explore(self, state):
+        # i = self.rng.randint(0, len(self.actions))
+        i = 0
+        output = np.zeros(self.actions[i] + 1)
+        action = self.rng.uniform(-1, 1, self.actions[0])
+        output[0] = i
+        output[1:(self.actions[i] + 1)] = action
+        return output
+
+    def predict(self, state):
+        return self.explore(state)
+
+    def learn(self, transition):
+        pass
+
+    def q_value(self, state, action):
+        return 0.0
+
+    def seed(self, seed):
+        self.rng.seed(seed)
+
+    def save(self, path):
+        pass
+
+def eval_random_actions(params, n_scenes=1000):
+    rb_logging.init(directory=params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
+
+    params['env']['params']['render'] = True
+    params['env']['params']['safe'] = False
+    params['env']['params']['hardcoded_primitive'] = 0
+    params['env']['params']['log_dir'] = params['world']['logging_dir']
+    params['world']['episodes'] = n_scenes
+
+    policy = RandomPolicy()
+    world = EvalWorld(agent=policy, env=params['env'], params=params['world'])
+    world.seed_list = np.arange(9, n_scenes, 1).tolist()
+    world.run()
+    print('Logging dir:', params['world']['logging_dir'])
+
+
 # Train VAE for visual observation dimensionality reduction
+# ---------------------------------------------------------
 
 
 def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
@@ -751,6 +803,7 @@ if __name__ == '__main__':
     # visualize_supervised_output(model_dir=os.path.join(logging_dir, 'supervised_scenes/training/robamine_logs_triss_2020.05.24.15.32.16.980679'),
     #                             scenes_dir=os.path.join(logging_dir, 'supervised_scenes/testing'))
 
+    # eval_random_actions(params, n_scenes=10)
 
     # VAE training
     # ------------
