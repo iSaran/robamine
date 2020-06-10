@@ -312,10 +312,27 @@ class ClutterXMLGenerator(XMLGenerator):
     def get_finger(self, index, type='sphere', rgba=[0.3, 0.3, 0.3, 1.0], size=[0.005, 0.005, 0.005]):
         return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size, mass=0.1)
 
-    def get_table(self, rgba=[0.2, 0.2, 0.2, 1.0], size=[0.25, 0.25, 0.01]):
+    def get_table(self, rgba=[0.2, 0.2, 0.2, 1.0], size=[0.25, 0.25, 0.01], walls=False):
         body = self.get_body(name='table', pos=[0.0, 0.0, -size[2]])
         geom = self.get_geom(name='table', type='box', size=size, rgba=rgba)
         body.append(geom)
+        if walls:
+            walls_height = 0.03
+            walls_width = 0.01
+            rgba_ = rgba.copy()
+            rgba_[-1] = 0.4
+            geom = self.get_geom(name='table_wall_x', type='box', size=[size[0], walls_width, walls_height], rgba=rgba_,
+                                 pos=[0, size[1] + walls_width, walls_height])
+            body.append(geom)
+            geom = self.get_geom(name='table_wall_x2', type='box', size=[size[0], walls_width, walls_height],
+                                 rgba=rgba_, pos=[0, -size[1] - walls_width, walls_height])
+            body.append(geom)
+            geom = self.get_geom(name='table_wall_y', type='box', size=[walls_width, size[1], walls_height], rgba=rgba_,
+                                 pos=[size[0] + walls_width, 0, walls_height])
+            body.append(geom)
+            geom = self.get_geom(name='table_wall_y2', type='box', size=[walls_width, size[1], walls_height],
+                                 rgba=rgba_, pos=[-size[0] - walls_width, 0, walls_height])
+            body.append(geom)
         return body
 
     def seed(self, seed):
@@ -339,7 +356,8 @@ class ClutterXMLGenerator(XMLGenerator):
 
         self.surface_size[0] = self.rng.uniform(surface_length_range[0], surface_length_range[1])
         self.surface_size[1] = self.rng.uniform(surface_width_range[0], surface_width_range[1])
-        table = self.get_table(size=[self.surface_size[0], self.surface_size[1], 0.01])
+        table = self.get_table(size=[self.surface_size[0], self.surface_size[1], 0.01],
+                               walls=self.params.get('walls', False))
         self.worldbody.append(table)
 
         # Randomize target object
