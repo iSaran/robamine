@@ -187,7 +187,7 @@ class SplitDDPG(RLAgent):
             self.info['q_values'].append(0.0)
 
         self.exploration_noise = []
-        for i in range(len(self.action_dim)):
+        for i in range(self.nr_network):
             if self.params['noise']['name'] == 'OU':
                 self.exploration_noise.append(OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim[i]), sigma=self.params['noise']['sigma']))
             elif self.params['noise']['name'] == 'Normal':
@@ -232,12 +232,7 @@ class SplitDDPG(RLAgent):
     def predict(self, state):
         output = np.zeros(max(self.action_dim) + 1)
         max_q = -1e10
-        i = 0
         for i in range(self.nr_network):
-            if self.hardcoded_primitive < 0:
-                k = i
-            else:
-                k = self.hardcoded_primitive
             state_ = preprocess_real_state(state, self.max_init_distance, 0)
             real_state = RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                    translate_wrt_target=False).array()
@@ -250,10 +245,7 @@ class SplitDDPG(RLAgent):
                 max_a = a.cpu().detach().numpy()
                 max_primitive = i
 
-        if self.hardcoded_primitive < 0:
-            output[0] = max_primitive
-        else:
-            output[0] = int(self.hardcoded_primitive)
+        output[0] = self.network_to_primitive_index(max_primitive)
         output[1:(self.action_dim[max_primitive] + 1)] = max_a
         return output
 
@@ -265,34 +257,38 @@ class SplitDDPG(RLAgent):
         epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
         self.results['epsilon'] = epsilon
 
+        output = np.zeros(max(self.action_dim) + 1)
         if (self.rng.uniform(0, 1) >= epsilon) and self.preloading_finished:
             pred = self.predict(state)
             i = int(pred[0])
-            action = pred[1:self.action_dim[i] + 1]
-            action += self.exploration_noise[i]()
+            action = pred[1:self.action_dim[self.primitive_to_network_index(i)] + 1]
+            action += self.exploration_noise[self.primitive_to_network_index(i)]()
+            action[action > 1] = 1
+            action[action < -1] = -1
+            output[0] = i
+            output[1:(self.action_dim[self.primitive_to_network_index(i)] + 1)] = action
         else:
-            i = self.rng.randint(0, len(self.action_dim))
+            i = self.rng.randint(0, self.nr_network)
             action = self.rng.uniform(-1, 1, self.action_dim[i])
+            action[action > 1] = 1
+            action[action < -1] = -1
+            output[0] = self.network_to_primitive_index(i)
+            output[1:(self.action_dim[i] + 1)] = action
 
-        action[action > 1] = 1
-        action[action < -1] = -1
-        output = np.zeros(max(self.action_dim) + 1)
-        output[0] = i
-        output[1:(self.action_dim[i] + 1)] = action
         return output
 
     def get_low_level_action(self, high_level_action):
         # Process a single high level action
         if len(high_level_action.shape) == 1:
             i = int(high_level_action[0])
-            return i, high_level_action[1:(self.action_dim[i] + 1)]
+            return i, high_level_action[1:(self.action_dim[self.primitive_to_network_index(i)] + 1)]
 
         # Process a batch of high levels actions of the same primitive
         elif len(high_level_action.shape) == 2:
             indeces = high_level_action[:, 0].astype('int32')
             assert np.all(indeces == indeces[0])
             i = indeces[0]
-            return i, high_level_action[:, 1:(self.action_dim[i] + 1)]
+            return i, high_level_action[:, 1:(self.action_dim[self.primitive_to_network_index(i)] + 1)]
 
         else:
             raise ValueError(self.name + ': Dimension of a high level action should be 1 or 2.')
@@ -548,6 +544,17 @@ class SplitDDPG(RLAgent):
                               terminal=transition.terminal)
             transitions.append(tran)
         return transitions
+
+    def primitive_to_network_index(self, i):
+        if self.hardcoded_primitive < 0:
+            return i
+        return 0
+
+    def network_to_primitive_index(self, i):
+        if self.hardcoded_primitive < 0:
+            return i
+        return int(self.hardcoded_primitive)
+
 
 class ObstacleAvoidanceLoss(nn.Module):
     def __init__(self, distance_range, min_dist_range=[0.002, 0.1], device='cpu'):
