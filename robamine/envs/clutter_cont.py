@@ -1125,7 +1125,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             # Push obstacle primitive
             elif primitive == 1:
                 push = PushObstacle(theta=action[1],
-                                    push_distance=1,  # use maximum distance for now
+                                    push_distance=0,  # use maximum distance for now
                                     push_distance_range=self.params['push']['distance'],
                                     object_height=2 * self.target_bounding_box[2],
                                     finger_height=self.finger_height)
@@ -1231,7 +1231,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_reward(self, observation, action):
         if self.params.get('real_state', False):
-            reward = self.get_reward_real_state_push_target(observation, action)
+            if self.hardcoded_primitive == 0:
+                reward = self.get_reward_real_state_push_target(observation, action)
+            if self.hardcoded_primitive == 1:
+                reward = self.get_reward_real_state_push_obstacle(observation, action)
         elif self.hardcoded_primitive == 0:
             reward = self.get_reward_push_target(observation, action)
         elif self.hardcoded_primitive == 1:
@@ -1404,6 +1407,33 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # return min_max_scale(reward, range=[-10, 10], target_range=[-1, 1])
 
         return -1 + extra_penalty
+
+    def get_reward_real_state_push_obstacle(self, observation, action):
+        if self.push_stopped_ext_forces:
+            return -10
+
+        dist = self.get_real_distance_from_closest_obstacle(observation)
+        if dist > self.singulation_distance:
+            return 10
+
+        # Calculate the sum
+        def get_distances_in_singulation_proximity(obs):
+            poses = obs['object_poses'][obs['object_above_table']]
+            bbox = obs['object_bounding_box'][obs['object_above_table']]
+            distances_ = np.zeros(len(poses))
+            for i in range(len(poses)):
+                distances_[i] = get_distance_of_two_bbox(poses[0], bbox[0], poses[i], bbox[i])
+            distances_ = distances_[distances_ < self.singulation_distance]
+            distances_[distances_ < 0.001] = 0.001
+            return 1 / distances_
+
+        distances = get_distances_in_singulation_proximity(self.obs_dict_prev)
+        distances_next = get_distances_in_singulation_proximity(self.obs_dict)
+
+        if np.sum(distances_next) < np.sum(distances) - 10:
+            return -5
+
+        return -10
 
     def terminal_state_real_state_push_target(self, obs):
         if self.timesteps >= self.max_timesteps:
