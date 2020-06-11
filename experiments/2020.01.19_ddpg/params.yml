@@ -2,20 +2,20 @@ agent:
   name: SplitDDPG
   params:
     save_heightmaps_disk: False
-    batch_size: [32]
+    batch_size: [32, 32]
     device: cpu
     gamma: 0.9
     load_buffers: ''
     load_nets: ''
     replay_buffer_size: 1000000
     tau: 0.001
-    update_iter: [5]
+    update_iter: [5, 5]
     actor:
-      hidden_units: [[400, 300]]
+      hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
       preactivation_weight: 0.05
     critic:
-      hidden_units: [[400, 300]]
+      hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
     obs_avoid_loss:
       bbox_augmentation: 0.008
@@ -30,11 +30,11 @@ agent:
       end: 0.05
       decay: 10000
     heightmap_rotations: 8
-    n_preloaded_buffer: [1000]
+    n_preloaded_buffer: [1000, 1000]
     real_state: True
     rotation_invariant: False
     env_params:
-      hardcoded_primitive: 0
+      hardcoded_primitive: -1
       obstacle:
         max_bounding_box: [.03, .03, .020]
       push:
@@ -47,7 +47,7 @@ agent:
 env:
   name: ClutterContWrapper-v0
   params:
-    hardcoded_primitive: 0
+    hardcoded_primitive: -1
     max_timesteps: 5
     real_state: True
     all_equal_height_prob: 0.0
@@ -57,7 +57,7 @@ env:
     nr_of_obstacles:
       - 5
       - 8
-    render: false
+    render: true
     target:
       min_bounding_box: [.01, .01, .005]
       max_bounding_box: [.03, .03, .010]
@@ -78,7 +78,7 @@ env:
       workspace: [0.0, 0.1]
     feature_normalization_per: 'session'  # available: 'session', 'episode'
     hug_probability: 0.5
-    walls: True
+    walls: False
 world:
   comments: ''
   friendly_name: ''
