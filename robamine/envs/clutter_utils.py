@@ -332,7 +332,7 @@ def rotated_to_regular_transitions(transitions, heightmap_rotations=0):
 
 
 def get_action_dim(primitive):
-    action_dim_all = [2, 1, 1]
+    action_dim_all = [2, 1]
 
     if primitive >= 0:
         action_dim = [action_dim_all[primitive]]
@@ -344,9 +344,9 @@ def get_action_dim(primitive):
 
 def get_observation_dim(primitive, real_state=False):
     if real_state:
-        obs_dim_all = [RealState.dim(), RealState.dim(), RealState.dim()]
+        obs_dim_all = [RealState.dim(), RealState.dim()]
     else:
-        obs_dim_all = [PushTargetFeature.dim(), PushObstacleFeature.dim(), GraspTargetFeature.dim()]
+        obs_dim_all = [PushTargetFeature.dim(), PushObstacleFeature.dim()]
 
     if primitive >= 0:
         obs_dim = [obs_dim_all[primitive]]
