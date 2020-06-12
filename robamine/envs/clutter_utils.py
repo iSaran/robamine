@@ -605,10 +605,12 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
 def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
                                  surface_edges,
                                  angle=0, plot=False):
-    visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle, plot)
-    latent = autoencoder(visual_feature)
-    normalized_latent = normalizer.transform(latent)
-
+    """Angle in rad"""
+    angle_deg = angle * (180 / np.pi)
+    visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle_deg, plot)
+    visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0], visual_feature.shape[1]).to(autoencoder.device)
+    latent = autoencoder.encoder(visual_feature)
+    normalized_latent = normalizer.transform(latent.detach().cpu().numpy())
     rot_2d = np.array([[cos(angle), -sin(angle)],
                        [sin(angle), cos(angle)]])
     surface_edges = np.transpose(np.matmul(rot_2d, np.transpose(surface_edges)))
@@ -616,7 +618,7 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
 
 def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, angle=0, plot=False):
     heightmap = obs_dict['heightmap_mask'][0]
-    mask = obs_dict['heightmap_mask'][0]
+    mask = obs_dict['heightmap_mask'][1]
     target_bounding_box_z = obs_dict['target_bounding_box'][2]
     finger_height = obs_dict['finger_height']
     surface_edges = obs_dict['surface_edges']
