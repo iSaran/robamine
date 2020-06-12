@@ -11,6 +11,8 @@ from robamine.utils.cv_tools import Feature
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
+LATENT_DIM = 256  # hardcoded
+
 params = {
     'layers': 4,
     'encoder': {
@@ -26,7 +28,7 @@ params = {
         'stride': [2, 2, 2, 2],
         'padding': [1, 1 ,1 , 1]
     },
-    'latent_dim': 256,
+    'latent_dim': LATENT_DIM,
     'device': 'cuda',
     'batch_size': 32,
     'learning_rate': 0.001,
@@ -213,7 +215,7 @@ def test_vae(dir, dataset_name='dataset'):
 
     device = 'cuda'
 
-    latent_dim = 256
+    latent_dim = LATENT_DIM
     conv_vae = ConvVae(latent_dim)
     conv_vae.load_state_dict(state_dict)
 
