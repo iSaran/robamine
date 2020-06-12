@@ -1445,7 +1445,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return np.min(distances)
 
-
     def terminal_state(self, observation):
         if self.params.get('real_state', False):
             return self.terminal_state_real_state_push_target(observation)
