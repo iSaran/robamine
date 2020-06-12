@@ -1429,9 +1429,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if dist > self.singulation_distance:
             return 10
 
-        # extra_penalty = 0
-        # if int(action[0]) == 0:
-        #     extra_penalty = -min_max_scale(self.init_distance_from_target, range=[-1, 1], target_range=[0, 2])
+        extra_penalty = 0
+        if int(action[0]) == 0:
+            extra_penalty = -min_max_scale(self.init_distance_from_target, range=[-1, 1], target_range=[0, 2])
 
         # Calculate the sum
         def get_distances_in_singulation_proximity(obs):
@@ -1448,9 +1448,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         distances_next = get_distances_in_singulation_proximity(self.obs_dict)
 
         if np.sum(distances_next) < np.sum(distances) - 10:
-            return -5
+            return -3 + extra_penalty
 
-        return -10
+        return -8 + extra_penalty
 
     def get_reward_real_state_push_obstacle(self, observation, action):
         if self.push_stopped_ext_forces:
