@@ -14,6 +14,9 @@ agent:
       hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
       preactivation_weight: 0.05
+      autoencoder:
+        model: /home/iason/Desktop/model.pkll
+        scaler: /home/iason/Desktop/skaler.pkl
     critic:
       hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001

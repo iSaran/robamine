@@ -11,8 +11,7 @@ from robamine.utils.memory import ReplayBuffer, get_batch_indices, LargeReplayBu
 from robamine.utils.math import min_max_scale
 from robamine.utils.orientation import rot_z, Quaternion, transform_poses
 from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise, Transition
-from robamine.envs.clutter_utils import (get_observation_dim, get_action_dim, obs_dict2feature, PushTargetFeature,
-                                         RealState, preprocess_real_state)
+import robamine.envs.clutter_utils as clutter
 
 import numpy as np
 import pickle
@@ -152,9 +151,24 @@ class SplitDDPG(RLAgent):
     def __init__(self, state_dim, action_dim, params=default_params):
         self.hardcoded_primitive = params['env_params']['hardcoded_primitive']
         self.real_state = params.get('real_state', False)
-        self.state_dim = get_observation_dim(self.hardcoded_primitive, real_state=self.real_state)
-        self.action_dim = get_action_dim(self.hardcoded_primitive)
+        self.state_dim = clutter.get_observation_dim(self.hardcoded_primitive, real_state=self.real_state)
+        self.action_dim = clutter.get_action_dim(self.hardcoded_primitive)
         super().__init__(self.state_dim, self.action_dim, 'SplitDDPG', params)
+        self.actor_state_dim = self.state_dim
+
+        # Load autoencoder
+        if 'autoencoder' in self.params['actor']:
+            import robamine.algo.conv_vae as ae
+            with open(self.params['actor']['autoencoder']['model'], 'rb') as file:
+                model = pickle.load(file)
+            latent_dim = model['encoder.fc.weight'].shape[0]
+            self.ae = ae.ConvVae(latent_dim)
+            self.ae.load_state_dict(model)
+
+            with open(self.params['actor']['autoencoder']['scaler'], 'rb') as file:
+                self.scaler = pickle.load(file)
+
+            self.actor_state_dim = ae.LATENT_DIM + 8  # TODO: hardcoded the extra dim for surface edges
 
         # The number of networks is the number of primitive actions. One network
         # per primitive action
@@ -166,8 +180,8 @@ class SplitDDPG(RLAgent):
         self.actor, self.target_actor, self.critic, self.target_critic = nn.ModuleList(), nn.ModuleList(), \
                                                                          nn.ModuleList(), nn.ModuleList()
         for i in range(self.nr_network):
-            self.actor.append(Actor(self.state_dim[i], self.action_dim[i], self.params['actor']['hidden_units'][i]))
-            self.target_actor.append(Actor(self.state_dim[i], self.action_dim[i], self.params['actor']['hidden_units'][i]))
+            self.actor.append(Actor(self.actor_state_dim, self.action_dim[i], self.params['actor']['hidden_units'][i]))
+            self.target_actor.append(Actor(self.actor_state_dim, self.action_dim[i], self.params['actor']['hidden_units'][i]))
             self.critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i], rotation_invariant=self.params.get('rotation_invariant', False)))
             self.target_critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i], rotation_invariant=self.params.get('rotation_invariant', False)))
 
@@ -229,15 +243,19 @@ class SplitDDPG(RLAgent):
             self.file_heightmaps.create_dataset('heightmap_mask', (5000, 2, 386, 386), dtype='f')
             self.file_heightmaps_counter = 0
 
+
+
     def predict(self, state):
         output = np.zeros(max(self.action_dim) + 1)
         max_q = -1e10
         for i in range(self.nr_network):
-            state_ = preprocess_real_state(state, self.max_init_distance, 0)
-            real_state = RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
+            state_ = clutter.preprocess_real_state(state, self.max_init_distance, 0)
+            real_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                    translate_wrt_target=False).array()
             s = torch.FloatTensor(real_state).to(self.device)
-            a = self.actor[i](s)
+            actor_state = torch.FloatTensor(
+                clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler)).to(self.device)
+            a = self.actor[i](actor_state)
             q = self.critic[i](s, a).cpu().detach().numpy()
             self.info['q_values'][i] = q[0]
             if q > max_q:
@@ -333,43 +351,22 @@ class SplitDDPG(RLAgent):
         terminal = torch.zeros((len(batch), 1)).to(self.device)
         reward = torch.zeros((len(batch), 1)).to(self.device)
         action = torch.zeros((len(batch), self.action_dim[i])).to(self.device)
-        state_real = torch.zeros((len(batch), RealState.dim())).to(self.device)
-        state_real_actor = torch.zeros((len(batch), RealState.dim())).to(self.device)
-        next_state_real_actor = torch.zeros((len(batch), RealState.dim())).to(self.device)
-        next_state_real = torch.zeros((len(batch), RealState.dim())).to(self.device)
-        density = self.params['obs_avoid_loss']['density']
-        # state_point_cloud = torch.zeros((len(batch), density ** 2, 2))
-        max_init_distance = self.params['env_params']['push']['target_init_distance'][1]
-        max_obs_bounding_box = np.max(self.params['env_params']['obstacle']['max_bounding_box'])
-        density = self.params['obs_avoid_loss']['density']
+        state_real = torch.zeros((len(batch), clutter.RealState.dim())).to(self.device)
+        state_real_actor = torch.zeros((len(batch), self.actor_state_dim)).to(self.device)
+        next_state_real_actor = torch.zeros((len(batch), self.actor_state_dim)).to(self.device)
+        next_state_real = torch.zeros((len(batch), clutter.RealState.dim())).to(self.device)
         for j in range(len(batch)):
             reward[j] = batch[j].reward
             terminal[j] = batch[j].terminal
             _, action_ = self.get_low_level_action(batch[j].action)
             action[j] = torch.FloatTensor(action_).to(self.device)
 
-            state_real[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
-                                   translate_wrt_target=False).array()).to(self.device)
-            state_real_actor[j] = torch.FloatTensor(RealState(batch[j].state, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
-                                                        translate_wrt_target=False).array()).to(self.device)
+            state_real[j] = torch.FloatTensor(batch[j].state['critic']).to(self.device)
+            state_real_actor[j] = torch.FloatTensor(batch[j].state['actor']).to(self.device)
 
             if not terminal[j]:
-                next_state_real[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
-                                                                 translate_wrt_target=False).array()).to(self.device)
-                next_state_real_actor[j] = torch.FloatTensor(RealState(batch[j].next_state, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
-                                                                 translate_wrt_target=False).array()).to(self.device)
-
-            next_state_real_actor[j, -1] = 0.0
-            state_real_actor[j, -1] = 0.0
-            # point_cloud_ = get_table_point_cloud(batch[j].state['object_poses'][batch[j].state['object_above_table']],
-            #                                      batch[j].state['object_bounding_box'][batch[j].state['object_above_table']],
-            #                                      workspace=[max_init_distance, max_init_distance],
-            #                                      density=density)
-            # state_point_cloud[j, :point_cloud_.shape[0], :] = torch.FloatTensor(point_cloud_).to(self.device)
-
-        # state_real = torch.FloatTensor(batch.state['real_state']).to(self.device)
-        # state_point_cloud = torch.FloatTensor(batch.state['point_cloud']).to(self.device)
-        # next_state_real = torch.FloatTensor(batch.next_state['real_state']).to(self.device)
+                next_state_real[j] = torch.FloatTensor(batch[j].next_state['critic']).to(self.device)
+                next_state_real_actor[j] = torch.FloatTensor(batch[j].next_state['actor']).to(self.device)
 
         # Compute the target Q-value
         target_q = self.target_critic[i](next_state_real, self.target_actor[i](next_state_real_actor))
@@ -422,8 +419,8 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        state_ = preprocess_real_state(state, self.max_init_distance, 0)
-        real_state = RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
+        state_ = clutter.preprocess_real_state(state, self.max_init_distance, 0)
+        real_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
                                translate_wrt_target=False).array()
         s = torch.FloatTensor(real_state).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
@@ -477,46 +474,23 @@ class SplitDDPG(RLAgent):
         transitions = []
         heightmap_rotations = self.params.get('heightmap_rotations', 1)
 
-        what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_angle',
-                       'max_n_objects']
-
-        max_init_distance = self.params['env_params']['push']['target_init_distance'][1]
-        max_obs_bounding_box = np.max(self.params['env_params']['obstacle']['max_bounding_box'])
-        density = self.params['obs_avoid_loss']['density']
-
         # Create rotated states if needed
         angle = np.linspace(0, 2 * np.pi, heightmap_rotations, endpoint=False)
+        state, next_state = {}, {}
         for j in range(heightmap_rotations):
             transition.state['init_distance_from_target'] = transition.next_state['init_distance_from_target']
-            state = preprocess_real_state(transition.state, self.max_init_distance, angle[j])
+            state_critic = clutter.preprocess_real_state(transition.state, self.max_init_distance, angle[j])
+            state['critic'] = clutter.RealState(state_critic, angle=angle[j], sort=True, normalize=True, spherical=True,
+                                                range_norm=[-1, 1], translate_wrt_target=False).array()
+            state['actor'] = clutter.get_asymmetric_actor_feature_from_dict(transition.state, self.ae, self.scaler,
+                                                                            angle[j])
 
-            # Real state:
-            # real_state = RealState(state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
-            #                        translate_wrt_target=False).array()
-            # # Point cloud:
-            # point_cloud = max_init_distance * np.ones((density ** 2, 2))
-            # point_cloud_ = get_table_point_cloud(state['object_poses'][state['object_above_table']],
-            #                                      state['object_bounding_box'][state['object_above_table']],
-            #                                      workspace=[max_init_distance, max_init_distance],
-            #                                      density=density)
-            # point_cloud[:point_cloud_.shape[0]] = point_cloud_
-
-            # Rotate next state
-            # real_state_next = np.zeros(RealState.dim())
-            # point_cloud_next = max_init_distance * np.ones((density ** 2, 2))
-            next_state = preprocess_real_state(transition.next_state, self.max_init_distance, angle[j])
-            # if not transition.terminal:
-            #     next_state = self.preprocess_real_state(transition.next_state, angle[j])
-                # Real state:
-                # real_state_next = RealState(next_state, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
-                #                        translate_wrt_target=False).array()
-                # # Point cloud:
-                # point_cloud_next = max_init_distance * np.ones((density ** 2, 2))
-                # point_cloud_next_ = get_table_point_cloud(next_state['object_poses'][next_state['object_above_table']],
-                #                                      next_state['object_bounding_box'][next_state['object_above_table']],
-                #                                      workspace=[max_init_distance, max_init_distance],
-                #                                      density=density)
-                # point_cloud_next[:point_cloud_next_.shape[0]] = point_cloud_next_
+            next_state_critic = clutter.preprocess_real_state(transition.next_state, self.max_init_distance, angle[j])
+            next_state['critic'] = clutter.RealState(next_state_critic, angle=angle[j], sort=True, normalize=True,
+                                                     spherical=True, range_norm=[-1, 1],
+                                                     translate_wrt_target=False).array()
+            next_state['actor'] = clutter.get_asymmetric_actor_feature_from_dict(transition.next_state, self.ae,
+                                                                                 self.scaler, angle[j])
 
             # Rotate action
             # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
