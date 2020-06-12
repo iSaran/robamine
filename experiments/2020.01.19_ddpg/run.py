@@ -711,29 +711,30 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
 
 def VAE_create_dataset(dir, rotations=0):
     from robamine.utils.cv_tools import Feature
+    from robamine.envs.clutter_utils import get_actor_visual_feature
     import h5py
 
-    def get_visual_feature(obs_dict):
-        heightmap = obs_dict['heightmap_mask'][0]
-        mask = obs_dict['heightmap_mask'][1]
-        target_bounding_box_z = obs_dict['target_bounding_box_z']
-        finger_height = obs_dict['finger_height']
-        crop_area = obs_dict['crop_area']
-
-        # heightmap = Feature(heightmap).crop(crop_area[0], crop_area[1]).\
-        #     pooling(kernel=[2, 2], stride=2, mode='AVG').array()
-        # mask = Feature(mask).crop(crop_area[0], crop_area[1]). \
-        #     pooling(kernel=[2, 2], stride=2, mode='AVG').array()
-
-        thresholded = np.zeros(heightmap.shape)
-        threshold = target_bounding_box_z - 1.5 * finger_height
-        if threshold < 0:
-            threshold = 0
-        thresholded[heightmap > threshold] = 1
-        thresholded[mask > 0] = 0.5
-        feature = Feature(thresholded).crop(crop_area[0], crop_area[1])
-        # feature = feature.pooling(mode='AVG')
-        return feature
+    # def get_visual_feature(obs_dict):
+    #     heightmap = obs_dict['heightmap_mask'][0]
+    #     mask = obs_dict['heightmap_mask'][1]
+    #     target_bounding_box_z = obs_dict['target_bounding_box_z']
+    #     finger_height = obs_dict['finger_height']
+    #     crop_area = obs_dict['crop_area']
+    #
+    #     # heightmap = Feature(heightmap).crop(crop_area[0], crop_area[1]).\
+    #     #     pooling(kernel=[2, 2], stride=2, mode='AVG').array()
+    #     # mask = Feature(mask).crop(crop_area[0], crop_area[1]). \
+    #     #     pooling(kernel=[2, 2], stride=2, mode='AVG').array()
+    #
+    #     thresholded = np.zeros(heightmap.shape)
+    #     threshold = target_bounding_box_z - 1.5 * finger_height
+    #     if threshold < 0:
+    #         threshold = 0
+    #     thresholded[heightmap > threshold] = 1
+    #     thresholded[mask > 0] = 0.5
+    #     feature = Feature(thresholded).crop(crop_area[0], crop_area[1])
+    #     # feature = feature.pooling(mode='AVG')
+    #     return feature
 
     scenes, params = pickle.load(open(dir + 'scenes.pkl', 'rb'))
     n_scenes = len(scenes)
@@ -744,19 +745,15 @@ def VAE_create_dataset(dir, rotations=0):
 
     n_sampler = 0
     for scene in scenes:
-        obs_dict = dict()
-        obs_dict['heightmap_mask'] = scene['heightmap_mask']
-        obs_dict['finger_height'] = np.array([0.005])
-        obs_dict['target_bounding_box_z'] = np.array([scene['heightmap_mask'][0][198, 198] / 2.0])
-        obs_dict['crop_area'] = np.array([128, 128])
-        feature = get_visual_feature(obs_dict).pooling(kernel=[2, 2], stride=2, mode='AVG')
-        # feature.plot()
-        # feature.pooling(kernel=[2, 2], stride=2, mode='AVG').plot()
-
-
         for i in range(rotations):
             theta = (360 / rotations) * i
-            visual_features[n_sampler] = feature.rotate(theta).array()
+            feature = get_actor_visual_feature(heightmap=scene['heightmap_mask'][0],
+                                               mask=scene['heightmap_mask'][1],
+                                               target_bounding_box_z=np.array(
+                                                   [scene['heightmap_mask'][0][198, 198] / 2.0]),
+                                               finger_height=0.005,
+                                               angle=theta)
+            visual_features[n_sampler] = feature.copy()
             n_sampler += 1
 
 
