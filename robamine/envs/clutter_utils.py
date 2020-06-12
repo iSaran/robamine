@@ -16,7 +16,7 @@ from robamine.utils.math import (LineSegment2D, triangle_area, min_max_scale, ca
                                  get_centroid_convex_hull)
 from robamine.utils.orientation import (rot_x, rot_z, rot2angleaxis, Quaternion, rot_y, transform_poses,
                                         transform_points)
-from robamine.utils.cv_tools import Feature
+from robamine.utils.cv_tools import Feature as cv_tools_feature
 from robamine.utils.info import get_now_timestamp
 import copy
 
@@ -588,13 +588,13 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
     """Angle in deg"""
     # Calculate fused visual feature
     crop_area = [128, 128]
-    thresholded = np.zeros(heightmap.array().shape)
+    thresholded = np.zeros(heightmap.shape)
     threshold = target_bounding_box_z - 1.5 * finger_height
     if threshold < 0:
         threshold = 0
-    thresholded[heightmap.array() > threshold] = 1
-    thresholded[mask.array() > 0] = 0.5
-    visual_feature = Feature(thresholded).rotate(angle)
+    thresholded[heightmap > threshold] = 1
+    thresholded[mask > 0] = 0.5
+    visual_feature = cv_tools_feature(thresholded).rotate(angle)
     visual_feature = visual_feature.crop(crop_area[0], crop_area[1])
     visual_feature = visual_feature.pooling(kernel=[2, 2], stride=2, mode='AVG')
     if plot:
