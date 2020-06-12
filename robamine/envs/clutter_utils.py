@@ -584,6 +584,46 @@ class RealState(Feature):
         return 10 * 4 * 3 + 8 + 1 # TODO: hardcoded max n objects
 
 
+def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0, plot=False):
+    """Angle in deg"""
+    # Calculate fused visual feature
+    crop_area = [128, 128]
+    thresholded = np.zeros(heightmap.array().shape)
+    threshold = target_bounding_box_z - 1.5 * finger_height
+    if threshold < 0:
+        threshold = 0
+    thresholded[heightmap.array() > threshold] = 1
+    thresholded[mask.array() > 0] = 0.5
+    visual_feature = Feature(thresholded).rotate(angle)
+    visual_feature = visual_feature.crop(crop_area[0], crop_area[1])
+    visual_feature = visual_feature.pooling(kernel=[2, 2], stride=2, mode='AVG')
+    if plot:
+        visual_feature.plot()
+    return visual_feature.array()
+
+
+def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
+                                 surface_edges,
+                                 angle=0, plot=False):
+    visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle, plot)
+    latent = autoencoder(visual_feature)
+    normalized_latent = normalizer.transform(latent)
+
+    rot_2d = np.array([[cos(angle), -sin(angle)],
+                       [sin(angle), cos(angle)]])
+    surface_edges = np.transpose(np.matmul(rot_2d, np.transpose(surface_edges)))
+    return np.append(normalized_latent, surface_edges.flatten())
+
+def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, angle=0, plot=False):
+    heightmap = obs_dict['heightmap_mask'][0]
+    mask = obs_dict['heightmap_mask'][0]
+    target_bounding_box_z = obs_dict['target_bounding_box'][2]
+    finger_height = obs_dict['finger_height']
+    surface_edges = obs_dict['surface_edges']
+    return get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
+                                        surface_edges, angle, plot)
+
+
 class PrimitiveFeature:
     def __init__(self, heightmap, mask, angle=0, name=None):
         self.name = name
