@@ -258,4 +258,5 @@ def estimate_normalizer(dir, dataset_name='dataset'):
 
     scaler = StandardScaler()
     scaler.fit(latents)
-    print(scaler.mean_)
+    with open(dir + 'normalizer.pkl', 'wb') as file:
+        pickle.dump(scaler, file)
