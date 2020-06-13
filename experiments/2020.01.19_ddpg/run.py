@@ -744,7 +744,7 @@ def VAE_create_dataset(dir, rotations=0):
                                                target_bounding_box_z=np.array(
                                                    [scene['heightmap_mask'][0][198, 198] / 2.0]),
                                                finger_height=0.005,
-                                               angle=theta, plot=True)
+                                               angle=theta)
             visual_features[n_sampler] = feature.copy()
             n_sampler += 1
 
@@ -800,7 +800,8 @@ if __name__ == '__main__':
     # VAE_collect_scenes(params,
     #                    dir_to_save='/home/mkiatos/robamine/logs/VAE',
     #                    n_scenes=1000)
-    VAE_create_dataset(dir = '/home/mkiatos/robamine/logs/VAE/', rotations=16)
-    # from robamine.algo.conv_vae import train, test_vae
+    # VAE_create_dataset(dir = '/home/mkiatos/robamine/logs/VAE/', rotations=16)
+    from robamine.algo.conv_vae import train, test_vae, estimate_normalizer
     # train(dir = '/home/mkiatos/robamine/logs/VAE/')
     # test_vae(dir = '/home/mkiatos/robamine/logs/VAE/')
+    estimate_normalizer(dir = '/home/mkiatos/robamine/logs/VAE/')

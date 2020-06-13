@@ -8,6 +8,8 @@ import os
 import pickle
 
 from robamine.utils.cv_tools import Feature
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
 
 params = {
     'layers': 4,
@@ -24,7 +26,7 @@ params = {
         'stride': [2, 2, 2, 2],
         'padding': [1, 1 ,1 , 1]
     },
-    'latent_dim': 512,
+    'latent_dim': 256,
     'device': 'cuda',
     'batch_size': 32,
     'learning_rate': 0.001,
@@ -196,14 +198,22 @@ def train(dir, dataset_name='dataset', params = params):
         with open(dir + 'model/' + str(epoch) + '.pkl', 'wb') as file:
             pickle.dump(conv_vae.state_dict(), file)
 
+
+def plot(x, rec_x):
+    fig, ax = plt.subplots(1, 2)
+    ax[0].imshow(x, cmap='gray', vmin=np.min(x), vmax=np.max(x))
+    ax[1].imshow(rec_x, cmap='gray', vmin=np.min(rec_x), vmax=np.max(rec_x))
+    plt.show()
+
+
 def test_vae(dir, dataset_name='dataset'):
-    file_path = dir + 'model/70.pkl'
+    file_path = dir + 'model/50.pkl'
     with open(file_path, 'rb') as file:
         state_dict = pickle.load(file)
 
     device = 'cuda'
 
-    latent_dim = 512
+    latent_dim = 256
     conv_vae = ConvVae(latent_dim)
     conv_vae.load_state_dict(state_dict)
 
@@ -212,10 +222,40 @@ def test_vae(dir, dataset_name='dataset'):
     dataset_size = len(file_['features'])
 
     for i in range(14000, dataset_size):
-        Feature(features[i]).plot()
         x = np.expand_dims(np.expand_dims(features[i], axis=0), axis=0)
         x = torch.tensor(x, dtype=torch.float, requires_grad=True).to(device)
         # rec_x, _, _ = conv_vae(x)
         rec_x = conv_vae(x)
-        Feature(rec_x.detach().cpu().numpy()[0, 0, :, :]).plot()
+        plot(features[i], rec_x.detach().cpu().numpy()[0, 0, :, :])
 
+
+def estimate_normalizer(dir, dataset_name='dataset'):
+    file_path = dir + 'model/50.pkl'
+    with open(file_path, 'rb') as file:
+        state_dict = pickle.load(file)
+
+    device = 'cuda'
+    latent_dim = 256
+    conv_vae = ConvVae(latent_dim)
+    conv_vae.load_state_dict(state_dict)
+
+    file_ = h5py.File(os.path.join(dir, dataset_name + '.hdf5'), "r")
+    features = file_['features'][:, :, :]
+    dataset_size = len(file_['features'])
+
+    latents = np.zeros((dataset_size, latent_dim))
+    for i in range(dataset_size):
+        x = np.expand_dims(np.expand_dims(features[i], axis=0), axis=0)
+        x = torch.tensor(x, dtype=torch.float).to(device)
+        # rec_x, _, _ = conv_vae(x)
+        # rec_x = conv_vae(x)
+        # Feature(features[i]).plot()
+        # x = conv_vae.encoder(x)
+        # print(x.detach().cpu().numpy())
+        # rec_x = conv_vae.decoder(x)
+        # Feature(rec_x.detach().cpu().numpy()[0, 0, :, :]).plot()
+        latents[i] = conv_vae.encoder(x).detach().cpu().numpy()
+
+    scaler = StandardScaler()
+    scaler.fit(latents)
+    print(scaler.mean_)
