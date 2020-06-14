@@ -18,6 +18,10 @@ agent:
       autoencoder:
         model: /home/iason/Desktop/model.pkll
         scaler: /home/iason/Desktop/skaler.pkl
+      #pretrained:  # Uncomment to use pretrained actors. Comment-out for initialize actors from scratch it if want to initialize actors from scratch
+      #- /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
+      #- /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
+      start_training_at: 0
     critic:
       hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
@@ -44,9 +48,6 @@ agent:
       push:
         target_init_distance: [0.0, 0.1]
 
-    # load_actors:  # Uncomment to use pretrained actors. Comment-out for initialize actors from scratch it if want to initialize actors from scratch
-    #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
-    #   - /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
   trainable_params: ''
 env:
   name: ClutterContWrapper-v0

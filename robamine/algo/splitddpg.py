@@ -214,10 +214,10 @@ class SplitDDPG(RLAgent):
         self.learn_step_counter = 0
         self.preloading_finished = False
 
-        if 'load_actors' in self.params:
+        if 'pretrained' in self.params['actor']:
             logger.warn("SplitDDPG: Overwriting the actors from the models provided in load_actors param.")
             for i in range(self.nr_network):
-                path = self.params['load_actors'][i]
+                path = self.params['actor']['pretrained'][i]
                 with open(path, 'rb') as file:
                     pretrained_splitddpg = pickle.load(file)
                     # Assuming that pretrained splitddpg has only one primitive so actor is in 0 index
@@ -392,35 +392,35 @@ class SplitDDPG(RLAgent):
         critic_loss.backward()
         self.critic_optimizer[i].step()
 
-        # Compute preactivation
-        state_abs_mean = self.actor[i].forward2(state_real_actor).abs().mean()
-        preactivation = (state_abs_mean - torch.tensor(1.0)).pow(2)
-        if state_abs_mean < torch.tensor(1.0):
-            preactivation = torch.tensor(0.0)
-        weight = self.params['actor'].get('preactivation_weight', .05)
-        preactivation = weight * preactivation
+        if self.learn_step_counter > self.params['actor']['start_training_at']:
+            # Compute preactivation
+            state_abs_mean = self.actor[i].forward2(state_real_actor).abs().mean()
+            preactivation = (state_abs_mean - torch.tensor(1.0)).pow(2)
+            if state_abs_mean < torch.tensor(1.0):
+                preactivation = torch.tensor(0.0)
+            weight = self.params['actor'].get('preactivation_weight', .05)
+            preactivation = weight * preactivation
 
-        actor_action = self.actor[i](state_real_actor)
+            actor_action = self.actor[i](state_real_actor)
 
-        critic_loss = - self.critic[i](state_real, actor_action).mean()
+            critic_loss = - self.critic[i](state_real, actor_action).mean()
 
-        # obs_avoidance = self.obstacle_avoidance_loss(state_point_cloud, actor_action)
+            # obs_avoidance = self.obstacle_avoidance_loss(state_point_cloud, actor_action)
 
-        # actor_loss = obs_avoidance + critic_loss
-        actor_loss = critic_loss + preactivation
+            # actor_loss = obs_avoidance + critic_loss
+            actor_loss = critic_loss + preactivation
 
-        self.info['actor_' + str(i) + '_loss'] = float(actor_loss.detach().cpu().numpy())
+            self.info['actor_' + str(i) + '_loss'] = float(actor_loss.detach().cpu().numpy())
 
-        # Optimize actor
-        self.actor_optimizer[i].zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer[i].step()
+            # Optimize actor
+            self.actor_optimizer[i].zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer[i].step()
 
-        # Soft update of target networks
+            for param, target_param in zip(self.actor[i].parameters(), self.target_actor[i].parameters()):
+                target_param.data.copy_(self.params['tau'] * param.data + (1 - self.params['tau']) * target_param.data)
+
         for param, target_param in zip(self.critic[i].parameters(), self.target_critic[i].parameters()):
-            target_param.data.copy_(self.params['tau'] * param.data + (1 - self.params['tau']) * target_param.data)
-
-        for param, target_param in zip(self.actor[i].parameters(), self.target_actor[i].parameters()):
             target_param.data.copy_(self.params['tau'] * param.data + (1 - self.params['tau']) * target_param.data)
 
         self.learn_step_counter += 1
