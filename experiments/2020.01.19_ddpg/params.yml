@@ -1,6 +1,7 @@
 agent:
   name: SplitDDPG
   params:
+    asymmetric: True
     save_heightmaps_disk: False
     batch_size: [32, 32]
     device: cpu
