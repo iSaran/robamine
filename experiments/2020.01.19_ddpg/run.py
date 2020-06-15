@@ -660,6 +660,7 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
     params['env']['params']['push']['target_init_distance'][1] = 0.15
     params['env']['params']['safe'] = False
     params['env']['params']['target']['randomize_pos'] = False
+    params['env']['params']['nr_of_obstacles'] = [1, 8]
     env = ClutterContWrapper(params=params['env']['params'])
 
     real_states = []
@@ -757,7 +758,7 @@ if __name__ == '__main__':
     if hostname == 'dream':
         logging_dir = '/home/espa/robamine_logs/'
     elif hostname == 'triss':
-        logging_dir = '/home/iason/robamine_logs/2020.01.16.split_ddpg'
+        logging_dir = '/home/iason/robamine_logs/2020.01.16.split_ddpg/'
     elif hostname == 'iti-479':
         logging_dir = '/home/mkiatos/robamine/logs/'
     else:
@@ -797,11 +798,11 @@ if __name__ == '__main__':
     # VAE training
     # ------------
 
-    # VAE_collect_scenes(params,
-    #                    dir_to_save='/home/mkiatos/robamine/logs/VAE',
-    #                    n_scenes=1000)
-    # VAE_create_dataset(dir = '/home/mkiatos/robamine/logs/VAE/', rotations=16)
-    from robamine.algo.conv_vae import train, test_vae, estimate_normalizer
-    # train(dir = '/home/mkiatos/robamine/logs/VAE/')
-    # test_vae(dir = '/home/mkiatos/robamine/logs/VAE/')
-    estimate_normalizer(dir = '/home/mkiatos/robamine/logs/VAE/')
+    VAE_collect_scenes(params,
+                       dir_to_save=logging_dir + 'VAE',
+                       n_scenes=1000)
+    # VAE_create_dataset(dir=logging_dir+'VAE', rotations=16)
+    # import robamine.algo.conv_vae as ae
+    # ae.train(dir=logging_dir+'VAE')
+    # ae.test_vae(dir=logging_dir+'VAE')
+    # ae.estimate_normalizer(dir=logging_dir+'VAE')
