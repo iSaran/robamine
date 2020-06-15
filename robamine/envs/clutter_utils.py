@@ -607,13 +607,22 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
                                  angle=0, plot=False):
     """Angle in rad"""
     angle_deg = angle * (180 / np.pi)
-    visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle_deg, plot)
+    visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle_deg, plot=False)
     visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0], visual_feature.shape[1]).to(autoencoder.device)
     latent = autoencoder.encoder(visual_feature)
     normalized_latent = normalizer.transform(latent.detach().cpu().numpy())
     rot_2d = np.array([[cos(angle), -sin(angle)],
                        [sin(angle), cos(angle)]])
     surface_edges = np.transpose(np.matmul(rot_2d, np.transpose(surface_edges)))
+    
+    if plot:
+        ae_output = autoencoder(visual_feature).detach().cpu().numpy()
+        visual_feature = visual_feature.detach().cpu().numpy()
+        fig, ax = plt.subplots(1, 2)
+        ax[0].imshow(visual_feature, cmap='gray', vmin=np.min(visual_feature), vmax=np.max(visual_feature))
+        ax[1].imshow(ae_output, cmap='gray', vmin=np.min(ae_output), vmax=np.max(ae_output))
+        plt.show()
+
     return np.append(normalized_latent, surface_edges.flatten())
 
 def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, angle=0, plot=False):
