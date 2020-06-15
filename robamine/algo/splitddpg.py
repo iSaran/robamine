@@ -276,6 +276,12 @@ class SplitDDPG(RLAgent):
         return output
 
     def explore(self, state):
+        if self.hardcoded_primitive >= 0:
+            return self.exploration_policy(state)
+        else:
+            return self.exploration_policy_combo(state)
+
+    def exploration_policy(self, state):
         # Calculate epsilon for epsilon-greedy
         start = self.params['epsilon']['start']
         end = self.params['epsilon']['end']
@@ -302,6 +308,44 @@ class SplitDDPG(RLAgent):
             output[1:(self.action_dim[i] + 1)] = action
 
         return output
+
+    def exploration_policy_combo(self, state):
+        # Calculate epsilon for epsilon-greedy
+        start = self.params['epsilon']['start']
+        end = self.params['epsilon']['end']
+        decay = self.params['epsilon']['decay']
+        epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
+        self.results['epsilon'] = epsilon
+
+        output = np.zeros(max(self.action_dim) + 1)
+        if (self.rng.uniform(0, 1) >= epsilon) and self.preloading_finished:
+            pred = self.predict(state)
+            i = int(pred[0])
+            action = pred[1:self.action_dim[self.primitive_to_network_index(i)] + 1]
+            action += self.exploration_noise[self.primitive_to_network_index(i)]()
+            action[action > 1] = 1
+            action[action < -1] = -1
+            output[0] = i
+            output[1:(self.action_dim[self.primitive_to_network_index(i)] + 1)] = action
+        else:
+            i = self.rng.randint(0, self.nr_network)
+            if self.asymmetric:
+                feature = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler)
+            else:
+                feature = clutter.preprocess_real_state(state, self.max_init_distance)
+                feature = clutter.RealState(feature, angle=0, sort=True, normalize=True, spherical=True,
+                                            range_norm=[-1, 1], translate_wrt_target=False).array()
+            actor_state = torch.FloatTensor(feature).to(self.device)
+            action = self.actor[i](actor_state).detach().cpu().numpy().copy()
+            action += self.exploration_noise[self.primitive_to_network_index(i)]()
+            action[action > 1] = 1
+            action[action < -1] = -1
+            output[0] = self.network_to_primitive_index(i)
+            output[1:(self.action_dim[i] + 1)] = action
+
+        return output
+
+
 
     def get_low_level_action(self, high_level_action):
         # Process a single high level action
