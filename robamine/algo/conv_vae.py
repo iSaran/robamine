@@ -144,15 +144,19 @@ def get_batch_indices(indices, batch_size, shuffle=True, seed=None):
     batches = np.split(for_splitting, (total_size - residual) / batch_size_)
     return batches
 
-def train(dir, dataset_name='dataset', params = params):
+def train(dir, dataset_name='dataset', split_per=0.8, params = params):
     file_ = h5py.File(os.path.join(dir, dataset_name + '.hdf5'), "r")
     features = file_['features'][:, :, :]
 
+    models_path = os.path.join(dir, 'model')
+    if not os.path.exists(models_path):
+        os.makedirs(models_path)
+
     # Split to train and validation
     dataset_size = len(file_['features'])
-    split_per = 0.8
-    train_indices = np.arange(0, 14000, 1)
-    valid_indices = np.arange(14000, dataset_size, 1)
+    train_last_index = int(split_per * dataset_size)
+    train_indices = np.arange(0, train_last_index, 1)
+    valid_indices = np.arange(train_last_index, dataset_size, 1)
 
     # Initialize the autoencoder
     conv_vae = ConvVae(params['latent_dim'])
@@ -197,7 +201,8 @@ def train(dir, dataset_name='dataset', params = params):
         print('epoch:', epoch, 'valid_loss:', valid_loss / len(minibatches))
         print('---')
 
-        with open(dir + 'model/' + str(epoch) + '.pkl', 'wb') as file:
+        model_path = os.path.join(models_path, str(epoch) + '.pkl')
+        with open(model_path, 'wb') as file:
             pickle.dump(conv_vae.state_dict(), file)
 
 
@@ -208,8 +213,8 @@ def plot(x, rec_x):
     plt.show()
 
 
-def test_vae(dir, dataset_name='dataset'):
-    file_path = dir + 'model/50.pkl'
+def test_vae(dir, dataset_name='dataset', model_epoch=50, split_per=0.8):
+    file_path = os.path.join(dir, 'model/' + str(model_epoch) + '.pkl')
     with open(file_path, 'rb') as file:
         state_dict = pickle.load(file)
 
@@ -222,8 +227,8 @@ def test_vae(dir, dataset_name='dataset'):
     file_ = h5py.File(os.path.join(dir, dataset_name + '.hdf5'), "r")
     features = file_['features'][:, :, :]
     dataset_size = len(file_['features'])
-
-    for i in range(14000, dataset_size):
+    test_first_index = int(split_per * dataset_size)
+    for i in range(test_first_index, dataset_size):
         x = np.expand_dims(np.expand_dims(features[i], axis=0), axis=0)
         x = torch.tensor(x, dtype=torch.float, requires_grad=True).to(device)
         # rec_x, _, _ = conv_vae(x)
@@ -231,8 +236,8 @@ def test_vae(dir, dataset_name='dataset'):
         plot(features[i], rec_x.detach().cpu().numpy()[0, 0, :, :])
 
 
-def estimate_normalizer(dir, dataset_name='dataset'):
-    file_path = dir + 'model/50.pkl'
+def estimate_normalizer(dir, dataset_name='dataset', model_epoch=50):
+    file_path = os.path.join(dir, 'model/' + str(model_epoch) + '.pkl')
     with open(file_path, 'rb') as file:
         state_dict = pickle.load(file)
 
@@ -260,5 +265,6 @@ def estimate_normalizer(dir, dataset_name='dataset'):
 
     scaler = StandardScaler()
     scaler.fit(latents)
-    with open(dir + 'normalizer.pkl', 'wb') as file:
+    normalizer_path = os.path.join(dir, 'normalizer.pkl')
+    with open(normalizer_path, 'wb') as file:
         pickle.dump(scaler, file)

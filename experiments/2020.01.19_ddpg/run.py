@@ -666,6 +666,10 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
     real_states = []
     keywords = ['heightmap_mask']
 
+    screenshots_path = os.path.join(dir_to_save, 'screenshots')
+    if not os.path.exists(screenshots_path):
+        os.makedirs(screenshots_path)
+
     i = 0
     while i < n_scenes:
         print('Collecting scenes. Scene: ', i, 'out of', n_scenes)
@@ -675,7 +679,7 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
         for key in keywords:
             scene[key] = copy.deepcopy(obs[key])
         real_states.append(scene)
-        plt.imsave(os.path.join(dir_to_save, 'screenshots/' + str(i) + '_screenshot.png'), env.env.bgr)
+        plt.imsave(os.path.join(screenshots_path, str(i) + '_screenshot.png'), env.env.bgr)
         i += 1
 
         print('Collecting scenes. Scene: ', i, 'out of', n_scenes)
@@ -729,10 +733,12 @@ def VAE_create_dataset(dir, rotations=0):
     #         visual_feature.plot()
     #     return feature
 
-    scenes, params = pickle.load(open(dir + 'scenes.pkl', 'rb'))
+    scenes_path = os.path.join(dir, 'scenes.pkl')
+    scenes, params = pickle.load(open(scenes_path, 'rb'))
     n_scenes = len(scenes)
 
-    file_ = h5py.File(os.path.join(dir, 'dataset' + '.hdf5'), "a")
+    dataset_path = os.path.join(dir, 'dataset' + '.hdf5')
+    file_ = h5py.File(dataset_path, "a")
     n_datapoints = n_scenes * rotations
     visual_features = file_.create_dataset('features', (n_datapoints, 128, 128), dtype='f')
 
@@ -795,14 +801,14 @@ if __name__ == '__main__':
 
     # eval_random_actions(params, n_scenes=10)
 
+
     # VAE training
     # ------------
 
-    # VAE_collect_scenes(params,
-    #                    dir_to_save=logging_dir + 'VAE',
-    #                    n_scenes=1000)
-    # VAE_create_dataset(dir=logging_dir+'VAE', rotations=16)
+    VAE_path = os.path.join(logging_dir, 'VAE')
+    # VAE_collect_scenes(params, dir_to_save=VAE_path, n_scenes=1000)
+    # VAE_create_dataset(dir=VAE_path, rotations=16)
     # import robamine.algo.conv_vae as ae
-    # ae.train(dir=logging_dir+'VAE')
-    # ae.test_vae(dir=logging_dir+'VAE')
-    # ae.estimate_normalizer(dir=logging_dir+'VAE')
+    # ae.train(dir=VAE_path)
+    # ae.test_vae(dir=VAE_path, model_epoch=1)
+    # ae.estimate_normalizer(dir=VAE_path, model_epoch=1)
