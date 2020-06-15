@@ -616,8 +616,8 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
     surface_edges = np.transpose(np.matmul(rot_2d, np.transpose(surface_edges)))
     
     if plot:
-        ae_output = autoencoder(visual_feature).detach().cpu().numpy()
-        visual_feature = visual_feature.detach().cpu().numpy()
+        ae_output = autoencoder(visual_feature).detach().cpu().numpy()[0, 0, :, :]
+        visual_feature = visual_feature.detach().cpu().numpy()[0, 0, :, :]
         fig, ax = plt.subplots(1, 2)
         ax[0].imshow(visual_feature, cmap='gray', vmin=np.min(visual_feature), vmax=np.max(visual_feature))
         ax[1].imshow(ae_output, cmap='gray', vmin=np.min(ae_output), vmax=np.max(ae_output))

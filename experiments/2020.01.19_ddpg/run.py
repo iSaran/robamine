@@ -772,7 +772,7 @@ if __name__ == '__main__':
     # Basic runs
     # ----------
 
-    # train(params)
+    train(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
@@ -798,9 +798,9 @@ if __name__ == '__main__':
     # VAE training
     # ------------
 
-    VAE_collect_scenes(params,
-                       dir_to_save=logging_dir + 'VAE',
-                       n_scenes=1000)
+    # VAE_collect_scenes(params,
+    #                    dir_to_save=logging_dir + 'VAE',
+    #                    n_scenes=1000)
     # VAE_create_dataset(dir=logging_dir+'VAE', rotations=16)
     # import robamine.algo.conv_vae as ae
     # ae.train(dir=logging_dir+'VAE')
