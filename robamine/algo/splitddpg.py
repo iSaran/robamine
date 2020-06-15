@@ -488,25 +488,25 @@ class SplitDDPG(RLAgent):
         for j in range(heightmap_rotations):
             transition.state['init_distance_from_target'] = transition.next_state['init_distance_from_target']
             state_critic = clutter.preprocess_real_state(transition.state, self.max_init_distance, angle[j])
-            state['critic'] = clutter.RealState(state_critic, angle=angle[j], sort=True, normalize=True, spherical=True,
+            state['critic'] = clutter.RealState(state_critic, angle=0, sort=True, normalize=True, spherical=True,
                                                 range_norm=[-1, 1], translate_wrt_target=False).array()
             if self.asymmetric:
                 state['actor'] = clutter.get_asymmetric_actor_feature_from_dict(transition.state, self.ae, self.scaler,
                                                                                 angle[j])
             else:
-                state['actor'] = clutter.RealState(state_critic, angle=angle[j], sort=True, normalize=True,
+                state['actor'] = clutter.RealState(state_critic, angle=0, sort=True, normalize=True,
                                                     spherical=True,
                                                     range_norm=[-1, 1], translate_wrt_target=False).array()
 
             next_state_critic = clutter.preprocess_real_state(transition.next_state, self.max_init_distance, angle[j])
-            next_state['critic'] = clutter.RealState(next_state_critic, angle=angle[j], sort=True, normalize=True,
+            next_state['critic'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
                                                      spherical=True, range_norm=[-1, 1],
                                                      translate_wrt_target=False).array()
             if self.asymmetric:
                 next_state['actor'] = clutter.get_asymmetric_actor_feature_from_dict(transition.next_state, self.ae,
                                                                                      self.scaler, angle[j])
             else:
-                next_state['actor'] = clutter.RealState(next_state_critic, angle=angle[j], sort=True, normalize=True,
+                next_state['actor'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
                                                          spherical=True, range_norm=[-1, 1],
                                                          translate_wrt_target=False).array()
 
