@@ -603,7 +603,7 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
 
 
 def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
-                                 surface_edges,
+                                 target_pos, surface_edges,
                                  angle=0, plot=False):
     """Angle in rad"""
     angle_deg = angle * (180 / np.pi)
@@ -611,10 +611,12 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
     visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0], visual_feature.shape[1]).to(autoencoder.device)
     latent = autoencoder.encoder(visual_feature)
     normalized_latent = normalizer.transform(latent.detach().cpu().numpy())
+
+    surface_edges_ = surface_edges - target_pos
     rot_2d = np.array([[cos(angle), -sin(angle)],
                        [sin(angle), cos(angle)]])
-    surface_edges = np.transpose(np.matmul(rot_2d, np.transpose(surface_edges)))
-    
+    surface_edges_ = np.transpose(np.matmul(rot_2d, np.transpose(surface_edges_)))
+
     if plot:
         ae_output = autoencoder(visual_feature).detach().cpu().numpy()[0, 0, :, :]
         visual_feature = visual_feature.detach().cpu().numpy()[0, 0, :, :]
@@ -623,7 +625,7 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
         ax[1].imshow(ae_output, cmap='gray', vmin=np.min(ae_output), vmax=np.max(ae_output))
         plt.show()
 
-    return np.append(normalized_latent, surface_edges.flatten())
+    return np.append(normalized_latent, surface_edges_.flatten())
 
 def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, angle=0, plot=False):
     heightmap = obs_dict['heightmap_mask'][0]
@@ -631,8 +633,9 @@ def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, an
     target_bounding_box_z = obs_dict['target_bounding_box'][2]
     finger_height = obs_dict['finger_height']
     surface_edges = obs_dict['surface_edges']
+    target_pos = obs_dict['object_poses'][0, 0:2]
     return get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
-                                        surface_edges, angle, plot)
+                                        target_pos, surface_edges, angle, plot)
 
 
 class PrimitiveFeature:
