@@ -19,7 +19,8 @@ import torch.optim as optim
 
 from robamine.algo.util import get_agent_handle
 from robamine.envs.clutter_utils import (plot_point_cloud_of_scene, discretize_2d_box, PushTargetFeature, RealState,
-                                         preprocess_real_state, plot_real_state, PushTargetRealWithObstacleAvoidance)
+                                         preprocess_real_state, plot_real_state, PushTargetRealWithObstacleAvoidance,
+                                         get_asymmetric_actor_feature_from_dict)
 import matplotlib.pyplot as plt
 from robamine.utils.math import min_max_scale
 from robamine.utils.memory import get_batch_indices
@@ -85,6 +86,13 @@ def process_episodes(dir):
 def check_transition(params):
     '''Run environment'''
 
+    # Load autoencoder
+    # import robamine.algo.conv_vae as ae
+    # with open('/home/iason/robamine_logs/2020.01.16.split_ddpg/VAE/model.pkl', 'rb') as file:
+    #     model = pickle.load(file)
+    # latent_dim = model['encoder.fc.weight'].shape[0]
+    # vae = ae.ConvVae(latent_dim)
+    # vae.load_state_dict(model)
 
     params['env']['params']['render'] = True
     params['env']['params']['safe'] = False
@@ -118,6 +126,8 @@ def check_transition(params):
         obs = env.reset(seed=seed)
         # RealState(obs, spherical=True)
         # plot_point_cloud_of_scene(obs)
+        # get_asymmetric_actor_feature_from_dict(obs, vae, None, angle=0, plot=True)
+
         while True:
             action = rng.uniform(-1, 1, 4)
             action[0] = 0

@@ -1171,30 +1171,49 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 push_initial_pos_world = push.get_init_pos()
                 push_final_pos_world = push.get_final_pos()
 
+            # Calculate the orientation of the finger based on the direction of the push
+            push_direction = (push_final_pos_world - push_initial_pos_world) / np.linalg.norm(push_final_pos_world - push_initial_pos_world)
+            x_axis = push_direction
+            y_axis = np.matmul(rot_z(np.pi/2), x_axis)
+            z_axis = np.array([0, 0, 1])
+            rot_mat = np.transpose(np.array([x_axis, y_axis, z_axis]))
+            push_quat = Quaternion.from_rotation_matrix(rot_mat)
+            push_quat_angle, _ = rot2angleaxis(rot_mat)
+
             if self.params['push'].get('predict_collision', True):
-                if primitive == 0 and predict_collision(self.obs_dict, push_initial_pos_world[0], push_initial_pos_world[1]):
+                if primitive == 0 and predict_collision(obs=self.obs_dict,
+                                                        x=push_initial_pos_world[0], y=push_initial_pos_world[1],
+                                                        theta=push_quat_angle):
                     self.push_stopped_ext_forces = True
                     print('Collision detected!')
                     return self.sim.data.time
 
-                self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1], push_initial_pos_world[2] + 0.01, 1, 0, 0, 0])
+                self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1],
+                                                         push_initial_pos_world[2] + 0.01, 1, 0, 0, 0])
                 self.sim_step()
-                self.move_joint_to_target('finger1', [None, None, push_initial_pos_world[2]], 0.1)  # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+                # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+                self.move_joint_to_target(joint_name='finger1', target_position=[None, None, push_initial_pos_world[2]],
+                                          desired_quat=push_quat, duration=0.1)
                 duration = push.get_duration()
 
                 end = push_final_pos_world[:2]
-                self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
+                self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
+                                          desired_quat=push_quat, duration=duration)
             else:
-                init_z = 2 * self.target_bounding_box[2] + 0.05
+                init_z = 2 * self.target_bounding_box[2] + 0.05 + self.finger_height
                 self.sim.data.set_joint_qpos('finger1',
                                              [push_initial_pos_world[0], push_initial_pos_world[1],
-                                              init_z, 1, 0, 0, 0])
+                                              init_z, push_quat.w, push_quat.x, push_quat.y, push_quat.z])
                 self.sim_step()
                 duration = push.get_duration()
 
-                if self.move_joint_to_target('finger1', [None, None, push_initial_pos_world[2]], stop_external_forces=True):
+                if self.move_joint_to_target(joint_name='finger1',
+                                             target_position=[None, None, push_initial_pos_world[2]],
+                                             desired_quat=push_quat,
+                                             stop_external_forces=True):
                     end = push_final_pos_world[:2]
-                    self.move_joint_to_target('finger1', [end[0], end[1], None], duration)
+                    self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
+                                              desired_quat=push_quat, duration=duration)
                 else:
                     self.push_stopped_ext_forces = True
 
@@ -1578,7 +1597,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return False
 
-    def move_joint_to_target(self, joint_name, target_position, duration = 1, stop_external_forces=False):
+    def move_joint_to_target(self, joint_name, target_position, desired_quat, duration = 1, stop_external_forces=False):
         """
         Generates a trajectory in Cartesian space (x, y, z) from the current
         position of a joint to a target position. If one of the x, y, z is None
@@ -1593,7 +1612,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         forces
         """
         init_time = self.time
-        desired_quat = Quaternion()
         self.target_init_pose = Affine3.from_vec_quat(self.target_pos_vision, self.target_quat_vision)
 
         trajectory = [None, None, None]
