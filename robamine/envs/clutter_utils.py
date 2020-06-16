@@ -6,7 +6,7 @@ Clutter Env for continuous control
 """
 
 import numpy as np
-from math import cos, sin, pi, acos, atan2
+from math import cos, sin, pi, acos, atan2, ceil
 
 from scipy.spatial import ConvexHull, Delaunay
 import matplotlib.pyplot as plt
@@ -1117,7 +1117,9 @@ class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
         raw_depth_ = obs_dict['raw_depth'].copy()
         table_depth = np.max(raw_depth_)
 
-        patch_size = 2 * int(finger_length / pixels_to_m) + 2
+        # TODO: The patch has unit orientation and is the norm of the finger length. Optimally the patch should be
+        # calculated using an oriented square.
+        patch_size = 2 * int(ceil(np.linalg.norm([finger_length, finger_length]) / pixels_to_m))
         centroid_pxl = np.zeros(2, dtype=np.int32)
         centroid_pxl[0] = obs_dict['centroid_pxl'][1]
         centroid_pxl[1] = obs_dict['centroid_pxl'][0]
@@ -1560,13 +1562,13 @@ def is_object_above_object(pose, bbox, pose_2, bbox_2, density=0.005, plot=False
 #     return x_y[inhulls.all(axis=1), :]
 
 
-def predict_collision(obs, x, y):
+def predict_collision(obs, x, y, theta):
     n_objects = int(len(obs['object_poses'][obs['object_above_table']]))
     sphere_pose = np.zeros(7)
     sphere_pose[0] = x
     sphere_pose[1] = y
     sphere_pose[2] = 0.5
-    sphere_pose[3] = 1  # identity orientation
+    sphere_pose[3:] = Quaternion.from_rotation_matrix(rot_z(theta)).as_vector()
     sphere_bbox = obs['finger_length'][0] * np.ones(3)
     for i in range(0, n_objects):
         object_pose = obs['object_poses'][obs['object_above_table']][i]
