@@ -1022,6 +1022,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if not self._target_is_on_table():
             for key in list(shapes.keys()):
                 assert obs_dict[key].shape == shapes[key]
+            if self.obs_dict is not None:
+                self.obs_dict_prev = self.obs_dict.copy()
+            self.obs_dict = obs_dict
             return obs_dict
 
         self.get_heightmap()
