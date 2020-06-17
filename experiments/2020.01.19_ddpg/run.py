@@ -671,6 +671,11 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
         os.makedirs(screenshots_path)
 
     i = 0
+    pickle_path = os.path.join(dir_to_save, 'scenes.pkl')
+    assert not os.path.exists(pickle_path), 'File already exists in ' + pickle_path
+    file = open(pickle_path, 'wb')
+    pickle.dump(n_scenes, file)
+    pickle.dump(params, file)
     while i < n_scenes:
         print('Collecting scenes. Scene: ', i, 'out of', n_scenes)
         scene = {}
@@ -678,7 +683,7 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
         scene['seed'] = seed
         for key in keywords:
             scene[key] = copy.deepcopy(obs[key])
-        real_states.append(scene)
+        pickle.dump(scene, file)
         plt.imsave(os.path.join(screenshots_path, str(i) + '_screenshot.png'), env.env.bgr)
         i += 1
 
@@ -704,14 +709,15 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
             scene['seed'] = seed
             for key in keywords:
                 scene[key] = copy.deepcopy(obs[key])
-            real_states.append(scene)
+            pickle.dump(scene, file)
             plt.imsave(os.path.join(dir_to_save, 'screenshots/' + str(i) + '_screenshot.png'), env.env.bgr)
             i += 1
         else:
             print('Collecting scenes. Scene: ', i, 'failed, producing new')
 
-    with open(os.path.join(dir_to_save, 'scenes_5000.pkl'), 'wb') as file:
-        pickle.dump([real_states, params], file)
+    file.close()
+
+
 
 
 def VAE_create_dataset(dir, rotations=0):
@@ -734,8 +740,9 @@ def VAE_create_dataset(dir, rotations=0):
     #     return feature
 
     scenes_path = os.path.join(dir, 'scenes.pkl')
-    scenes, params = pickle.load(open(scenes_path, 'rb'))
-    n_scenes = len(scenes)
+    file = open(scenes_path, 'rb')
+    n_scenes = pickle.load(file)
+    params = pickle.load(file)
 
     dataset_path = os.path.join(dir, 'dataset' + '.hdf5')
     file_ = h5py.File(dataset_path, "a")
@@ -743,7 +750,8 @@ def VAE_create_dataset(dir, rotations=0):
     visual_features = file_.create_dataset('features', (n_datapoints, 128, 128), dtype='f')
 
     n_sampler = 0
-    for scene in scenes:
+    for i in range(n_scenes):
+        scene = pickle.load(file)
         for i in range(rotations):
             theta = (360 / rotations) * i
             feature = get_actor_visual_feature(heightmap=scene['heightmap_mask'][0],
@@ -754,6 +762,8 @@ def VAE_create_dataset(dir, rotations=0):
                                                angle=theta)
             visual_features[n_sampler] = feature.copy()
             n_sampler += 1
+
+    file.close()
 
 
 if __name__ == '__main__':
