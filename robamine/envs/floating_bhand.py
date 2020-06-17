@@ -1,4 +1,4 @@
-from robamine.utils.mujoco import get_body_mass, get_body_inertia, get_camera_pose
+from robamine.utils.mujoco import get_body_mass, get_body_inertia, get_camera_pose, get_body_pose
 from robamine.utils.robotics import PDController, Trajectory
 from robamine.utils.orientation import Quaternion
 from robamine.utils.pcl_tools import PinholeCamera, PointCloud, gl2cv
@@ -11,7 +11,7 @@ import os
 class FloatingBhand:
     def __init__(self):
 
-        self.path = "/home/mkiatos/roBoPy/roBoPy/envs/assets/xml/robots/small_table_floating_bhand.xml"
+        self.path = "/home/mkiatos/roBoPy/roBoPy/envs/assets/xml/robots/floating_bhand_single_object.xml"
         self.model = load_model_from_path(self.path)
         self.sim = MjSim(self.model)
         self.offscreen = MjRenderContextOffscreen(self.sim, 0)
