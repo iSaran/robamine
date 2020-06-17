@@ -162,12 +162,14 @@ class SplitDDPG(RLAgent):
         if self.asymmetric:
             import robamine.algo.conv_vae as ae
             with open(self.params['actor']['autoencoder']['model'], 'rb') as file:
-                model = pickle.load(file)
+                # model = pickle.load(file)
+                model = torch.load(file, map_location='cpu')
+
             latent_dim = model['encoder.fc.weight'].shape[0]
-            self.ae = ae.ConvVae(latent_dim).to('cpu')
+            ae_params = ae.params
+            ae_params['device'] = 'cpu'
+            self.ae = ae.ConvVae(latent_dim, ae_params)
             self.ae.load_state_dict(model)
-            # for param in self.ae.parameters():
-            #     param.requires_grad = False
 
             with open(self.params['actor']['autoencoder']['scaler'], 'rb') as file:
                 self.scaler = pickle.load(file)

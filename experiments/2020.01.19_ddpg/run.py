@@ -710,7 +710,7 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
         else:
             print('Collecting scenes. Scene: ', i, 'failed, producing new')
 
-    with open(os.path.join(dir_to_save, 'scenes.pkl'), 'wb') as file:
+    with open(os.path.join(dir_to_save, 'scenes_5000.pkl'), 'wb') as file:
         pickle.dump([real_states, params], file)
 
 
@@ -806,9 +806,9 @@ if __name__ == '__main__':
     # ------------
 
     VAE_path = os.path.join(logging_dir, 'VAE')
-    # VAE_collect_scenes(params, dir_to_save=VAE_path, n_scenes=1000)
+    VAE_collect_scenes(params, dir_to_save=VAE_path, n_scenes=5000)
     # VAE_create_dataset(dir=VAE_path, rotations=16)
-    import robamine.algo.conv_vae as ae
-    # ae.train(dir=VAE_path)
-    ae.test_vae(dir=VAE_path, model_epoch=70)
+    # import robamine.algo.conv_vae as ae
+    # ae.train(dir=VAE_path, split_per=0.9)
+    # ae.test_vae(dir=VAE_path, model_epoch=70, split_per=0.9)
     # ae.estimate_normalizer(dir=VAE_path, model_epoch=1)
