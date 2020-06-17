@@ -56,11 +56,19 @@ class Encoder(nn.Module):
         self.fc = nn.Linear(8192, latent_dim)
 
     def forward(self, x):
+        # start = torch.cuda.Event(enable_timing=True)
+        # end = torch.cuda.Event(enable_timing=True)
+        # start.record()
+
         x = nn.functional.relu(self.conv1(x))
         x = nn.functional.relu(self.conv2(x))
         x = nn.functional.relu(self.conv3(x))
         x = nn.functional.relu(self.conv4(x))
         x = x.view(-1, 8192)
+
+        # end.record()
+        # torch.cuda.synchronize()
+        # print('cuda time', start.elapsed_time(end))
         # return self.mu(x), self.logvar(x)
         return nn.functional.relu(self.fc(x))
 
@@ -201,9 +209,13 @@ def train(dir, dataset_name='dataset', split_per=0.8, params = params):
         print('epoch:', epoch, 'valid_loss:', valid_loss / len(minibatches))
         print('---')
 
+        mode_cuda_path = os.path.join(models_path, str(epoch) + 'cuda.pkl')
+        with open(mode_cuda_path, 'wb') as file:
+            pickle.dump(conv_vae.state_dict(), file)
+
         model_path = os.path.join(models_path, str(epoch) + '.pkl')
         with open(model_path, 'wb') as file:
-            pickle.dump(conv_vae.state_dict(), file)
+            torch.save(conv_vae, file)
 
 
 def plot(x, rec_x):
@@ -213,16 +225,20 @@ def plot(x, rec_x):
     plt.show()
 
 
-def test_vae(dir, dataset_name='dataset', model_epoch=50, split_per=0.8):
+def test_vae(dir, dataset_name='dataset', model_epoch=70, split_per=0.8):
     file_path = os.path.join(dir, 'model/' + str(model_epoch) + '.pkl')
     with open(file_path, 'rb') as file:
-        state_dict = pickle.load(file)
+        model = torch.load(file, map_location='cpu')
+        # state_dict = pickle.load(file)
 
     device = 'cuda'
 
     latent_dim = LATENT_DIM
-    conv_vae = ConvVae(latent_dim)
-    conv_vae.load_state_dict(state_dict)
+    conv_vae = ConvVae(latent_dim).to('cpu')
+    conv_vae.load_state_dict(model.state_dict())
+    conv_vae.eval()
+
+    print (torch.cuda.memory_allocated(device=0))
 
     file_ = h5py.File(os.path.join(dir, dataset_name + '.hdf5'), "r")
     features = file_['features'][:, :, :]
@@ -230,7 +246,7 @@ def test_vae(dir, dataset_name='dataset', model_epoch=50, split_per=0.8):
     test_first_index = int(split_per * dataset_size)
     for i in range(test_first_index, dataset_size):
         x = np.expand_dims(np.expand_dims(features[i], axis=0), axis=0)
-        x = torch.tensor(x, dtype=torch.float, requires_grad=True).to(device)
+        x = torch.tensor(x, dtype=torch.float, requires_grad=True).to('cpu')
         # rec_x, _, _ = conv_vae(x)
         rec_x = conv_vae(x)
         plot(features[i], rec_x.detach().cpu().numpy()[0, 0, :, :])

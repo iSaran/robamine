@@ -30,6 +30,7 @@ from scipy.spatial.distance import cdist
 from robamine.algo.util import Transition
 import torch
 import torch.nn as nn
+import time
 
 class TargetObjectConvexHull:
     def __init__(self, masked_in_depth, log_dir='/tmp'):
@@ -606,10 +607,23 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
                                  target_pos, surface_edges,
                                  angle=0, plot=False):
     """Angle in rad"""
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    """Angle in rad"""
     angle_deg = angle * (180 / np.pi)
-    visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle_deg, plot=False)
-    visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0], visual_feature.shape[1]).to(autoencoder.device)
+    visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle_deg,
+                                              plot=False)
+    visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0],
+                                                               visual_feature.shape[1]).to('cpu')
+    # start.record()
+    # with torch.no_grad():
+        # print(autoencoder.encoder.conv4(autoencoder.encoder.conv3(autoencoder.encoder.conv2(autoencoder.encoder.conv1(visual_feature)))))
     latent = autoencoder.encoder(visual_feature)
+
+    # end.record()
+    # torch.cuda.synchronize()
+    # print('cuda time', start.elapsed_time(end))
+    # print('time:', time.time() - start)
     normalized_latent = normalizer.transform(latent.detach().cpu().numpy())
 
     surface_edges_ = surface_edges - target_pos

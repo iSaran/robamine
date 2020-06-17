@@ -47,7 +47,7 @@ def eval_with_render(dir):
         except yaml.YAMLError as exc:
             print(exc)
 
-    config['env']['params']['render'] = True
+    config['env']['params']['render'] = False
     config['env']['params']['push']['predict_collision'] = False
     config['env']['params']['max_timesteps'] = 5
     config['env']['params']['safe'] = False
@@ -758,7 +758,7 @@ def VAE_create_dataset(dir, rotations=0):
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
-    exp_dir = 'test'
+    exp_dir = 'robamine_logs_iti-479_2020.06.16.12.44.42'
 
     yml_name = 'params.yml'
     if hostname == 'dream':
@@ -778,7 +778,7 @@ if __name__ == '__main__':
     # Basic runs
     # ----------
 
-    train(params)
+    # train(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
@@ -808,7 +808,7 @@ if __name__ == '__main__':
     VAE_path = os.path.join(logging_dir, 'VAE')
     # VAE_collect_scenes(params, dir_to_save=VAE_path, n_scenes=1000)
     # VAE_create_dataset(dir=VAE_path, rotations=16)
-    # import robamine.algo.conv_vae as ae
+    import robamine.algo.conv_vae as ae
     # ae.train(dir=VAE_path)
-    # ae.test_vae(dir=VAE_path, model_epoch=1)
+    ae.test_vae(dir=VAE_path, model_epoch=70)
     # ae.estimate_normalizer(dir=VAE_path, model_epoch=1)
