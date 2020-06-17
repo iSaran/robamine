@@ -765,6 +765,73 @@ def VAE_create_dataset(dir, rotations=0):
             visual_features[n_sampler] = feature.copy()
             n_sampler += 1
 
+def eval_random_target_search(logging_dir, n_scenes=1000):
+    from robamine.envs.clutter_cont import ClutterContWrapper
+    from robamine.envs.clutter_utils import InvalidEnvError
+    from robamine.utils.info import create_log_dir
+
+    dir_name = create_log_dir(logging_dir)
+    log_dir = os.path.join(logging_dir, dir_name)
+    print('Saving in', log_dir)
+
+    params['env']['params']['render'] = False
+    params['env']['params']['safe'] = False
+    params['env']['params']['max_timesteps'] = 10
+    env = ClutterContWrapper(params=params['env']['params'])
+    scenes = np.arange(0, n_scenes, 1).astype(np.int32)
+
+    successes = []
+    timesteps = []
+    for scene in scenes:
+        seed = int(scene)
+        rng = np.random.RandomState()
+        rng.seed(seed)
+
+        print('')
+        print('======== Scene ', scene, 'out of', len(scenes), '==========')
+        print('Seed:', scene)
+        try:
+            obs = env.reset(seed=seed)
+        except InvalidEnvError as e:
+            print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
+            continue
+
+        timesteps_ = 0
+        step_failed = False
+        while True:
+            timesteps_ += 1
+            action = np.array([0, rng.uniform(-1, 1), 1])
+
+            try:
+                obs, reward, done, info = env.step(action)
+            except InvalidEnvError as e:
+                print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
+                step_failed = True
+                break
+
+            if done:
+                break
+
+        if step_failed:
+            continue
+
+        successes.append(info['success'])
+        print('Object revealed:', info['success'])
+        if info['success']:
+            timesteps.append(timesteps_)
+            print('Object revealed in', timesteps_, 'timesteps')
+
+        print('Average steps before reveal:', np.mean(np.array(timesteps)))
+        print('Max steps before reveal:', np.max(np.array(timesteps)))
+        print('Min steps before reveal:', np.min(np.array(timesteps)))
+        print('Std steps before reveal:', np.std(np.array(timesteps)))
+        print('Success rate:', np.mean(np.array(successes)) * 100, '%')
+
+        with open(os.path.join(log_dir, 'results'), 'wb') as f:
+            pickle.dump([timesteps, successes], f)
+        print('Saving in:', log_dir)
+        print('=============================')
+
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
@@ -788,7 +855,7 @@ if __name__ == '__main__':
     # Basic runs
     # ----------
 
-    train(params)
+    # train(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
@@ -815,10 +882,12 @@ if __name__ == '__main__':
     # VAE training
     # ------------
 
-    VAE_path = os.path.join(logging_dir, 'VAE')
+    # VAE_path = os.path.join(logging_dir, 'VAE')
     # VAE_collect_scenes(params, dir_to_save=VAE_path, n_scenes=1000)
     # VAE_create_dataset(dir=VAE_path, rotations=16)
     # import robamine.algo.conv_vae as ae
     # ae.train(dir=VAE_path)
     # ae.test_vae(dir=VAE_path, model_epoch=1)
     # ae.estimate_normalizer(dir=VAE_path, model_epoch=1)
+
+    eval_random_target_search(logging_dir=logging_dir, n_scenes=1000)

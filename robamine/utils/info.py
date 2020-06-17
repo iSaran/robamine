@@ -75,3 +75,10 @@ def get_now_timestamp():
            '{:02d}'.format(now_raw.minute) + '.' \
            '{:02d}'.format(now_raw.second) + '.' \
            '{:02d}'.format(now_raw.microsecond)
+
+def create_log_dir(path):
+    dir_name = 'robamine_logs_' + get_pc_and_version()[0] + '_' + get_now_timestamp()
+    log_dir = os.path.join(path, dir_name)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    return dir_name

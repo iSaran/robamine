@@ -28,7 +28,8 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          get_distance_of_two_bbox, transform_list_of_points, is_object_above_object,
                                          predict_collision, ObstacleAvoidanceLoss, PushTargetRealWithObstacleAvoidance,
                                          PushTargetReal, PushTargetRealObjectAvoidance, get_table_point_cloud,
-                                         PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition)
+                                         PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition,
+                                         PushTargetSearch)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -475,6 +476,155 @@ class ClutterXMLGenerator(XMLGenerator):
         xml = ET.tostring(self.root, encoding="utf-8", method="xml").decode("utf-8")
         return xml
 
+class ClutterXMLOcclusionGenerator(ClutterXMLGenerator):
+    def generate_random_xml(self, surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
+
+        # Setup fingers
+        # -------------
+
+        finger_size = self.params['finger']['size']
+        finger = self.get_finger(1, type=self.params['finger']['type'], size=self.params['finger']['size'])
+        self.worldbody.append(finger)
+
+        finger = self.get_finger(2, type=self.params['finger']['type'], size=self.params['finger']['size'])
+        self.worldbody.append(finger)
+
+        # Setup surface
+        # -------------
+
+        self.surface_size[0] = self.rng.uniform(surface_length_range[0], surface_length_range[1])
+        self.surface_size[1] = self.rng.uniform(surface_width_range[0], surface_width_range[1])
+        table = self.get_table(size=[self.surface_size[0], self.surface_size[1], 0.01],
+                               walls=self.params.get('walls', False))
+        self.worldbody.append(table)
+
+        # Randomize target object
+        # -----------------------
+
+        #   Randomize type (box or cylinder)
+        temp = self.rng.uniform(0, 1)
+        if (temp < self.params['target']['probability_box']):
+            type = 'box'
+        else:
+            type = 'cylinder'
+            # # Increase the friction of the cylinders to stabilize them
+            # self.sim.model.geom_friction[geom_id][0] = 1.0
+            # self.sim.model.geom_friction[geom_id][1] = .01
+            # self.sim.model.geom_friction[geom_id][2] = .01
+            # self.sim.model.geom_condim[geom_id] = 4
+            # self.sim.model.geom_solref[geom_id][0] = .002
+
+        #   Randomize size
+        target_length = self.rng.uniform(self.params['target']['min_bounding_box'][0], self.params['target']['max_bounding_box'][0])
+        target_width  = self.rng.uniform(self.params['target']['min_bounding_box'][1], min(target_length, self.params['target']['max_bounding_box'][1]))
+        target_height = self.rng.uniform(max(self.params['target']['min_bounding_box'][2], finger_size), self.params['target']['max_bounding_box'][2])
+
+        # Randomize position
+        theta = self.rng.uniform(0, 2 * math.pi)
+        table_line_segments = [LineSegment2D(np.array([self.surface_size[0], -self.surface_size[1]]),
+                                             np.array([self.surface_size[0], self.surface_size[1]])),
+                               LineSegment2D(np.array([self.surface_size[0], self.surface_size[1]]),
+                                             np.array([-self.surface_size[0], self.surface_size[1]])),
+                               LineSegment2D(np.array([-self.surface_size[0], self.surface_size[1]]),
+                                             np.array([-self.surface_size[0], -self.surface_size[1]])),
+                               LineSegment2D(np.array([-self.surface_size[0], -self.surface_size[1]]),
+                                             np.array([self.surface_size[0], -self.surface_size[1]]))]
+        distance_table = np.linalg.norm(
+            LineSegment2D(np.zeros(2), np.array([math.cos(theta), math.sin(theta)])).get_first_intersection_point(
+                table_line_segments))
+
+        max_distance = distance_table - math.sqrt(math.pow(target_length, 2) + math.pow(target_width, 2))
+        distance = min(1, abs(self.rng.normal(0, 0.5))) * max_distance
+        target_pos = [distance * math.cos(theta), distance * math.sin(theta), 0.0]
+
+        if not self.params['target'].get('randomize_pos', True):
+            target_pos = np.zeros(3)
+
+        #   Randomize orientation
+        theta = self.rng.uniform(0, 2 * math.pi)
+        quat = Quaternion()
+        quat.rot_z(theta)
+
+        if type == 'box':
+            target = self.get_target(type, pos=target_pos, quat=[quat.w, quat.x, quat.y, quat.z], size = [target_length, target_width, target_height])
+        else:
+            target = self.get_target(type, size = [target_length, target_height, 0.0])
+        self.worldbody.append(target)
+
+        obstacle_above_target = self.get_obstacle(1, pos=[target_pos[0], target_pos[1],
+                                                          target_pos[2] + target_height + 0.05],
+                                                  quat=[quat.w, quat.x, quat.y, quat.z],
+                                                  size=[1.0 * target_length, 1.0 * target_width, target_height])
+        self.worldbody.append(obstacle_above_target)
+        # input('')
+
+        # Randomize obstacles
+        # -------------------
+
+        all_equal_height = self.rng.uniform(0, 1)
+
+        if all_equal_height < self.params['all_equal_height_prob']:
+            self.n_obstacles = self.params['nr_of_obstacles'][1]
+        else:
+            self.n_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
+
+        # for i in range(1, self.n_obstacles + 1):
+        i = 2
+        while i < self.n_obstacles + 1:
+            # Randomize type (box or cylinder)
+            temp = self.rng.uniform(0, 1)
+            if (temp < self.params['obstacle']['probability_box']):
+                type = 'box'
+            else:
+                type = 'cylinder'
+                # Increase the friction of the cylinders to stabilize them
+                # self.sim.model.geom_friction[geom_id][0] = 1.0
+                # self.sim.model.geom_friction[geom_id][1] = .01
+                # self.sim.model.geom_friction[geom_id][2] = .01
+                # self.sim.model.geom_condim[geom_id] = 4
+
+            #   Randomize size
+            obstacle_length = self.rng.uniform(self.params['obstacle']['min_bounding_box'][0], self.params['obstacle']['max_bounding_box'][0])
+            obstacle_width  = self.rng.uniform(self.params['obstacle']['min_bounding_box'][1], min(obstacle_length, self.params['obstacle']['max_bounding_box'][1]))
+
+            if all_equal_height < self.params['all_equal_height_prob']:
+                obstacle_height = target_height
+            else:
+                # obstacle_height = self.rng.uniform(max(self.params['obstacle']['min_bounding_box'][2], finger_height), self.params['obstacle']['max_bounding_box'][2])
+                min_h = max(self.params['obstacle']['min_bounding_box'][2], target_height + finger_size)
+                if min_h > self.params['obstacle']['max_bounding_box'][2]:
+                    obstacle_height = self.params['obstacle']['max_bounding_box'][2]
+                else:
+                    obstacle_height = self.rng.uniform(min_h, self.params['obstacle']['max_bounding_box'][2])
+
+            if type == 'box':
+                x = obstacle_length
+                y = obstacle_width
+                z = obstacle_height
+            else:
+                x = obstacle_length
+                y = obstacle_height
+                z = 0.0
+
+            # Randomize the positions
+            r = self.rng.exponential(0.01) + target_length + max(x, y)
+            theta = self.rng.uniform(0, 2 * math.pi)
+            pos = [r * math.cos(theta) + target_pos[0], r * math.sin(theta) + target_pos[1], z]
+            obstacle = self.get_obstacle(index=i, type=type, pos=pos, size=[x, y, z])
+            self.worldbody.append(obstacle)
+            i += 1
+
+            if self.rng.uniform(0, 1) > 0.6 and i < self.n_obstacles + 1:
+                zz = self.rng.uniform(self.params['obstacle']['min_bounding_box'][2],
+                                      self.params['obstacle']['max_bounding_box'][2])
+                obstacle = self.get_obstacle(index=i, type=type, pos=[pos[0], pos[1], pos[2] + 0.1], size=[x, y, zz])
+                self.worldbody.append(obstacle)
+                i += 1
+
+        xml = ET.tostring(self.root, encoding="utf-8", method="xml").decode("utf-8")
+        return xml
+
+
 class ClutterContWrapper(gym.Env):
     def __init__(self, params):
         self.params = params
@@ -553,9 +703,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def __init__(self, params):
         self.params = params
         self.log_dir = self.params.get('log_dir', '/tmp')
-        path = os.path.join(os.path.dirname(__file__), "assets/xml/robots/clutter.xml")
-        self.xml_generator = ClutterXMLGenerator(path, params)
+
         self.rng = np.random.RandomState()  # rng for the scene
+        self.occlusion_ = self.rng.uniform(0, 1) < self.params.get('occlusion_probability', 0)
+
+        path = os.path.join(os.path.dirname(__file__), "assets/xml/robots/clutter.xml")
+        if self.occlusion_:
+            self.xml_generator = ClutterXMLOcclusionGenerator(path, params)
+        else:
+            self.xml_generator = ClutterXMLGenerator(path, params)
         s = self.params.get('seed', None)
         self.seed(s)
 
@@ -673,6 +829,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.raw_depth = None
         self.centroid_pxl = None
         self.singulation_condition = None
+        self.target_is_occluded = False
 
     def __del__(self):
         if self.viewer is not None:
@@ -741,13 +898,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 self.sim_step()
 
             hug_probability = self.params.get('hug_probability', 1)
-            if self.rng.uniform(0, 1) < hug_probability:
+            if self.rng.uniform(0, 1) < hug_probability and not self.occlusion_:
                 self._hug_target(number_of_obstacles)
 
             if not self._target_is_on_table():
                 raise InvalidEnvError('Target has fallen off the table during resetting the env.')
 
-            self.check_target_occlusion_2()
+            if not self.occlusion_:
+                self.check_target_occlusion_2()
 
             for _ in range(100):
                 for i in range(1, number_of_obstacles):
@@ -873,13 +1031,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         # Calculate masks
         color_detector = cv_tools.ColorDetector('red')
-        mask = color_detector.detect(bgr)
-
         obstacle_detector = cv_tools.ColorDetector('blue')
+        mask = color_detector.detect(bgr)
+        self.target_is_occluded = len(np.argwhere(mask > 0)) < 200
+        if self.target_is_occluded:
+            mask = obstacle_detector.detect(bgr)
+
         mask_obstacles = obstacle_detector.detect(bgr)
 
         cv2.imwrite(os.path.join(self.log_dir, 'initial_mask.png'), mask)
-        if len(np.argwhere(mask > 0)) < 200:
+        if self.target_is_occluded and not self.occlusion_:
             raise InvalidEnvError('Mask is empty during reset. Possible occlusion of the target object.')
 
         # Calculate the centroid w.r.t. initial image (640x480) in pixels
@@ -948,7 +1109,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         n_obstacles = self.xml_generator.n_obstacles
         for i in range(1, n_obstacles + 1):
             names.append("object" + str(i))
-        for i in range(n_obstacles + 1):
+        for i in range(1, n_obstacles + 1):
             body_id = get_body_names(self.sim.model).index(names[i])
             if self.sim.data.body_xpos[body_id][2] < 0:
                 self.sim.data.set_joint_qpos(names[i], [100, 100, -100, 1, 0, 0, 0])
@@ -1128,19 +1289,21 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     # self.init_distance_from_target = push.init_distance_from_target
                     # push.translate(self.obs_dict['object_poses'][0, :2])
 
-                    push = PushTargetDepthObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
-                                                          push_distance_range=self.params['push']['distance'],
-                                                          init_distance_range=self.params['push']['target_init_distance'],
-                                                          finger_length=self.finger_length,
-                                                          finger_height=self.finger_height,
-                                                          target_height=self.target_bounding_box[2],
-                                                          camera=self.camera,
-                                                          pixels_to_m=self.pixels_to_m,
-                                                          rgb_to_camera_frame=self.rgb_to_camera_frame,
-                                                          camera_pose=get_camera_pose(self.sim, 'xtion'))
-                    self.init_distance_from_target = push.init_distance_from_target
-                    push.translate(self.obs_dict['object_poses'][0, :2])
+                    # push = PushTargetDepthObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
+                    #                                       push_distance_range=self.params['push']['distance'],
+                    #                                       init_distance_range=self.params['push']['target_init_distance'],
+                    #                                       finger_length=self.finger_length,
+                    #                                       finger_height=self.finger_height,
+                    #                                       target_height=self.target_bounding_box[2],
+                    #                                       camera=self.camera,
+                    #                                       pixels_to_m=self.pixels_to_m,
+                    #                                       rgb_to_camera_frame=self.rgb_to_camera_frame,
+                    #                                       camera_pose=get_camera_pose(self.sim, 'xtion'))
+                    push = PushTargetSearch(angle=action[1], target_pos_z=self.target_pos[2],
+                                            target_bb_z=self.target_bounding_box[2], finger_height=self.finger_height)
 
+                    self.init_distance_from_target = push.init_distance_from_target
+                    push.translate(self.target_pos_vision[:2])
                 else:
                     push = PushTarget(theta=action[1],
                                       push_distance=action[2],
@@ -1170,6 +1333,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             else:
                 push_initial_pos_world = push.get_init_pos()
                 push_final_pos_world = push.get_final_pos()
+
 
             # Calculate the orientation of the finger based on the direction of the push
             push_direction = (push_final_pos_world - push_initial_pos_world) / np.linalg.norm(push_final_pos_world - push_initial_pos_world)
@@ -1513,6 +1677,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     def terminal_state_real_state_push_target(self, obs):
         if self.timesteps >= self.max_timesteps:
             return True, 'timesteps'
+
+        if not self.target_is_occluded:
+            self.success = True
+            return True, 'target_revealed'
 
         # Terminal if collision is detected
         if self.push_stopped_ext_forces:

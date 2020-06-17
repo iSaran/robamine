@@ -58,7 +58,7 @@ env:
     all_equal_height_prob: 0.0
     finger:
       size: 0.005
-      type: sphere
+      type: box
     nr_of_obstacles:
       - 5
       - 8
@@ -83,6 +83,7 @@ env:
       workspace: [0.0, 0.1]
     feature_normalization_per: 'session'  # available: 'session', 'episode'
     hug_probability: 0.5
+    occlusion_probability: 1
     walls: False
 world:
   comments: ''
