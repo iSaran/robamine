@@ -220,8 +220,6 @@ class FloatingBhand:
             self.sim_step()
 
         self.set_joint_vals(target_configuration)
-        print('target configuration setted')
-        input('')
         self.close_fingers()
         self.pick_the_object()
         self.pertain()
@@ -232,8 +230,8 @@ class FloatingBhand:
         target_position = self.bhand_pos
         target_quat = self.bhand_quat
 
-        configuration = [target_configuration[0], target_configuration[1] + 10 * np.pi / 180.0,
-                         target_configuration[2] + 10 * np.pi / 180.0, target_configuration[3] + 10 * np.pi / 180.0]
+        configuration = [target_configuration[0], target_configuration[1],
+                         target_configuration[2], target_configuration[3]]
         trajectory_joints = [None, None, None, None]
         for i in range(4):
             trajectory_joints[i] = Trajectory([self.time, self.time + duration], [self.bhand_joint_pos[i], configuration[i]])
