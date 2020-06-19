@@ -413,3 +413,7 @@ class PointCloud:
         frame = open3d.create_mesh_coordinate_frame(size=0.1)
         open3d.draw_geometries([pcd, frame])
 
+    def crop(self, min, max, axis=0):
+        ids = np.where((self.points[:, axis] > min) & (self.points[:, axis] < max))
+        self.points = self.points[ids]
+
