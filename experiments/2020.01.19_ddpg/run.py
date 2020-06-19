@@ -832,6 +832,13 @@ def eval_random_target_search(logging_dir, n_scenes=1000):
         print('Saving in:', log_dir)
         print('=============================')
 
+def eval_random_target_search_plot(results_path):
+    with open(results_path, 'rb') as f:
+        timesteps, successes = pickle.load(f)
+    plt.hist(timesteps)
+    plt.show()
+    print(timesteps)
+
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
@@ -890,4 +897,5 @@ if __name__ == '__main__':
     # ae.test_vae(dir=VAE_path, model_epoch=1)
     # ae.estimate_normalizer(dir=VAE_path, model_epoch=1)
 
-    eval_random_target_search(logging_dir=logging_dir, n_scenes=1000)
+    # eval_random_target_search(logging_dir=logging_dir, n_scenes=1000)
+    eval_random_target_search_plot(results_path='/home/iason/robamine_logs/2020.01.16.split_ddpg/results')
