@@ -47,7 +47,7 @@ def eval_with_render(dir):
         except yaml.YAMLError as exc:
             print(exc)
 
-    config['env']['params']['render'] = False
+    config['env']['params']['render'] = True
     config['env']['params']['push']['predict_collision'] = False
     config['env']['params']['max_timesteps'] = 5
     config['env']['params']['safe'] = False

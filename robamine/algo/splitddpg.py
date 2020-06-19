@@ -23,7 +23,6 @@ import copy
 
 import matplotlib.pyplot as plt
 import logging
-import time
 
 logger = logging.getLogger('robamine.algo.splitdqn')
 
@@ -255,7 +254,6 @@ class SplitDDPG(RLAgent):
 
 
     def predict(self, state):
-        start = time.time()
         output = np.zeros(max(self.action_dim) + 1)
         max_q = -1e10
         for i in range(self.nr_network):
@@ -280,7 +278,6 @@ class SplitDDPG(RLAgent):
 
         output[0] = self.network_to_primitive_index(max_primitive)
         output[1:(self.action_dim[max_primitive] + 1)] = max_a
-        print('predict_time:', time.time() - start)
         return output
 
     def explore(self, state):
