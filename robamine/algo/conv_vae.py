@@ -167,6 +167,8 @@ def train(dir, dataset_name='dataset', split_per=0.8, params = params):
     train_last_index = int(split_per * dataset_size)
     train_indices = np.arange(0, train_last_index, 1)
     valid_indices = np.arange(train_last_index, dataset_size, 1)
+    print(train_last_index)
+    input('')
 
     # Initialize the autoencoder
     conv_vae = ConvVae(params['latent_dim'])
@@ -252,22 +254,26 @@ def test_vae(dir, dataset_name='dataset', model_epoch=70, split_per=0.8):
         plot(features[i], rec_x.detach().cpu().numpy()[0, 0, :, :])
 
 
-def estimate_normalizer(dir, dataset_name='dataset', model_epoch=50):
+def estimate_normalizer(dir, dataset_name='dataset', model_epoch=50, split_per=0.8):
     file_path = os.path.join(dir, 'model/' + str(model_epoch) + '.pkl')
     with open(file_path, 'rb') as file:
-        state_dict = pickle.load(file)
+        model = torch.load(file, map_location='cpu')
 
-    device = 'cuda'
-    latent_dim = 256
-    conv_vae = ConvVae(latent_dim)
-    conv_vae.load_state_dict(state_dict)
+    device = 'cpu'
+
+    latent_dim = LATENT_DIM
+    conv_vae = ConvVae(latent_dim).to(device)
+    conv_vae.load_state_dict(model)
+    conv_vae.eval()
 
     file_ = h5py.File(os.path.join(dir, dataset_name + '.hdf5'), "r")
     features = file_['features'][:, :, :]
     dataset_size = len(file_['features'])
 
+    train_last_index = int(split_per * dataset_size)
+
     latents = np.zeros((dataset_size, latent_dim))
-    for i in range(dataset_size):
+    for i in range(train_last_index):
         x = np.expand_dims(np.expand_dims(features[i], axis=0), axis=0)
         x = torch.tensor(x, dtype=torch.float).to(device)
         # rec_x, _, _ = conv_vae(x)
