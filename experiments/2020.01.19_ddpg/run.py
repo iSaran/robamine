@@ -728,8 +728,6 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
     file.close()
 
 
-
-
 def VAE_create_dataset(dir, rotations=0):
     from robamine.utils.cv_tools import Feature
     from robamine.envs.clutter_utils import get_actor_visual_feature
@@ -774,6 +772,35 @@ def VAE_create_dataset(dir, rotations=0):
             n_sampler += 1
 
     file.close()
+
+
+# Train ICRA
+
+def icra_check_transition(params):
+    from robamine.envs.clutter_cont import ClutterContICRAWrapper
+    params['env']['params']['render'] = True
+    params['env']['params']['safe'] = False
+    params['env']['params']['icra']['use'] = True
+    env = ClutterContICRAWrapper(params['env']['params'])
+
+    while True:
+        seed = np.random.randint(100000000)
+        # seed = 36263774
+        # seed = 48114142
+        # seed = 86177553
+        print('Seed:', seed)
+        rng = np.random.RandomState()
+        rng.seed(seed)
+        obs = env.reset(seed=seed)
+
+        while True:
+            for action in np.arange(0, 16, 1):
+                # action = 8
+                print('icra discrete action', action)
+                obs, reward, done, info = env.step(action)
+                print('reward: ', reward, 'done:', done)
+            if done:
+                break
 
 
 if __name__ == '__main__':
@@ -825,10 +852,15 @@ if __name__ == '__main__':
     # VAE training
     # ------------
 
-    VAE_path = os.path.join(logging_dir, 'VAE')
+    # VAE_path = os.path.join(logging_dir, 'VAE')
     # VAE_collect_scenes(params, dir_to_save=VAE_path, n_scenes=5000)
     # VAE_create_dataset(dir=VAE_path, rotations=16)
-    import robamine.algo.conv_vae as ae
+    # import robamine.algo.conv_vae as ae
     # ae.train(dir=VAE_path, split_per=0.9)
     # ae.test_vae(dir=VAE_path, model_epoch=60, split_per=0.9)
-    ae.estimate_normalizer(dir=VAE_path, model_epoch=60, split_per=0.9)
+    # ae.estimate_normalizer(dir=VAE_path, model_epoch=60, split_per=0.9)
+
+    # ICRA comparison
+    # ---------------
+
+    icra_check_transition(params)

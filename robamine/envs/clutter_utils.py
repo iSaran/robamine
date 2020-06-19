@@ -1192,6 +1192,55 @@ class PushObstacle(PushAction2D):
 
         super(PushObstacle, self).__init__(p1, p2, z)
 
+class PushObstacleICRA(PushObstacle):
+    def __init__(self, action, nr_rotations, push_distance, push_distance_range, object_height, finger_height):
+        theta = action * 2 * np.pi / nr_rotations
+        # print('--')
+        # print('action: ', action)
+        # print('theta: ', theta)
+        # print('rotations: ', nr_rotations)
+        # print('--')
+        theta = min_max_scale(theta, range=[0, 2 * np.pi], target_range=[-1, 1])
+        super(PushObstacleICRA, self).__init__(theta=theta, push_distance=push_distance,
+                                               push_distance_range=push_distance_range, object_height=object_height,
+                                               finger_height=finger_height)
+
+class PushTargetICRA(PushTargetWithObstacleAvoidance):
+    def __init__(self, action, nr_rotations, obs_dict, push_distance_range, translate_wrt_target=True):
+        theta = action * 2 * np.pi / nr_rotations
+        theta = min_max_scale(theta, range=[0, 2 * np.pi], target_range=[-1, 1])
+
+        self.push_distance_range = push_distance_range
+        self.init_distance_range = [0, 0.1]
+        # Get the vertices of the bounding box from real state, calculate the fourth vertice and this is the convex hull
+        target_principal_corners = RealState(obs_dict, sort=False, normalize=False,
+                                             spherical=False,
+                                             translate_wrt_target=translate_wrt_target).principal_corners[0]
+
+        fourth_point = target_principal_corners[2][0:2] - target_principal_corners[0][0:2]
+        fourth_point += target_principal_corners[1][0:2]
+        convex_hull = [LineSegment2D(target_principal_corners[0][0:2], target_principal_corners[1][0:2]),
+                       LineSegment2D(target_principal_corners[1][0:2], fourth_point),
+                       LineSegment2D(fourth_point, target_principal_corners[2][0:2]),
+                       LineSegment2D(target_principal_corners[2][0:2], target_principal_corners[0][0:2])]
+
+        angle, _ = rot2angleaxis(Quaternion.from_vector(obs_dict['object_poses'][0, 3:]).rotation_matrix())
+        rotz = rot_z(angle)
+        for i in range(4):
+            convex_hull[i].p1 = np.matmul(rotz, np.append(convex_hull[i].p1, 0))[:2]
+            convex_hull[i].p2 = np.matmul(rotz, np.append(convex_hull[i].p2, 0))[:2]
+
+        finger_size = obs_dict['finger_height']
+        object_height = target_principal_corners[3][2] / 2
+
+        super(PushTargetICRA, self).__init__(theta=theta, push_distance=1,
+                                                                  distance=-1,
+                                                                  push_distance_range=push_distance_range,
+                                                                  init_distance_range=[0, 0.1],
+                                                                  convex_hull=convex_hull, object_height=object_height,
+                                                                  finger_size=finger_size)
+
+
 # Various utils methods
 # ---------------------
 

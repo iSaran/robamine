@@ -28,7 +28,8 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          get_distance_of_two_bbox, transform_list_of_points, is_object_above_object,
                                          predict_collision, ObstacleAvoidanceLoss, PushTargetRealWithObstacleAvoidance,
                                          PushTargetReal, PushTargetRealObjectAvoidance, get_table_point_cloud,
-                                         PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition)
+                                         PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition,
+                                         PushObstacleICRA, PushTargetICRA)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -44,6 +45,7 @@ import matplotlib.pyplot as plt
 from robamine.utils.cv_tools import Feature
 
 import torch
+import copy
 
 def exp_reward(x, max_penalty, min, max):
     a = 1
@@ -477,6 +479,7 @@ class ClutterXMLGenerator(XMLGenerator):
 
 class ClutterContWrapper(gym.Env):
     def __init__(self, params):
+        self.env_type=ClutterCont
         self.params = params
         self.params['seed'] = self.params.get('seed', None)
         self.env = None
@@ -504,14 +507,14 @@ class ClutterContWrapper(gym.Env):
             reset_not_valid = True
             while reset_not_valid:
                 reset_not_valid = False
-                self.env = ClutterCont(params=self.params)
+                self.env = self.env_type(params=self.params)
                 try:
                     obs = self.env.reset()
                 except InvalidEnvError as e:
                     print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
                     reset_not_valid = True
         else:
-            self.env = ClutterCont(params=self.params)
+            self.env = self.env_type(params=self.params)
             obs = self.env.reset()
 
         self.last_reset_state_dict = self.env.state_dict()
@@ -846,6 +849,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
             # Convert depth (distance from camera) to heightmap (distance from table)
             depth = cv_tools.gl2cv(depth, z_near, z_far)
+
+            self.point_cloud = cv_tools.PointCloud.from_depth(depth, self.camera)
+            target_pose = get_body_pose(self.sim, 'target')  # g_wo: object w.r.t. world
+            camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
+            camera_pose[:3, :3] = self.rgb_to_camera_frame
+            camera_to_target = np.matmul(np.linalg.inv(target_pose), camera_pose)  # g_oc = inv(g_wo) * g_wc
+            self.point_cloud.transform(camera_to_target)
+            self.point_cloud.crop(0, 0.4, axis=2)
+
             max_depth = np.max(depth)
             depth[depth == 0] = max_depth
             heightmap = max_depth - depth
@@ -1052,7 +1064,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return obs_dict
 
     def step(self, action):
-        action_ = action.copy()
+        action_ = copy.copy(action)
 
         if action_[0] == 0:
             self.observation_area = [50, 50]
@@ -1965,3 +1977,168 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 qvel = self.sim.data.qvel.ravel().copy()
                 qpos[index[0] + 2] = - 0.2
                 self.set_state(qpos, qvel)
+
+class ClutterContICRAWrapper(ClutterContWrapper):
+    def __init__(self, params):
+        super(ClutterContICRAWrapper, self).__init__(params)
+        self.env_type = ClutterContICRA
+
+class ClutterContICRA(ClutterCont):
+    def do_simulation(self, action):
+        self.target_grasped_successfully = False
+        self.obstacle_grasped_successfully = False
+
+        n_rotations = self.params['icra']['n_rotations']
+
+        primitive = np.floor(action / n_rotations)
+        action_ = action - n_rotations * primitive
+
+        if primitive == 0:
+            push = PushTargetICRA(action=action_,
+                                  nr_rotations=self.params['icra']['n_rotations'],
+                                  obs_dict=self.obs_dict,
+                                  push_distance_range=self.params['push']['distance'])
+            angle, _ = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
+            push.rotate(-angle)
+            push.translate(self.obs_dict['object_poses'][0, :2])
+        elif primitive == 1:
+            push = PushObstacleICRA(action=action_,
+                                    nr_rotations=self.params['icra']['n_rotations'],
+                                    push_distance=1,  # use maximum distance for now
+                                    push_distance_range=self.params['push']['distance'],
+                                    object_height=2 * self.target_bounding_box[2],
+                                    finger_height=self.finger_height)
+            angle, _ = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
+            push.rotate(-angle)
+            push.translate(self.obs_dict['object_poses'][0, :2])
+        elif primitive == 2:
+            raise Exception('Not iplemented')
+
+        push_initial_pos_world = push.get_init_pos()
+        push_final_pos_world = push.get_final_pos()
+
+        # Calculate the orientation of the finger based on the direction of the push
+        push_direction = (push_final_pos_world - push_initial_pos_world) / np.linalg.norm(
+            push_final_pos_world - push_initial_pos_world)
+        x_axis = push_direction
+        y_axis = np.matmul(rot_z(np.pi / 2), x_axis)
+        z_axis = np.array([0, 0, 1])
+        rot_mat = np.transpose(np.array([x_axis, y_axis, z_axis]))
+        push_quat = Quaternion.from_rotation_matrix(rot_mat)
+        push_quat_angle, _ = rot2angleaxis(rot_mat)
+
+        if self.params['push'].get('predict_collision', True):
+            if primitive == 0 and predict_collision(obs=self.obs_dict,
+                                                    x=push_initial_pos_world[0], y=push_initial_pos_world[1],
+                                                    theta=push_quat_angle):
+                self.push_stopped_ext_forces = True
+                print('Collision detected!')
+                return self.sim.data.time
+
+            self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1],
+                                                     push_initial_pos_world[2] + 0.01, 1, 0, 0, 0])
+            self.sim_step()
+            # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+            self.move_joint_to_target(joint_name='finger1', target_position=[None, None, push_initial_pos_world[2]],
+                                      desired_quat=push_quat, duration=0.1)
+            duration = push.get_duration()
+
+            end = push_final_pos_world[:2]
+            self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
+                                      desired_quat=push_quat, duration=duration)
+        else:
+            init_z = 2 * self.target_bounding_box[2] + 0.05 + self.finger_height
+            self.sim.data.set_joint_qpos('finger1',
+                                         [push_initial_pos_world[0], push_initial_pos_world[1],
+                                          init_z, push_quat.w, push_quat.x, push_quat.y, push_quat.z])
+            self.sim_step()
+            duration = push.get_duration()
+
+            if self.move_joint_to_target(joint_name='finger1',
+                                         target_position=[None, None, push_initial_pos_world[2]],
+                                         desired_quat=push_quat,
+                                         stop_external_forces=True):
+                end = push_final_pos_world[:2]
+                self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
+                                          desired_quat=push_quat, duration=duration)
+            else:
+                self.push_stopped_ext_forces = True
+
+        return self.sim.data.time
+
+    def step(self, action):
+        action_ = action
+
+        self.observation_area = [50, 50]
+
+        self.timesteps += 1
+        time = self.do_simulation(action_)
+        experience_time = time - self.last_timestamp
+        self.last_timestamp = time
+
+        obs = self.get_obs()
+
+        reward = self.get_reward(obs, action_)
+        # reward = self.get_shaped_reward_obs(obs, pcd, dim)
+        # reward = self.get_reward_obs(obs, pcd, dim)
+
+        done = False
+        terminal, reason = self.terminal_state(obs)
+        if terminal:
+            done = True
+        self.push_stopped_ext_forces = False
+
+        # Extra data for having pushing distance, theta along with displacements
+        # of the target
+        extra_data = {'target_init_pose': self.target_init_pose.matrix()}
+
+        self.heightmap_prev = self.heightmap.copy()
+
+        collision = False
+        if reason == 'collision':
+            collision = True
+        return obs, reward, done, {'experience_time': experience_time,
+                                   'success': self.success,
+                                   'extra_data': extra_data,
+                                   'collision': collision}
+
+    def get_reward(self, observation, action):
+        # Penalize external forces during going downwards
+        if self.push_stopped_ext_forces:
+            return -10
+
+        if observation['object_poses'][0][2] < 0:
+            return -10
+
+        dist = self.get_real_distance_from_closest_obstacle(observation)
+        if dist > self.singulation_distance:
+            return 10
+
+        # for each push that frees the space around the target
+        point_cloud = self.point_cloud.points
+        dim = get_geom_size(self.sim.model, 'target')
+
+        # for each push that frees the space around the target
+        points_around = []
+        gap = 0.03
+        bbox_limit = 0.01
+        for p in point_cloud:
+            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
+                dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
+                    -dim[1]  < p[1] < dim[1]:
+                points_around.append(p)
+            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
+                dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
+                    -dim[0]  < p[0] < dim[0]:
+                points_around.append(p)
+
+        if self.no_of_prev_points_around == len(points_around):
+            return -5
+
+        self.no_of_prev_points_around = len(points_around)
+
+        extra_penalty = 0
+        # if self.params['extra_primitive'] and action >= self.params['nr_of_actions'] * (2/3):
+        #     extra_penalty = -5
+
+        return -1 + extra_penalty

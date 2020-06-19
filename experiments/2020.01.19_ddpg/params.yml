@@ -52,6 +52,10 @@ agent:
 env:
   name: ClutterContWrapper-v0
   params:
+    icra:
+      use: False
+      n_rotations: 8
+      n_primitives: 3
     hardcoded_primitive: 0
     max_timesteps: 5
     real_state: True
