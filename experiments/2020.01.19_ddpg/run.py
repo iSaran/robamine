@@ -209,6 +209,36 @@ def visualize_critic_predictions(exp_dir, model_name='model.pkl'):
 
         obs, _, _, _ = env.step(action=action)
 
+def train_combo_q_learning(params):
+    rb_logging.init(directory=params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
+    from robamine.algo.splitddpg import DQNCombo
+
+    agent = DQNCombo({'hidden_units': [100, 100],
+                      'learning_rate': 1e-3,
+                      'replay_buffer_size': 1000000,
+                      'epsilon_start': 0.9,
+                      'epsilon_end': 0.05,
+                      'epsilon_decay': 10000,
+                      'device': 'cpu',
+                      'autoencoder_model': os.path.join(params['world']['logging_dir'], 'VAE/model.pkl'),
+                      'autoencoder_scaler': os.path.join(params['world']['logging_dir'], 'VAE/normalizer.pkl'),
+                      'pretrained': [os.path.join(params['world']['logging_dir'], 'splitcombo/push_target.pkl'), \
+                                     os.path.join(params['world']['logging_dir'], 'splitcombo/push_obstacle.pkl')],
+                      'heightmap_rotations': 8,
+                      'batch_size': 32,
+                      'tau': 0.001,
+                      'double_dqn': True,
+                      'discount': 0.99
+                      })
+
+
+    params['env']['params']['render'] = False
+    params['env']['params']['hardcoded_primitive'] = -1
+    env = gym.make(params['env']['name'], params=params['env']['params'])
+
+    trainer = TrainWorld(agent=agent, env=env, params=params['world']['params'])
+    trainer.run()
+
 
 # Supervised learning of a critic
 # -------------------------------
@@ -826,6 +856,7 @@ if __name__ == '__main__':
     # ----------
 
     # train(params)
+    train_combo_q_learning(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
@@ -863,4 +894,4 @@ if __name__ == '__main__':
     # ICRA comparison
     # ---------------
 
-    icra_check_transition(params)
+    # icra_check_transition(params)

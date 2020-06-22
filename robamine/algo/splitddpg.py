@@ -664,3 +664,227 @@ class ObstacleAvoidanceLoss(nn.Module):
         fig.colorbar(surf1, ax=axs, shrink=0.5, aspect=5)
 
 
+class QNetwork(nn.Module):
+    def __init__(self, state_dim, action_dim, hidden_units):
+        super(QNetwork, self).__init__()
+
+        self.hidden_layers = nn.ModuleList()
+        self.hidden_layers.append(nn.Linear(state_dim, hidden_units[0]))
+        i = 0
+        for i in range(1, len(hidden_units)):
+            self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
+
+        self.out = nn.Linear(hidden_units[i], action_dim)
+
+    def forward(self, x):
+        for layer in self.hidden_layers:
+            x = layer(x)
+            x = nn.functional.relu(x)
+        action_prob = self.out(x)
+        return action_prob
+
+class DQNCombo(RLAgent):
+    def __init__(self, params):
+        import robamine.algo.conv_vae as ae
+        self.state_dim = clutter.get_observation_dim(-1)
+        action_dim = len(params['pretrained'])
+        super().__init__(self.state_dim, action_dim, 'DQN', params)
+        state_dim = ae.LATENT_DIM + 8  # TODO: hardcoded the extra dim for surface edges
+
+        self.device = self.params['device']
+
+        self.network, self.target_network = QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device), \
+                                            QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=self.params['learning_rate'])
+        self.loss = nn.MSELoss()
+        self.replay_buffer = ReplayBuffer(self.params['replay_buffer_size'])
+        self.learn_step_counter = 0
+
+        self.rng = np.random.RandomState()
+
+        self.info['qnet_loss'] = 0
+        self.epsilon = self.params['epsilon_start']
+        self.info['epsilon'] = self.epsilon
+
+        with open(self.params['autoencoder_model'], 'rb') as file:
+            model = torch.load(file, map_location='cpu')
+
+        latent_dim = model['encoder.fc.weight'].shape[0]
+        ae_params = ae.params
+        ae_params['device'] = 'cpu'
+        self.ae = ae.ConvVae(latent_dim, ae_params)
+        self.ae.load_state_dict(model)
+
+        with open(self.params['autoencoder_scaler'], 'rb') as file:
+            self.scaler = pickle.load(file)
+
+
+        pretrained = self.params['pretrained']
+
+        self.actor = nn.ModuleList()
+        logger.warn("SplitDDPG: Overwriting the actors from the models provided in load_actors param.")
+        for i in range(len(pretrained)):
+            path = pretrained[i]
+            with open(path, 'rb') as file:
+                pretrained_splitddpg = pickle.load(file)
+                # Assuming that pretrained splitddpg has only one primitive so actor is in 0 index
+                self.actor.append(
+                    Actor(state_dim, pretrained_splitddpg['action_dim'][0], [400, 300]))
+                self.actor[-1].load_state_dict(pretrained_splitddpg['actor'][0])
+
+    def predict(self, state):
+        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, 0)
+        s = torch.FloatTensor(state_).to(self.device)
+        values = self.network(s).cpu().detach().numpy()
+        primitive = np.argmax(values)
+        action = self.actor[primitive](s).detach().cpu().numpy()
+        return np.insert(action, 0, primitive)
+
+    def explore(self, state):
+        self.epsilon = self.params['epsilon_end'] + \
+                       (self.params['epsilon_start'] - self.params['epsilon_end']) * \
+                       math.exp(-1 * self.learn_step_counter / self.params['epsilon_decay'])
+        if self.rng.uniform(0, 1) >= self.epsilon:
+            return self.predict(state)
+        primitive = self.rng.randint(0, self.action_dim)
+
+
+        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, 0)
+        s = torch.FloatTensor(state_).to(self.device)
+        action = self.actor[primitive](s).detach().cpu().numpy()
+        return np.insert(action, 0, primitive)
+
+    def learn(self, transition):
+        self.info['qnet_loss'] = 0
+
+        transitions = self._transitions(transition)
+        for t in transitions:
+            self.replay_buffer.store(t)
+
+        # If we have not enough samples just keep storing transitions to the
+        # buffer and thus exit.
+        if self.replay_buffer.size() < self.params['batch_size']:
+            return
+
+        # Update target network if necessary
+        # if self.learn_step_counter > self.params['target_net_updates']:
+        #     self.target_network.load_state_dict(self.network.state_dict())
+        #     self.learn_step_counter = 0
+
+        new_target_params = {}
+        for key in self.target_network.state_dict():
+            new_target_params[key] = self.params['tau'] * self.target_network.state_dict()[key] + (
+                        1 - self.params['tau']) * self.network.state_dict()[key]
+        self.target_network.load_state_dict(new_target_params)
+
+        # Sample from replay buffer
+        batch = self.replay_buffer.sample_batch(self.params['batch_size'])
+        batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
+        batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
+        batch.action = np.array(batch.action.reshape((batch.action.shape[0], 1)))
+
+        state = torch.FloatTensor(batch.state).to(self.device)
+        action = torch.LongTensor(batch.action.astype(int)).to(self.device)
+        next_state = torch.FloatTensor(batch.next_state).to(self.device)
+        terminal = torch.FloatTensor(batch.terminal).to(self.device)
+        reward = torch.FloatTensor(batch.reward).to(self.device)
+
+        if self.params['double_dqn']:
+            best_action = self.network(next_state).max(1)[1]  # action selection
+            q_next = self.target_network(next_state).gather(1, best_action.view(self.params['batch_size'],
+                                                                                1))  # action evaluation
+        else:
+            q_next = self.target_network(next_state).max(1)[0].view(self.params['batch_size'], 1)
+
+        q_target = reward + (1 - terminal) * self.params['discount'] * q_next
+        q = self.network(state).gather(1, action)
+        loss = self.loss(q, q_target)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        self.learn_step_counter += 1
+        self.info['qnet_loss'] = loss.detach().cpu().numpy().copy()
+        self.info['epsilon'] = self.epsilon
+
+    @classmethod
+    def load(cls, file_path):
+        model = pickle.load(open(file_path, 'rb'))
+        params = model['params']
+        self = cls(model['state_dim'], model['action_dim'], params)
+        self.load_trainable(model)
+        self.learn_step_counter = model['learn_step_counter']
+        logger.info('Agent loaded from %s', file_path)
+        return self
+
+    def load_trainable(self, input):
+        if isinstance(input, dict):
+            trainable = input
+            logger.warn('Trainable parameters loaded from dictionary.')
+        elif isinstance(input, str):
+            trainable = pickle.load(open(input, 'rb'))
+            logger.warn('Trainable parameters loaded from: ' + input)
+        else:
+            raise ValueError('Dict or string is valid')
+
+        self.network.load_state_dict(trainable['network'])
+        self.target_network.load_state_dict(trainable['target_network'])
+
+    def save(self, file_path):
+        model = {}
+        model['params'] = self.params
+        model['network'] = self.network.state_dict()
+        model['target_network'] = self.target_network.state_dict()
+        model['learn_step_counter'] = self.learn_step_counter
+        model['state_dim'] = self.state_dim
+        model['action_dim'] = self.action_dim
+        pickle.dump(model, open(file_path, 'wb'))
+
+    def q_value(self, state, action):
+        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, 0)
+        s = torch.FloatTensor(state_).to(self.device)
+        return self.network(s).cpu().detach().numpy()[int(action[0])]
+
+    def seed(self, seed):
+        self.replay_buffer.seed(seed)
+        self.rng.seed(seed)
+
+    def _transitions(self, transition):
+        transitions = []
+        heightmap_rotations = self.params.get('heightmap_rotations', 1)
+
+        # Create rotated states if needed
+        angle = np.linspace(0, 2 * np.pi, heightmap_rotations, endpoint=False)
+        for j in range(heightmap_rotations):
+            transition.state['init_distance_from_target'] = transition.next_state['init_distance_from_target']
+            state = clutter.get_asymmetric_actor_feature_from_dict(transition.state, self.ae, self.scaler, angle[j])
+            next_state = clutter.get_asymmetric_actor_feature_from_dict(transition.next_state, self.ae,
+                                                                                     self.scaler, angle[j])
+
+            # Rotate action
+            # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
+            angle_pi = angle[j]
+            if angle[j] > np.pi:
+                angle_pi -= 2 * np.pi
+            angle_pi = min_max_scale(angle_pi, range=[-np.pi, np.pi], target_range=[-1, 1])
+            act = transition.action.copy()
+            act[1] += angle_pi
+            if act[1] > 1:
+                act[1] = -1 + abs(1 - act[1])
+            elif act[1] < -1:
+                act[1] = 1 - abs(-1 - act[1])
+
+            # statee = {}
+            # statee['real_state'] = copy.deepcopy(real_state)
+            # statee['point_cloud'] = copy.deepcopy(point_cloud)
+            # next_statee = {}
+            # next_statee['real_state'] = copy.deepcopy(real_state_next)
+            # next_statee['point_cloud'] = copy.deepcopy(point_cloud_next)
+            tran = Transition(state=copy.deepcopy(state),
+                              action=transition.action[0],
+                              reward=transition.reward,
+                              next_state=copy.deepcopy(next_state),
+                              terminal=transition.terminal)
+            transitions.append(tran)
+        return transitions
