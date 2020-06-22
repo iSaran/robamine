@@ -38,7 +38,7 @@ default_params = {
     'actor': {
         'hidden_units': [[140, 140], [140, 140]],
         'learning_rate': 1e-3,
-        },
+    },
     'critic': {
         'hidden_units': [[140, 140], [140, 140]],
         'learning_rate': 1e-3,
@@ -47,10 +47,10 @@ default_params = {
         'name': 'OU',
         'sigma': 0.2
     },
-    'epsilon' : {
-        'start' : 0.9,
-        'end' : 0.05,
-        'decay' : 10000,
+    'epsilon': {
+        'start': 0.9,
+        'end': 0.05,
+        'decay': 10000,
     }
 }
 import h5py
@@ -149,6 +149,7 @@ class SplitDDPG(RLAgent):
     only in predict, so during training if you call explore the q values will be
     invalid.
     '''
+
     def __init__(self, state_dim, action_dim, params=default_params):
         self.hardcoded_primitive = params['env_params']['hardcoded_primitive']
         self.real_state = params.get('real_state', False)
@@ -189,14 +190,19 @@ class SplitDDPG(RLAgent):
                                                                          nn.ModuleList(), nn.ModuleList()
         for i in range(self.nr_network):
             self.actor.append(Actor(self.actor_state_dim, self.action_dim[i], self.params['actor']['hidden_units'][i]))
-            self.target_actor.append(Actor(self.actor_state_dim, self.action_dim[i], self.params['actor']['hidden_units'][i]))
-            self.critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i], rotation_invariant=self.params.get('rotation_invariant', False)))
-            self.target_critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i], rotation_invariant=self.params.get('rotation_invariant', False)))
+            self.target_actor.append(
+                Actor(self.actor_state_dim, self.action_dim[i], self.params['actor']['hidden_units'][i]))
+            self.critic.append(Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i],
+                                      rotation_invariant=self.params.get('rotation_invariant', False)))
+            self.target_critic.append(
+                Critic(self.state_dim[i], self.action_dim[i], self.params['critic']['hidden_units'][i],
+                       rotation_invariant=self.params.get('rotation_invariant', False)))
 
         self.actor_optimizer, self.critic_optimizer, self.replay_buffer = [], [], []
         self.info['q_values'] = []
         for i in range(self.nr_network):
-            self.critic_optimizer.append(optim.Adam(self.critic[i].parameters(), self.params['critic']['learning_rate']))
+            self.critic_optimizer.append(
+                optim.Adam(self.critic[i].parameters(), self.params['critic']['learning_rate']))
             self.actor_optimizer.append(optim.Adam(self.actor[i].parameters(), self.params['actor']['learning_rate']))
             # self.replay_buffer.append(LargeReplayBuffer(buffer_size=self.params['replay_buffer_size'],
             #                                             obs_dims={'real_state': [RealState.dim()], 'point_cloud': [density ** 2, 2]},
@@ -211,9 +217,11 @@ class SplitDDPG(RLAgent):
         self.exploration_noise = []
         for i in range(self.nr_network):
             if self.params['noise']['name'] == 'OU':
-                self.exploration_noise.append(OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim[i]), sigma=self.params['noise']['sigma']))
+                self.exploration_noise.append(
+                    OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim[i]), sigma=self.params['noise']['sigma']))
             elif self.params['noise']['name'] == 'Normal':
-                self.exploration_noise.append(NormalNoise(mu=np.zeros(self.action_dim[i]), sigma=self.params['noise']['sigma']))
+                self.exploration_noise.append(
+                    NormalNoise(mu=np.zeros(self.action_dim[i]), sigma=self.params['noise']['sigma']))
             else:
                 raise ValueError(self.name + ': Exploration noise should be OU or Normal.')
         self.learn_step_counter = 0
@@ -251,22 +259,21 @@ class SplitDDPG(RLAgent):
             self.file_heightmaps.create_dataset('heightmap_mask', (5000, 2, 386, 386), dtype='f')
             self.file_heightmaps_counter = 0
 
-
-
     def predict(self, state):
         output = np.zeros(max(self.action_dim) + 1)
         max_q = -1e10
         for i in range(self.nr_network):
             state_ = clutter.preprocess_real_state(state, self.max_init_distance, 0)
-            real_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
-                                   translate_wrt_target=False).array()
+            real_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True,
+                                           range_norm=[-1, 1],
+                                           translate_wrt_target=False).array()
             s = torch.FloatTensor(real_state).to(self.device)
             if self.asymmetric:
                 feature = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler)
             else:
                 feature = clutter.preprocess_real_state(state, self.max_init_distance)
                 feature = clutter.RealState(feature, angle=0, sort=True, normalize=True, spherical=True,
-                                                    range_norm=[-1, 1], translate_wrt_target=False).array()
+                                            range_norm=[-1, 1], translate_wrt_target=False).array()
             actor_state = torch.FloatTensor(feature).to(self.device)
             a = self.actor[i](actor_state)
             q = self.critic[i](s, a).cpu().detach().numpy()
@@ -291,7 +298,7 @@ class SplitDDPG(RLAgent):
         start = self.params['epsilon']['start']
         end = self.params['epsilon']['end']
         decay = self.params['epsilon']['decay']
-        epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
+        epsilon = end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
         self.results['epsilon'] = epsilon
 
         output = np.zeros(max(self.action_dim) + 1)
@@ -319,7 +326,7 @@ class SplitDDPG(RLAgent):
         start = self.params['epsilon']['start']
         end = self.params['epsilon']['end']
         decay = self.params['epsilon']['decay']
-        epsilon =  end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
+        epsilon = end + (start - end) * math.exp(-1 * self.learn_step_counter / decay)
         self.results['epsilon'] = epsilon
 
         output = np.zeros(max(self.action_dim) + 1)
@@ -349,8 +356,6 @@ class SplitDDPG(RLAgent):
             output[1:(self.action_dim[i] + 1)] = action
 
         return output
-
-
 
     def get_low_level_action(self, high_level_action):
         # Process a single high level action
@@ -478,7 +483,7 @@ class SplitDDPG(RLAgent):
         i, action_ = self.get_low_level_action(action)
         state_ = clutter.preprocess_real_state(state, self.max_init_distance, 0)
         real_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
-                               translate_wrt_target=False).array()
+                                       translate_wrt_target=False).array()
         s = torch.FloatTensor(real_state).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
         if self.hardcoded_primitive >= 0:
@@ -492,7 +497,8 @@ class SplitDDPG(RLAgent):
 
     def state_dict(self):
         state_dict = super().state_dict()
-        state_dict['actor'], state_dict['critic'], state_dict['target_actor'], state_dict['target_critic'] = [], [], [], []
+        state_dict['actor'], state_dict['critic'], state_dict['target_actor'], state_dict[
+            'target_critic'] = [], [], [], []
         for i in range(self.nr_network):
             state_dict['actor'].append(self.actor[i].state_dict())
             state_dict['critic'].append(self.critic[i].state_dict())
@@ -544,8 +550,8 @@ class SplitDDPG(RLAgent):
                                                                                 angle[j])
             else:
                 state['actor'] = clutter.RealState(state_critic, angle=0, sort=True, normalize=True,
-                                                    spherical=True,
-                                                    range_norm=[-1, 1], translate_wrt_target=False).array()
+                                                   spherical=True,
+                                                   range_norm=[-1, 1], translate_wrt_target=False).array()
 
             next_state_critic = clutter.preprocess_real_state(transition.next_state, self.max_init_distance, angle[j])
             next_state['critic'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
@@ -556,8 +562,8 @@ class SplitDDPG(RLAgent):
                                                                                      self.scaler, angle[j])
             else:
                 next_state['actor'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
-                                                         spherical=True, range_norm=[-1, 1],
-                                                         translate_wrt_target=False).array()
+                                                        spherical=True, range_norm=[-1, 1],
+                                                        translate_wrt_target=False).array()
 
             # Rotate action
             # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
@@ -616,13 +622,14 @@ class ObstacleAvoidanceLoss(nn.Module):
         x_y = x_y.reshape(x_y.shape[0], 1, x_y.shape[1]).repeat((1, point_clouds.shape[1], 1))
         diff = x_y - point_clouds
         min_dist = torch.min(torch.norm(diff, p=2, dim=2), dim=1)[0]
-        threshold = torch.nn.Threshold(threshold=- self.min_dist_range[1], value= - self.min_dist_range[1])
+        threshold = torch.nn.Threshold(threshold=- self.min_dist_range[1], value=- self.min_dist_range[1])
         min_dist = - threshold(- min_dist)
         # hard_shrink = torch.nn.Hardshrink(lambd=self.min_dist_range[0])
         # min_dist = hard_shrink(min_dist)
         obstacle_avoidance_signal = - min_max_scale(min_dist, range=self.min_dist_range, target_range=[0.0, 200],
                                                     lib='torch', device=self.device)
-        close_center_signal = 0.5 - min_max_scale(distance, range=self.distance_range, target_range=[0, .5], lib='torch',
+        close_center_signal = 0.5 - min_max_scale(distance, range=self.distance_range, target_range=[0, .5],
+                                                  lib='torch',
                                                   device=self.device)
         final_signal = close_center_signal + obstacle_avoidance_signal
         return - final_signal.mean()
