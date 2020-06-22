@@ -31,6 +31,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+import copy
 
 logger = logging.getLogger('robamine.algo.core')
 
@@ -651,6 +652,9 @@ class RLWorld(World):
         # Environment setup
         if isinstance(env, gym.Env):
             self.env = env
+            self.config['env'] = {}
+            self.config['env']['name'] = env.spec.id
+            self.config['env']['params'] = copy.deepcopy(env.params)
         elif isinstance(env, str):
             self.env = gym.make(env)
             if isinstance(self.env.observation_space, gym.spaces.dict.Dict):
@@ -692,6 +696,9 @@ class RLWorld(World):
             self.config['agent'] = agent
         elif isinstance(agent, Agent):
             self.agent = agent
+            self.config['agent'] = {}
+            self.config['agent']['name'] = self.agent.name
+            self.config['agent']['params'] = copy.deepcopy(agent.params)
         else:
             err = ValueError('Provide an Agent or a string in order to create an agent for the new world')
             logger.exception(err)
