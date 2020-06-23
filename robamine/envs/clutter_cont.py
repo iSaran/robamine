@@ -992,7 +992,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'push_distance_range': (2,),
                 'surface_edges': (4, 2),
                 'raw_depth': (480, 640),
-                'centroid_pxl': (2,)}
+                'centroid_pxl': (2,),
+                'point_cloud': (10000, 3)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
@@ -1036,12 +1037,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                      [self.surface_size[0], -self.surface_size[1]],
                                      [-self.surface_size[0], -self.surface_size[1]]]),
             'raw_depth': np.zeros(shapes['raw_depth']),
-            'centroid_pxl': np.zeros(shapes['centroid_pxl'])
+            'centroid_pxl': np.zeros(shapes['centroid_pxl']),
+            'point_cloud': self.point_cloud.points
         }
 
         if not self._target_is_on_table():
             for key in list(shapes.keys()):
-                assert obs_dict[key].shape == shapes[key]
+                if key != 'point_cloud':
+                    assert obs_dict[key].shape == shapes[key]
             if self.obs_dict is not None:
                 self.obs_dict_prev = self.obs_dict.copy()
             self.obs_dict = obs_dict
@@ -1056,7 +1059,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         assert set(obs_dict.keys()) == set(shapes.keys())
 
         for key in list(shapes.keys()):
-            assert obs_dict[key].shape == shapes[key]
+            if key != 'point_cloud':
+                assert obs_dict[key].shape == shapes[key]
 
         if self.obs_dict is not None:
             self.obs_dict_prev = self.obs_dict.copy()

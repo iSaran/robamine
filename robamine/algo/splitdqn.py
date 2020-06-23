@@ -15,6 +15,11 @@ import numpy as np
 import pickle
 import math
 import os
+import copy
+
+from robamine.algo.util import Transition
+import robamine.envs.clutter_utils as clutter
+from robamine.utils import cv_tools
 
 import logging
 logger = logging.getLogger('robamine.algo.splitdqn')
@@ -131,7 +136,8 @@ class SplitDQN(RLAgent):
 
     def predict(self, state):
         action_value = []
-        state_split = np.split(state, self.nr_substates)
+        state_ = clutter.get_icra_feature(obs_dict=state, rotations=self.nr_substates)
+        state_split = np.split(state_, self.nr_substates)
         for i in range(self.nr_network):
             for j in range(self.nr_substates):
                 s = torch.FloatTensor(state_split[j]).to(self.device)
@@ -148,7 +154,7 @@ class SplitDQN(RLAgent):
 
     def learn(self, transition):
         i = int(np.floor(transition.action / self.nr_substates))
-        self.replay_buffer[i].store(transition)
+        self.replay_buffer[i].store(self._transitions(transition))
 
         for _ in range(self.params['update_iter'][i]):
             self.update_net(i)
@@ -205,7 +211,8 @@ class SplitDQN(RLAgent):
         self.learn_step_counter += 1
 
     def q_value(self, state, action):
-        split = np.split(state, self.nr_substates)
+        state_ = clutter.get_icra_feature(obs_dict=state, rotations=self.nr_substates)
+        split = np.split(state_, self.nr_substates)
         net_index = int(np.floor(action / self.nr_substates))
         substate_index = int(action - np.floor(action / self.nr_substates) * self.nr_substates)
         s = torch.FloatTensor(split[substate_index]).to(self.device)
@@ -250,3 +257,14 @@ class SplitDQN(RLAgent):
         model['state_dim'] = self.state_dim
         model['action_dim'] = self.action_dim
         pickle.dump(model, open(file_path, 'wb'))
+
+    def _transitions(self, transition):
+        # Create rotated states if needed
+        state = clutter.get_icra_feature(obs_dict=transition.state, rotations=self.nr_substates)
+        next_state = clutter.get_icra_feature(obs_dict=transition.next_state, rotations=self.nr_substates)
+        tran = Transition(state=copy.deepcopy(state),
+                          action=transition.action,
+                          reward=transition.reward,
+                          next_state=copy.deepcopy(next_state),
+                          terminal=transition.terminal)
+        return tran

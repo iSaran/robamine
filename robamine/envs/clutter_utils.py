@@ -16,7 +16,7 @@ from robamine.utils.math import (LineSegment2D, triangle_area, min_max_scale, ca
                                  get_centroid_convex_hull)
 from robamine.utils.orientation import (rot_x, rot_z, rot2angleaxis, Quaternion, rot_y, transform_poses,
                                         transform_points)
-from robamine.utils.cv_tools import Feature as cv_tools_feature
+from robamine.utils import cv_tools
 from robamine.utils.info import get_now_timestamp
 import copy
 
@@ -595,7 +595,7 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
         threshold = 0
     thresholded[heightmap > threshold] = 1
     thresholded[mask > 0] = 0.5
-    visual_feature = cv_tools_feature(thresholded).rotate(angle)
+    visual_feature = cv_tools.Feature(thresholded).rotate(angle)
     visual_feature = visual_feature.crop(crop_area[0], crop_area[1])
     visual_feature = visual_feature.pooling(kernel=[2, 2], stride=2, mode='AVG')
     if plot:
@@ -792,6 +792,35 @@ class GraspTargetFeature(PrimitiveFeature):
     @staticmethod
     def dim():
         return 401
+
+def get_icra_feature(obs_dict, rotations=8):
+    point_cloud = cv_tools.PointCloud()
+    point_cloud.points = obs_dict['point_cloud']
+    heightmaps = point_cloud.generate_height_map(rotations=rotations)
+    rot_angle = 360 / rotations
+    features = []
+    for i in range(0, len(heightmaps)):
+        feature = cv_tools.Feature(heightmaps[i])
+        feature = feature.crop(32, 32)
+        feature = feature.pooling()
+        feature = feature.normalize(0.06).flatten()
+        feature = np.append(feature, obs_dict['object_bounding_box'][0] / 0.5)
+        feature = np.append(feature, i * rot_angle / 360)
+
+        # Add the distance of the object from the edge
+        distances = [obs_dict['surface_size'][0] - obs_dict['target_pos'][0], \
+                     obs_dict['surface_size'][0] + obs_dict['target_pos'][0], \
+                     obs_dict['surface_size'][1] - obs_dict['target_pos'][1], \
+                     obs_dict['surface_size'][1] + obs_dict['target_pos'][1]]
+
+        distances = [x / 0.5 for x in distances]
+
+        feature = np.append(feature, distances)
+        features.append(feature)
+    final_feature = np.append(features[0], features[1], axis=0)
+    for i in range(2, len(features)):
+        final_feature = np.append(final_feature, features[i], axis=0)
+    return final_feature
 
 
 # Action: Pushing Primitive Actions
