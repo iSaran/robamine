@@ -37,12 +37,12 @@ agent:
       start: 0.9
       end: 0.05
       decay: 10000
-    heightmap_rotations: 8
+    heightmap_rotations: 1
     n_preloaded_buffer: [1000, 1000]
     real_state: True
     rotation_invariant: False
     env_params:
-      hardcoded_primitive: -1
+      hardcoded_primitive: 0
       obstacle:
         max_bounding_box: [.03, .03, .020]
       push:
@@ -56,7 +56,7 @@ env:
       use: False
       n_rotations: 8
       n_primitives: 3
-    hardcoded_primitive: -1
+    hardcoded_primitive: 0
     max_timesteps: 5
     real_state: True
     all_equal_height_prob: 0.0
