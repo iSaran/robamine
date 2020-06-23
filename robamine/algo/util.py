@@ -213,10 +213,9 @@ class EpisodeData(list):
         self.reward = {'mean': None, 'std': None, 'max': None, 'min': None, 'sum': None}
         self.q_value = {'mean': None, 'std': None, 'max': None, 'min': None, 'sum': None}
         self.actions_performed = []
-        self.monte_carlo_return = []
 
     def calc(self):
-        rewards, q_values = [], []
+        rewards, q_values, self.actions_performed = [], [], []
 
         for timestep in self:
             rewards.append(timestep.transition.reward)
