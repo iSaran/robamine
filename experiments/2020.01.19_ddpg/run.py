@@ -1,4 +1,4 @@
-from robamine.algo.core import TrainWorld, EvalWorld, SupervisedTrainWorld
+from robamine.algo.core import TrainWorld, EvalWorld, TrainEvalWorld, SupervisedTrainWorld
 # from robamine.algo.ddpg_torch import DDPG_TORCH
 from robamine.algo.splitddpg import SplitDDPG, Critic
 from robamine.algo.util import EpisodeListData
@@ -37,6 +37,17 @@ logger = logging.getLogger('robamine')
 def train(params):
     rb_logging.init(directory=params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
     trainer = TrainWorld(agent=params['agent'], env=params['env'], params=params['world']['params'])
+    trainer.run()
+    print('Logging dir:', params['world']['logging_dir'])
+
+def train_eval(params):
+    rb_logging.init(directory=params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
+    trainer = TrainEvalWorld(agent=params['agent'], env=params['env'],
+                             params={'episodes': 10000,
+                                     'eval_episodes': 20,
+                                     'eval_every': 100,
+                                     'eval_render': False,
+                                     'save_every': 100})
     trainer.run()
     print('Logging dir:', params['world']['logging_dir'])
 
@@ -885,6 +896,7 @@ if __name__ == '__main__':
     # ----------
 
     # train(params)
+    train_eval(params)
     # train_combo_q_learning(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
@@ -924,4 +936,4 @@ if __name__ == '__main__':
     # ---------------
 
     # icra_check_transition(params)
-    train_icra(params)
+    # train_icra(params)

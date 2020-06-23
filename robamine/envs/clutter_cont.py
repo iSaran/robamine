@@ -1413,15 +1413,31 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return -10
 
         dist = self.get_real_distance_from_closest_obstacle(observation)
-
         if dist > self.singulation_distance:
             return 10
+
+        # Calculate the sum
+        def get_distances_in_singulation_proximity(obs):
+            poses = obs['object_poses'][obs['object_above_table']]
+            bbox = obs['object_bounding_box'][obs['object_above_table']]
+            distances_ = np.zeros(len(poses))
+            for i in range(len(poses)):
+                distances_[i] = get_distance_of_two_bbox(poses[0], bbox[0], poses[i], bbox[i])
+            distances_ = distances_[distances_ < self.singulation_distance]
+            distances_[distances_ < 0.001] = 0.001
+            return 1 / distances_
+
+        distances = get_distances_in_singulation_proximity(self.obs_dict_prev)
+        distances_next = get_distances_in_singulation_proximity(self.obs_dict)
+
+        if np.sum(distances_next) < np.sum(distances) - 10:
+            return -5
 
         extra_penalty = 0
         if int(action[0]) == 0:
             extra_penalty = -min_max_scale(self.init_distance_from_target, range=[-1, 1], target_range=[0, 2])
 
-        return -1 + extra_penalty
+        return -10
 
     def get_reward_real_state_push_target(self, observation, action):
         # if self.push_stopped_ext_forces:

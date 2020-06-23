@@ -818,6 +818,7 @@ class RLWorld(World):
         self.reset()
         self.set_state(WorldState.RUNNING)
         for i in range(self.iterations):
+            print('RLWorld: Running episode ', i, 'out of ', self.iterations)
             self.run_episode(i)
 
             if self.stop_running:
@@ -1001,6 +1002,7 @@ class TrainEvalWorld(RLWorld):
 
         # Evaluate every some number of training episodes
         if (i + 1) % self.eval_every == 0:
+            print('Running', self.eval_episodes, 'testing episodes')
             for j in range(self.eval_episodes):
                 episode = TestingEpisode(self.agent, self.env)
                 episode.run(self.render_eval)
