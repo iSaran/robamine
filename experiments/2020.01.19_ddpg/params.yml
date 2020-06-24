@@ -62,7 +62,7 @@ env:
     all_equal_height_prob: 0.0
     finger:
       size: 0.005
-      type: box
+      type: sphere
     nr_of_obstacles:
       - 5
       - 8
