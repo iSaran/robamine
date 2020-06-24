@@ -847,6 +847,7 @@ def VAE_create_dataset(dir, rotations=0):
 
 
 # Train ICRA
+# ----------
 
 def icra_check_transition(params):
     from robamine.envs.clutter_cont import ClutterContICRAWrapper
@@ -902,6 +903,41 @@ def train_icra(params):
                              'update_iter': [1, 1, 5]
                             })
     trainer = TrainWorld(agent=agent, env=env, params=params['world']['params'])
+    trainer.run()
+
+def train_eval_icra(params):
+    rb_logging.init(directory=params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
+    from robamine.algo.splitdqn import SplitDQN
+
+    from robamine.envs.clutter_cont import ClutterContICRAWrapper
+    params['env']['params']['render'] = False
+    params['env']['params']['safe'] = True
+    params['env']['params']['icra']['use'] = True
+    env = gym.make('ClutterContICRAWrapper-v0', params=params['env']['params'])
+
+    agent = SplitDQN(state_dim=264 * 8, action_dim=8 * 2,
+                     params={'replay_buffer_size': 1e6,
+                             'batch_size': [64, 64],
+                             'discount': 0.9,
+                             'epsilon_start': 0.9,
+                             'epsilon_end': 0.05,
+                             'epsilon_decay': 20000,
+                             'learning_rate': [1e-3, 1e-3],
+                             'tau': 0.999,
+                             'double_dqn': True,
+                             'hidden_units': [[100, 100], [100, 100]],
+                             'loss': ['mse', 'mse'],
+                             'device': 'cpu',
+                             'load_nets': '',
+                             'load_buffers': '',
+                             'update_iter': [1, 1, 5]
+                             })
+    trainer = TrainEvalWorld(agent=agent, env=env,
+                             params={'episodes': 10000,
+                                     'eval_episodes': 20,
+                                     'eval_every': 100,
+                                     'eval_render': False,
+                                     'save_every': 100})
     trainer.run()
 
 if __name__ == '__main__':
