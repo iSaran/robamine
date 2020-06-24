@@ -643,15 +643,15 @@ def test_obstacle_avoidance_critic_torch(params):
 class RandomPolicy(RLAgent):
     def __init__(self):
         super(RandomPolicy, self).__init__(state_dim=None, action_dim=None, name='RandomPolicy')
-        self.params = params
+        self.params = {}
         self.rng = np.random.RandomState()
-        self.actions = [2]
+        self.actions = [2, 1]
 
     def explore(self, state):
-        # i = self.rng.randint(0, len(self.actions))
-        i = 0
+        i = self.rng.randint(0, len(self.actions))
+        # i = 0
         output = np.zeros(self.actions[i] + 1)
-        action = self.rng.uniform(-1, 1, self.actions[0])
+        action = self.rng.uniform(-1, 1, self.actions[i])
         output[0] = i
         output[1:(self.actions[i] + 1)] = action
         return output
@@ -671,18 +671,49 @@ class RandomPolicy(RLAgent):
     def save(self, path):
         pass
 
+class RandomICRAPolicy(RLAgent):
+    def __init__(self):
+        super(RandomICRAPolicy, self).__init__(state_dim=None, action_dim=None, name='RandomPolicy')
+        self.params = {}
+        self.rng = np.random.RandomState()
+
+    def explore(self, state):
+        n_primitives = 2
+        n_low_actions = 8
+        output = np.zeros(3)
+        output[0] = self.rng.randint(0, n_primitives)
+        angle = self.rng.randint(0, n_low_actions) * 2 * np.pi / n_low_actions
+        output[1] = min_max_scale(angle, range=[0, 2*np.pi], target_range=[-1, 1])
+        return output
+
+    def predict(self, state):
+        return self.explore(state)
+
+    def learn(self, transition):
+        pass
+
+    def q_value(self, state, action):
+        return 0.0
+
+    def seed(self, seed):
+        self.rng.seed(seed)
+
+    def save(self, path):
+        pass
+
+
 def eval_random_actions(params, n_scenes=1000):
     rb_logging.init(directory=params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
 
-    params['env']['params']['render'] = True
+    params['env']['params']['render'] = False
     params['env']['params']['safe'] = False
-    params['env']['params']['hardcoded_primitive'] = 0
+    params['env']['params']['hardcoded_primitive'] = -1
     params['env']['params']['log_dir'] = params['world']['logging_dir']
     params['world']['episodes'] = n_scenes
 
-    policy = RandomPolicy()
+    policy = RandomICRAPolicy()
     world = EvalWorld(agent=policy, env=params['env'], params=params['world'])
-    world.seed_list = np.arange(9, n_scenes, 1).tolist()
+    world.seed_list = np.arange(0, n_scenes, 1).tolist()
     world.run()
     print('Logging dir:', params['world']['logging_dir'])
 
@@ -895,8 +926,8 @@ if __name__ == '__main__':
     # Basic runs
     # ----------
 
-    # train(params)
-    train_eval(params)
+    train(params)
+    # train_eval(params)
     # train_combo_q_learning(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
@@ -918,7 +949,7 @@ if __name__ == '__main__':
     # visualize_supervised_output(model_dir=os.path.join(logging_dir, 'supervised_scenes/training/robamine_logs_triss_2020.05.24.15.32.16.980679'),
     #                             scenes_dir=os.path.join(logging_dir, 'supervised_scenes/testing'))
 
-    # eval_random_actions(params, n_scenes=10)
+    # eval_random_actions(params, n_scenes=1000)
 
 
     # VAE training

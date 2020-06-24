@@ -965,6 +965,10 @@ class EvalWorld(RLWorld):
         self.actions_file.write(str(episode.stats['actions_performed'][-1]) + '\n')
         self.actions_file.flush()
 
+        print('---')
+        self.episode_list_data.calc()
+        print(self.episode_list_data.__str__())
+
     def run(self):
         super().run()
 
