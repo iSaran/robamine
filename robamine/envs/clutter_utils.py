@@ -1224,12 +1224,9 @@ class PushObstacle(PushAction2D):
 class PushObstacleICRA(PushObstacle):
     def __init__(self, action, nr_rotations, push_distance, push_distance_range, object_height, finger_height):
         theta = action * 2 * np.pi / nr_rotations
-        # print('--')
-        # print('action: ', action)
-        # print('theta: ', theta)
-        # print('rotations: ', nr_rotations)
-        # print('--')
-        theta = min_max_scale(theta, range=[0, 2 * np.pi], target_range=[-1, 1])
+        if theta > np.pi:
+            theta = -np.pi + abs(theta - np.pi)
+        theta = min_max_scale(theta, range=[-np.pi, np.pi], target_range=[-1, 1])
         super(PushObstacleICRA, self).__init__(theta=theta, push_distance=push_distance,
                                                push_distance_range=push_distance_range, object_height=object_height,
                                                finger_height=finger_height)
@@ -1237,7 +1234,9 @@ class PushObstacleICRA(PushObstacle):
 class PushTargetICRA(PushTargetWithObstacleAvoidance):
     def __init__(self, action, nr_rotations, obs_dict, push_distance_range, translate_wrt_target=True):
         theta = action * 2 * np.pi / nr_rotations
-        theta = min_max_scale(theta, range=[0, 2 * np.pi], target_range=[-1, 1])
+        if theta > np.pi:
+            theta = -np.pi + abs(theta - np.pi)
+        theta = min_max_scale(theta, range=[-np.pi, np.pi], target_range=[-1, 1])
 
         self.push_distance_range = push_distance_range
         self.init_distance_range = [0, 0.1]
