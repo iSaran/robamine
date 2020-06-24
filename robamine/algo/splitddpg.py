@@ -511,6 +511,9 @@ class SplitDDPG(RLAgent):
 
     @classmethod
     def load_state_dict(cls, state_dict):
+        # Uncomment for eval in different pc
+        # state_dict['params']['actor']['autoencoder']['model'] = '/home/iason/robamine_logs/2020.01.16.split_ddpg/VAE/model.pkl'
+        # state_dict['params']['actor']['autoencoder']['scaler'] = '/home/iason/robamine_logs/2020.01.16.split_ddpg/VAE/normalizer.pkl'
         params = state_dict['params']
         self = cls(state_dict['state_dim'], state_dict['action_dim'], params)
         self.load_trainable(state_dict)
