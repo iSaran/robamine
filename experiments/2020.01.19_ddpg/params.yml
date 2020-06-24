@@ -62,7 +62,7 @@ env:
     all_equal_height_prob: 0.0
     finger:
       size: 0.005
-      type: sphere
+      type: box
     nr_of_obstacles:
       - 5
       - 8
@@ -79,7 +79,7 @@ env:
       probability_box: 1.0
     push:
       distance: [0.02, 0.10]
-      target_init_distance: [0.0, 0.1]
+      target_init_distance: [0.0, 0.15]
       predict_collision: True
     grasp:
       spread: [0.05, 0.05]
