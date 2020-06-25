@@ -1102,7 +1102,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return obs, reward, done, {'experience_time': experience_time,
                                    'success': self.success,
                                    'extra_data': extra_data,
-                                   'collision': collision}
+                                   'collision': collision,
+                                   'termination_reason': reason}
 
     def do_simulation(self, action):
         primitive = int(action[0])
@@ -1551,16 +1552,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             self.push_stopped_ext_forces = False
             return True, 'collision'
 
+        # If the object has fallen from the table
+        if obs['object_poses'][0][2] < 0:
+            return True, 'fallen'
+
         # Terminate if the target flips to its side, i.e. if target's z axis is
         # parallel to table, terminate.
         target_z = self.target_quat.rotation_matrix()[:,2]
         world_z = np.array([0, 0, 1])
         if np.dot(target_z, world_z) < 0.9:
             return True, 'flipped'
-
-        # If the object has fallen from the table
-        if obs['object_poses'][0][2] < 0:
-            return True, 'fallen'
 
         # if self.singulation_condition(self.heightmap, self.mask):
         if self.get_real_distance_from_closest_obstacle(obs) > self.singulation_distance:

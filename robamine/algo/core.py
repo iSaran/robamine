@@ -1007,12 +1007,14 @@ class TrainEvalWorld(RLWorld):
         # Evaluate every some number of training episodes
         if (i + 1) % self.eval_every == 0:
             print('Running', self.eval_episodes, 'testing episodes')
+            termination_reasons = []
             for j in range(self.eval_episodes):
                 episode = TestingEpisode(self.agent, self.env)
                 episode.run(self.render_eval)
                 self.eval_stats.update(self.eval_episodes * self.counter + j, episode.stats)
                 self.episode_stats_eval.append(episode.stats)
                 pickle.dump(self.episode_stats_eval, open(os.path.join(self.log_dir, 'episode_stats_eval.pkl'), 'wb'))
+                termination_reasons.append(episode.termination_reason)
 
                 for k in range (0, episode.stats['n_timesteps']):
                     self.expected_values_file.write(str(episode.stats['q_value'][k]) + ',' + str(episode.stats['monte_carlo_return'][k]) + '\n')
@@ -1022,6 +1024,9 @@ class TrainEvalWorld(RLWorld):
                     self.actions_file.write(str(episode.stats['actions_performed'][k]) + ',')
                 self.actions_file.write(str(episode.stats['actions_performed'][-1]) + '\n')
                 self.actions_file.flush()
+
+            print('Eval: Termination reason: fallen perc: ', termination_reasons.count('fallen') * 100 / len(termination_reasons), '%')
+            print('Eval: Termination reason: singulation perc: ', termination_reasons.count('singulation') * 100 / len(termination_reasons), '%')
 
             self.counter += 1
 
@@ -1145,6 +1150,8 @@ class Episode:
 
         self.data = EpisodeData()
 
+        self.termination_reason = None
+
     def run(self, render = False, init_state = None, seed=None):
 
         state = self.env.reset(seed=seed)
@@ -1161,6 +1168,7 @@ class Episode:
 
             state = next_state.copy()
             if done and not info.get('collision', False):
+                self.termination_reason = info['termination_reason']
                 break
 
         self._update_states_episode(info)
