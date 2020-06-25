@@ -175,7 +175,7 @@ class SplitDDPG(RLAgent):
                 self.scaler = pickle.load(file)
 
         if self.asymmetric:
-            self.actor_state_dim = ae.LATENT_DIM + 8  # TODO: hardcoded the extra dim for surface edges
+            self.actor_state_dim = ae.LATENT_DIM + 4  # TODO: hardcoded the extra dim for surface edges
         else:
             self.actor_state_dim = clutter.RealState.dim()
 

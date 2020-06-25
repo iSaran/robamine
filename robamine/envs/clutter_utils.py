@@ -397,6 +397,10 @@ class RealState(Feature):
         rot_2d = np.array([[cos(angle), -sin(angle)],
                            [sin(angle), cos(angle)]])
         self.surface_edges = np.transpose(np.matmul(rot_2d, np.transpose(self.surface_edges)))
+        if 'surface_distances' in obs_dict:
+            self.surface_distances = obs_dict['surface_distances']
+        else:
+            self.surface_distances = np.zeros(4)
 
         self.init_distance_from_target = obs_dict['init_distance_from_target'][0]
 
@@ -524,9 +528,8 @@ class RealState(Feature):
     def array(self):
         array = np.concatenate((self.principal_corners, self.range_norm[0] * np.ones(
             (int(self.max_n_objects - self.principal_corners.shape[0]), 4, 3)))).flatten()
-        array = np.append(array, self.surface_edges.flatten())
+        array = np.append(array, self.surface_distances.flatten())
         array = np.append(array, self.init_distance_from_target)
-
 
         # assert (array <= 1).all()
         # assert (array >= -1).all()
@@ -582,7 +585,7 @@ class RealState(Feature):
 
     @staticmethod
     def dim():
-        return 10 * 4 * 3 + 8 + 1 # TODO: hardcoded max n objects
+        return 10 * 4 * 3 + 4 + 1 # TODO: hardcoded max n objects
 
 
 def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0, plot=False):
@@ -604,7 +607,7 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
 
 
 def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
-                                 target_pos, surface_edges,
+                                 target_pos, surface_distances,
                                  angle=0, plot=False):
     """Angle in rad"""
     start = torch.cuda.Event(enable_timing=True)
@@ -626,10 +629,10 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
     # print('time:', time.time() - start)
     normalized_latent = normalizer.transform(latent.detach().cpu().numpy())
 
-    surface_edges_ = surface_edges - target_pos
-    rot_2d = np.array([[cos(angle), -sin(angle)],
-                       [sin(angle), cos(angle)]])
-    surface_edges_ = np.transpose(np.matmul(rot_2d, np.transpose(surface_edges_)))
+    # surface_edges_ = surface_edges - target_pos
+    # rot_2d = np.array([[cos(angle), -sin(angle)],
+    #                    [sin(angle), cos(angle)]])
+    # surface_edges_ = np.transpose(np.matmul(rot_2d, np.transpose(surface_edges_)))
 
     if plot:
         ae_output = autoencoder(visual_feature).detach().cpu().numpy()[0, 0, :, :]
@@ -639,7 +642,7 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
         ax[1].imshow(ae_output, cmap='gray', vmin=np.min(ae_output), vmax=np.max(ae_output))
         plt.show()
 
-    return np.append(normalized_latent, surface_edges_.flatten())
+    return np.append(normalized_latent, surface_distances.flatten())
 
 def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, angle=0, plot=False):
     heightmap = obs_dict['heightmap_mask'][0]
@@ -647,9 +650,16 @@ def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, an
     target_bounding_box_z = obs_dict['target_bounding_box'][2]
     finger_height = obs_dict['finger_height']
     surface_edges = obs_dict['surface_edges']
+
+    surface_distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                 obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+    surface_distances = np.array([x / 0.5 for x in surface_distances])
+
     target_pos = obs_dict['object_poses'][0, 0:2]
     return get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
-                                        target_pos, surface_edges, angle, plot)
+                                        target_pos, surface_distances, angle, plot)
 
 
 class PrimitiveFeature:
@@ -1418,6 +1428,13 @@ def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0):
     surface_edges = transform_poses(surface_edges, target_pose)
     state['surface_edges'] = surface_edges[:, :2].copy()
     state['object_poses'][state['object_above_table']] = poses
+
+    distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                 obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+    state['surface_distances'] = np.array([x / 0.5 for x in distances])
+
     return state
 
 def plot_real_state(state):
