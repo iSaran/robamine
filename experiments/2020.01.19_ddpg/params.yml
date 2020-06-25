@@ -10,7 +10,7 @@ agent:
     load_nets: ''
     replay_buffer_size: 1000000
     tau: 0.001
-    update_iter: [5, 5]
+    update_iter: [1, 1]
     actor:
       hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
@@ -57,7 +57,7 @@ env:
       n_rotations: 8
       n_primitives: 3
     hardcoded_primitive: 0
-    max_timesteps: 5
+    max_timesteps: 10
     real_state: True
     all_equal_height_prob: 0.0
     finger:
