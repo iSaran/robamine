@@ -387,8 +387,8 @@ class PointCloud:
             idx_y = int(np.floor(y / grid_step)) + int(height / 2)
 
             if 0 < idx_x < width - 1 and 0 < idx_y < height - 1:
-                if height_grid[idx_y][idx_x] < z:
-                    height_grid[idx_y][idx_x] = z
+                if height_grid[height - idx_y][idx_x] < z:
+                    height_grid[height - idx_y][idx_x] = z
 
         if rotations > 0:
             step_angle = 360 / rotations
