@@ -962,8 +962,8 @@ if __name__ == '__main__':
     # Basic runs
     # ----------
 
-    train(params)
-    # train_eval(params)
+    # train(params)
+    train_eval(params)
     # train_combo_q_learning(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
