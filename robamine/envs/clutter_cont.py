@@ -1038,7 +1038,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                      [-self.surface_size[0], -self.surface_size[1]]]),
             'raw_depth': np.zeros(shapes['raw_depth']),
             'centroid_pxl': np.zeros(shapes['centroid_pxl']),
-            'point_cloud': self.point_cloud.points
+            'point_cloud': np.zeros(shapes['point_cloud'])
         }
 
         if not self._target_is_on_table():
@@ -1055,6 +1055,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         obs_dict['heightmap_mask'][1, :] = self.convex_mask
         obs_dict['raw_depth'] = self.raw_depth
         obs_dict['centroid_pxl'] = self.centroid_pxl
+        obs_dict['point_cloud'] = self.point_cloud.points
 
         assert set(obs_dict.keys()) == set(shapes.keys())
 
