@@ -32,6 +32,15 @@ import torch
 import torch.nn as nn
 import time
 
+INFO = True
+DEBUG = False
+def debug(*args):
+    if DEBUG:
+        print("DEBUG:clutter_utils:" + " ".join(map(str, args)))
+def info(*args):
+    if INFO:
+        print("INFO:clutter_utils:" + " ".join(map(str, args)))
+
 class TargetObjectConvexHull:
     def __init__(self, masked_in_depth, log_dir='/tmp'):
         self.masked_in_depth = masked_in_depth
@@ -804,8 +813,10 @@ class GraspTargetFeature(PrimitiveFeature):
         return 401
 
 def get_icra_feature(obs_dict, rotations=8):
+    debug('get_icra_feature: Start')
     point_cloud = cv_tools.PointCloud()
     point_cloud.points = obs_dict['point_cloud']
+    debug('object_poses:', obs_dict['object_poses'])
     heightmaps = point_cloud.generate_height_map(rotations=rotations)
     rot_angle = 360 / rotations
     features = []
@@ -830,6 +841,7 @@ def get_icra_feature(obs_dict, rotations=8):
     final_feature = np.append(features[0], features[1], axis=0)
     for i in range(2, len(features)):
         final_feature = np.append(final_feature, features[i], axis=0)
+    debug('get_icra_feature: End')
     return final_feature
 
 

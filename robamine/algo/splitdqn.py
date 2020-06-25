@@ -24,6 +24,15 @@ from robamine.utils import cv_tools
 import logging
 logger = logging.getLogger('robamine.algo.splitdqn')
 
+INFO = True
+DEBUG = False
+def debug(*args):
+    if DEBUG:
+        print("DEBUG:splitdqn:" + " ".join(map(str, args)))
+def info(*args):
+    if INFO:
+        print("INFO:splitdqn:" + " ".join(map(str, args)))
+
 default_params = {
         'name' : 'SplitDQN',
         'replay_buffer_size' : [1e6, 1e6],
@@ -86,13 +95,16 @@ class SplitDQN(RLAgent):
         # The number of networks is the number of high level actions (e.g. push
         # target, push obstacles, grasp). One network per high level action.
         self.nr_network = int(len(self.params['hidden_units']))
+        debug('nr_network', self.nr_network)
 
         # Nr of substates is the number of low level actions, which are
         # represented as different states (e.g. rotations of visual features).
         # This is the number of segments that the incoming states will be
         # splitted to.
         self.nr_substates = int(self.action_dim / self.nr_network)
+        debug('nr substates', self.nr_substates)
         self.substate_dim = int(state_dim / self.nr_substates)
+        debug('substate dim', self.substate_dim)
 
         self.device = self.params['device']
 
@@ -100,6 +112,7 @@ class SplitDQN(RLAgent):
         self.network, self.target_network = nn.ModuleList(), nn.ModuleList()
         for hidden in self.params['hidden_units']:
             self.network.append(QNetwork(self.substate_dim, 1, hidden).to(self.device))
+            debug(self.network)
             self.target_network.append(QNetwork(self.substate_dim, 1, hidden).to(self.device))
 
         self.optimizer, self.replay_buffer, self.loss = [], [], []
@@ -135,6 +148,7 @@ class SplitDQN(RLAgent):
                 logger.warn("SplitDQN: Preloaded buffer of size " + str(self.replay_buffer[i].size()) + " splitted from " + self.params['load_buffers'])
 
     def predict(self, state):
+        debug('predict: Start')
         action_value = []
         state_ = clutter.get_icra_feature(obs_dict=state, rotations=self.nr_substates)
         state_split = np.split(state_, self.nr_substates)
@@ -142,6 +156,7 @@ class SplitDQN(RLAgent):
             for j in range(self.nr_substates):
                 s = torch.FloatTensor(state_split[j]).to(self.device)
                 action_value.append(self.network[i](s).cpu().detach().numpy())
+        debug('predict: end')
         return np.argmax(action_value)
 
     def explore(self, state):
@@ -153,11 +168,17 @@ class SplitDQN(RLAgent):
         return self.rng.randint(0, self.action_dim)
 
     def learn(self, transition):
+        debug(' ======= SplitDQN Learn start ==========')
         i = int(np.floor(transition.action / self.nr_substates))
+        debug('learn step counter:', self.learn_step_counter)
+        info('epsilon:', self.epsilon)
+        debug('action:', transition.action)
+        debug('primitive:', i)
         self.replay_buffer[i].store(self._transitions(transition))
 
         for _ in range(self.params['update_iter'][i]):
             self.update_net(i)
+        debug(' ======= SplitDQN Learn end ==========')
 
 
     def update_net(self, i):
@@ -211,11 +232,13 @@ class SplitDQN(RLAgent):
         self.learn_step_counter += 1
 
     def q_value(self, state, action):
+        debug('q_value: Start')
         state_ = clutter.get_icra_feature(obs_dict=state, rotations=self.nr_substates)
         split = np.split(state_, self.nr_substates)
         net_index = int(np.floor(action / self.nr_substates))
         substate_index = int(action - np.floor(action / self.nr_substates) * self.nr_substates)
         s = torch.FloatTensor(split[substate_index]).to(self.device)
+        debug('q_value: End')
         return self.network[net_index](s).cpu().detach().numpy()
 
     def seed(self, seed):
@@ -259,12 +282,19 @@ class SplitDQN(RLAgent):
         pickle.dump(model, open(file_path, 'wb'))
 
     def _transitions(self, transition):
+        debug('_transition(): Start')
         # Create rotated states if needed
+        debug('State')
         state = clutter.get_icra_feature(obs_dict=transition.state, rotations=self.nr_substates)
+        debug('Next State')
         next_state = clutter.get_icra_feature(obs_dict=transition.next_state, rotations=self.nr_substates)
         tran = Transition(state=copy.deepcopy(state),
                           action=transition.action,
                           reward=transition.reward,
                           next_state=copy.deepcopy(next_state),
                           terminal=transition.terminal)
+        debug('transitions:tran.state', type(tran.state), tran.state.shape)
+        debug('transitions:tran.next_state', type(tran.next_state), tran.next_state.shape)
+        debug('transitions:tran.action', tran.action)
+        debug('_transition(): end')
         return tran

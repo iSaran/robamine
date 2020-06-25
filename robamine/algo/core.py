@@ -33,6 +33,15 @@ import torch.optim as optim
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 import copy
 
+INFO = True
+DEBUG = False
+def debug(*args):
+    if DEBUG:
+        print("DEBUG:core:" + " ".join(map(str, args)))
+def info(*args):
+    if INFO:
+        print("INFO:core:" + " ".join(map(str, args)))
+
 logger = logging.getLogger('robamine.algo.core')
 
 class InvalidEnvError(Exception):
@@ -1154,6 +1163,7 @@ class Episode:
 
     def run(self, render = False, init_state = None, seed=None):
 
+        debug('Episode:run: Resetting env')
         state = self.env.reset(seed=seed)
         # self.env.load_state_dict(init_state)
 
@@ -1161,6 +1171,7 @@ class Episode:
             if (render):
                 self.env.render()
             action = self._action_policy(state)
+            debug('Episode:run: Step env')
             next_state, reward, done, info = self.env.step(action)
             transition = Transition(state, action, reward, next_state, done)
             self._learn(transition)
