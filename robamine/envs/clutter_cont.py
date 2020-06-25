@@ -2120,7 +2120,8 @@ class ClutterContICRA(ClutterCont):
         return obs, reward, done, {'experience_time': experience_time,
                                    'success': self.success,
                                    'extra_data': extra_data,
-                                   'collision': collision}
+                                   'collision': collision,
+                                   'termination_reason': reason}
 
     def get_reward(self, observation, action):
         # Penalize external forces during going downwards
