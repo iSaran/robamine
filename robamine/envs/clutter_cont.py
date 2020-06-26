@@ -47,6 +47,16 @@ from robamine.utils.cv_tools import Feature
 import torch
 import copy
 
+INFO = True
+DEBUG = False
+def debug(*args):
+    if DEBUG:
+        print("DEBUG:clutter_utils:" + " ".join(map(str, args)))
+def info(*args):
+    if INFO:
+        print("INFO:clutter_utils:" + " ".join(map(str, args)))
+
+
 def exp_reward(x, max_penalty, min, max):
     a = 1
     b = -1.2
@@ -2012,6 +2022,7 @@ class ClutterContICRA(ClutterCont):
         n_rotations = self.params['icra']['n_rotations']
 
         primitive = np.floor(action / n_rotations)
+        debug('ClutterContICRA:do_simulation:primitive:', primitive)
         action_ = action - n_rotations * primitive
 
         if primitive == 0:
@@ -2029,11 +2040,15 @@ class ClutterContICRA(ClutterCont):
                                     push_distance_range=self.params['push']['distance'],
                                     object_height=2 * self.target_bounding_box[2],
                                     finger_height=self.finger_height)
+            debug('ClutterContICRA:do_simulation: init pos:', push.get_init_pos(), 'final pos:', push.get_final_pos())
             angle, _ = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
+            debug('ClutterContICRA:do_simulation:angle of target:', angle)
             push.rotate(-angle)
+            debug('ClutterContICRA:do_simulation: after rotation w.r.t. target init pos:', push.get_init_pos(), 'final pos:', push.get_final_pos())
             push.translate(self.obs_dict['object_poses'][0, :2])
+            debug('ClutterContICRA:do_simulation: after translatation w.r.t. target init pos:', push.get_init_pos(), 'final pos:', push.get_final_pos())
         elif primitive == 2:
-            raise Exception('Not iplemented')
+            raise Exception('Not implemented')
 
         push_initial_pos_world = push.get_init_pos()
         push_final_pos_world = push.get_final_pos()

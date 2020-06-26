@@ -160,12 +160,21 @@ class SplitDQN(RLAgent):
         return np.argmax(action_value)
 
     def explore(self, state):
+        debug('explore:Start')
         self.epsilon = self.params['epsilon_end'] + \
                        (self.params['epsilon_start'] - self.params['epsilon_end']) * \
                        math.exp(-1 * self.learn_step_counter / self.params['epsilon_decay'])
+        debug('explore:epsilon:', self.epsilon)
         if self.rng.uniform(0, 1) >= self.epsilon:
-            return self.predict(state)
-        return self.rng.randint(0, self.action_dim)
+            debug('expore: Selecting prediction')
+            result = self.predict(state)
+            debug('action:', result)
+            return result
+        debug('expore: Selecting random action')
+        result = self.rng.randint(0, self.action_dim)
+        debug('explore:action:', result)
+        debug('explore:End')
+        return result
 
     def learn(self, transition):
         debug(' ======= SplitDQN Learn start ==========')
