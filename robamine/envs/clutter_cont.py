@@ -1408,14 +1408,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_reward_real_state_all(self, observation, action):
         if self.push_stopped_ext_forces:
-            return -10
+            return -1
 
         if observation['object_poses'][0][2] < 0:
-            return -10
+            return -1
 
         dist = self.get_real_distance_from_closest_obstacle(observation)
         if dist > self.singulation_distance:
-            return 10
+            return 1
 
         # Calculate the sum
         def get_distances_in_singulation_proximity(obs):
@@ -1432,13 +1432,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         distances_next = get_distances_in_singulation_proximity(self.obs_dict)
 
         if np.sum(distances_next) < np.sum(distances) - 10:
-            return -5
+            return -0.1
 
-        extra_penalty = 0
-        if int(action[0]) == 0:
-            extra_penalty = -min_max_scale(self.init_distance_from_target, range=[-1, 1], target_range=[0, 2])
-
-        return -10
+        return -0.25
 
     def get_reward_real_state_push_target(self, observation, action):
         # if self.push_stopped_ext_forces:
@@ -1521,11 +1517,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_reward_real_state_push_obstacle(self, observation, action):
         if self.push_stopped_ext_forces:
-            return -10
+            return -1
 
         dist = self.get_real_distance_from_closest_obstacle(observation)
         if dist > self.singulation_distance:
-            return 10
+            return 1
 
         # Calculate the sum
         def get_distances_in_singulation_proximity(obs):
@@ -1542,9 +1538,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         distances_next = get_distances_in_singulation_proximity(self.obs_dict)
 
         if np.sum(distances_next) < np.sum(distances) - 10:
-            return -5
+            return -0.1
 
-        return -10
+        return -0.25
 
     def terminal_state_real_state_push_target(self, obs):
         if self.timesteps >= self.max_timesteps:
