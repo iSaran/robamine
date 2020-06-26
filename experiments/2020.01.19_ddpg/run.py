@@ -942,7 +942,7 @@ def train_eval_icra(params):
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
-    exp_dir = 'robamine_logs_iti-479_2020.06.16.12.44.42'
+    exp_dir = 'robamine_logs_iti-479_2020.06.25.18.49.31'
 
     yml_name = 'params.yml'
     if hostname == 'dream':
@@ -963,9 +963,10 @@ if __name__ == '__main__':
     # ----------
 
     # train(params)
-    train_eval(params)
+    # train_eval(params)
     # train_combo_q_learning(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
+    eval_in_scenes(params, os.path.join(params['world']['logging_dir'], exp_dir), n_scenes=1000)
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
     # test(params)
