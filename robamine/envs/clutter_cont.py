@@ -2030,8 +2030,9 @@ class ClutterContICRA(ClutterCont):
                                   nr_rotations=self.params['icra']['n_rotations'],
                                   obs_dict=self.obs_dict,
                                   push_distance_range=self.params['push']['distance'])
-            angle, _ = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
-            push.rotate(-angle)
+            angle, axis = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
+            angle = (axis[2] / abs(axis[2])) * angle
+            push.rotate(angle)
             push.translate(self.obs_dict['object_poses'][0, :2])
         elif primitive == 1:
             push = PushObstacleICRA(action=action_,
@@ -2040,13 +2041,10 @@ class ClutterContICRA(ClutterCont):
                                     push_distance_range=self.params['push']['distance'],
                                     object_height=2 * self.target_bounding_box[2],
                                     finger_height=self.finger_height)
-            debug('ClutterContICRA:do_simulation: init pos:', push.get_init_pos(), 'final pos:', push.get_final_pos())
-            angle, _ = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
-            debug('ClutterContICRA:do_simulation:angle of target:', angle)
-            push.rotate(-angle)
-            debug('ClutterContICRA:do_simulation: after rotation w.r.t. target init pos:', push.get_init_pos(), 'final pos:', push.get_final_pos())
+            angle, axis = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
+            angle = (axis[2] / abs(axis[2])) * angle
+            push.rotate(angle)
             push.translate(self.obs_dict['object_poses'][0, :2])
-            debug('ClutterContICRA:do_simulation: after translatation w.r.t. target init pos:', push.get_init_pos(), 'final pos:', push.get_final_pos())
         elif primitive == 2:
             raise Exception('Not implemented')
 
