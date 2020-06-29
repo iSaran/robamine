@@ -1554,9 +1554,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return -0.25
 
     def terminal_state_real_state_push_target(self, obs):
-        if self.timesteps >= self.max_timesteps:
-            return True, 'timesteps'
-
         # Terminal if collision is detected
         if self.push_stopped_ext_forces:
             self.push_stopped_ext_forces = False
@@ -1577,6 +1574,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.get_real_distance_from_closest_obstacle(obs) > self.singulation_distance:
             self.success = True
             return True, 'singulation'
+
+        if self.timesteps >= self.max_timesteps:
+            return True, 'timesteps'
 
         return False, ''
 
