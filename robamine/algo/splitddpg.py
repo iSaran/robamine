@@ -557,14 +557,20 @@ class SplitDDPG(RLAgent):
                                                    range_norm=[-1, 1], translate_wrt_target=False).array()
 
             next_state_critic = clutter.preprocess_real_state(transition.next_state, self.max_init_distance, angle[j])
-            next_state['critic'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
-                                                     spherical=True, range_norm=[-1, 1],
-                                                     translate_wrt_target=False).array()
+            if transition.terminal:
+                next_state['critic'] = np.zeros(clutter.RealState.dim())
+            else:
+                next_state['critic'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
+                                                         spherical=True, range_norm=[-1, 1],
+                                                         translate_wrt_target=False).array()
             if self.asymmetric:
                 next_state['actor'] = clutter.get_asymmetric_actor_feature_from_dict(transition.next_state, self.ae,
                                                                                      self.scaler, angle[j])
             else:
-                next_state['actor'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
+                if transition.terminal:
+                    next_state['actor'] = np.zeros(clutter.RealState.dim())
+                else:
+                    next_state['actor'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
                                                         spherical=True, range_norm=[-1, 1],
                                                         translate_wrt_target=False).array()
 
