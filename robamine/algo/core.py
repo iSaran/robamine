@@ -1208,6 +1208,7 @@ class Episode:
         timestep.transition = transition.copy()
         timestep.transition.state = None
         timestep.transition.next_state = None
+        timestep.transition.info = info
         timestep.q_value = self.agent.q_value(transition.state, transition.action)
         self.data.append(timestep)
 

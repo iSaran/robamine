@@ -37,12 +37,14 @@ class Transition:
                  action=None,
                  reward=None,
                  next_state=None,
-                 terminal=None):
+                 terminal=None,
+                 info=None):
         self.state = state
         self.action = action
         self.reward = reward
         self.next_state = next_state
         self.terminal = terminal
+        self.info = info
 
     def array(self):
         return np.array([self.state, self.action, self.reward, self.next_state, self.terminal])
@@ -55,7 +57,7 @@ class Transition:
                 ', terminal: ' + str(self.terminal) + ']'
 
     def __copy__(self):
-        return Transition(state=copy.copy(self.state), action=copy.copy(self.action), reward=copy.copy(self.reward), next_state=copy.copy(self.next_state), terminal=copy.copy(self.terminal))
+        return Transition(state=copy.copy(self.state), action=copy.copy(self.action), reward=copy.copy(self.reward), next_state=copy.copy(self.next_state), terminal=copy.copy(self.terminal), info=copy.copy(self.info))
 
     def copy(self):
         return self.__copy__()
