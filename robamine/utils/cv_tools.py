@@ -396,7 +396,7 @@ class PointCloud:
             heightmaps = []
             for i in range(rotations):
                 angle = i * step_angle
-                m = cv2.getRotationMatrix2D(center, angle, scale=1)
+                m = cv2.getRotationMatrix2D(center, -angle, scale=1)
                 heightmaps.append(cv2.warpAffine(height_grid, m, (height, width)))
                 if plot:
                     plot_2d_img(heightmaps[i], 'height_map' + str(i))
