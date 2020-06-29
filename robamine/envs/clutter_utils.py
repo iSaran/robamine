@@ -825,14 +825,14 @@ def get_icra_feature(obs_dict, rotations=8):
         feature = feature.crop(32, 32)
         feature = feature.pooling()
         feature = feature.normalize(0.06).flatten()
-        feature = np.append(feature, obs_dict['object_bounding_box'][0] / 0.5)
-        feature = np.append(feature, i * rot_angle / 360)
+        feature = np.append(feature, i * rot_angle)
+        feature = np.append(feature, obs_dict['object_bounding_box'][0][:2] / 0.03)
 
         # Add the distance of the object from the edge
-        distances = [obs_dict['surface_size'][0] - obs_dict['target_pos'][0], \
-                     obs_dict['surface_size'][0] + obs_dict['target_pos'][0], \
-                     obs_dict['surface_size'][1] - obs_dict['target_pos'][1], \
-                     obs_dict['surface_size'][1] + obs_dict['target_pos'][1]]
+        distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                     obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                     obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                     obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
 
         distances = [x / 0.5 for x in distances]
 

@@ -20,6 +20,7 @@ import copy
 from robamine.algo.util import Transition
 import robamine.envs.clutter_utils as clutter
 from robamine.utils import cv_tools
+import matplotlib.pyplot as plt
 
 import logging
 logger = logging.getLogger('robamine.algo.splitdqn')
@@ -195,7 +196,7 @@ class SplitDQN(RLAgent):
 
         # If we have not enough samples just keep storing transitions to the
         # buffer and thus exit.
-        if self.replay_buffer[i].size() < self.params['batch_size'][i]:
+        if self.replay_buffer[i].size() < self.params['n_preloaded_buffer'][i]:
             return
 
         # Update target net's params
@@ -218,6 +219,19 @@ class SplitDQN(RLAgent):
                 q_next_i = self.target_network[net](next_state)
                 q_next = torch.cat((q_next, q_next_i), dim=1)
         q_next = q_next.max(1)[0].view(self.params['batch_size'][i], 1)
+
+        if DEBUG:
+            fig, ax = plt.subplots(8, 2)
+            for k in range(8):
+                f = cv_tools.Feature(batch.state[0, (256 + 7) * k:(256 + 7) * k + 256].reshape(16, 16))
+                ax[k, 0].imshow(f.heightmap, cmap='gray', vmin=np.min(f.heightmap), vmax=np.max(f.heightmap))
+                print('action:' + str(batch.action[0]) + '/' + str(
+                    batch.action[0] - i * self.nr_substates) + 'reward:' + str(batch.reward[0]) + 'terminal:' + str(
+                    batch.terminal[0]))
+                # ax[k, 0].title()
+                f = cv_tools.Feature(batch.next_state[0, (256 + 7) * k:(256 + 7) * k + 256].reshape(16, 16))
+                ax[k, 1].imshow(f.heightmap, cmap='gray', vmin=np.min(f.heightmap), vmax=np.max(f.heightmap))
+            plt.show()
 
         reward = torch.FloatTensor(batch.reward).to(self.device)
         terminal = torch.FloatTensor(batch.terminal).to(self.device)

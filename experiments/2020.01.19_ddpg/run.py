@@ -915,12 +915,12 @@ def train_eval_icra(params):
     params['env']['params']['icra']['use'] = True
     env = gym.make('ClutterContICRAWrapper-v0', params=params['env']['params'])
 
-    agent = SplitDQN(state_dim=264 * 8, action_dim=8 * 2,
+    agent = SplitDQN(state_dim=263 * 8, action_dim=8 * 2,
                      params={'replay_buffer_size': 1e6,
                              'batch_size': [64, 64],
                              'discount': 0.9,
                              'epsilon_start': 0.9,
-                             'epsilon_end': 0.05,
+                             'epsilon_end': 0.25,
                              'epsilon_decay': 20000,
                              'learning_rate': [1e-3, 1e-3],
                              'tau': 0.999,
@@ -930,7 +930,8 @@ def train_eval_icra(params):
                              'device': 'cpu',
                              'load_nets': '',
                              'load_buffers': '',
-                             'update_iter': [1, 1, 5]
+                             'update_iter': [1, 1, 5],
+                             'n_preloaded_buffer': [1000, 1000]
                              })
     trainer = TrainEvalWorld(agent=agent, env=env,
                              params={'episodes': 10000,
