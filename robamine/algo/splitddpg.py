@@ -289,10 +289,11 @@ class SplitDDPG(RLAgent):
         return output
 
     def explore(self, state):
-        if self.hardcoded_primitive >= 0:
-            return self.exploration_policy(state)
-        else:
-            return self.exploration_policy_combo(state)
+        return self.exploration_policy(state)
+        # if self.hardcoded_primitive >= 0:
+        #     return self.exploration_policy(state)
+        # else:
+        #     return self.exploration_policy_combo(state)
 
     def exploration_policy(self, state):
         # Calculate epsilon for epsilon-greedy
