@@ -61,7 +61,7 @@ env:
     hardcoded_primitive: 0
     max_timesteps: 10
     real_state: True
-    all_equal_height_prob: 0.0
+    all_equal_height_prob: 0.2
     finger:
       size: 0.005
       type: sphere
