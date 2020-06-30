@@ -875,6 +875,7 @@ def VAE_create_dataset(dir, rotations=0):
 def icra_check_transition(params):
     from robamine.envs.clutter_cont import ClutterContICRAWrapper
     params['env']['params']['render'] = True
+    params['env']['params']['push']['predict_collision'] = False
     params['env']['params']['safe'] = False
     params['env']['params']['icra']['use'] = True
     env = ClutterContICRAWrapper(params['env']['params'])
@@ -890,7 +891,7 @@ def icra_check_transition(params):
         obs = env.reset(seed=seed)
 
         while True:
-            for action in np.arange(0, 16, 1):
+            for action in np.arange(0, 24, 1):
                 # action = 8
                 print('icra discrete action', action)
                 obs, reward, done, info = env.step(action)
@@ -938,23 +939,23 @@ def train_eval_icra(params):
     params['env']['params']['icra']['use'] = True
     env = gym.make('ClutterContICRAWrapper-v0', params=params['env']['params'])
 
-    agent = SplitDQN(state_dim=263 * 8, action_dim=8 * 2,
+    agent = SplitDQN(state_dim=263 * 8, action_dim=8 * 3,
                      params={'replay_buffer_size': 1e6,
-                             'batch_size': [64, 64],
+                             'batch_size': [64, 64, 64],
                              'discount': 0.9,
                              'epsilon_start': 0.9,
                              'epsilon_end': 0.25,
                              'epsilon_decay': 20000,
-                             'learning_rate': [1e-3, 1e-3],
+                             'learning_rate': [1e-3, 1e-3, 1e-3],
                              'tau': 0.999,
                              'double_dqn': True,
-                             'hidden_units': [[100, 100], [100, 100]],
-                             'loss': ['mse', 'mse'],
+                             'hidden_units': [[100, 100], [100, 100], [100, 100]],
+                             'loss': ['mse', 'mse', 'mse'],
                              'device': 'cpu',
                              'load_nets': '',
                              'load_buffers': '',
-                             'update_iter': [1, 1, 5],
-                             'n_preloaded_buffer': [1000, 1000]
+                             'update_iter': [1, 1, 1],
+                             'n_preloaded_buffer': [500, 500, 500]
                              })
     trainer = TrainEvalWorld(agent=agent, env=env,
                              params={'episodes': 10000,
@@ -987,7 +988,7 @@ if __name__ == '__main__':
     # ----------
 
     # train(params)
-    train_eval(params)
+    # train_eval(params)
     # train_combo_q_learning(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # eval_in_scenes(params, os.path.join(params['world']['logging_dir'], exp_dir), n_scenes=1000)
@@ -1030,3 +1031,4 @@ if __name__ == '__main__':
 
     # icra_check_transition(params)
     # train_icra(params)
+    train_eval_icra(params)

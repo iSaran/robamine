@@ -29,7 +29,7 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          predict_collision, ObstacleAvoidanceLoss, PushTargetRealWithObstacleAvoidance,
                                          PushTargetReal, PushTargetRealObjectAvoidance, get_table_point_cloud,
                                          PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition,
-                                         PushObstacleICRA, PushTargetICRA)
+                                         PushObstacleICRA, PushTargetICRA, PushExtraICRA)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -2030,10 +2030,6 @@ class ClutterContICRA(ClutterCont):
                                   nr_rotations=self.params['icra']['n_rotations'],
                                   obs_dict=self.obs_dict,
                                   push_distance_range=self.params['push']['distance'])
-            angle, axis = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
-            angle = (axis[2] / abs(axis[2])) * angle
-            push.rotate(angle)
-            push.translate(self.obs_dict['object_poses'][0, :2])
         elif primitive == 1:
             push = PushObstacleICRA(action=action_,
                                     nr_rotations=self.params['icra']['n_rotations'],
@@ -2041,12 +2037,18 @@ class ClutterContICRA(ClutterCont):
                                     push_distance_range=self.params['push']['distance'],
                                     object_height=2 * self.target_bounding_box[2],
                                     finger_height=self.finger_height)
-            angle, axis = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
-            angle = (axis[2] / abs(axis[2])) * angle
-            push.rotate(angle)
-            push.translate(self.obs_dict['object_poses'][0, :2])
         elif primitive == 2:
-            raise Exception('Not implemented')
+            push = PushExtraICRA(action=action_,
+                                 nr_rotations=self.params['icra']['n_rotations'],
+                                 obs_dict=self.obs_dict)
+
+        else:
+            raise ValueError()
+
+        angle, axis = rot2angleaxis(Quaternion.from_vector(self.obs_dict['object_poses'][0, 3:]).rotation_matrix())
+        angle = (axis[2] / abs(axis[2])) * angle
+        push.rotate(angle)
+        push.translate(self.obs_dict['object_poses'][0, :2])
 
         push_initial_pos_world = push.get_init_pos()
         push_final_pos_world = push.get_final_pos()

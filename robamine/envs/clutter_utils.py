@@ -1299,6 +1299,31 @@ class PushTargetICRA(PushTargetWithObstacleAvoidance):
                                                                   convex_hull=convex_hull, object_height=object_height,
                                                                   finger_size=finger_size)
 
+class PushExtraICRA(PushTarget2D):
+    def __init__(self, action, nr_rotations, obs_dict):
+        theta = action * 2 * np.pi / nr_rotations
+        if theta > np.pi:
+            theta = -np.pi + abs(theta - np.pi)
+
+        r = np.linalg.norm(obs_dict['surface_size'])
+        init_distance = np.linalg.norm(obs_dict['surface_size'])
+        push_distance = 0.1
+        p1 = init_distance * np.array([np.cos(theta), np.sin(theta)])
+        p2 = - push_distance * np.array([cos(theta), sin(theta)])
+
+        # Calculate height (z) of the push
+        # --------------------------------
+        finger_size = obs_dict['finger_height']
+        object_height = obs_dict['object_bounding_box'][0, 2]
+        if object_height - finger_size > 0:
+            offset = object_height - finger_size
+        else:
+            offset = 0
+        z = float(finger_size + offset + 0.001)
+
+        super(PushExtraICRA, self).__init__(p1, p2, z, push_distance)
+
+
 
 # Various utils methods
 # ---------------------
