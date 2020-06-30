@@ -269,7 +269,8 @@ class SplitDDPG(RLAgent):
                                            translate_wrt_target=False).array()
             s = torch.FloatTensor(real_state).to(self.device)
             if self.asymmetric:
-                feature = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler)
+                feature = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler,
+                                                                         primitive=self.network_to_primitive_index(i))
             else:
                 feature = clutter.preprocess_real_state(state, self.max_init_distance)
                 feature = clutter.RealState(feature, angle=0, sort=True, normalize=True, spherical=True,
@@ -342,7 +343,8 @@ class SplitDDPG(RLAgent):
         else:
             i = self.rng.randint(0, self.nr_network)
             if self.asymmetric:
-                feature = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler)
+                feature = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler,
+                                                                         primitive=self.network_to_primitive_index(i))
             else:
                 feature = clutter.preprocess_real_state(state, self.max_init_distance)
                 feature = clutter.RealState(feature, angle=0, sort=True, normalize=True, spherical=True,
@@ -549,8 +551,10 @@ class SplitDDPG(RLAgent):
             state['critic'] = clutter.RealState(state_critic, angle=0, sort=True, normalize=True, spherical=True,
                                                 range_norm=[-1, 1], translate_wrt_target=False).array()
             if self.asymmetric:
-                state['actor'] = clutter.get_asymmetric_actor_feature_from_dict(transition.state, self.ae, self.scaler,
-                                                                                angle[j])
+                state['actor'] = \
+                    clutter.get_asymmetric_actor_feature_from_dict(transition.state, self.ae, self.scaler,
+                                                                   angle[j],
+                                                                   primitive=transition.action[0])
             else:
                 state['actor'] = clutter.RealState(state_critic, angle=0, sort=True, normalize=True,
                                                    spherical=True,
@@ -565,7 +569,8 @@ class SplitDDPG(RLAgent):
                                                          translate_wrt_target=False).array()
             if self.asymmetric:
                 next_state['actor'] = clutter.get_asymmetric_actor_feature_from_dict(transition.next_state, self.ae,
-                                                                                     self.scaler, angle[j])
+                                                                                     self.scaler, angle[j],
+                                                                                     primitive=transition.action[0])
             else:
                 if transition.terminal:
                     next_state['actor'] = np.zeros(clutter.RealState.dim())
@@ -742,7 +747,7 @@ class DQNCombo(RLAgent):
                 self.actor[-1].load_state_dict(pretrained_splitddpg['actor'][0])
 
     def predict(self, state):
-        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, 0)
+        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, 0, primitive=0)
         s = torch.FloatTensor(state_).to(self.device)
         values = self.network(s).cpu().detach().numpy()
         primitive = np.argmax(values)
@@ -758,7 +763,7 @@ class DQNCombo(RLAgent):
         primitive = self.rng.randint(0, self.action_dim)
 
 
-        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, 0)
+        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, 0, primitive=0)
         s = torch.FloatTensor(state_).to(self.device)
         action = self.actor[primitive](s).detach().cpu().numpy()
         return np.insert(action, 0, primitive)
@@ -851,7 +856,7 @@ class DQNCombo(RLAgent):
         pickle.dump(model, open(file_path, 'wb'))
 
     def q_value(self, state, action):
-        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, 0)
+        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, 0, primitive=0)
         s = torch.FloatTensor(state_).to(self.device)
         return self.network(s).cpu().detach().numpy()[int(action[0])]
 
@@ -867,9 +872,9 @@ class DQNCombo(RLAgent):
         angle = np.linspace(0, 2 * np.pi, heightmap_rotations, endpoint=False)
         for j in range(heightmap_rotations):
             transition.state['init_distance_from_target'] = transition.next_state['init_distance_from_target']
-            state = clutter.get_asymmetric_actor_feature_from_dict(transition.state, self.ae, self.scaler, angle[j])
+            state = clutter.get_asymmetric_actor_feature_from_dict(transition.state, self.ae, self.scaler, angle[j], primitive=0)
             next_state = clutter.get_asymmetric_actor_feature_from_dict(transition.next_state, self.ae,
-                                                                                     self.scaler, angle[j])
+                                                                                     self.scaler, angle[j], primitive=0)
 
             # Rotate action
             # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:

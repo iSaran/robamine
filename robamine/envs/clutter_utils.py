@@ -597,12 +597,18 @@ class RealState(Feature):
         return 10 * 4 * 3 + 4 + 1 # TODO: hardcoded max n objects
 
 
-def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0, plot=False):
+def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0, primitive=0, plot=False):
     """Angle in deg"""
     # Calculate fused visual feature
     crop_area = [128, 128]
     thresholded = np.zeros(heightmap.shape)
-    threshold = target_bounding_box_z - 1.5 * finger_height
+    if primitive == 0:
+        threshold = target_bounding_box_z - 1.5 * finger_height
+    elif primitive == 1:
+        threshold = 2 * target_bounding_box_z + 1.5 * finger_height
+    else:
+        raise ValueError()
+
     if threshold < 0:
         threshold = 0
     thresholded[heightmap > threshold] = 1
@@ -617,14 +623,14 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
 
 def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
                                  target_pos, surface_distances,
-                                 angle=0, plot=False):
+                                 angle=0, primitive=0, plot=False):
     """Angle in rad"""
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     """Angle in rad"""
     angle_deg = angle * (180 / np.pi)
     visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle_deg,
-                                              plot=False)
+                                              primitive, plot=False)
     visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0],
                                                                visual_feature.shape[1]).to('cpu')
     # start.record()
@@ -653,7 +659,7 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
 
     return np.append(normalized_latent, surface_distances.flatten())
 
-def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, angle=0, plot=False):
+def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, angle=0, primitive=0, plot=False):
     heightmap = obs_dict['heightmap_mask'][0]
     mask = obs_dict['heightmap_mask'][1]
     target_bounding_box_z = obs_dict['target_bounding_box'][2]
@@ -668,7 +674,7 @@ def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, an
 
     target_pos = obs_dict['object_poses'][0, 0:2]
     return get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
-                                        target_pos, surface_distances, angle, plot)
+                                        target_pos, surface_distances, angle, primitive, plot)
 
 
 class PrimitiveFeature:
