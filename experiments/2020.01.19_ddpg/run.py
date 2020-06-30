@@ -86,6 +86,29 @@ def eval_in_scenes(params, dir, n_scenes=1000):
     world.run()
     print('Logging dir:', params['world']['logging_dir'])
 
+def analyze_eval_in_scenes(dir):
+    data = EpisodeListData.load(os.path.join(dir, 'episodes'))
+    singulations, fallens, collisions, timesteps = 0, 0, 0, 0
+    singulations2, fallens2, collisions2, timesteps = 0, 0, 0, 0
+    steps_singulations = []
+    episodes = len(data)
+    for i in range(episodes):
+        timesteps += len(data[i])
+        if data[i][-1].transition.info['termination_reason'] == 'singulation':
+            singulations += 1
+            steps_singulations.append(len(data[i]))
+        elif data[i][-1].transition.info['termination_reason'] == 'fallen':
+            fallens += 1
+
+    print('terminal singulations:', (singulations / episodes) * 100, '%')
+    print('terminal fallens:', (fallens / episodes) * 100, '%')
+    print('collisions:', (collisions / episodes) * 100, '%')
+    print('Total timesteps:', timesteps)
+    print('Mean steps for singulation:', np.mean(steps_singulations))
+    plt.hist(steps_singulations)
+    plt.show()
+
+
 def process_episodes(dir):
     data = EpisodeListData.load(os.path.join(dir, 'episodes'))
     data.calc()
@@ -968,6 +991,7 @@ if __name__ == '__main__':
     # train_combo_q_learning(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # eval_in_scenes(params, os.path.join(params['world']['logging_dir'], exp_dir), n_scenes=1000)
+    # analyze_eval_in_scenes(os.path.join(params['world']['logging_dir'], exp_dir))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
     # test(params)
