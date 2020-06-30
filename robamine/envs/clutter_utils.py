@@ -605,7 +605,7 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
     if primitive == 0:
         threshold = target_bounding_box_z - 1.5 * finger_height
     elif primitive == 1:
-        threshold = 2 * target_bounding_box_z + 1.5 * finger_height
+        threshold = 2 * target_bounding_box_z + 1.1 * finger_height
     else:
         raise ValueError()
 
