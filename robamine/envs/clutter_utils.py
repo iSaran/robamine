@@ -680,6 +680,43 @@ def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, an
     return get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, target_bounding_box_z, finger_height,
                                         target_pos, surface_distances, angle, primitive, plot)
 
+def detect_singulation_from_actor_visual_feature(obs_dict):
+    heightmap = obs_dict['heightmap_mask'][0]
+    mask = obs_dict['heightmap_mask'][1]
+    target_bounding_box_z = obs_dict['target_bounding_box'][2]
+    finger_height = obs_dict['finger_height']
+    singulation_distance = obs_dict['singulation_distance'][0]
+    pixels_to_m = obs_dict['pixels_to_m'][0]
+    singulation_distance_in_pxl = int(np.ceil(singulation_distance / pixels_to_m))
+    visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0,
+                                              primitive=0, plot=False, maskout_target=True)
+    singulation_feature = cv_tools.Feature(visual_feature).crop(singulation_distance_in_pxl,
+                                                                singulation_distance_in_pxl)
+    if np.max(singulation_feature.array()) < 1.0:
+        return True
+    return False
+
+def push_obstacle_feature_includes_affordances(obs_dict):
+    heightmap = obs_dict['heightmap_mask'][0]
+    mask = obs_dict['heightmap_mask'][1]
+    target_bounding_box_z = obs_dict['target_bounding_box'][2]
+    finger_height = obs_dict['finger_height']
+    pixels_to_m = obs_dict['pixels_to_m'][0]
+    push_distance = obs_dict['push_distance_range'][1]
+    singulation_distance_in_pxl = int(np.ceil(push_distance / pixels_to_m))
+    crop_area = [singulation_distance_in_pxl, singulation_distance_in_pxl]
+
+    visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0,
+                                              primitive=1, plot=False, maskout_target=True, crop_area=crop_area,
+                                              pooling=False)
+
+    circle_mask = cv_tools.get_circle_mask(visual_feature.shape[0], visual_feature.shape[1],
+                                           singulation_distance_in_pxl, inverse=True)
+    visual_feature = cv_tools.Feature(visual_feature).mask_out(circle_mask).array()
+    if np.max(visual_feature) < 1.0:
+        return False
+    return True
+
 
 class PrimitiveFeature:
     def __init__(self, heightmap, mask, angle=0, name=None):
