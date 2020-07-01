@@ -1003,7 +1003,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'surface_edges': (4, 2),
                 'raw_depth': (480, 640),
                 'centroid_pxl': (2,),
-                'point_cloud': (10000, 3)}
+                'point_cloud': (10000, 3),
+                'pixels_to_m': (1,)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
@@ -1048,7 +1049,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                      [-self.surface_size[0], -self.surface_size[1]]]),
             'raw_depth': np.zeros(shapes['raw_depth']),
             'centroid_pxl': np.zeros(shapes['centroid_pxl']),
-            'point_cloud': np.zeros(shapes['point_cloud'])
+            'point_cloud': np.zeros(shapes['point_cloud']),
+            'pixels_to_m': np.array([self.pixels_to_m])
         }
 
         if not self._target_is_on_table():
