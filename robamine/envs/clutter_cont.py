@@ -2175,7 +2175,7 @@ class ClutterContICRA(ClutterCont):
         self.no_of_prev_points_around = len(points_around)
 
         extra_penalty = 0
-        # if self.params['extra_primitive'] and action >= self.params['nr_of_actions'] * (2/3):
-        #     extra_penalty = -5
+        if action >= 16:
+            extra_penalty = -5
 
         return -1 + extra_penalty
