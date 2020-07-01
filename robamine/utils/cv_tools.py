@@ -238,6 +238,7 @@ class Feature:
         """
         Remove from height map the pixels that do not belong to the mask
         """
+        mask = mask.astype(np.int8)
         maskin_heightmap = cv2.bitwise_and(self.heightmap, self.heightmap, mask=mask)
         return Feature(maskin_heightmap)
 
@@ -245,7 +246,7 @@ class Feature:
         """
         Remove from height map the pixels that belong to the mask
         """
-        mask = 255 - mask
+        mask = (255 - mask).astype(np.int8)
         maskout_heightmap = cv2.bitwise_and(self.heightmap, self.heightmap, mask=mask)
         return Feature(maskout_heightmap)
 
@@ -323,6 +324,17 @@ class Feature:
         normalized[normalized > 1] = 1
         normalized[normalized < 0] = 0
         return Feature(normalized)
+
+def get_circle_mask(x, y, radius, inverse=False):
+    circle_mask = np.zeros((x, y))
+    center = [int(x / 2), int(y / 2)]
+    for i in range(x):
+        for j in range(y):
+            if np.linalg.norm([i - center[0], j - center[1]]) < radius:
+                circle_mask[i, j] = 256
+    if inverse:
+        circle_mask = cv2.bitwise_not(circle_mask)
+    return circle_mask
 
 
 class PointCloud:
