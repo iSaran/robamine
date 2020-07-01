@@ -1185,7 +1185,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             # Push obstacle primitive
             elif primitive == 1:
                 push = PushObstacle(theta=action[1],
-                                    push_distance=0,  # use maximum distance for now
+                                    push_distance=1,  # use maximum distance for now
                                     push_distance_range=self.params['push']['distance'],
                                     object_height=2 * self.target_bounding_box[2],
                                     finger_height=self.finger_height)
