@@ -597,10 +597,10 @@ class RealState(Feature):
         return 10 * 4 * 3 + 4 + 1 # TODO: hardcoded max n objects
 
 
-def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0, primitive=0, plot=False):
+def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0, primitive=0, plot=False,
+                             maskout_target=False, crop_area=[128, 128], pooling=True):
     """Angle in deg"""
     # Calculate fused visual feature
-    crop_area = [128, 128]
     thresholded = np.zeros(heightmap.shape)
     if primitive == 0:
         threshold = target_bounding_box_z - 1.5 * finger_height
@@ -613,9 +613,13 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
         threshold = 0
     thresholded[heightmap > threshold] = 1
     thresholded[mask > 0] = 0.5
-    visual_feature = cv_tools.Feature(thresholded).rotate(angle)
+    visual_feature = cv_tools.Feature(thresholded)
+    if maskout_target:
+        visual_feature = visual_feature.mask_out(mask)
+    visual_feature = visual_feature.rotate(angle)
     visual_feature = visual_feature.crop(crop_area[0], crop_area[1])
-    visual_feature = visual_feature.pooling(kernel=[2, 2], stride=2, mode='AVG')
+    if pooling:
+        visual_feature = visual_feature.pooling(kernel=[2, 2], stride=2, mode='AVG')
     if plot:
         visual_feature.plot()
     return visual_feature.array()
