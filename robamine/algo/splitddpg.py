@@ -262,7 +262,10 @@ class SplitDDPG(RLAgent):
     def predict(self, state):
         output = np.zeros(max(self.action_dim) + 1)
         max_q = -1e10
-        for i in range(self.nr_network):
+        valid_nets = np.arange(0, self.nr_network, 1)
+        if self.nr_network > 1 and not clutter.push_obstacle_feature_includes_affordances(state):
+            valid_nets = np.delete(valid_nets, [1])
+        for i in valid_nets:
             state_ = clutter.preprocess_real_state(state, self.max_init_distance, 0)
             real_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True,
                                            range_norm=[-1, 1],
@@ -314,7 +317,10 @@ class SplitDDPG(RLAgent):
             output[0] = i
             output[1:(self.action_dim[self.primitive_to_network_index(i)] + 1)] = action
         else:
-            i = self.rng.randint(0, self.nr_network)
+            valid_nets = np.arange(0, self.nr_network, 1)
+            if self.nr_network > 1 and not clutter.push_obstacle_feature_includes_affordances(state):
+                valid_nets = np.delete(valid_nets, [1])
+            i = valid_nets[self.rng.randint(0, len(valid_nets))]
             action = self.rng.uniform(-1, 1, self.action_dim[i])
             action[action > 1] = 1
             action[action < -1] = -1
