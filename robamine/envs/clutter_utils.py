@@ -1293,7 +1293,18 @@ class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
             patch_x = int(patch_center[0] - patch_size / 2.)
             patch_y = int(patch_center[1] - patch_size / 2.)
             patch_image = raw_depth_[patch_x:patch_x + patch_size, patch_y:patch_y + patch_size]
-            if (np.abs(patch_image - table_depth) < 1e-6).all():
+
+            # fig, ax = plt.subplots(1)
+            # ax.imshow(raw_depth_)
+            # rect = patches.Rectangle((patch_y, patch_x), patch_size, patch_size, linewidth=1, edgecolor='r', facecolor='none')
+            # ax.add_patch(rect)
+            # plt.show()
+            # plt.imshow(patch_image)
+            # plt.show()
+            # print('abs', np.abs(patch_image - table_depth))
+            # print('table', table_depth)
+
+            if (np.abs(patch_image - table_depth) < 1e-3).all():
                 z = raw_depth_[patch_center[0], patch_center[1]]
                 patch_center_ = patch_center.copy()
                 patch_center_[0] = patch_center[1]
