@@ -18,9 +18,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from robamine.algo.util import get_agent_handle
-from robamine.envs.clutter_utils import (plot_point_cloud_of_scene, discretize_2d_box, PushTargetFeature, RealState,
-                                         preprocess_real_state, plot_real_state, PushTargetRealWithObstacleAvoidance,
-                                         get_asymmetric_actor_feature_from_dict)
+import robamine.envs.clutter_utils as clutter
 import matplotlib.pyplot as plt
 from robamine.utils.math import min_max_scale
 from robamine.utils.memory import get_batch_indices
@@ -108,6 +106,10 @@ def analyze_eval_in_scenes(dir):
     print('Mean steps for singulation:', np.mean(steps_singulations))
     plt.hist(steps_singulations)
     plt.show()
+    data = sorted(steps_singulations)
+    print('25th perc:', data[int(0.25 * len(data))])
+    print('50th perc:', data[int(0.5 * len(data))])
+    print('75th perc:', data[int(0.75 * len(data))])
 
 
 def process_episodes(dir):
@@ -174,11 +176,12 @@ def check_transition(params):
             # action = [0, -1, 1, -1]
             print('action', action)
             obs, reward, done, info = env.step(action)
-            RealState(obs).plot()
-            array = RealState(obs).array()
-            if (array > 1).any() or (array < -1).any():
-                print('out of limits indeces > 1:', array[array < -1])
-                print('out of limits indeces < -1:', array[array < -1])
+            print('singulation:', clutter.detect_singulation_from_real_state(obs))
+            # RealState(obs).plot()
+            # array = RealState(obs).array()
+            # if (array > 1).any() or (array < -1).any():
+            #     print('out of limits indeces > 1:', array[array < -1])
+            #     print('out of limits indeces < -1:', array[array < -1])
             # plot_point_cloud_of_scene(obs)
             print('reward: ', reward, 'done:', done)
             if done:
@@ -498,13 +501,13 @@ def create_dataset_from_scenes(dir, n_x=16, n_y=16):
             theta = np.arctan2(x_y_random[i, 1], x_y_random[i, 0])
             theta = min_max_scale(theta, range=[-np.pi, np.pi], target_range=[-1, 1])  # it seems silly just to leave the rest the same
             rad = min_max_scale(theta, range=[-1, 1], target_range=[-np.pi, np.pi])
-            state = RealState(obs_dict=data[scene], angle=-rad, sort=True, normalize=True, spherical=False,
+            state = clutter.RealState(obs_dict=data[scene], angle=-rad, sort=True, normalize=True, spherical=False,
                               translate_wrt_target=True)
 
             r = np.linalg.norm(x_y_random[i])
             if r > 1:
                 r = 1
-            push = PushTargetRealWithObstacleAvoidance(data[scene], theta=theta, push_distance=-1, distance=r,
+            push = clutter.PushTargetRealWithObstacleAvoidance(data[scene], theta=theta, push_distance=-1, distance=r,
                                                        push_distance_range=params['env']['params']['push']['distance'],
                                                        init_distance_range=params['env']['params']['push']['target_init_distance'],
                                                        translate_wrt_target=False)
@@ -565,7 +568,7 @@ def visualize_supervised_output(model_dir, scenes_dir):
             for j in range(sizee):
                 theta = np.arctan2(y[i, j], x[i, j])
                 rad = theta
-                state = RealState(obs_dict=data[scene_id], angle=-rad, sort=True, normalize=True, spherical=False,
+                state = clutter.RealState(obs_dict=data[scene_id], angle=-rad, sort=True, normalize=True, spherical=False,
                                   translate_wrt_target=True)
 
 
@@ -574,7 +577,7 @@ def visualize_supervised_output(model_dir, scenes_dir):
                     z[i, j] = 0
                 else:
                     r = min_max_scale(r, range=[0, 1], target_range=[-1, 1])
-                    push = PushTargetRealWithObstacleAvoidance(data[scene_id], theta=theta, push_distance=-1, distance=r,
+                    push = clutter.PushTargetRealWithObstacleAvoidance(data[scene_id], theta=theta, push_distance=-1, distance=r,
                                                                push_distance_range=params['env']['params']['push'][
                                                                    'distance'],
                                                                init_distance_range=params['env']['params']['push'][
