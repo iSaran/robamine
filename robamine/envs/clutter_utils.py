@@ -696,6 +696,55 @@ def detect_singulation_from_actor_visual_feature(obs_dict):
         return True
     return False
 
+
+def detect_singulation_from_real_state(obs_dict):
+    # Returns the minimum distance of target from the obstacles'''
+    n_objects = int(obs_dict['n_objects'])
+    target_pose = obs_dict['object_poses'][0]
+    target_bbox = obs_dict['object_bounding_box'][0]
+    target_bounding_box_z = obs_dict['target_bounding_box'][2]
+    finger_height = obs_dict['finger_height']
+    threshold = target_bounding_box_z - 1.5 * finger_height
+
+    distances = 100 * np.ones((int(n_objects),))
+    for i in range(1, n_objects):
+        obstacle_pose = obs_dict['object_poses'][i]
+        obstacle_bbox = obs_dict['object_bounding_box'][i]
+
+        height = get_object_height(obstacle_pose, obstacle_bbox)
+        if height > threshold:
+            distances[i] = get_distance_of_two_bbox(target_pose, target_bbox, obstacle_pose, obstacle_bbox)
+
+    min_distance = np.min(distances)
+
+    singulation_distance = obs_dict['singulation_distance'][0]
+    if min_distance > singulation_distance:
+        return True
+    return False
+
+def get_object_height(pose, bounding_box):
+    bbox = bounding_box
+    bbox_corners_object = np.array([[bbox[0], bbox[1], bbox[2]],
+                                    [bbox[0], -bbox[1], bbox[2]],
+                                    [bbox[0], bbox[1], -bbox[2]],
+                                    [bbox[0], -bbox[1], -bbox[2]],
+                                    [-bbox[0], bbox[1], bbox[2]],
+                                    [-bbox[0], -bbox[1], bbox[2]],
+                                    [-bbox[0], bbox[1], -bbox[2]],
+                                    [-bbox[0], -bbox[1], -bbox[2]]])
+    pos = pose[0:3]
+    quat = Quaternion(pose[3], pose[4], pose[5], pose[6])
+    corners = transform_list_of_points(bbox_corners_object, pos, quat)
+    dists = np.zeros(corners.shape[0])
+    normal = np.zeros(3)
+    normal[2] = 1
+    for i in range(corners.shape[0]):
+        v = corners[i] - np.zeros(3)
+        dists[i] = abs(np.dot(v, normal))
+    return np.max(dists)
+
+
+
 def push_obstacle_feature_includes_affordances(obs_dict):
     heightmap = obs_dict['heightmap_mask'][0]
     mask = obs_dict['heightmap_mask'][1]

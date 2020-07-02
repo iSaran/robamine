@@ -29,7 +29,7 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          predict_collision, ObstacleAvoidanceLoss, PushTargetRealWithObstacleAvoidance,
                                          PushTargetReal, PushTargetRealObjectAvoidance, get_table_point_cloud,
                                          PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition,
-                                         PushObstacleICRA, PushTargetICRA, PushExtraICRA)
+                                         PushObstacleICRA, PushTargetICRA, PushExtraICRA, detect_singulation_from_real_state)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -1438,8 +1438,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if observation['object_poses'][0][2] < 0:
             return -1
 
-        dist = self.get_real_distance_from_closest_obstacle(observation)
-        if dist > self.singulation_distance:
+        if detect_singulation_from_real_state(observation):
             return 1
 
         # Calculate the sum
@@ -1584,8 +1583,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if np.dot(target_z, world_z) < 0.9:
             return True, 'flipped'
 
-        # if self.singulation_condition(self.heightmap, self.mask):
-        if self.get_real_distance_from_closest_obstacle(obs) > self.singulation_distance:
+        if detect_singulation_from_real_state(obs):
             self.success = True
             return True, 'singulation'
 
