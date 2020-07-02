@@ -594,7 +594,7 @@ class RealState(Feature):
 
     @staticmethod
     def dim():
-        return 14 * 4 * 3 + 4 + 1 # TODO: hardcoded max n objects
+        return 10 * 4 * 3 + 4 + 1 # TODO: hardcoded max n objects
 
 
 def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0, primitive=0, plot=False,

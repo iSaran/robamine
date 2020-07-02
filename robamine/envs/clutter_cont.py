@@ -994,7 +994,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         Provides the shapes of the observation returned by the env. The shapes should be constants and should not change
         dynamically, because we want them to store them in arrays like h5py.
         """
-        max_n_obstacles = 14  # TODO: the maximum possible number of obstacles is hardcoded.
+        max_n_obstacles = 10  # TODO: the maximum possible number of obstacles is hardcoded.
         return {'target_bounding_box': (3,),
                 'finger_height': (1,),
                 'finger_length': (1,),
