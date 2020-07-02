@@ -766,7 +766,7 @@ def VAE_collect_scenes(params, dir_to_save, n_scenes=1000):
     params['env']['params']['push']['target_init_distance'][1] = 0.15
     params['env']['params']['safe'] = False
     params['env']['params']['target']['randomize_pos'] = False
-    params['env']['params']['nr_of_obstacles'] = [1, 8]
+    params['env']['params']['nr_of_obstacles'] = [1, 13]
     env = ClutterContWrapper(params=params['env']['params'])
 
     real_states = []
