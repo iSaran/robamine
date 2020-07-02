@@ -48,6 +48,7 @@ def train_eval(params):
                                      'eval_every': 100,
                                      'eval_render': False,
                                      'save_every': 100})
+    trainer.seed(21321)
     trainer.run()
     print('Logging dir:', params['world']['logging_dir'])
 

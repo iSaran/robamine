@@ -507,10 +507,13 @@ class ClutterContWrapper(gym.Env):
 
         self.last_reset_state_dict = None
         self.safe = self.params.get('safe', True)
+        self.rng = np.random.RandomState()
+        self.seed = None
 
     def reset(self, seed=None):
         if self.env is not None:
             del self.env
+        self.seed = seed
         if seed is not None:
             self.params['seed'] = seed
         if self.safe:
@@ -522,6 +525,11 @@ class ClutterContWrapper(gym.Env):
                     obs = self.env.reset()
                 except InvalidEnvError as e:
                     print("WARN: {0}. Invalid environment during reset. A new environment will be spawn.".format(e))
+                    if self.params['seed'] is not None:
+                        self.seed += 1
+                        print("Changing seed due to invalid env to:", self.seed)
+                        self.params['seed'] = self.seed
+
                     reset_not_valid = True
         else:
             self.env = self.env_type(params=self.params)
@@ -537,7 +545,10 @@ class ClutterContWrapper(gym.Env):
                 self.results['collisions'] += int(result[3]['collision'])
             except InvalidEnvError as e:
                 print("WARN: {0}. Invalid environment during step. A new environment will be spawn.".format(e))
-                self.reset()
+                if self.seed is not None:
+                    self.seed += 1
+                    print("Changing seed due to invalid env to:", self.seed)
+                self.reset(self.seed)
                 return self.step(action)
             return result
         else:
@@ -547,6 +558,7 @@ class ClutterContWrapper(gym.Env):
 
     def seed(self, seed):
         self.env.seed(seed)
+        self.rng.seed(seed)
 
     def render(self, mode='human'):
         self.env.render(mode)

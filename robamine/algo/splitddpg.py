@@ -501,7 +501,8 @@ class SplitDDPG(RLAgent):
         return q
 
     def seed(self, seed):
-        self.replay_buffer.seed(seed)
+        for i in range(len(self.replay_buffer)):
+            self.replay_buffer[i].seed(seed)
         self.rng.seed(seed)
 
     def state_dict(self):

@@ -751,6 +751,8 @@ class RLWorld(World):
 
         self.episode_list_data = EpisodeListData()
 
+        self.rng = np.random.RandomState()
+
     @classmethod
     def from_dict(cls, config):
         # Setup the environment
@@ -782,8 +784,9 @@ class RLWorld(World):
         return self
 
     def seed(self, seed):
-        self.env.seed(seed)
+        # self.env.seed(seed)
         self.agent.seed(seed)
+        self.rng.seed(seed)
 
     def reset(self):
         super(RLWorld, self).reset()
@@ -805,7 +808,7 @@ class RLWorld(World):
         if self.seed_list is not None:
             seed = self.seed_list[i]
         else:
-            seed = None
+            seed = self.rng.randint(0, 999999999)
         episode.run(render=self.render, init_state=init_state, seed=seed)
 
         # Update tensorboard stats
@@ -940,7 +943,7 @@ class EvalWorld(RLWorld):
         if self.seed_list is not None:
             seed = self.seed_list[i + self.seed_offset]
         else:
-            seed = None
+            seed = self.rng.randint(0, 999999999)
 
         try:
             episode.run(render=self.render, init_state=init_state, seed=seed)
@@ -1164,6 +1167,7 @@ class Episode:
     def run(self, render = False, init_state = None, seed=None):
 
         debug('Episode:run: Resetting env')
+        print('Run episode with seed:', seed)
         state = self.env.reset(seed=seed)
         # self.env.load_state_dict(init_state)
 
@@ -1172,6 +1176,7 @@ class Episode:
                 self.env.render()
             action = self._action_policy(state)
             debug('Episode:run: Step env')
+            print('Run episode with seed:', seed, 'action:', action)
             next_state, reward, done, info = self.env.step(action)
             transition = Transition(state, action, reward, next_state, done)
             self._learn(transition)
