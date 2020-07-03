@@ -462,12 +462,12 @@ class ClutterXMLGenerator(XMLGenerator):
             if all_equal_height < self.params['all_equal_height_prob']:
                 obstacle_height = target_height
             else:
-                # obstacle_height = self.rng.uniform(max(self.params['obstacle']['min_bounding_box'][2], finger_size), self.params['obstacle']['max_bounding_box'][2])
-                min_h = max(self.params['obstacle']['min_bounding_box'][2], target_height + finger_size)
-                if min_h > self.params['obstacle']['max_bounding_box'][2]:
-                    obstacle_height = self.params['obstacle']['max_bounding_box'][2]
-                else:
-                    obstacle_height = self.rng.uniform(min_h, self.params['obstacle']['max_bounding_box'][2])
+                obstacle_height = self.rng.uniform(max(self.params['obstacle']['min_bounding_box'][2], finger_size), self.params['obstacle']['max_bounding_box'][2])
+                # min_h = max(self.params['obstacle']['min_bounding_box'][2], target_height + finger_size)
+                # if min_h > self.params['obstacle']['max_bounding_box'][2]:
+                #     obstacle_height = self.params['obstacle']['max_bounding_box'][2]
+                # else:
+                #     obstacle_height = self.rng.uniform(min_h, self.params['obstacle']['max_bounding_box'][2])
 
             if type == 'box':
                 x = obstacle_length
