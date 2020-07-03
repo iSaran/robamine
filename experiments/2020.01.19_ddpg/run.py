@@ -88,18 +88,34 @@ def eval_in_scenes(params, dir, n_scenes=1000):
     print('Logging dir:', params['world']['logging_dir'])
 
 def analyze_eval_in_scenes(dir):
+    from collections import OrderedDict
+    from tabulate import tabulate
+
     data = EpisodeListData.load(os.path.join(dir, 'episodes'))
     singulations, fallens, collisions, timesteps = 0, 0, 0, 0
     singulations2, fallens2, collisions2, timesteps = 0, 0, 0, 0
     steps_singulations = []
     episodes = len(data)
+    rewards = []
+
+    under = [5, 10, 15, 20]
+    singulation_under = OrderedDict()
+    for k in under:
+        singulation_under[k] = 0
+
     for i in range(episodes):
         timesteps += len(data[i])
         if data[i][-1].transition.info['termination_reason'] == 'singulation':
+            for k in under:
+                if len(data[i]) <= k:
+                    singulation_under[k] += 1
             singulations += 1
             steps_singulations.append(len(data[i]))
         elif data[i][-1].transition.info['termination_reason'] == 'fallen':
             fallens += 1
+
+        for j in range(len(data[i])):
+            rewards.append(data[i][j].transition.reward)
 
     print('terminal singulations:', (singulations / episodes) * 100, '%')
     print('terminal fallens:', (fallens / episodes) * 100, '%')
@@ -108,10 +124,30 @@ def analyze_eval_in_scenes(dir):
     print('Mean steps for singulation:', np.mean(steps_singulations))
     plt.hist(steps_singulations)
     plt.show()
+    plt.hist(rewards)
+    plt.show()
     data = sorted(steps_singulations)
     print('25th perc:', data[int(0.25 * len(data))])
     print('50th perc:', data[int(0.5 * len(data))])
     print('75th perc:', data[int(0.75 * len(data))])
+
+
+    for k in under:
+        singulation_under[k] *= (100 / episodes)
+
+    print('singulation under:', singulation_under)
+
+
+    results = [['Singulation under 5 timesteps', singulation_under[5]],
+               ['Singulation under 10 timesteps', singulation_under[10]],
+               ['Singulation under 15 timesteps', singulation_under[15]],
+               ['Singulation under 20 timesteps', singulation_under[20]],
+               ['Fallen', str((fallens / episodes) * 100) + '%'],
+               ['Mean reward per step', np.mean(rewards)],
+               ['Mean actions for singulation', np.mean(steps_singulations)],
+               ]
+
+    print(tabulate(results, headers=['Metric', 'Value']))
 
 
 def process_episodes(dir):
@@ -1047,4 +1083,5 @@ if __name__ == '__main__':
 
     # icra_check_transition(params)
     # train_icra(params)
-    train_eval_icra(params)
+    # train_eval_icra(params)
+    # eval_random_actions_icra(params, n_scenes=1000)
