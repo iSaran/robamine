@@ -738,7 +738,7 @@ class RandomPolicy(RLAgent):
 
 class RandomICRAPolicy(RLAgent):
     def __init__(self):
-        super(RandomICRAPolicy, self).__init__(state_dim=None, action_dim=None, name='RandomPolicy')
+        super(RandomICRAPolicy, self).__init__(state_dim=None, action_dim=None, name='RandomICRAPolicy')
         self.params = {}
         self.rng = np.random.RandomState()
 
@@ -1015,7 +1015,7 @@ def eval_random_actions_icra(params, n_scenes=1000):
     world = EvalWorld(agent=policy, env=env, params=params['world'])
     world.seed(0)
     world.run()
-    print('Logging dir:', params['world']['logging_dir'])
+    print('Logging dir:', world.log_dir)
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
