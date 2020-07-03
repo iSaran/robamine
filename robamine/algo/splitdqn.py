@@ -265,7 +265,8 @@ class SplitDQN(RLAgent):
         return self.network[net_index](s).cpu().detach().numpy()
 
     def seed(self, seed):
-        self.replay_buffer.seed(seed)
+        for i in range(len(self.replay_buffer)):
+            self.replay_buffer[i].seed(seed)
         self.rng.seed(seed)
 
     @classmethod

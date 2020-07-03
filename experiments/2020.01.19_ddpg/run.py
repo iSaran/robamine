@@ -65,7 +65,8 @@ def eval_with_render(dir):
     config['env']['params']['log_dir'] = '/tmp'
     config['world']['episodes'] = 10
     world = EvalWorld.load(dir, overwrite_config=config)
-    world.seed_list = np.arange(33, 40, 1).tolist()
+    # world.seed_list = np.arange(33, 40, 1).tolist()
+    world.seed(100)
     world.run()
 
 def eval_in_scenes(params, dir, n_scenes=1000):
