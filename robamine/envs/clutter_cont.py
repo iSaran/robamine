@@ -985,7 +985,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         for i in range(n_obstacles + 1):
             body_id = get_body_names(self.sim.model).index(names[i])
             if self.sim.data.body_xpos[body_id][2] < 0:
-                self.sim.data.set_joint_qpos(names[i], [100, 100, -100, 1, 0, 0, 0])
+                self.sim.data.set_joint_qpos(names[i], [i * 100, 100, -0.25, 1, 0, 0, 0])
         self.sim_step()
 
     @staticmethod
@@ -2020,6 +2020,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 qvel = self.sim.data.qvel.ravel().copy()
                 qpos[index[0] + 2] = - 0.2
                 self.set_state(qpos, qvel)
+
+        self.sim_step()
 
 class ClutterContICRAWrapper(ClutterContWrapper):
     def __init__(self, params):
