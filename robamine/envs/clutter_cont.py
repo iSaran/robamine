@@ -29,7 +29,8 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          predict_collision, ObstacleAvoidanceLoss, PushTargetRealWithObstacleAvoidance,
                                          PushTargetReal, PushTargetRealObjectAvoidance, get_table_point_cloud,
                                          PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition,
-                                         PushObstacleICRA, PushTargetICRA, PushExtraICRA, detect_singulation_from_real_state)
+                                         PushObstacleICRA, PushTargetICRA, PushExtraICRA,
+                                         detect_singulation_from_real_state, detect_empty_action_from_real_state)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -1571,6 +1572,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if self.push_stopped_ext_forces:
             self.push_stopped_ext_forces = False
             return True, 'collision'
+
+        if self.params['deterministic_policy'] and detect_empty_action_from_real_state(self.obs_dict,
+                                                                                       self.obs_dict_prev):
+            return True, 'empty'
 
         # If the object has fallen from the table
         if obs['object_poses'][0][2] < 0:

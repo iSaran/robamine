@@ -90,6 +90,7 @@ env:
     feature_normalization_per: 'session'  # available: 'session', 'episode'
     hug_probability: 0.5
     walls: False
+    deterministic_policy: False
 world:
   comments: ''
   friendly_name: ''

@@ -79,6 +79,7 @@ def eval_in_scenes(params, dir, n_scenes=1000):
     config['env']['params']['render'] = False
     config['env']['params']['safe'] = False
     config['env']['params']['log_dir'] = params['world']['logging_dir']
+    config['env']['params']['deterministic_policy'] = True
     config['world']['episodes'] = n_scenes
     world = EvalWorld.load(dir, overwrite_config=config)
     world.seed_list = np.arange(0, n_scenes, 1).tolist()

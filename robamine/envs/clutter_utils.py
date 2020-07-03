@@ -722,6 +722,16 @@ def detect_singulation_from_real_state(obs_dict):
         return True
     return False
 
+def detect_empty_action_from_real_state(obs_dict, obs_dict_prev):
+    '''Its not the best detection because if an object is moved not because of the finger it will return a non-empty push'''
+    poses = obs_dict['object_poses'][obs_dict['object_above_table']][:, 0:3]
+    poses_prev = obs_dict_prev['object_poses'][obs_dict_prev['object_above_table']][:, 0:3]
+    if len(poses) == len(poses_prev):
+        error = np.abs(poses - poses_prev)
+        return (error < 1e-3).all()
+    return False
+
+
 def get_object_height(pose, bounding_box):
     bbox = bounding_box
     bbox_corners_object = np.array([[bbox[0], bbox[1], bbox[2]],
