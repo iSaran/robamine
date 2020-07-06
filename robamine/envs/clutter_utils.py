@@ -661,7 +661,11 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
         ax[1].imshow(ae_output, cmap='gray', vmin=np.min(ae_output), vmax=np.max(ae_output))
         plt.show()
 
+    if primitive == 1:
+        return np.append(normalized_latent, np.zeros(surface_distances.flatten().shape))
+
     return np.append(normalized_latent, surface_distances.flatten())
+
 
 def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, angle=0, primitive=0, plot=False):
     heightmap = obs_dict['heightmap_mask'][0]
