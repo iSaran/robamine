@@ -1022,6 +1022,7 @@ class TrainEvalWorld(RLWorld):
         # Evaluate every some number of training episodes
         if (i + 1) % self.eval_every == 0:
             print('Running', self.eval_episodes, 'testing episodes')
+            self.env.params['deterministic_policy'] = True
             termination_reasons = []
             print('Evaluation seeds:', self.eval_seeds)
             for j in range(self.eval_episodes):
@@ -1040,6 +1041,8 @@ class TrainEvalWorld(RLWorld):
                     self.actions_file.write(str(episode.stats['actions_performed'][k]) + ',')
                 self.actions_file.write(str(episode.stats['actions_performed'][-1]) + '\n')
                 self.actions_file.flush()
+
+            self.env.params['deterministic_policy'] = False
 
             print('Eval: Termination reason: fallen perc: ', termination_reasons.count('fallen') * 100 / len(termination_reasons), '%')
             print('Eval: Termination reason: singulation perc: ', termination_reasons.count('singulation') * 100 / len(termination_reasons), '%')
@@ -1193,7 +1196,7 @@ class Episode:
             self._update_stats_step(transition, info)
 
             state = next_state.copy()
-            if done and not info.get('collision', False):
+            if done:
                 self.termination_reason = info['termination_reason']
                 break
 
