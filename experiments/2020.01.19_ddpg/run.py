@@ -1049,7 +1049,7 @@ if __name__ == '__main__':
     # ----------
 
     # train(params)
-    train_eval(params)
+    # train_eval(params)
     # train_combo_q_learning(params)
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # eval_in_scenes(params, os.path.join(params['world']['logging_dir'], exp_dir), n_scenes=1000)
