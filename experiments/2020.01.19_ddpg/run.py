@@ -87,13 +87,68 @@ def eval_in_scenes(params, dir, n_scenes=1000):
     world.run()
     print('Logging dir:', params['world']['logging_dir'])
 
+def analyze_multiple_evals(dirs, names):
+    assert len(dirs) == len(names)
+    from tabulate import tabulate
+    import seaborn
+    import pandas as pd
+    # seaborn.set(style="whitegrid")
+    seaborn.set(style="ticks", palette="pastel")
+
+
+    headers = ['Metric']
+    column_0 = ['Singulation under 5 timesteps',
+               'Singulation under 10 timesteps',
+               'Singulation under 15 timesteps',
+               'Singulation under 20 timesteps',
+               'Fallen',
+               'Max timesteps terminals',
+               'Collision terminals',
+               'Mean reward per step',
+               'Mean actions for singulation']
+
+    data = [None] * len(names)
+    columns = [None] * len(names)
+    table = []
+    for i in range(len(names)):
+        headers.append(names[i])
+        data[i], columns[i] = analyze_eval_in_scenes(dirs[i])
+
+    print("columns:", columns[1])
+
+    for i in range(len(column_0)):
+        print(i)
+        row = []
+        row.append(column_0[i])
+        for j in range(len(names)):
+            row.append(columns[j][i])
+        table.append(row)
+    print(tabulate(table, headers=headers))
+
+    # Violin plots
+    fig, axes = plt.subplots()
+    df = pd.DataFrame({names[0]: data[0]})
+    for i in range(1, len(names)):
+        df = pd.concat([df, pd.DataFrame({names[i]: data[i]})], axis=1)
+
+    seaborn.violinplot(data=df, bw=.4, cut=2,
+                       linewidth=1)
+    # seaborn.violinplot(data=data[1], palette="Set3", bw=.2, cut=2,
+    #                    linewidth=3)
+    # seaborn.violinplot(data=data[2], palette="Set3", bw=.2, cut=2,
+    #                    linewidth=3)
+
+    # axes.violinplot(data)
+    # axes.violinplot(data, [0], points=100, widths=0.3,
+    #                 showmeans=True, showextrema=True, showmedians=True)
+    plt.show()
+
+
 def analyze_eval_in_scenes(dir):
     from collections import OrderedDict
-    from tabulate import tabulate
 
     data = EpisodeListData.load(os.path.join(dir, 'episodes'))
     singulations, fallens, collisions, timesteps = 0, 0, 0, 0
-    singulations2, fallens2, collisions2, timesteps = 0, 0, 0, 0
     steps_singulations = []
     episodes = len(data)
     rewards = []
@@ -123,19 +178,19 @@ def analyze_eval_in_scenes(dir):
         for j in range(len(data[i])):
             rewards.append(data[i][j].transition.reward)
 
-    print('terminal singulations:', (singulations / episodes) * 100, '%')
-    print('terminal fallens:', (fallens / episodes) * 100, '%')
-    print('collisions:', (collisions / episodes) * 100, '%')
-    print('Total timesteps:', timesteps)
-    print('Mean steps for singulation:', np.mean(steps_singulations))
-    plt.hist(steps_singulations)
-    plt.show()
-    plt.hist(rewards)
-    plt.show()
-    data = sorted(steps_singulations)
-    print('25th perc:', data[int(0.25 * len(data))])
-    print('50th perc:', data[int(0.5 * len(data))])
-    print('75th perc:', data[int(0.75 * len(data))])
+    # print('terminal singulations:', (singulations / episodes) * 100, '%')
+    # print('terminal fallens:', (fallens / episodes) * 100, '%')
+    # print('collisions:', (collisions / episodes) * 100, '%')
+    # print('Total timesteps:', timesteps)
+    # print('Mean steps for singulation:', np.mean(steps_singulations))
+    # plt.hist(steps_singulations)
+    # plt.show()
+    # plt.hist(rewards)
+    # plt.show()
+    # data = sorted(steps_singulations)
+    # print('25th perc:', data[int(0.25 * len(data))])
+    # print('50th perc:', data[int(0.5 * len(data))])
+    # print('75th perc:', data[int(0.75 * len(data))])
 
 
     for k in under:
@@ -144,18 +199,18 @@ def analyze_eval_in_scenes(dir):
     print('singulation under:', singulation_under)
 
 
-    results = [['Singulation under 5 timesteps', singulation_under[5]],
-               ['Singulation under 10 timesteps', singulation_under[10]],
-               ['Singulation under 15 timesteps', singulation_under[15]],
-               ['Singulation under 20 timesteps', singulation_under[20]],
-               ['Fallen', str((fallens / episodes) * 100) + '%'],
-               ['Max timesteps terminals', str((timestep_terminals / episodes) * 100) + '%'],
-               ['Collision terminals', str((collision_terminals / episodes) * 100) + '%'],
-               ['Mean reward per step', np.mean(rewards)],
-               ['Mean actions for singulation', np.mean(steps_singulations)],
-               ]
+    results = [singulation_under[5],
+               singulation_under[10],
+               singulation_under[15],
+               singulation_under[20],
+               (fallens / episodes),
+               (timestep_terminals / episodes),
+               (collision_terminals / episodes),
+               np.mean(rewards),
+               np.mean(steps_singulations)]
 
-    print(tabulate(results, headers=['Metric', 'Value']))
+    return steps_singulations, results
+
 
 
 def process_episodes(dir):
@@ -1054,6 +1109,10 @@ if __name__ == '__main__':
     # eval_with_render(os.path.join(params['world']['logging_dir'], exp_dir))
     # eval_in_scenes(params, os.path.join(params['world']['logging_dir'], exp_dir), n_scenes=1000)
     # analyze_eval_in_scenes(os.path.join(params['world']['logging_dir'], exp_dir))
+    # exps = ['../ral-results/env-hard/random-discrete', '../ral-results/env-hard/random-cont',
+    #         '../ral-results/env-hard/splitac-scratch/eval']
+    # names = ['Random-Discrete', 'Random-Cont', 'SplitAC-scratch']
+    # analyze_multiple_evals([os.path.join(params['world']['logging_dir'], _) for _ in exps], names)
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
     # test(params)

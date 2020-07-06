@@ -19,5 +19,6 @@ setup(name='robamine',
                         'torch==1.1.0',\
                         'open3d-python==0.6.0.0',\
                         'sklearn==0.22.1',
-                        'h5py==2.10.0']
+                        'h5py==2.10.0',
+                        'seaborn==0.9.1']
 )
