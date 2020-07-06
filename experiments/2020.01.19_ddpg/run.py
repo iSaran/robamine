@@ -97,6 +97,8 @@ def analyze_eval_in_scenes(dir):
     steps_singulations = []
     episodes = len(data)
     rewards = []
+    timestep_terminals = 0
+    collision_terminals = 0
 
     under = [5, 10, 15, 20]
     singulation_under = OrderedDict()
@@ -113,6 +115,10 @@ def analyze_eval_in_scenes(dir):
             steps_singulations.append(len(data[i]))
         elif data[i][-1].transition.info['termination_reason'] == 'fallen':
             fallens += 1
+        elif data[i][-1].transition.info['termination_reason'] == 'timesteps':
+            timestep_terminals += 1
+        elif data[i][-1].transition.info['termination_reason'] == 'collision':
+            collision_terminals += 1
 
         for j in range(len(data[i])):
             rewards.append(data[i][j].transition.reward)
@@ -143,6 +149,8 @@ def analyze_eval_in_scenes(dir):
                ['Singulation under 15 timesteps', singulation_under[15]],
                ['Singulation under 20 timesteps', singulation_under[20]],
                ['Fallen', str((fallens / episodes) * 100) + '%'],
+               ['Max timesteps terminals', str((timestep_terminals / episodes) * 100) + '%'],
+               ['Collision terminals', str((collision_terminals / episodes) * 100) + '%'],
                ['Mean reward per step', np.mean(rewards)],
                ['Mean actions for singulation', np.mean(steps_singulations)],
                ]
