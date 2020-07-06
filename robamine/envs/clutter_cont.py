@@ -804,6 +804,27 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.singulation_condition = SingulationCondition(self.finger_length, self.pixels_to_m, finger_max_spread=0.1)
 
+
+        ## Point cloud for icra
+        # for each push that frees the space around the target
+        point_cloud = self.point_cloud.points
+        dim = get_geom_size(self.sim.model, 'target')
+
+        # for each push that frees the space around the target
+        points_around = []
+        gap = 0.03
+        bbox_limit = 0.01
+        for p in point_cloud:
+            if (-dim[0] - bbox_limit > p[0] > -dim[0] - gap - bbox_limit or \
+                dim[0] + bbox_limit < p[0] < dim[0] + gap + bbox_limit) and \
+                    -dim[1]  < p[1] < dim[1]:
+                points_around.append(p)
+            if (-dim[1] - bbox_limit > p[1] > -dim[1] - gap - bbox_limit or \
+                dim[1] + bbox_limit < p[1] < dim[1] + gap + bbox_limit) and \
+                    -dim[0]  < p[0] < dim[0]:
+                points_around.append(p)
+        self.no_of_prev_points_around = len(points_around)
+
         return self.get_obs()
 
     def _hug_target(self, number_of_obstacles):
@@ -2188,7 +2209,7 @@ class ClutterContICRA(ClutterCont):
                     -dim[0]  < p[0] < dim[0]:
                 points_around.append(p)
 
-        if self.no_of_prev_points_around == len(points_around):
+        if abs(self.no_of_prev_points_around - len(points_around)) < 20:
             return -5
 
         self.no_of_prev_points_around = len(points_around)
