@@ -1189,8 +1189,9 @@ class Episode:
                 self.env.render()
             action = self._action_policy(state)
             debug('Episode:run: Step env')
-            print('Run episode with seed:', seed, 'action:', action)
             next_state, reward, done, info = self.env.step(action)
+            print('Run episode with seed:', seed, 'action:', action, 'reward:', reward, 'done:', done,
+                  'termination_reason:', info['termination_reason'])
             transition = Transition(state, action, reward, next_state, done)
             self._learn(transition)
             self._update_stats_step(transition, info)
