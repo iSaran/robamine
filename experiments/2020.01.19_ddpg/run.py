@@ -1007,6 +1007,7 @@ def train_eval_icra(params):
                                      'eval_every': 100,
                                      'eval_render': False,
                                      'save_every': 100})
+    trainer.seed(0)
     trainer.run()
 
 def eval_random_actions_icra(params, n_scenes=1000):

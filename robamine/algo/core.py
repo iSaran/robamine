@@ -1007,6 +1007,9 @@ class TrainEvalWorld(RLWorld):
 
         self.episode_stats_eval = []
 
+        rng_eval = np.random.RandomState()
+        self.eval_seeds = rng_eval.randint(0, 99999999, self.eval_episodes)
+
     def reset(self):
         super(TrainEvalWorld, self).reset()
         self.episode_stats_eval = []
@@ -1020,9 +1023,10 @@ class TrainEvalWorld(RLWorld):
         if (i + 1) % self.eval_every == 0:
             print('Running', self.eval_episodes, 'testing episodes')
             termination_reasons = []
+            print('Evaluation seeds:', self.eval_seeds)
             for j in range(self.eval_episodes):
                 episode = TestingEpisode(self.agent, self.env)
-                episode.run(self.render_eval)
+                episode.run(render=self.render_eval, seed=int(self.eval_seeds[j]))
                 self.eval_stats.update(self.eval_episodes * self.counter + j, episode.stats)
                 self.episode_stats_eval.append(episode.stats)
                 pickle.dump(self.episode_stats_eval, open(os.path.join(self.log_dir, 'episode_stats_eval.pkl'), 'wb'))
@@ -1046,6 +1050,12 @@ class TrainEvalWorld(RLWorld):
         super(TrainEvalWorld, self).save(suffix)
         agent_model_file_name = os.path.join(self.log_dir, 'model' + suffix + '.pkl')
         self.agent.save(agent_model_file_name)
+
+    def seed(self, seed):
+        super(TrainEvalWorld, self).seed(seed)
+        rng_eval = np.random.RandomState()
+        rng_eval.seed(seed)
+        self.eval_seeds = rng_eval.randint(0, 99999999, self.eval_episodes)
 
 class SampleTransitionsWorld(RLWorld):
     def __init__(self, agent, env, params, name):
