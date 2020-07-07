@@ -97,15 +97,20 @@ def analyze_multiple_evals(dirs, names):
 
 
     headers = ['Metric']
-    column_0 = ['Singulation under 5 timesteps',
-               'Singulation under 10 timesteps',
-               'Singulation under 15 timesteps',
-               'Singulation under 20 timesteps',
-               'Fallen',
-               'Max timesteps terminals',
-               'Collision terminals',
+    column_0 = ['Valid Episodes',
+               'Singulation in 5 steps for valid episodes %',
+               'Singulation in 10 steps for valid episodes %',
+               'Singulation in 15 steps for valid episodes %',
+               'Singulation in 20 steps for valid episodes %',
+               'Fallen %',
+               'Max timesteps terminals %',
+               'Collision terminals %',
+               'Flips terminals %',
+               'Empty terminals %',
                'Mean reward per step',
                'Mean actions for singulation']
+
+    percentage = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     data = [None] * len(names)
     columns = [None] * len(names)
@@ -114,14 +119,15 @@ def analyze_multiple_evals(dirs, names):
         headers.append(names[i])
         data[i], columns[i] = analyze_eval_in_scenes(dirs[i])
 
-    print("columns:", columns[1])
-
     for i in range(len(column_0)):
-        print(i)
         row = []
         row.append(column_0[i])
         for j in range(len(names)):
-            row.append(columns[j][i])
+            if i in percentage:
+                row.append(columns[j][i] * 100)
+            else:
+                row.append(columns[j][i])
+
         table.append(row)
     print(tabulate(table, headers=headers))
 
@@ -131,8 +137,10 @@ def analyze_multiple_evals(dirs, names):
     for i in range(1, len(names)):
         df = pd.concat([df, pd.DataFrame({names[i]: data[i]})], axis=1)
 
-    seaborn.violinplot(data=df, bw=.4, cut=2,
-                       linewidth=1)
+    seaborn.violinplot(data=df, bw=.4, cut=2, scale='area',
+                       linewidth=1, inner='box', orient='h')
+    plt.axvline(x=5, color='gray', linestyle='--')
+
     # seaborn.violinplot(data=data[1], palette="Set3", bw=.2, cut=2,
     #                    linewidth=3)
     # seaborn.violinplot(data=data[2], palette="Set3", bw=.2, cut=2,
@@ -154,6 +162,9 @@ def analyze_eval_in_scenes(dir):
     rewards = []
     timestep_terminals = 0
     collision_terminals = 0
+    flips = 0
+    episodes_terminated = 0
+    empties = 0
 
     under = [5, 10, 15, 20]
     singulation_under = OrderedDict()
@@ -162,21 +173,32 @@ def analyze_eval_in_scenes(dir):
 
     for i in range(episodes):
         timesteps += len(data[i])
-        if data[i][-1].transition.info['termination_reason'] == 'singulation':
-            for k in under:
-                if len(data[i]) <= k:
-                    singulation_under[k] += 1
-            singulations += 1
-            steps_singulations.append(len(data[i]))
-        elif data[i][-1].transition.info['termination_reason'] == 'fallen':
-            fallens += 1
-        elif data[i][-1].transition.info['termination_reason'] == 'timesteps':
-            timestep_terminals += 1
-        elif data[i][-1].transition.info['termination_reason'] == 'collision':
-            collision_terminals += 1
+        if data[i][-1].transition.terminal:
+            episodes_terminated += 1
+            if data[i][-1].transition.info['termination_reason'] == 'singulation':
+                for k in under:
+                    if len(data[i]) <= k:
+                        singulation_under[k] += 1
+                singulations += 1
+                steps_singulations.append(len(data[i]))
+            elif data[i][-1].transition.info['termination_reason'] == 'fallen':
+                fallens += 1
+            elif data[i][-1].transition.info['termination_reason'] == 'timesteps':
+                timestep_terminals += 1
+            elif data[i][-1].transition.info['termination_reason'] == 'collision':
+                collision_terminals += 1
+            elif data[i][-1].transition.info['termination_reason'] == 'flipped':
+                episodes_terminated -= 1
+                flips += 1
+            elif data[i][-1].transition.info['termination_reason'] == 'empty':
+                empties += 1
+            else:
+                raise Exception(data[i][-1].transition.info['termination_reason'])
 
-        for j in range(len(data[i])):
-            rewards.append(data[i][j].transition.reward)
+            for j in range(len(data[i])):
+                rewards.append(data[i][j].transition.reward)
+
+    print(episodes_terminated, 'episodes temrinalted')
 
     # print('terminal singulations:', (singulations / episodes) * 100, '%')
     # print('terminal fallens:', (fallens / episodes) * 100, '%')
@@ -194,18 +216,18 @@ def analyze_eval_in_scenes(dir):
 
 
     for k in under:
-        singulation_under[k] *= (100 / episodes)
+        singulation_under[k] /= episodes_terminated
 
-    print('singulation under:', singulation_under)
-
-
-    results = [singulation_under[5],
+    results = [episodes_terminated,
+               singulation_under[5],
                singulation_under[10],
                singulation_under[15],
                singulation_under[20],
                (fallens / episodes),
                (timestep_terminals / episodes),
                (collision_terminals / episodes),
+               (flips / episodes),
+               (empties / episodes),
                np.mean(rewards),
                np.mean(steps_singulations)]
 
@@ -1083,7 +1105,7 @@ def eval_random_actions_icra(params, n_scenes=1000):
 
 if __name__ == '__main__':
     hostname = socket.gethostname()
-    exp_dir = 'robamine_logs_iti-479_2020.06.25.18.49.31'
+    exp_dir = 'robamine_logs_dream_2020.07.02.18.35.45.636114'
 
     yml_name = 'params.yml'
     if hostname == 'dream':
@@ -1110,8 +1132,9 @@ if __name__ == '__main__':
     # eval_in_scenes(params, os.path.join(params['world']['logging_dir'], exp_dir), n_scenes=1000)
     # analyze_eval_in_scenes(os.path.join(params['world']['logging_dir'], exp_dir))
     # exps = ['../ral-results/env-hard/random-discrete', '../ral-results/env-hard/random-cont',
-    #         '../ral-results/env-hard/splitac-scratch/eval']
-    # names = ['Random-Discrete', 'Random-Cont', 'SplitAC-scratch']
+    #         '../ral-results/env-hard/splitac-scratch/eval', '../ral-results/env-hard/splitdqn/eval',
+    #         '../ral-results/env-icra/splitdqn-3/eval', '../ral-results/env-icra/splitac-scratch/eval']
+    # names = ['Random-Discrete', 'Random-Cont', 'SplitAC-scratch', 'SplitDQN', 'SplitDQN@Env-ICRA', 'SplitAC-scr@Env-ICRA']
     # analyze_multiple_evals([os.path.join(params['world']['logging_dir'], _) for _ in exps], names)
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
