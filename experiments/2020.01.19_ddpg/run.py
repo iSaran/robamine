@@ -87,7 +87,28 @@ def eval_in_scenes(params, dir, n_scenes=1000):
     world.run()
     print('Logging dir:', params['world']['logging_dir'])
 
-def analyze_multiple_evals(dirs, names):
+def analyze_multiple_eval_envs(dir_, results_dir):
+    names = ['SplitAC-scr', 'SplitDQN']
+    paths =['../ral-results/env-icra/splitac-scratch', '../ral-results/env-icra/splitdqn-3']
+    for i in range(len(paths)):
+        paths[i] = os.path.join(dir_, paths[i])
+    analyze_multiple_evals(paths, names, results_dir, env_name='Env-ICRA')
+
+    names = ['Random-Cont', 'SplitAC-scr', 'SplitDQN', 'SplitAC-pt']
+    paths = ['../ral-results/env-hard/random-cont',
+             '../ral-results/env-hard/splitac-scratch', '../ral-results/env-hard/splitdqn',
+             '../ral-results/env-hard/splitac-modular/push-target']
+    for i in range(len(paths)):
+        paths[i] = os.path.join(dir_, paths[i])
+    analyze_multiple_evals(paths, names, results_dir, env_name='Env-Hard')
+
+    names = ['Random-Cont']
+    paths =['../ral-results/env-very-hard/random-cont']
+    for i in range(len(paths)):
+        paths[i] = os.path.join(dir_, paths[i])
+    analyze_multiple_evals(paths, names, results_dir, env_name='Env-very-hard')
+
+def analyze_multiple_evals(dirs, names, results_dir, env_name='Metric'):
     assert len(dirs) == len(names)
     from tabulate import tabulate
     import seaborn
@@ -96,7 +117,7 @@ def analyze_multiple_evals(dirs, names):
     seaborn.set(style="ticks", palette="pastel")
 
 
-    headers = ['Metric']
+    headers = [env_name]
     column_0 = ['Valid Episodes',
                'Singulation in 5 steps for valid episodes %',
                'Singulation in 10 steps for valid episodes %',
@@ -117,7 +138,7 @@ def analyze_multiple_evals(dirs, names):
     table = []
     for i in range(len(names)):
         headers.append(names[i])
-        data[i], columns[i] = analyze_eval_in_scenes(dirs[i])
+        data[i], columns[i] = analyze_eval_in_scenes(os.path.join(dirs[i], 'eval'))
 
     for i in range(len(column_0)):
         row = []
@@ -129,6 +150,7 @@ def analyze_multiple_evals(dirs, names):
                 row.append(columns[j][i])
 
         table.append(row)
+    pd.DataFrame(table, columns=headers).to_csv(os.path.join(results_dir, env_name + '.csv'), index=False)
     print(tabulate(table, headers=headers))
 
     # Violin plots
@@ -149,7 +171,8 @@ def analyze_multiple_evals(dirs, names):
     # axes.violinplot(data)
     # axes.violinplot(data, [0], points=100, widths=0.3,
     #                 showmeans=True, showextrema=True, showmedians=True)
-    plt.show()
+    plt.savefig(os.path.join(results_dir, env_name + '.png'))
+
 
 
 def analyze_eval_in_scenes(dir):
@@ -1136,6 +1159,8 @@ if __name__ == '__main__':
     #         '../ral-results/env-icra/splitdqn-3/eval', '../ral-results/env-icra/splitac-scratch/eval']
     # names = ['Random-Discrete', 'Random-Cont', 'SplitAC-scratch', 'SplitDQN', 'SplitDQN@Env-ICRA', 'SplitAC-scr@Env-ICRA']
     # analyze_multiple_evals([os.path.join(params['world']['logging_dir'], _) for _ in exps], names)
+    # analyze_multiple_eval_envs(params['world']['logging_dir'],
+    #                            results_dir=os.path.join(logging_dir, '../ral-results/results'))
     # process_episodes(os.path.join(params['world']['logging_dir'], exp_dir))
     # check_transition(params)
     # test(params)
