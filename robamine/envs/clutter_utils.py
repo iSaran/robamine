@@ -1689,7 +1689,7 @@ def get_rotated_transition(transition, angle=0):
                       terminal=transition.terminal)
 
 
-def get_distance_of_two_bbox(pose_1, bbox_1, pose_2, bbox_2, density=0.005):
+def get_distance_of_two_bbox(pose_1, bbox_1, pose_2, bbox_2, density=0.005, plot=False):
     '''Calculates the distance between two oriented bounding boxes using point clouds.'''
     point_cloud_1 = discretize_3d_box(bbox_1[0], bbox_1[1], bbox_1[2], density)
     point_cloud_2 = discretize_3d_box(bbox_2[0], bbox_2[1], bbox_2[2], density)
@@ -1699,14 +1699,15 @@ def get_distance_of_two_bbox(pose_1, bbox_1, pose_2, bbox_2, density=0.005):
     point_cloud_2 = transform_list_of_points(point_cloud_2, pose_2[0:3],
                                               Quaternion(pose_2[3], pose_2[4], pose_2[5], pose_2[6]))
 
-    # Uncomment to plot point clouds
-    # import matplotlib.pyplot as plt
-    # from mpl_toolkits.mplot3d import Axes3D
-    # fig = plt.figure()
-    # ax = Axes3D(fig)
-    # ax.scatter(p[:, 0], p[:, 1], p[:, 2], marker='o')
-    # ax.axis('equal')
-    # plt.show()
+    if plot:
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        fig = plt.figure()
+        ax = Axes3D(fig)
+        ax.scatter(point_cloud_1[:, 0], point_cloud_1[:, 1], point_cloud_1[:, 2], marker='o')
+        ax.scatter(point_cloud_2[:, 0], point_cloud_2[:, 1], point_cloud_2[:, 2], marker='o')
+        ax.axis('equal')
+        plt.show()
 
     return np.min(cdist(point_cloud_1, point_cloud_2))
 
