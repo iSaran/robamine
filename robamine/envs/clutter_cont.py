@@ -1261,8 +1261,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 duration = push.get_duration()
 
                 end = push_final_pos_world[:2]
-                self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
-                                          desired_quat=push_quat, duration=duration)
+                if self.params['walls']:
+                    self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
+                                              desired_quat=push_quat, duration=duration, stop_external_forces=True,
+                                              external_force_threshold=12)
+                else:
+                    self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
+                                              desired_quat=push_quat, duration=duration)
+
             else:
                 init_z = 2 * self.target_bounding_box[2] + 0.05 + self.finger_height
                 self.sim.data.set_joint_qpos('finger1',
@@ -1276,8 +1282,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                              desired_quat=push_quat,
                                              stop_external_forces=True):
                     end = push_final_pos_world[:2]
-                    self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
-                                              desired_quat=push_quat, duration=duration)
+                    if self.params['walls']:
+                        self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
+                                                  desired_quat=push_quat, duration=duration, stop_external_forces=True,
+                                                  external_force_threshold=12)
+                    else:
+                        self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
+                                                  desired_quat=push_quat, duration=duration)
                 else:
                     self.push_stopped_ext_forces = True
 
@@ -1678,7 +1689,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return False
 
-    def move_joint_to_target(self, joint_name, target_position, desired_quat, duration = 1, stop_external_forces=False):
+    def move_joint_to_target(self, joint_name, target_position, desired_quat, duration=1, stop_external_forces=False,
+                             external_force_threshold=0.01):
         """
         Generates a trajectory in Cartesian space (x, y, z) from the current
         position of a joint to a target position. If one of the x, y, z is None
@@ -1719,11 +1731,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             current_qpos[index[0] + 6] = desired_quat.z
             self.sim_step()
 
-            if stop_external_forces and (self.finger_external_force_norm > 0.01):
+            if stop_external_forces and (self.finger_external_force_norm > external_force_threshold):
                 break
 
         # If external force is present move away
-        if stop_external_forces and (self.finger_external_force_norm > 0.01):
+        if stop_external_forces and (self.finger_external_force_norm > external_force_threshold):
             self.sim_step()
             # Create a new trajectory for moving the finger slightly in the
             # opposite direction to reduce the external forces
