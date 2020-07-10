@@ -701,7 +701,7 @@ def detect_singulation_from_actor_visual_feature(obs_dict):
     return False
 
 
-def detect_singulation_from_real_state(obs_dict):
+def detect_singulation_from_real_state(obs_dict, singulate_from_walls=False):
     # Returns the minimum distance of target from the obstacles'''
     n_objects = int(obs_dict['n_objects'])
     target_pose = obs_dict['object_poses'][0]
@@ -722,8 +722,17 @@ def detect_singulation_from_real_state(obs_dict):
     min_distance = np.min(distances)
 
     singulation_distance = obs_dict['singulation_distance'][0]
-    if min_distance > singulation_distance:
+
+    singulation_condition = min_distance > singulation_distance
+
+    if singulate_from_walls:
+        fixed_distances = get_distances_from_walls(obs_dict)
+        min_fixed_distance = np.min(fixed_distances)
+        singulation_condition = min_distance > singulation_distance and min_fixed_distance > singulation_distance
+
+    if singulation_condition:
         return True
+
     return False
 
 def detect_empty_action_from_real_state(obs_dict, obs_dict_prev):
@@ -734,6 +743,21 @@ def detect_empty_action_from_real_state(obs_dict, obs_dict_prev):
         error = np.abs(poses - poses_prev)
         return (error < 1e-3).all()
     return False
+
+def get_distances_from_walls(obs_dict):
+    '''Returns the 4 distances of the target from the walls'''
+    n_fixed_objects = int(obs_dict['n_fixed_objects'])
+    target_pose = obs_dict['object_poses'][0]
+    target_bbox = obs_dict['object_bounding_box'][0]
+
+    fixed_distances = 100 * np.ones((int(n_fixed_objects),))
+    for i in range(0, n_fixed_objects):
+        fixed_obstacle_pose = obs_dict['fixed_object_poses'][i]
+        fixed_obstacle_bbox = obs_dict['fixed_object_bounding_box'][i]
+        fixed_distances[i] = get_distance_of_two_bbox(target_pose, target_bbox, fixed_obstacle_pose,
+                                                      fixed_obstacle_bbox, plot=False)
+
+    return fixed_distances
 
 
 def get_object_height(pose, bounding_box):

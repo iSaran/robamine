@@ -1511,7 +1511,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if observation['object_poses'][0][2] < 0:
             return -1
 
-        if detect_singulation_from_real_state(observation):
+        if detect_singulation_from_real_state(observation, singulate_from_walls=self.params['walls']['singulate']):
             return 1
 
         # Calculate the sum
@@ -1660,7 +1660,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         if np.dot(target_z, world_z) < 0.9:
             return True, 'flipped'
 
-        if detect_singulation_from_real_state(obs):
+        if detect_singulation_from_real_state(obs, singulate_from_walls=self.params['walls']['singulate']):
             self.success = True
             return True, 'singulation'
 
