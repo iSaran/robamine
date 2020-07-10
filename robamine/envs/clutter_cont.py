@@ -303,6 +303,7 @@ class ClutterXMLGenerator(XMLGenerator):
         self.worldbody = worldbody
         self.rng = np.random.RandomState()  # rng for the scene
         self.n_obstacles = 0
+        self.n_fixed_objects = 0
 
 
         # Auxiliary variables
@@ -332,28 +333,46 @@ class ClutterXMLGenerator(XMLGenerator):
             pos_ = [0.0, 0.0, height - size]
         return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size_, mass=0.1)
 
-    def get_table(self, rgba=[0.2, 0.2, 0.2, 1.0], size=[0.25, 0.25, 0.01], walls=False):
+    def get_table(self, rgba=[0.2, 0.2, 0.2, 1.0], size=[0.25, 0.25, 0.01]):
         body = self.get_body(name='table', pos=[0.0, 0.0, -size[2]])
         geom = self.get_geom(name='table', type='box', size=size, rgba=rgba)
         body.append(geom)
-        if walls:
-            walls_height = 0.03
-            walls_width = 0.01
-            rgba_ = rgba.copy()
-            rgba_[-1] = 0.4
-            geom = self.get_geom(name='table_wall_x', type='box', size=[size[0], walls_width, walls_height], rgba=rgba_,
-                                 pos=[0, size[1] + walls_width, walls_height])
-            body.append(geom)
-            geom = self.get_geom(name='table_wall_x2', type='box', size=[size[0], walls_width, walls_height],
-                                 rgba=rgba_, pos=[0, -size[1] - walls_width, walls_height])
-            body.append(geom)
-            geom = self.get_geom(name='table_wall_y', type='box', size=[walls_width, size[1], walls_height], rgba=rgba_,
-                                 pos=[size[0] + walls_width, 0, walls_height])
-            body.append(geom)
-            geom = self.get_geom(name='table_wall_y2', type='box', size=[walls_width, size[1], walls_height],
-                                 rgba=rgba_, pos=[-size[0] - walls_width, 0, walls_height])
-            body.append(geom)
         return body
+
+    def get_fixed_object(self, index, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0],
+                         size=[0.01, 0.01, 0.01],
+                         rgba=[0.0, 0.0, 1.0, 1.0], name='fixed_object'):
+        body = self.get_body(name=name + '_' + str(index), pos=pos, quat=quat)
+        geom = self.get_geom(name=name + '_' + str(index), type=type, size=size, rgba=rgba)
+        body.append(geom)
+        return body
+
+    def get_walls(self, table_size, walls_height=0.03, walls_width=0.01):
+        '''Returns 4 fixed objects as the walls'''
+        bodies = []
+        rgba = [0.2, 0.2, 0.2, 0.5]
+        name = 'table_wall'
+        size = [table_size[0], walls_width, walls_height]
+        bodies.append(self.get_fixed_object(1, pos=[0, table_size[1] + walls_width, walls_height],
+                                            size=size, rgba=rgba,
+                                            name=name))
+
+        bodies.append(self.get_fixed_object(2, pos=[0, -table_size[1] - walls_width, walls_height],
+                                            size=size, rgba=rgba,
+                                            name=name))
+        quat = Quaternion().rot_z(np.pi / 2)
+
+        bodies.append(self.get_fixed_object(3, pos=[table_size[0] + walls_width, 0, walls_height],
+                                            quat=[quat.w, quat.x, quat.y, quat.z],
+                                            size=size, rgba=rgba,
+                                            name=name))
+
+        bodies.append(self.get_fixed_object(4, pos=[-table_size[0] - walls_width, 0, walls_height],
+                                            quat=[quat.w, quat.x, quat.y, quat.z],
+                                            size=size, rgba=rgba,
+                                            name=name))
+        self.n_fixed_objects += 4
+        return bodies
 
     def seed(self, seed):
         self.rng.seed(seed)
@@ -375,9 +394,13 @@ class ClutterXMLGenerator(XMLGenerator):
 
         self.surface_size[0] = self.rng.uniform(surface_length_range[0], surface_length_range[1])
         self.surface_size[1] = self.rng.uniform(surface_width_range[0], surface_width_range[1])
-        table = self.get_table(size=[self.surface_size[0], self.surface_size[1], 0.01],
-                               walls=self.params.get('walls', False))
+        table = self.get_table(size=[self.surface_size[0], self.surface_size[1], 0.01])
         self.worldbody.append(table)
+
+        if self.params['walls']['use']:
+            walls = self.get_walls(table_size=[self.surface_size[0], self.surface_size[1], 0.01])
+            for wall in walls:
+                self.worldbody.append(wall)
 
         # Randomize target object
         # -----------------------
@@ -1017,6 +1040,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         dynamically, because we want them to store them in arrays like h5py.
         """
         max_n_obstacles = 10  # TODO: the maximum possible number of obstacles is hardcoded.
+        max_n_fixed_objects = 4  # TODO: the maximum possible number of fixed objects is hardcoded.
         return {'target_bounding_box': (3,),
                 'finger_height': (1,),
                 'finger_length': (1,),
@@ -1028,8 +1052,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'target_pos': (3,),
                 'object_poses': (max_n_obstacles, 7),
                 'object_bounding_box': (max_n_obstacles, 3),
+                'fixed_object_poses': (max_n_fixed_objects, 7),
+                'fixed_object_bounding_box': (max_n_fixed_objects, 3),
                 'object_above_table': (max_n_obstacles,),
                 'n_objects': (1,),
+                'n_fixed_objects': (1,),
                 'max_n_objects': (1,),
                 'init_distance_from_target': (1,),
                 'singulation_distance': (1,),
@@ -1059,6 +1086,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             if poses[i, 2] > 0:
                 above_table[i] = True
 
+        n_fixed_objects = self.xml_generator.n_fixed_objects
+        fixed_poses, fixed_bounding_box = np.zeros(shapes['fixed_object_poses']), np.zeros(
+            shapes['fixed_object_bounding_box'])
+        if self.params['walls']['use']:
+            for i in range(n_fixed_objects):
+                body_id = get_body_names(self.sim.model).index("table_wall_" + str(i + 1))
+                fixed_poses[i, 0:3] = self.sim.data.body_xpos[body_id]
+                fixed_poses[i, 3:] = self.sim.data.body_xquat[body_id]
+                fixed_bounding_box[i, :] = get_geom_size(self.sim.model, "table_wall_" + str(i + 1))
+
         obs_dict = {
             'target_bounding_box': self.target_bounding_box_vision,
             'finger_height': np.array([self.finger_height]),
@@ -1072,7 +1109,10 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'object_poses': poses,
             'object_bounding_box': bounding_box,
             'object_above_table': above_table,
+            'fixed_object_poses': fixed_poses,
+            'fixed_object_bounding_box': fixed_bounding_box,
             'n_objects': np.array([self.xml_generator.n_obstacles + 1]),
+            'n_fixed_objects': np.array([self.xml_generator.n_fixed_objects]),
             'max_n_objects': np.array([shapes['object_poses'][0]]),
             'init_distance_from_target': np.array([self.init_distance_from_target]),
             'singulation_distance': np.array([self.singulation_distance]),
@@ -1084,7 +1124,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'raw_depth': np.zeros(shapes['raw_depth']),
             'centroid_pxl': np.zeros(shapes['centroid_pxl']),
             'point_cloud': np.zeros(shapes['point_cloud']),
-            'pixels_to_m': np.array([self.pixels_to_m])
+            'pixels_to_m': np.array([self.pixels_to_m]),
         }
 
         if not self._target_is_on_table():
