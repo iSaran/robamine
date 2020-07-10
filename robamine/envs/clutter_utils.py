@@ -735,6 +735,24 @@ def detect_singulation_from_real_state(obs_dict, singulate_from_walls=False):
 
     return False
 
+def detect_target_stuck_on_wall(obs_dict):
+    target_pose = obs_dict['object_poses'][0]
+
+    if np.min(get_distances_from_walls(obs_dict)) > 0.001:
+        return False
+
+    distances = get_distances_from_walls(obs_dict)
+    argmin = np.argmin(distances)
+    target_x_axis = Quaternion.from_vector(target_pose[3:]).rotation_matrix()[:, 0]
+    wall_pose = obs_dict['fixed_object_poses'][argmin]
+    wall_x_axis = Quaternion.from_vector(wall_pose[3:]).rotation_matrix()[:, 0]
+    dot_pr = np.abs(np.dot(target_x_axis, wall_x_axis))
+
+    if dot_pr > 0.80 or dot_pr < 0.2:
+        return True
+
+    return False
+
 def detect_empty_action_from_real_state(obs_dict, obs_dict_prev):
     '''Its not the best detection because if an object is moved not because of the finger it will return a non-empty push'''
     poses = obs_dict['object_poses'][obs_dict['object_above_table']][:, 0:3]

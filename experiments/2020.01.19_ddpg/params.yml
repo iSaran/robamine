@@ -91,7 +91,9 @@ env:
     hug_probability: 0.5
     walls:
       use: False
-      singulate: False
+      singulate: False  # Set false if push target and walls
+    terminal:
+      stuck_on_wall: False  # Set true if push target and walls
     deterministic_policy: False
 world:
   comments: ''

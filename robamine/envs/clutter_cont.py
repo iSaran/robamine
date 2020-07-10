@@ -30,7 +30,8 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          PushTargetReal, PushTargetRealObjectAvoidance, get_table_point_cloud,
                                          PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition,
                                          PushObstacleICRA, PushTargetICRA, PushExtraICRA,
-                                         detect_singulation_from_real_state, detect_empty_action_from_real_state)
+                                         detect_singulation_from_real_state, detect_empty_action_from_real_state,
+                                         detect_target_stuck_on_wall)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -1666,6 +1667,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         if self.timesteps >= self.max_timesteps:
             return True, 'timesteps'
+
+        if self.params['terminal']['stuck_on_wall'] and detect_target_stuck_on_wall(obs):
+            return True, 'target_stuck_on_wall'
 
         return False, ''
 
