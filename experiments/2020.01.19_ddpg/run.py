@@ -1012,6 +1012,101 @@ def VAE_create_dataset(dir, rotations=0):
 
     file.close()
 
+def VAE_visual_eval_in_scenes(ae_dir, n_scenes=50):
+    """
+    Runs a number of scenes and saves the plots of input and output of AE in results_dir
+    """
+
+    # Load autoencoder
+    import robamine.algo.conv_vae as ae
+    ae_path = os.path.join(ae_dir, 'model.pkl')
+    with open(ae_path, 'rb') as file:
+        model = torch.load(file, map_location='cpu')
+    # print('model', model, ae_path)
+    latent_dim = model['encoder.fc.weight'].shape[0]
+    vae = ae.ConvVae(latent_dim).to('cpu')
+    vae.load_state_dict(model)
+
+    params['env']['params']['render'] = False
+    params['env']['params']['nr_of_obstacles'] = [1, 8]
+    env = gym.make(params['env']['name'], params=params['env']['params'])
+
+    results_path = os.path.join(ae_dir, 'results_1_8')
+
+    n_scenes_ = 0
+
+    rng = np.random.RandomState()
+    rng.seed(0)
+    seeds = rng.randint(0, 99999999, n_scenes)
+    print(seeds)
+
+    prediction_errors = []
+    while n_scenes_ < n_scenes:
+        seed = int(seeds[n_scenes_])
+        obs = env.reset(seed=seed)
+
+        heightmap = obs['heightmap_mask'][0]
+        mask = obs['heightmap_mask'][1]
+        target_bounding_box_z = obs['target_bounding_box'][2]
+        finger_height = obs['finger_height']
+        visual_feature = clutter.get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, 0,
+                                                  0, plot=False)
+        visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0],
+                                                                   visual_feature.shape[1]).to('cpu')
+        ae_output = vae(visual_feature).detach().cpu().numpy()[0, 0, :, :]
+        visual_feature = visual_feature.detach().cpu().numpy()[0, 0, :, :]
+        prediction_error = ae_output - visual_feature
+        prediction_errors.append(np.linalg.norm(prediction_error))
+        fig, ax = plt.subplots(1, 3)
+        ax[0].imshow(visual_feature, cmap='gray', vmin=np.min(visual_feature), vmax=np.max(visual_feature))
+        ax[0].set_title('Input')
+        ax[1].imshow(ae_output, cmap='gray', vmin=np.min(ae_output), vmax=np.max(ae_output))
+        ax[1].set_title('Output')
+        ax[2].imshow(prediction_error, cmap='gray', vmin=np.min(prediction_error), vmax=np.max(prediction_error))
+        ax[2].set_title('Diff')
+        fig.suptitle('AE performance. Norm(Diff) = ' + str(np.linalg.norm(prediction_error)))
+        plt.savefig(os.path.join(results_path, 'scene_' + str(n_scenes_) + '.png'), dpi=300)
+        plt.close()
+        n_scenes_ += 1
+
+        while n_scenes_ < n_scenes:
+            action = rng.uniform(-1, 1, 4)
+            action[0] = 0
+            obs, reward, done, info = env.step(action)
+            # print('action', action, 'reward: ', reward, 'done:', done)
+            if done:
+                break
+
+            heightmap = obs['heightmap_mask'][0]
+            mask = obs['heightmap_mask'][1]
+            target_bounding_box_z = obs['target_bounding_box'][2]
+            finger_height = obs['finger_height']
+            visual_feature = clutter.get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, 0,
+                                                              0, plot=False)
+            visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0],
+                                                                       visual_feature.shape[1]).to('cpu')
+            ae_output = vae(visual_feature).detach().cpu().numpy()[0, 0, :, :]
+            visual_feature = visual_feature.detach().cpu().numpy()[0, 0, :, :]
+            prediction_error = ae_output - visual_feature
+            prediction_errors.append(np.linalg.norm(prediction_error))
+            print('norm prediction error pixel', np.linalg.norm(prediction_error))
+            fig, ax = plt.subplots(1, 3)
+            ax[0].imshow(visual_feature, cmap='gray', vmin=np.min(visual_feature), vmax=np.max(visual_feature))
+            ax[0].set_title('Input')
+            ax[1].imshow(ae_output, cmap='gray', vmin=np.min(ae_output), vmax=np.max(ae_output))
+            ax[1].set_title('Output')
+            ax[2].imshow(prediction_error, cmap='gray', vmin=np.min(prediction_error), vmax=np.max(prediction_error))
+            ax[2].set_title('Diff')
+            fig.suptitle('AE performance. Norm(Diff) = ' + str(np.linalg.norm(prediction_error)))
+            plt.savefig(os.path.join(results_path, 'scene_' + str(n_scenes_) + '.png'), dpi=300)
+            plt.close()
+            n_scenes_ += 1
+
+            print('n_scenes = ', n_scenes_, '/', n_scenes)
+
+    print('mean prediction error:', np.mean(prediction_errors))
+    print('max prediction error:', np.max(prediction_errors))
+    print('min prediction error:', np.min(prediction_errors))
 
 # Train ICRA
 # ----------
@@ -1193,6 +1288,7 @@ if __name__ == '__main__':
     # ae.train(dir=VAE_path, split_per=0.9)
     # ae.test_vae(dir=VAE_path, model_epoch=60, split_per=0.9)
     # ae.estimate_normalizer(dir=VAE_path, model_epoch=60, split_per=0.9)
+    # VAE_visual_eval_in_scenes(ae_dir=VAE_path)
 
     # ICRA comparison
     # ---------------
