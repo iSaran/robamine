@@ -14,7 +14,7 @@ agent:
     actor:
       hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
-      preactivation_weight: 0.05
+      preactivation_weight: 0.0
       autoencoder:
         model: /home/mkiatos/robamine/logs/VAE/model.pkl
         scaler: /home/mkiatos/robamine/logs/VAE/normalizer.pkl
@@ -48,8 +48,7 @@ agent:
       obstacle:
         max_bounding_box: [.03, .03, .020]
       push:
-        target_init_distance: [0.0, 0.1]
-
+        target_init_distance: [0.0, 0.15]
   trainable_params: ''
 env:
   name: ClutterContWrapper-v0
