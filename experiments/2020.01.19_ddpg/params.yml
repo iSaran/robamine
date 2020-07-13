@@ -66,8 +66,8 @@ env:
       size: 0.005
       type: sphere
     nr_of_obstacles:
-      - 5
       - 8
+      - 13
     render: false
     target:
       min_bounding_box: [.01, .01, .005]
