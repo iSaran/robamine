@@ -102,8 +102,8 @@ def analyze_multiple_eval_envs(dir_, results_dir):
         paths[i] = os.path.join(dir_, paths[i])
     analyze_multiple_evals(paths, names, results_dir, env_name='Env-Hard')
 
-    names = ['Random-Cont']
-    paths =['../ral-results/env-very-hard/random-cont']
+    names = ['Random-Cont', 'SplitDQN']
+    paths =['../ral-results/env-very-hard/random-cont', '../ral-results/env-very-hard/splitdqn']
     for i in range(len(paths)):
         paths[i] = os.path.join(dir_, paths[i])
     analyze_multiple_evals(paths, names, results_dir, env_name='Env-very-hard')
