@@ -945,14 +945,7 @@ class EvalWorld(RLWorld):
         else:
             seed = self.rng.randint(0, 999999999)
 
-        try:
-            episode.run(render=self.render, init_state=init_state, seed=seed)
-        except InvalidEnvError as e:
-            print("WARN: {0}. Invalid environment during running testing episode.".format(e))
-            self.seed_offset += 1
-            self.seed_list.append(self.seed_list[-1] + 1000)
-            self.run_episode(i)
-            return
+        episode.run(render=self.render, init_state=init_state, seed=seed)
 
         # Update tensorboard stats
         self.stats.update(i, episode.stats)

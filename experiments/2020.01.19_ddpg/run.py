@@ -878,7 +878,7 @@ def eval_random_actions(params, n_scenes=1000):
 
     params['env']['params']['render'] = False
     params['env']['params']['deterministic_policy'] = True
-    params['env']['params']['safe'] = False
+    params['env']['params']['safe'] = True
     params['env']['params']['hardcoded_primitive'] = -1
     params['env']['params']['log_dir'] = params['world']['logging_dir']
     params['world']['episodes'] = n_scenes
