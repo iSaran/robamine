@@ -88,8 +88,9 @@ def eval_in_scenes(params, dir, n_scenes=1000):
     print('Logging dir:', params['world']['logging_dir'])
 
 def analyze_multiple_eval_envs(dir_, results_dir):
-    names = ['SplitAC-scr', 'SplitDQN']
-    paths =['../ral-results/env-icra/splitac-scratch', '../ral-results/env-icra/splitdqn-3']
+    names = ['SplitAC-scr', 'SplitDQN', 'SplitDQN-13']
+    paths = ['../ral-results/env-icra/splitac-scratch',
+             '../ral-results/env-icra/splitdqn-3', '../ral-results/env-very-hard/splitdqn']
     for i in range(len(paths)):
         paths[i] = os.path.join(dir_, paths[i])
     analyze_multiple_evals(paths, names, results_dir, env_name='Env-ICRA')
@@ -102,8 +103,8 @@ def analyze_multiple_eval_envs(dir_, results_dir):
         paths[i] = os.path.join(dir_, paths[i])
     analyze_multiple_evals(paths, names, results_dir, env_name='Env-Hard')
 
-    names = ['Random-Cont', 'SplitDQN']
-    paths =['../ral-results/env-very-hard/random-cont', '../ral-results/env-very-hard/splitdqn']
+    names = ['Random-Cont']
+    paths =['../ral-results/env-very-hard/random-cont']
     for i in range(len(paths)):
         paths[i] = os.path.join(dir_, paths[i])
     analyze_multiple_evals(paths, names, results_dir, env_name='Env-very-hard')
@@ -875,13 +876,14 @@ class RandomICRAPolicy(RLAgent):
 def eval_random_actions(params, n_scenes=1000):
     rb_logging.init(directory=params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
 
-    params['env']['params']['render'] = True
+    params['env']['params']['render'] = False
+    params['env']['params']['deterministic_policy'] = True
     params['env']['params']['safe'] = False
     params['env']['params']['hardcoded_primitive'] = -1
     params['env']['params']['log_dir'] = params['world']['logging_dir']
     params['world']['episodes'] = n_scenes
 
-    policy = RandomICRAPolicy()
+    policy = RandomPolicy()
     world = EvalWorld(agent=policy, env=params['env'], params=params['world'])
     world.seed(0)
     world.run()
