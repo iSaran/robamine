@@ -88,29 +88,37 @@ def eval_in_scenes(params, dir, n_scenes=1000):
     print('Logging dir:', params['world']['logging_dir'])
 
 def analyze_multiple_eval_envs(dir_, results_dir):
-    names = ['SplitAC-scr', 'SplitDQN', 'SplitDQN-13']
-    paths = ['../ral-results/env-icra/splitac-scratch',
-             '../ral-results/env-icra/splitdqn-3', '../ral-results/env-very-hard/splitdqn']
-    for i in range(len(paths)):
-        paths[i] = os.path.join(dir_, paths[i])
-    analyze_multiple_evals(paths, names, results_dir, env_name='Env-ICRA')
+    exps = [
+        {'name': 'SplitAC-scr', 'path': '../ral-results/env-icra/splitac-scratch', 'action_discrete': False},
+        {'name': 'SplitDQN', 'path': '../ral-results/env-icra/splitdqn-3', 'action_discrete': True},
+        {'name': 'SplitDQN-13', 'path': '../ral-results/env-very-hard/splitdqn', 'action_discrete': True}]
+    for i in range(len(exps)):
+        exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
+    analyze_multiple_evals(exps, results_dir, env_name='Env-ICRA')
 
-    names = ['Random-Cont', 'SplitAC-scr', 'SplitDQN', 'SplitAC-pt']
-    paths = ['../ral-results/env-hard/random-cont',
-             '../ral-results/env-hard/splitac-scratch', '../ral-results/env-hard/splitdqn',
-             '../ral-results/env-hard/splitac-modular/push-target']
-    for i in range(len(paths)):
-        paths[i] = os.path.join(dir_, paths[i])
-    analyze_multiple_evals(paths, names, results_dir, env_name='Env-Hard')
+    exps = [
+        {'name': 'Random-Cont', 'path': '../ral-results/env-hard/random-cont', 'action_discrete': False},
+        {'name': 'SplitAC-scr', 'path': '../ral-results/env-hard/splitac-scratch', 'action_discrete': False},
+        {'name': 'SplitDQN', 'path': '../ral-results/env-hard/splitdqn', 'action_discrete': True},
+        {'name': 'SplitAC-pt', 'path': '../ral-results/env-hard/splitac-modular/push-target', 'action_discrete': False},
+        {'name': 'Push-Target', 'path': '../ral-results/env-hard/splitac-modular/push-target', 'action_discrete': False},
+        {'name': 'Push-Obstacle', 'path': '../ral-results/env-hard/splitac-modular/push-obstacle', 'action_discrete': False},
+        {'name': 'SplitAC-combo', 'path': '../ral-results/env-hard/splitac-modular/combo', 'action_discrete': False}]
+    for i in range(len(exps)):
+        exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
+    analyze_multiple_evals(exps, results_dir, env_name='Env-Hard')
 
-    names = ['Random-Cont']
-    paths =['../ral-results/env-very-hard/random-cont']
-    for i in range(len(paths)):
-        paths[i] = os.path.join(dir_, paths[i])
-    analyze_multiple_evals(paths, names, results_dir, env_name='Env-very-hard')
+    exps = [{'name': 'Random-Cont', 'path': '../ral-results/env-very-hard/random-cont', 'action_discrete': False}]
+    for i in range(len(exps)):
+        exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
+    analyze_multiple_evals(exps, results_dir, env_name='Env-very-hard')
 
-def analyze_multiple_evals(dirs, names, results_dir, env_name='Metric'):
-    assert len(dirs) == len(names)
+def analyze_multiple_evals(exps, results_dir, env_name='Metric'):
+    names, dirs = [], []
+    for i in range(len(exps)):
+        names.append(exps[i]['name'])
+        dirs.append(exps[i]['path'])
+
     from tabulate import tabulate
     import seaborn
     import pandas as pd
@@ -130,16 +138,20 @@ def analyze_multiple_evals(dirs, names, results_dir, env_name='Metric'):
                'Flips terminals %',
                'Empty terminals %',
                'Mean reward per step',
-               'Mean actions for singulation']
+               'Mean actions for singulation',
+               'Push target used %',
+               'Push Obstacle used %',
+               'Extra primitive used %',
+               'Model trained for (timesteps)']
 
-    percentage = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    percentage = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14]
 
     data = [None] * len(names)
     columns = [None] * len(names)
     table = []
     for i in range(len(names)):
         headers.append(names[i])
-        data[i], columns[i] = analyze_eval_in_scenes(os.path.join(dirs[i], 'eval'))
+        data[i], columns[i] = analyze_eval_in_scenes(dirs[i], action_discrete=exps[i]['action_discrete'])
 
     for i in range(len(column_0)):
         row = []
@@ -152,6 +164,7 @@ def analyze_multiple_evals(dirs, names, results_dir, env_name='Metric'):
 
         table.append(row)
     pd.DataFrame(table, columns=headers).to_csv(os.path.join(results_dir, env_name + '.csv'), index=False)
+    print('')
     print(tabulate(table, headers=headers))
 
     # Violin plots
@@ -176,10 +189,18 @@ def analyze_multiple_evals(dirs, names, results_dir, env_name='Metric'):
 
 
 
-def analyze_eval_in_scenes(dir):
+def analyze_eval_in_scenes(dir, action_discrete=False):
     from collections import OrderedDict
+    training_timesteps = 0
+    path = os.path.join(dir, 'train/episodes')
+    if not os.path.exists(path):
+        training_timesteps = np.nan
+    else:
+        training_data = EpisodeListData.load(path)
+        for i in range(len(training_data)):
+            training_timesteps += len(training_data[i])
 
-    data = EpisodeListData.load(os.path.join(dir, 'episodes'))
+    data = EpisodeListData.load(os.path.join(dir, 'eval/episodes'))
     singulations, fallens, collisions, timesteps = 0, 0, 0, 0
     steps_singulations = []
     episodes = len(data)
@@ -190,6 +211,9 @@ def analyze_eval_in_scenes(dir):
     flips = 0
     episodes_terminated = 0
     empties = 0
+    push_target_used = 0
+    push_obstacle_used = 0
+    extra_primitive_used = 0
 
     under = [5, 10, 15, 20]
     singulation_under = OrderedDict()
@@ -225,7 +249,19 @@ def analyze_eval_in_scenes(dir):
             for j in range(len(data[i])):
                 rewards.append(data[i][j].transition.reward)
 
-    print(episodes_terminated, 'episodes temrinalted')
+        for timestep in range(len(data[i])):
+            if action_discrete:
+                if data[i][timestep].transition.action < 8:
+                    push_target_used += 1
+                elif data[i][timestep].transition.action < 16:
+                    push_obstacle_used += 1
+                else:
+                    extra_primitive_used += 1
+            else:
+                if data[i][timestep].transition.action[0] == 0:
+                    push_target_used += 1
+                elif data[i][timestep].transition.action[0] == 1:
+                    push_obstacle_used += 1
 
     # print('terminal singulations:', (singulations / episodes) * 100, '%')
     # print('terminal fallens:', (fallens / episodes) * 100, '%')
@@ -256,7 +292,11 @@ def analyze_eval_in_scenes(dir):
                (flips / episodes),
                (empties / episodes),
                np.mean(rewards),
-               np.mean(steps_singulations)]
+               np.mean(steps_singulations),
+               push_target_used / timesteps,
+               push_obstacle_used / timesteps,
+               extra_primitive_used / timesteps,
+               training_timesteps]
 
     return steps_singulations, results
 
