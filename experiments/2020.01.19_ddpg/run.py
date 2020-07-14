@@ -185,6 +185,7 @@ def analyze_eval_in_scenes(dir):
     rewards = []
     timestep_terminals = 0
     collision_terminals = 0
+    deterministic_collision_terminals = 0
     flips = 0
     episodes_terminated = 0
     empties = 0
@@ -210,6 +211,8 @@ def analyze_eval_in_scenes(dir):
                 timestep_terminals += 1
             elif data[i][-1].transition.info['termination_reason'] == 'collision':
                 collision_terminals += 1
+            elif data[i][-1].transition.info['termination_reason'] == 'deterministic_collision':
+                deterministic_collision_terminals += 1
             elif data[i][-1].transition.info['termination_reason'] == 'flipped':
                 episodes_terminated -= 1
                 flips += 1

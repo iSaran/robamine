@@ -1644,6 +1644,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # Terminal if collision is detected
         if self.push_stopped_ext_forces:
             self.push_stopped_ext_forces = False
+            if self.params['deterministic_policy']:
+                return True, 'deterministic_collision'
             return True, 'collision'
 
         if self.params['deterministic_policy'] and detect_empty_action_from_real_state(self.obs_dict,
