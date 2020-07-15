@@ -1282,7 +1282,7 @@ class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
         max_init_distance = init_distance_range[1]
         x_init = max_init_distance * np.cos(angle_)
         y_init = max_init_distance * np.sin(angle_)
-        preprocessed = preprocess_real_state(obs_dict, max_init_distance, 0)
+        preprocessed = preprocess_real_state(obs_dict, max_init_distance, 0, primitive=0)
 
         point_cloud = get_table_point_cloud(preprocessed['object_poses'][preprocessed['object_above_table']],
                                             preprocessed['object_bounding_box'][preprocessed['object_above_table']],
@@ -1595,7 +1595,7 @@ def get_table_point_cloud(pose, bbox, workspace, density=128, bbox_aug=0.008, pl
 
     return x_y[inhulls.all(axis=1), :]
 
-def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0):
+def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0, primitive=0):
     what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_edges',
                    'max_n_objects', 'init_distance_from_target']
     state = {}
@@ -1612,6 +1612,29 @@ def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0):
     state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
     state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
     state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]
+
+    # Filter out objects for the primitive
+    target_bounding_box_z = obs_dict['target_bounding_box'][2]
+    finger_height = obs_dict['finger_height']
+    if primitive == 0:
+        threshold = target_bounding_box_z - 1.5 * finger_height
+    elif primitive == 1:
+        threshold = 2 * target_bounding_box_z + 1.1 * finger_height
+    else:
+        raise ValueError()
+    n_objects = state['object_poses'].shape[0]
+    objects_useful_for_primitive = np.zeros(n_objects, dtype=np.bool)
+    objects_useful_for_primitive[0] = True
+    for i in range(1, n_objects):
+        pose = state['object_poses'][i]
+        bbox = state['object_bounding_box'][i]
+        height = get_object_height(pose, bbox)
+        if height > threshold:
+            objects_useful_for_primitive[i] = True
+
+    state['object_poses'] = state['object_poses'][objects_useful_for_primitive]
+    state['object_bounding_box'] = state['object_bounding_box'][objects_useful_for_primitive]
+    state['object_above_table'] = state['object_above_table'][objects_useful_for_primitive]
 
     app = np.zeros((4, 5))
     app[:, 1] = 1
@@ -1655,7 +1678,7 @@ def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0):
     shape = state['object_above_table'].shape
     if shape[0] < state['max_n_objects']:
         state['object_above_table'] = np.append(state['object_above_table'],
-                                                np.zeros((int(state['max_n_objects']) - shape[0], shape[1]),
+                                                np.zeros((int(state['max_n_objects']) - shape[0]),
                                                          dtype=np.bool), axis=0)
     return state
 
