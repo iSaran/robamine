@@ -432,7 +432,8 @@ class RealState(Feature):
             self.principal_corners[i, :, :] = self.get_principal_corner_obstacle(i)
 
     def get_principal_corner_obstacle(self, i):
-        pos_target = self.poses[0, 0:3]
+        pos_target = self.poses[0, 0:3].copy()
+        pos_target[2] = 0.0
         pos = self.poses[i, 0:3]
         quat = Quaternion(self.poses[i, 3], self.poses[i, 4], self.poses[i, 5], self.poses[i, 6])
         bbox=self.bounding_box[i]
@@ -1605,17 +1606,18 @@ def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0):
     poses = state['object_poses'][state['object_above_table']]
     if poses.shape[0] == 0:
         return state
-
-    app = np.zeros((4, 5))
-    app[:, 1] = 1
-    surface_edges = np.append(state['surface_edges'], app, axis=1)
-    threshold = max(max_init_distance, obs_dict['push_distance_range'][1]) + np.max(state['object_bounding_box'][0]) + obs_dict['singulation_distance'][0]
+    threshold = max(max_init_distance, obs_dict['push_distance_range'][1]) + np.max(state['object_bounding_box'][0]) + \
+                obs_dict['singulation_distance'][0]
     objects_close_target = np.linalg.norm(poses[:, 0:3] - poses[0, 0:3], axis=1) < threshold
     state['object_poses'] = state['object_poses'][state['object_above_table']][objects_close_target]
     state['object_bounding_box'] = state['object_bounding_box'][state['object_above_table']][objects_close_target]
     state['object_above_table'] = state['object_above_table'][state['object_above_table']][objects_close_target]
+
+    app = np.zeros((4, 5))
+    app[:, 1] = 1
+    surface_edges = np.append(state['surface_edges'], app, axis=1)
     # Rotate
-    poses = state['object_poses'][state['object_above_table']]
+    poses = state['object_poses']
     target_pose = poses[0].copy()
     poses = transform_poses(poses, target_pose)
     surface_edges = transform_poses(surface_edges, target_pose)
@@ -1628,9 +1630,10 @@ def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0):
     target_pose[3:] = np.zeros(4)
     target_pose[3] = 1
     poses = transform_poses(poses, target_pose)
+    poses[:, 2] += target_pose[2]
     surface_edges = transform_poses(surface_edges, target_pose)
+    surface_edges[:, 2] += target_pose[2]
     state['surface_edges'] = surface_edges[:, :2].copy()
-    state['object_poses'][state['object_above_table']] = poses
 
     distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
                  obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
@@ -1638,6 +1641,22 @@ def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0):
                  obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
     state['surface_distances'] = np.array([x / 0.5 for x in distances])
 
+    state['object_poses'] = poses
+    shape = state['object_poses'].shape
+    if shape[0] < state['max_n_objects']:
+        state['object_poses'] = np.append(state['object_poses'],
+                                                 np.zeros((int(state['max_n_objects']) - shape[0], shape[1])), axis=0)
+
+    shape = state['object_bounding_box'].shape
+    if shape[0] < state['max_n_objects']:
+        state['object_bounding_box'] = np.append(state['object_bounding_box'],
+                                                 np.zeros((int(state['max_n_objects']) - shape[0], shape[1])), axis=0)
+
+    shape = state['object_above_table'].shape
+    if shape[0] < state['max_n_objects']:
+        state['object_above_table'] = np.append(state['object_above_table'],
+                                                np.zeros((int(state['max_n_objects']) - shape[0], shape[1]),
+                                                         dtype=np.bool), axis=0)
     return state
 
 def plot_real_state(state):
