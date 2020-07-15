@@ -364,16 +364,14 @@ def check_transition(params):
             # action_[3] = min_max_scale(action[3], range=[-1, 1], target_range=params['env']['params']['push']['target_init_distance'])
             # RealState(obs).plot(action=action_)
             # action = [0, -1, 1, -1]
-            print('action', action)
             obs, reward, done, info = env.step(action)
-            print('singulation:', clutter.detect_singulation_from_real_state(obs))
+            print('reward:', reward, 'action:', action, 'done:', done, 'temrination condiction:', info['termination_reason'])
             # RealState(obs).plot()
             # array = RealState(obs).array()
             # if (array > 1).any() or (array < -1).any():
             #     print('out of limits indeces > 1:', array[array < -1])
             #     print('out of limits indeces < -1:', array[array < -1])
             # plot_point_cloud_of_scene(obs)
-            print('reward: ', reward, 'done:', done)
             if done:
                 break
 
