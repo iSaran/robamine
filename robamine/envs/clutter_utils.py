@@ -604,7 +604,7 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
     # Calculate fused visual feature
     thresholded = np.zeros(heightmap.shape)
     if primitive == 0:
-        threshold = target_bounding_box_z - 1.5 * finger_height
+        threshold = 0  # assuming that the env doesnt spawn flat
     elif primitive == 1:
         threshold = 2 * target_bounding_box_z + 1.1 * finger_height
     else:
@@ -1617,7 +1617,7 @@ def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0, primitive=0)
     target_bounding_box_z = obs_dict['target_bounding_box'][2]
     finger_height = obs_dict['finger_height']
     if primitive == 0:
-        threshold = target_bounding_box_z - 1.5 * finger_height
+        threshold = 0  # assuming the env does not spawn flat objects
     elif primitive == 1:
         threshold = 2 * target_bounding_box_z + 1.1 * finger_height
     else:
