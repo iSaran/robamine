@@ -1346,6 +1346,8 @@ class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
         while True:
             c = np.array([r * np.sin(-angle_), r * cos(-angle_)]).astype(np.int32)
             patch_center = centroid_pxl + c
+            if patch_center[0] > raw_depth_.shape[0] or patch_center[1] > raw_depth_.shape[1]:
+                break
             # calc patch position and extract the patch
             patch_x = int(patch_center[0] - patch_size / 2.)
             patch_y = int(patch_center[1] - patch_size / 2.)
