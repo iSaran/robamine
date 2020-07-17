@@ -156,10 +156,10 @@ class SplitDDPG(RLAgent):
         self.state_dim = clutter.get_observation_dim(self.hardcoded_primitive, real_state=self.real_state)
         self.action_dim = clutter.get_action_dim(self.hardcoded_primitive)
         super().__init__(self.state_dim, self.action_dim, 'SplitDDPG', params)
-        self.asymmetric = self.params.get('asymmetric', True)
+        self.asymmetric = self.params.get('asymmetric', 'asymmetric')
 
         # Load autoencoder
-        if self.asymmetric:
+        if self.asymmetric == 'asymmetric' or self.asymmetric == 'visual':
             import robamine.algo.conv_vae as ae
             with open(self.params['actor']['autoencoder']['model'], 'rb') as file:
                 # model = pickle.load(file)
@@ -174,9 +174,15 @@ class SplitDDPG(RLAgent):
             with open(self.params['actor']['autoencoder']['scaler'], 'rb') as file:
                 self.scaler = pickle.load(file)
 
-        if self.asymmetric:
-            self.actor_state_dim = ae.LATENT_DIM + 4  # TODO: hardcoded the extra dim for surface edges
-        else:
+            visual_dim = ae.LATENT_DIM + 4  # TODO: hardcoded the extra dim for surface edges
+            if self.asymmetric == 'asymmetric':
+                self.actor_state_dim = visual_dim
+            elif self.asymmetric == 'visual':
+                self.actor_state_dim = visual_dim
+                for i in range(len(self.state_dim)):
+                    self.state_dim[i] = visual_dim
+
+        if self.asymmetric == 'real':
             self.actor_state_dim = clutter.RealState.dim()
 
         # The number of networks is the number of primitive actions. One network
@@ -266,21 +272,11 @@ class SplitDDPG(RLAgent):
         if self.nr_network > 1 and not clutter.push_obstacle_feature_includes_affordances(state):
             valid_nets = np.delete(valid_nets, [1])
         for i in valid_nets:
-            state_ = clutter.preprocess_real_state(state, self.max_init_distance, 0,
-                                                   primitive=self.network_to_primitive_index(i))
-            real_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True,
-                                           range_norm=[-1, 1],
-                                           translate_wrt_target=False).array()
-            s = torch.FloatTensor(real_state).to(self.device)
-            if self.asymmetric:
-                feature = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler,
-                                                                         primitive=self.network_to_primitive_index(i))
-            else:
-                feature = clutter.preprocess_real_state(state, self.max_init_distance,
-                                                        primitive=self.network_to_primitive_index(i))
-                feature = clutter.RealState(feature, angle=0, sort=True, normalize=True, spherical=True,
-                                            range_norm=[-1, 1], translate_wrt_target=False).array()
-            actor_state = torch.FloatTensor(feature).to(self.device)
+            actor_state, critic_state = self._get_actor_critic_state(state,
+                                                                     primitive=self.network_to_primitive_index(i))
+
+            s = torch.FloatTensor(critic_state).to(self.device)
+            actor_state = torch.FloatTensor(actor_state).to(self.device)
             a = self.actor[i](actor_state)
             q = self.critic[i](s, a).cpu().detach().numpy()
             self.info['q_values'][i] = q[0]
@@ -351,14 +347,7 @@ class SplitDDPG(RLAgent):
             output[1:(self.action_dim[self.primitive_to_network_index(i)] + 1)] = action
         else:
             i = self.rng.randint(0, self.nr_network)
-            if self.asymmetric:
-                feature = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler,
-                                                                         primitive=self.network_to_primitive_index(i))
-            else:
-                feature = clutter.preprocess_real_state(state, self.max_init_distance,
-                                                        primitive=self.network_to_primitive_index(i))
-                feature = clutter.RealState(feature, angle=0, sort=True, normalize=True, spherical=True,
-                                            range_norm=[-1, 1], translate_wrt_target=False).array()
+            feature, _ = self._get_actor_critic_state(state, primitive=self.network_to_primitive_index(i))
             actor_state = torch.FloatTensor(feature).to(self.device)
             action = self.actor[i](actor_state).detach().cpu().numpy().copy()
             action += self.exploration_noise[self.primitive_to_network_index(i)]()
@@ -425,10 +414,10 @@ class SplitDDPG(RLAgent):
         terminal = torch.zeros((len(batch), 1)).to(self.device)
         reward = torch.zeros((len(batch), 1)).to(self.device)
         action = torch.zeros((len(batch), self.action_dim[i])).to(self.device)
-        state_real = torch.zeros((len(batch), clutter.RealState.dim())).to(self.device)
+        state_real = torch.zeros((len(batch), self.state_dim[i])).to(self.device)
         state_real_actor = torch.zeros((len(batch), self.actor_state_dim)).to(self.device)
         next_state_real_actor = torch.zeros((len(batch), self.actor_state_dim)).to(self.device)
-        next_state_real = torch.zeros((len(batch), clutter.RealState.dim())).to(self.device)
+        next_state_real = torch.zeros((len(batch), self.state_dim[i])).to(self.device)
         for j in range(len(batch)):
             reward[j] = batch[j].reward
             terminal[j] = batch[j].terminal
@@ -493,11 +482,8 @@ class SplitDDPG(RLAgent):
 
     def q_value(self, state, action):
         i, action_ = self.get_low_level_action(action)
-        state_ = clutter.preprocess_real_state(state, self.max_init_distance, 0,
-                                               primitive=self.network_to_primitive_index(i))
-        real_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True, range_norm=[-1, 1],
-                                       translate_wrt_target=False).array()
-        s = torch.FloatTensor(real_state).to(self.device)
+        _, critic_state = self._get_actor_critic_state(state, primitive=self.network_to_primitive_index(i), angle=0)
+        s = torch.FloatTensor(critic_state).to(self.device)
         a = torch.FloatTensor(action_).to(self.device)
         if self.hardcoded_primitive >= 0:
             i = 0
@@ -559,39 +545,16 @@ class SplitDDPG(RLAgent):
         state, next_state = {}, {}
         for j in range(heightmap_rotations):
             transition.state['init_distance_from_target'] = transition.next_state['init_distance_from_target']
-            state_critic = clutter.preprocess_real_state(transition.state, self.max_init_distance, angle[j],
-                                                         primitive=transition.action[0])
-            state['critic'] = clutter.RealState(state_critic, angle=0, sort=True, normalize=True, spherical=True,
-                                                range_norm=[-1, 1], translate_wrt_target=False).array()
-            if self.asymmetric:
-                state['actor'] = \
-                    clutter.get_asymmetric_actor_feature_from_dict(transition.state, self.ae, self.scaler,
-                                                                   angle[j],
-                                                                   primitive=transition.action[0])
-            else:
-                state['actor'] = clutter.RealState(state_critic, angle=0, sort=True, normalize=True,
-                                                   spherical=True,
-                                                   range_norm=[-1, 1], translate_wrt_target=False).array()
 
-            next_state_critic = clutter.preprocess_real_state(transition.next_state, self.max_init_distance, angle[j],
-                                                              primitive=transition.action[0])
-            if transition.terminal:
-                next_state['critic'] = np.zeros(clutter.RealState.dim())
-            else:
-                next_state['critic'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
-                                                         spherical=True, range_norm=[-1, 1],
-                                                         translate_wrt_target=False).array()
-            if self.asymmetric:
-                next_state['actor'] = clutter.get_asymmetric_actor_feature_from_dict(transition.next_state, self.ae,
-                                                                                     self.scaler, angle[j],
-                                                                                     primitive=transition.action[0])
-            else:
-                if transition.terminal:
-                    next_state['actor'] = np.zeros(clutter.RealState.dim())
-                else:
-                    next_state['actor'] = clutter.RealState(next_state_critic, angle=0, sort=True, normalize=True,
-                                                        spherical=True, range_norm=[-1, 1],
-                                                        translate_wrt_target=False).array()
+            state['actor'], state['critic'] = self._get_actor_critic_state(state=transition.state,
+                                                                           primitive=transition.action[0],
+                                                                           angle=angle[j], plot=False)
+
+            next_state['actor'], next_state['critic'] = self._get_actor_critic_state(state=transition.next_state,
+                                                                                     primitive=transition.action[0],
+                                                                                     angle=angle[j],
+                                                                                     terminal=transition.terminal,
+                                                                                     plot=False)
 
             # Rotate action
             # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
@@ -629,6 +592,61 @@ class SplitDDPG(RLAgent):
         if self.hardcoded_primitive < 0:
             return i
         return int(self.hardcoded_primitive)
+
+    def _get_actor_critic_state(self, state, primitive, angle=0, terminal=False, plot=False):
+        if self.asymmetric == 'asymmetric':
+            actor_state = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, angle=angle,
+                                                                     primitive=primitive, plot=plot)
+
+            if terminal:
+                critic_state = np.zeros(clutter.RealState.dim())
+            else:
+                state_ = clutter.preprocess_real_state(state, self.max_init_distance, angle=angle,
+                                                       primitive=primitive)
+                critic_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True,
+                                               range_norm=[-1, 1],
+                                               translate_wrt_target=False)
+                if plot:
+                    critic_state.plot()
+                    plt.show()
+
+                critic_state = critic_state.array()
+
+        elif self.asymmetric == 'visual':
+            actor_state = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, angle=angle,
+                                                                     primitive=primitive, plot=plot)
+
+            critic_state = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, angle=angle,
+                                                                    primitive=primitive, plot=plot)
+
+        elif self.asymmetric == 'real':
+            if terminal:
+                actor_state = np.zeros(clutter.RealState.dim())
+                critic_state = np.zeros(clutter.RealState.dim())
+            else:
+                feature = clutter.preprocess_real_state(state, self.max_init_distance, angle=angle,
+                                                        primitive=primitive)
+                actor_state = clutter.RealState(feature, angle=0, sort=True, normalize=True, spherical=True,
+                                            range_norm=[-1, 1], translate_wrt_target=False)
+                state_ = clutter.preprocess_real_state(state, self.max_init_distance, angle=angle,
+                                                       primitive=primitive)
+                critic_state = clutter.RealState(state_, angle=0, sort=True, normalize=True, spherical=True,
+                                               range_norm=[-1, 1],
+                                               translate_wrt_target=False)
+
+                if plot:
+                    actor_state.plot()
+                    plt.show()
+                    critic_state.plot()
+                    plt.show()
+
+                actor_state = actor_state.array()
+                critic_state = critic_state.array()
+
+        else:
+                raise ValueError
+
+        return actor_state, critic_state
 
 
 class ObstacleAvoidanceLoss(nn.Module):
