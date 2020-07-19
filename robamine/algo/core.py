@@ -479,6 +479,7 @@ class World:
         hostname, username, version = get_pc_and_version()
         self.config['results']['hostname'] = hostname + ':' + username
         self.config['results']['version'] = version
+        self.config['results']['pid'] = os.getpid()
         self.config['results']['started_on'] = None
         self.config['results']['estimated_time'] = None
         self.config['results']['time_elapsed'] = None

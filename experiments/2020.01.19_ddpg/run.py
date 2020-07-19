@@ -1265,6 +1265,8 @@ def eval_random_actions_icra(params, n_scenes=1000):
     print('Logging dir:', world.log_dir)
 
 if __name__ == '__main__':
+    pid = os.getpid()
+    print('Process ID:', pid)
     hostname = socket.gethostname()
     exp_dir = 'robamine_logs_dream_2020.07.02.18.35.45.636114'
 
