@@ -305,6 +305,7 @@ class ClutterXMLGenerator(XMLGenerator):
         self.rng = np.random.RandomState()  # rng for the scene
         self.n_obstacles = 0
         self.n_fixed_objects = 0
+        self.pushable_threshold = 0.0
 
 
         # Auxiliary variables
@@ -486,15 +487,12 @@ class ClutterXMLGenerator(XMLGenerator):
             if all_equal_height < self.params['all_equal_height_prob']:
                 obstacle_height = target_height
             else:
-                obstacle_height = self.rng.uniform(max(self.params['obstacle']['min_bounding_box'][2], finger_size), self.params['obstacle']['max_bounding_box'][2])
-                min_h = max(self.params['obstacle']['min_bounding_box'][2], target_height - 1.5 * finger_size)
-                if obstacle_height < min_h:
-                    obstacle_height = min_h
-                # min_h = max(self.params['obstacle']['min_bounding_box'][2], target_height + finger_size)
-                # if min_h > self.params['obstacle']['max_bounding_box'][2]:
-                #     obstacle_height = self.params['obstacle']['max_bounding_box'][2]
-                # else:
-                #     obstacle_height = self.rng.uniform(min_h, self.params['obstacle']['max_bounding_box'][2])
+                self.pushable_threshold = target_height - 0.5 * finger_size
+                min_h = max(self.params['obstacle']['min_bounding_box'][2], self.pushable_threshold)
+                if min_h > self.params['obstacle']['max_bounding_box'][2]:
+                    obstacle_height = self.params['obstacle']['max_bounding_box'][2]
+                else:
+                    obstacle_height = self.rng.uniform(min_h, self.params['obstacle']['max_bounding_box'][2])
 
             if type == 'box':
                 x = obstacle_length
