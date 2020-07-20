@@ -707,17 +707,13 @@ def detect_singulation_from_real_state(obs_dict, singulate_from_walls=False):
     n_objects = int(obs_dict['n_objects'])
     target_pose = obs_dict['object_poses'][0]
     target_bbox = obs_dict['object_bounding_box'][0]
-    target_bounding_box_z = obs_dict['target_bounding_box'][2]
-    finger_height = obs_dict['finger_height']
-    threshold = target_bounding_box_z - 1.5 * finger_height
 
     distances = 100 * np.ones((int(n_objects),))
     for i in range(1, n_objects):
         obstacle_pose = obs_dict['object_poses'][i]
         obstacle_bbox = obs_dict['object_bounding_box'][i]
 
-        height = get_object_height(obstacle_pose, obstacle_bbox)
-        if height > threshold:
+        if obs_dict['object_above_table'][i]:
             distances[i] = get_distance_of_two_bbox(target_pose, target_bbox, obstacle_pose, obstacle_bbox)
 
     min_distance = np.min(distances)
