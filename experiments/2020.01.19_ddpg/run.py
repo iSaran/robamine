@@ -60,7 +60,8 @@ def eval_with_render(dir):
 
     config['env']['params']['render'] = True
     config['env']['params']['push']['predict_collision'] = False
-    config['env']['params']['max_timesteps'] = 5
+    config['env']['params']['max_timesteps'] = 10
+    config['env']['params']['nr_of_obstacles'] = [8, 13]
     config['env']['params']['safe'] = False
     config['env']['params']['log_dir'] = '/tmp'
     config['world']['episodes'] = 10
@@ -81,6 +82,7 @@ def eval_in_scenes(params, dir, n_scenes=1000):
     config['env']['params']['safe'] = False
     config['env']['params']['log_dir'] = params['world']['logging_dir']
     config['env']['params']['deterministic_policy'] = True
+    config['env']['params']['nr_of_obstacles'] = [8, 13]
     config['world']['episodes'] = n_scenes
     world = EvalWorld.load(dir, overwrite_config=config)
     world.seed_list = np.arange(0, n_scenes, 1).tolist()
