@@ -1266,6 +1266,40 @@ def eval_random_actions_icra(params, n_scenes=1000):
     world.run()
     print('Logging dir:', world.log_dir)
 
+def util_test_generation_target(params, samples=1000, bins=20):
+    rng = np.random.RandomState()
+    finger_size = params['finger']['size']
+    objects = np.zeros((samples, 3))
+    for i in range(samples):
+        a = max(params['target']['min_bounding_box'][2], finger_size)
+        b = params['target']['max_bounding_box'][2]
+        if a > b:
+            b = a
+        target_height = rng.uniform(a, b)
+
+        # Length is 0.75 at least of height to reduce flipping
+        a = max(0.75 * target_height, params['target']['min_bounding_box'][0])
+        b = params['target']['max_bounding_box'][0]
+        if a > b:
+            b = a
+        target_length = rng.uniform(a, b)
+
+        a = max(0.75 * target_height, params['target']['min_bounding_box'][1])
+        b = min(target_length, params['target']['max_bounding_box'][1])
+        if a > b:
+            b = a
+        target_width = rng.uniform(a, b)
+
+        objects[i, 0] = target_length
+        objects[i, 1] = target_width
+        objects[i, 2] = target_height
+
+    fig, axs = plt.subplots(3,)
+    for i in range(3):
+        axs[i].hist(objects[:, i], bins=bins)
+    plt.show()
+
+
 if __name__ == '__main__':
     pid = os.getpid()
     print('Process ID:', pid)
@@ -1344,3 +1378,6 @@ if __name__ == '__main__':
     # train_icra(params)
     # train_eval_icra(params)
     # eval_random_actions_icra(params, n_scenes=1000)
+
+    # Utilities and tests
+    # util_test_generation_target(params['env']['params'], samples=3000, bins=20)

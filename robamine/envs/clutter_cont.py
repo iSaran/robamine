@@ -421,9 +421,24 @@ class ClutterXMLGenerator(XMLGenerator):
             # self.sim.model.geom_solref[geom_id][0] = .002
 
         #   Randomize size
-        target_length = self.rng.uniform(self.params['target']['min_bounding_box'][0], self.params['target']['max_bounding_box'][0])
-        target_width  = self.rng.uniform(self.params['target']['min_bounding_box'][1], min(target_length, self.params['target']['max_bounding_box'][1]))
-        target_height = self.rng.uniform(max(self.params['target']['min_bounding_box'][2], finger_size), self.params['target']['max_bounding_box'][2])
+        a = max(self.params['target']['min_bounding_box'][2], finger_size)
+        b = self.params['target']['max_bounding_box'][2]
+        if a > b:
+            b = a
+        target_height = self.rng.uniform(a, b)
+
+        # Length is 0.75 at least of height to reduce flipping
+        a = max(0.75 * target_height, self.params['target']['min_bounding_box'][0])
+        b = self.params['target']['max_bounding_box'][0]
+        if a > b:
+            b = a
+        target_length = self.rng.uniform(a, b)
+
+        a = max(0.75 * target_height, self.params['target']['min_bounding_box'][1])
+        b = min(target_length, self.params['target']['max_bounding_box'][1])
+        if a > b:
+            b = a
+        target_width = self.rng.uniform(a, b)
 
         # Randomize position
         theta = self.rng.uniform(0, 2 * math.pi)
