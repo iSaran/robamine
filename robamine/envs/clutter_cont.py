@@ -1677,7 +1677,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         target_z = self.target_quat.rotation_matrix()[:,2]
         world_z = np.array([0, 0, 1])
         if np.dot(target_z, world_z) < 0.9:
-            return True, 'flipped'
+            raise InvalidEnvError()
 
         if detect_singulation_from_real_state(obs, singulate_from_walls=self.params['walls']['singulate']):
             self.success = True
