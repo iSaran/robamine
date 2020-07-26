@@ -14,7 +14,7 @@ agent:
     actor:
       hidden_units: [[400, 300], [400, 300]]
       learning_rate: 0.001
-      preactivation_weight: 0.0
+      preactivation_weight: 0.05
       autoencoder:
         model: /home/mkiatos/robamine/logs/VAE/model.pkl
         scaler: /home/mkiatos/robamine/logs/VAE/normalizer.pkl
@@ -58,14 +58,14 @@ env:
       n_rotations: 8
       n_primitives: 3
     hardcoded_primitive: 0
-    max_timesteps: 10
+    max_timesteps: 20
     real_state: True
     all_equal_height_prob: 0.2
     finger:
       size: 0.005
       type: sphere
     nr_of_obstacles:
-      - 1
+      - 8
       - 13
     render: false
     target:
