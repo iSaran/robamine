@@ -79,10 +79,10 @@ def eval_in_scenes(params, dir, n_scenes=1000):
             print(exc)
 
     config['env']['params']['render'] = False
-    config['env']['params']['safe'] = False
+    config['env']['params']['safe'] = True
     config['env']['params']['log_dir'] = params['world']['logging_dir']
     config['env']['params']['deterministic_policy'] = True
-    config['env']['params']['nr_of_obstacles'] = [8, 13]
+    config['env']['params']['nr_of_obstacles'] = [1, 13]
     config['world']['episodes'] = n_scenes
     world = EvalWorld.load(dir, overwrite_config=config)
     world.seed_list = np.arange(0, n_scenes, 1).tolist()
@@ -919,7 +919,7 @@ def eval_random_actions(params, n_scenes=1000):
     rb_logging.init(directory=params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
 
     params['env']['params']['render'] = False
-    params['env']['params']['deterministic_policy'] = True
+    params['env']['params']['deterministic_policy'] = False
     params['env']['params']['safe'] = True
     params['env']['params']['hardcoded_primitive'] = -1
     params['env']['params']['log_dir'] = params['world']['logging_dir']

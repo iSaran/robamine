@@ -65,7 +65,7 @@ env:
       size: 0.005
       type: sphere
     nr_of_obstacles:
-      - 8
+      - 1
       - 13
     render: false
     target:
