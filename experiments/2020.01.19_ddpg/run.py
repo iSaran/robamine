@@ -102,7 +102,6 @@ def analyze_multiple_eval_envs(dir_, results_dir):
         {'name': 'Random-Cont', 'path': '../ral-results/env-hard/random-cont', 'action_discrete': False},
         {'name': 'SplitAC-scr', 'path': '../ral-results/env-hard/splitac-scratch', 'action_discrete': False},
         {'name': 'SplitDQN', 'path': '../ral-results/env-hard/splitdqn', 'action_discrete': True},
-        {'name': 'SplitAC-pt', 'path': '../ral-results/env-hard/splitac-modular/push-target', 'action_discrete': False},
         {'name': 'Push-Target', 'path': '../ral-results/env-hard/splitac-modular/push-target', 'action_discrete': False},
         {'name': 'Push-Obstacle', 'path': '../ral-results/env-hard/splitac-modular/push-obstacle', 'action_discrete': False},
         {'name': 'SplitAC-combo', 'path': '../ral-results/env-hard/splitac-modular/combo', 'action_discrete': False}]
@@ -110,7 +109,8 @@ def analyze_multiple_eval_envs(dir_, results_dir):
         exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
     analyze_multiple_evals(exps, results_dir, env_name='Env-Hard')
 
-    exps = [{'name': 'Random-Cont', 'path': '../ral-results/env-very-hard/random-cont', 'action_discrete': False}]
+    exps = [{'name': 'Random-Cont', 'path': '../ral-results/env-very-hard/random-cont', 'action_discrete': False},
+            {'name': 'Push-Target', 'path': '../ral-results/env-very-hard/splitac-modular/push-target', 'action_discrete': False}]
     for i in range(len(exps)):
         exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
     analyze_multiple_evals(exps, results_dir, env_name='Env-very-hard')
@@ -137,6 +137,7 @@ def analyze_multiple_evals(exps, results_dir, env_name='Metric'):
                'Fallen %',
                'Max timesteps terminals %',
                'Collision terminals %',
+               'Deterministic Collision terminals %',
                'Flips terminals %',
                'Empty terminals %',
                'Mean reward per step',
@@ -291,6 +292,7 @@ def analyze_eval_in_scenes(dir, action_discrete=False):
                (fallens / episodes),
                (timestep_terminals / episodes),
                (collision_terminals / episodes),
+               (deterministic_collision_terminals / episodes),
                (flips / episodes),
                (empties / episodes),
                np.mean(rewards),
