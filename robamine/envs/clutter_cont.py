@@ -1353,7 +1353,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             if self.params['push'].get('predict_collision', True):
                 if primitive == 0 and predict_collision(obs=self.obs_dict,
                                                         x=push_initial_pos_world[0], y=push_initial_pos_world[1],
-                                                        theta=push_quat_angle):
+                                                        theta=push_quat_angle, walls=self.params['walls']['use']):
                     self.push_stopped_ext_forces = True
                     print('Collision detected!')
                     return self.sim.data.time
@@ -1367,7 +1367,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 duration = push.get_duration()
 
                 end = push_final_pos_world[:2]
-                if self.params['walls']:
+                if self.params['walls']['use']:
                     self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
                                               desired_quat=push_quat, duration=duration, stop_external_forces=True,
                                               external_force_threshold=12)
@@ -1388,7 +1388,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                              desired_quat=push_quat,
                                              stop_external_forces=True):
                     end = push_final_pos_world[:2]
-                    if self.params['walls']:
+                    if self.params['walls']['use']:
                         self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
                                                   desired_quat=push_quat, duration=duration, stop_external_forces=True,
                                                   external_force_threshold=12)
