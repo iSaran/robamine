@@ -90,8 +90,8 @@ env:
     feature_normalization_per: 'session'  # available: 'session', 'episode'
     hug_probability: 0.5
     walls:
-      use: False
-      singulate: False  # Set false if push target and walls
+      use: True
+      singulate: True  # Set false if push target and walls
       push_after_slide: True
     terminal:
       stuck_on_wall: False  # Set true if push target and walls

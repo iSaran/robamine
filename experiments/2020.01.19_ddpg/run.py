@@ -1913,7 +1913,7 @@ class DQNCombo(core.RLAgent):
     def __init__(self, params, push_target_actor, push_obstacle_actor, seed):
         torch.manual_seed(seed)
         self.state_dim = clutter.get_observation_dim(-1)
-        action_dim = 2
+        action_dim = 3
         self.n_primitives = action_dim
         super().__init__(self.state_dim, action_dim, 'DQN', params)
         state_dim = 2 * (conv_ae.LATENT_DIM + 4)  # TODO: hardcoded the extra dim for surface edges
@@ -1950,6 +1950,8 @@ class DQNCombo(core.RLAgent):
         valid_nets, _ = clutter.get_valid_primitives(state, n_primitives=self.n_primitives)
         values[valid_nets == False] = -1e6
         primitive = np.argmax(values)
+        if primitive == 2:
+            return np.array([2])
         action = self.policy[primitive].predict(state)
         return action
 
@@ -1962,6 +1964,8 @@ class DQNCombo(core.RLAgent):
 
         _, valid_nets = clutter.get_valid_primitives(state, n_primitives=self.n_primitives)
         primitive = int(self.rng.choice(valid_nets, 1))
+        if primitive == 2:
+            return np.array([2])
 
         action = self.policy[primitive].predict(state)
         return action
@@ -2304,7 +2308,7 @@ if __name__ == '__main__':
                    push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
                    # push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
                    push_obstacle_actor_path='real',
-                   friendly_name='combo_dqn',
+                   friendly_name='combo_dqn_sliding',
                    seed=0)
     exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
     # exp.eval_with_render()

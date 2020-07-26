@@ -1417,7 +1417,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 direction /= np.linalg.norm(direction)
                 theta = np.arctan2(direction[1], direction[0])
                 theta = min_max_scale(theta, range=[-np.pi, np.pi], target_range=[-1, 1])
-                action = np.array([0., theta, -1])
+                action = np.array([0., theta, 0])
                 self.do_simulation(action)
 
         # elif primitive == 2 or primitive == 3:
