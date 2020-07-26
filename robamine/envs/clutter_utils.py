@@ -1949,7 +1949,10 @@ def is_object_above_object(pose, bbox, pose_2, bbox_2, density=0.005, plot=False
 #     return x_y[inhulls.all(axis=1), :]
 
 
-def predict_collision(obs, x, y, theta):
+def predict_collision(obs, x, y, theta, walls=False):
+    if walls and (abs(x) > obs['surface_size'][0] - obs['finger_length'][0]  or abs(y) > obs['surface_size'][1] - obs['finger_length'][0]):
+        return True
+
     n_objects = int(len(obs['object_poses'][obs['object_above_table']]))
     sphere_pose = np.zeros(7)
     sphere_pose[0] = x
