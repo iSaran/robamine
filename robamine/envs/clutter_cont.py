@@ -31,7 +31,8 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition,
                                          PushObstacleICRA, PushTargetICRA, PushExtraICRA,
                                          detect_singulation_from_real_state, detect_empty_action_from_real_state,
-                                         detect_target_stuck_on_wall, get_asymmetric_actor_feature_from_dict)
+                                         detect_target_stuck_on_wall, get_asymmetric_actor_feature_from_dict,
+                                         get_distances_from_walls)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -1109,7 +1110,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'point_cloud': (10000, 3),
                 'pixels_to_m': (1,),
                 'push_target_feature': (ae.LATENT_DIM + 4,),
-                'push_obstacle_feature': (ae.LATENT_DIM + 4,)}
+                'push_obstacle_feature': (ae.LATENT_DIM + 4,),
+                'walls': (1,)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
@@ -1171,6 +1173,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'pixels_to_m': np.array([self.pixels_to_m]),
             'push_target_feature': np.zeros(shapes['push_target_feature']),
             'push_obstacle_feature': np.zeros(shapes['push_obstacle_feature']),
+            'walls': np.array([self.params['walls']['use']])
         }
 
         if not self._target_is_on_table():

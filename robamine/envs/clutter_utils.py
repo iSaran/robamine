@@ -689,10 +689,14 @@ def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, an
     finger_height = obs_dict['finger_height']
     surface_edges = obs_dict['surface_edges']
 
-    surface_distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
-                 obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
-                 obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
-                 obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+    if obs_dict['walls']:
+        surface_distances = get_distances_from_walls(obs_dict)
+    else:
+        surface_distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                             obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                             obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                             obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+
     surface_distances = np.array([x / 0.5 for x in surface_distances])
 
     target_pos = obs_dict['object_poses'][0, 0:2]
@@ -1630,7 +1634,8 @@ def get_table_point_cloud(pose, bbox, workspace, density=128, bbox_aug=0.008, pl
 
 def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0, primitive=0):
     what_i_need = ['object_poses', 'object_bounding_box', 'object_above_table', 'surface_size', 'surface_edges',
-                   'max_n_objects', 'init_distance_from_target']
+                   'max_n_objects', 'init_distance_from_target', 'walls', 'n_fixed_objects', 'fixed_object_poses',
+                   'fixed_object_bounding_box']
     state = {}
     for key in what_i_need:
         state[key] = copy.deepcopy(obs_dict[key])
@@ -1691,10 +1696,14 @@ def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0, primitive=0)
     surface_edges[:, 2] += target_pose[2]
     state['surface_edges'] = surface_edges[:, :2].copy()
 
-    distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
-                 obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
-                 obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
-                 obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+    if obs_dict['walls']:
+        distances = get_distances_from_walls(obs_dict)
+    else:
+        distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                     obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                     obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                     obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+
     state['surface_distances'] = np.array([x / 0.5 for x in distances])
 
     state['object_poses'] = poses
