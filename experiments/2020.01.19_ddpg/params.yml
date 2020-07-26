@@ -92,6 +92,7 @@ env:
     walls:
       use: False
       singulate: False  # Set false if push target and walls
+      push_after_slide: True
     terminal:
       stuck_on_wall: False  # Set true if push target and walls
     deterministic_policy: False

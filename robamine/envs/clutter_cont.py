@@ -1385,44 +1385,76 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 else:
                     self.push_stopped_ext_forces = True
 
-        elif primitive == 2 or primitive == 3:
-            if primitive == 2:
-                grasp = GraspTarget(theta=action[1],
-                                    heightmap=self.heightmap,
-                                    mask=self.mask,
-                                    finger_size=self.finger_length,
-                                    pixels_to_m=self.pixels_to_m)
-
-            if primitive == 3:
-                theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
-                phi = rescale(action[2], min=-1, max=1, range=[0, math.pi])  # hardcoded, read it from table limits
-                distance = rescale(action[3], min=-1, max=1, range=self.params['grasp']['workspace'])  # hardcoded, read it from table limits
-                grasp = GraspObstacle(theta=theta, distance=distance, phi=phi, spread=self.grasp_spread, height=self.grasp_height, target_bounding_box = self.target_bounding_box_vision, finger_radius = self.finger_length)
-
-            f1_initial_pos_world = self.target_pos_vision + grasp.get_init_pos()
-            f2_initial_pos_world = self.target_pos_vision + grasp.get_final_pos()
-
-            init_z = 2 * self.target_bounding_box[2] + 0.05
-            self.sim.data.set_joint_qpos('finger1', [f1_initial_pos_world[0], f1_initial_pos_world[1], init_z, 1, 0, 0, 0])
-            self.sim.data.set_joint_qpos('finger2', [f2_initial_pos_world[0], f2_initial_pos_world[1], init_z, 1, 0, 0, 0])
+        elif primitive == 2:
+            init_pos = self.obs_dict['object_poses'][0, 0:3]
+            init_pos[2] += self.obs_dict['object_bounding_box'][0, 2] + self.obs_dict['finger_height']
+            finger_quat = self.obs_dict['object_poses'][0][3:]
+            finger_quat = Quaternion(finger_quat[0], finger_quat[1], finger_quat[2],
+                       finger_quat[3])
+            self.sim.data.set_joint_qpos('finger1',
+                                         [init_pos[0], init_pos[1], init_pos[2] + 0.02, finger_quat.w, finger_quat.x,
+                                          finger_quat.y, finger_quat.z])
             self.sim_step()
+            # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+            self.move_joint_to_target(joint_name='finger1', target_position=[None, None, init_pos[2]],
+                                      desired_quat=finger_quat, duration=0.1)
+            distance = 0.03
+            end_pos = distance * (- init_pos / np.linalg.norm(init_pos)) + init_pos
 
-            if self.move_joints_to_target([None, None, grasp.z], [None, None, grasp.z], ext_force_policy='avoid'):
-                centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
-                f1f2_dir = (f1_initial_pos_world - f2_initial_pos_world) / np.linalg.norm(f1_initial_pos_world - f2_initial_pos_world)
-                f1f2_dir_1 = np.append(centroid[:2] + f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
-                f1f2_dir_2 = np.append(centroid[:2] - f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
-                if not self.move_joints_to_target(f1f2_dir_1, f1f2_dir_2, ext_force_policy='stop'):
-                    contacts1 = detect_contact(self.sim, 'finger1')
-                    contacts2 = detect_contact(self.sim, 'finger2')
-                    if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
-                        if primitive == 2:
-                            self.target_grasped_successfully = True
-                        if primitive == 3:
-                            self._remove_obstacle_from_table(contacts1[0])
-                            self.obstacle_grasped_successfully = True
-            else:
-                self.push_stopped_ext_forces = True
+            self.sim.model.eq_active[0] = 1
+            self.sim_step()
+            self.move_joint_to_target(joint_name='finger1', target_position=[end_pos[0], end_pos[1], None],
+                                      desired_quat=finger_quat, duration=1, stop_external_forces=True,
+                                      external_force_threshold=12)
+            self.sim.model.eq_active[0] = 0
+
+            if self.params['walls'].get('push_after_slide', True):
+                self.get_obs()
+                direction = self.obs_dict["object_poses"][0][:3].copy()
+                direction /= np.linalg.norm(direction)
+                theta = np.arctan2(direction[1], direction[0])
+                theta = min_max_scale(theta, range=[-np.pi, np.pi], target_range=[-1, 1])
+                action = np.array([0., theta, -1])
+                self.do_simulation(action)
+
+        # elif primitive == 2 or primitive == 3:
+        #     if primitive == 2:
+        #         grasp = GraspTarget(theta=action[1],
+        #                             heightmap=self.heightmap,
+        #                             mask=self.mask,
+        #                             finger_size=self.finger_length,
+        #                             pixels_to_m=self.pixels_to_m)
+        #
+        #     if primitive == 3:
+        #         theta = rescale(action[1], min=-1, max=1, range=[-math.pi, math.pi])
+        #         phi = rescale(action[2], min=-1, max=1, range=[0, math.pi])  # hardcoded, read it from table limits
+        #         distance = rescale(action[3], min=-1, max=1, range=self.params['grasp']['workspace'])  # hardcoded, read it from table limits
+        #         grasp = GraspObstacle(theta=theta, distance=distance, phi=phi, spread=self.grasp_spread, height=self.grasp_height, target_bounding_box = self.target_bounding_box_vision, finger_radius = self.finger_length)
+        #
+        #     f1_initial_pos_world = self.target_pos_vision + grasp.get_init_pos()
+        #     f2_initial_pos_world = self.target_pos_vision + grasp.get_final_pos()
+        #
+        #     init_z = 2 * self.target_bounding_box[2] + 0.05
+        #     self.sim.data.set_joint_qpos('finger1', [f1_initial_pos_world[0], f1_initial_pos_world[1], init_z, 1, 0, 0, 0])
+        #     self.sim.data.set_joint_qpos('finger2', [f2_initial_pos_world[0], f2_initial_pos_world[1], init_z, 1, 0, 0, 0])
+        #     self.sim_step()
+        #
+        #     if self.move_joints_to_target([None, None, grasp.z], [None, None, grasp.z], ext_force_policy='avoid'):
+        #         centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
+        #         f1f2_dir = (f1_initial_pos_world - f2_initial_pos_world) / np.linalg.norm(f1_initial_pos_world - f2_initial_pos_world)
+        #         f1f2_dir_1 = np.append(centroid[:2] + f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
+        #         f1f2_dir_2 = np.append(centroid[:2] - f1f2_dir[:2] * 1.1 * self.finger_height, grasp.z)
+        #         if not self.move_joints_to_target(f1f2_dir_1, f1f2_dir_2, ext_force_policy='stop'):
+        #             contacts1 = detect_contact(self.sim, 'finger1')
+        #             contacts2 = detect_contact(self.sim, 'finger2')
+        #             if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
+        #                 if primitive == 2:
+        #                     self.target_grasped_successfully = True
+        #                 if primitive == 3:
+        #                     self._remove_obstacle_from_table(contacts1[0])
+        #                     self.obstacle_grasped_successfully = True
+        #     else:
+        #         self.push_stopped_ext_forces = True
 
         else:
             raise ValueError('Clutter: Primitive ' + str(primitive) + ' does not exist.')
