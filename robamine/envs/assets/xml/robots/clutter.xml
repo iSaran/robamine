@@ -55,4 +55,7 @@
     <motor gear="0 0 0 0 1 0" joint="finger2" name="finger2_4_wrench_actuator"/>
     <motor gear="0 0 0 0 0 1" joint="finger2" name="finger2_5_wrench_actuator"/>
   </actuator>
+  <equality>
+    <weld name="slider" body1="finger1" body2="target" active="false"/>
+  </equality>
 </mujoco>

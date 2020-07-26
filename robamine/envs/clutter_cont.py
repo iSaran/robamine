@@ -328,15 +328,15 @@ class ClutterXMLGenerator(XMLGenerator):
     def get_obstacle(self, index, type='box', pos=[0.0, 0.0, 0.0], quat=[1.0, 0.0, 0.0, 0.0], rgba=[0.0, 0.0, 1.0, 1.0], size=[0.01, 0.01, 0.01]):
         return self.get_object(name='object' + str(index), type=type, pos=pos, quat=quat, rgba=rgba, size=size, mass=0.05)
 
-    def get_finger(self, index, type='sphere', rgba=[0.3, 0.3, 0.3, 1.0], size=0.005):
-        pos_ = [0.0, 0.0, 0.0]
+    def get_finger(self, index, type='sphere', rgba=[0.3, 0.3, 0.3, 1.0], size=0.005, pos=[0.0, 0.0, 0.0],
+                   quat=[1., 0., 0., 0.]):
         if type == 'sphere':
             size_ = [size, size, size]
         elif type == 'box':
             height = 0.04
             size_ = [size, size, height]
             pos_ = [0.0, 0.0, height - size]
-        return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size_, mass=0.1)
+        return self.get_object(name='finger' + str(index), type=type, rgba=rgba, size=size_, mass=0.1, pos=pos, quat=quat)
 
     def get_table(self, rgba=[0.2, 0.2, 0.2, 1.0], size=[0.25, 0.25, 0.01]):
         body = self.get_body(name='table', pos=[0.0, 0.0, -size[2]])
@@ -384,15 +384,7 @@ class ClutterXMLGenerator(XMLGenerator):
 
     def generate_random_xml(self, surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
 
-        # Setup fingers
-        # -------------
-
         finger_size = self.params['finger']['size']
-        finger = self.get_finger(1, type=self.params['finger']['type'], size=self.params['finger']['size'])
-        self.worldbody.append(finger)
-
-        finger = self.get_finger(2, type=self.params['finger']['type'], size=self.params['finger']['size'])
-        self.worldbody.append(finger)
 
         # Setup surface
         # -------------
@@ -528,6 +520,18 @@ class ClutterXMLGenerator(XMLGenerator):
             pos = [r * math.cos(theta) + target_pos[0], r * math.sin(theta) + target_pos[1], z]
             obstacle = self.get_obstacle(index=i, type=type, pos=pos, size=[x, y, z])
             self.worldbody.append(obstacle)
+
+        # Setup fingers
+        # -------------
+        finger_pos = target_pos
+        finger_pos[2] += target_height + finger_size + 0.001
+        finger = self.get_finger(1, type=self.params['finger']['type'], size=self.params['finger']['size'],
+                                 pos=finger_pos, quat=[quat.w, quat.x, quat.y, quat.z])
+        self.worldbody.append(finger)
+
+        finger = self.get_finger(2, type=self.params['finger']['type'], size=self.params['finger']['size'])
+        self.worldbody.append(finger)
+
 
         xml = ET.tostring(self.root, encoding="utf-8", method="xml").decode("utf-8")
         return xml
