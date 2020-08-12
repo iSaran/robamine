@@ -499,10 +499,11 @@ class ClutterXMLGenerator(XMLGenerator):
             obstacle_length = self.rng.uniform(self.params['obstacle']['min_bounding_box'][0], self.params['obstacle']['max_bounding_box'][0])
             obstacle_width  = self.rng.uniform(self.params['obstacle']['min_bounding_box'][1], min(obstacle_length, self.params['obstacle']['max_bounding_box'][1]))
 
+            pushable_threshold_coeff = self.params['obstacle']['pushable_threshold_coeff']
             if all_equal_height < self.params['all_equal_height_prob']:
                 obstacle_height = target_height
             else:
-                self.pushable_threshold = target_height - 0.5 * finger_size
+                self.pushable_threshold = target_height + pushable_threshold_coeff * finger_size
                 min_h = max(self.params['obstacle']['min_bounding_box'][2], self.pushable_threshold)
                 if min_h > self.params['obstacle']['max_bounding_box'][2]:
                     obstacle_height = self.params['obstacle']['max_bounding_box'][2]
