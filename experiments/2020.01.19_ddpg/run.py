@@ -319,11 +319,19 @@ def check_transition(params):
 
     # Load autoencoder
     # import robamine.algo.conv_vae as ae
-    # with open('/home/iason/robamine_logs/2020.01.16.split_ddpg/VAE/model.pkl', 'rb') as file:
-    #     model = pickle.load(file)
+    # # Load autoencoder and scaler
+    # vae_path = '/home/iason/robamine_logs/2020.01.16.split_ddpg/VAE'
+    # ae_path = os.path.join(vae_path, 'model.pkl')
+    # normalizer_path = os.path.join(vae_path, 'normalizer.pkl')
+    # with open(ae_path, 'rb') as file1:
+    #     model = torch.load(file1, map_location='cpu')
     # latent_dim = model['encoder.fc.weight'].shape[0]
-    # vae = ae.ConvVae(latent_dim)
-    # vae.load_state_dict(model)
+    # ae_params = ae.params
+    # ae_params['device'] = 'cpu'
+    # autoencoder = ae.ConvVae(latent_dim, ae_params)
+    # autoencoder.load_state_dict(model)
+    # with open(normalizer_path, 'rb') as file2:
+    #     normalizer = pickle.load(file2)
 
     params['env']['params']['render'] = True
     params['env']['params']['safe'] = False
@@ -357,7 +365,8 @@ def check_transition(params):
         obs = env.reset(seed=seed)
         # RealState(obs, spherical=True)
         # plot_point_cloud_of_scene(obs)
-        # get_asymmetric_actor_feature_from_dict(obs, vae, None, angle=0, plot=True)
+        # clutter.get_asymmetric_actor_feature_from_dict(obs, autoencoder, normalizer, angle=0, plot=True)
+        # reconstruction = autoencoder(obs).detach().cpu().numpy()[0, 0, :, :]
 
         while True:
             action = rng.uniform(-1, 1, 4)
