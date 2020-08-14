@@ -358,7 +358,7 @@ class NetworkModel(Agent):
             dataset = Dataset.from_array(data_x, data_y)
 
         # Split to train and test datasets
-        self.train_dataset, self.test_dataset = dataset.split(0.7)
+        self.train_dataset, self.test_dataset = dataset.split(0.9)
 
     def predict(self, state):
         # ndim == 1 is assumed to mean 1 sample (not multiple samples of 1 feature)
@@ -587,6 +587,8 @@ class SupervisedTrainWorld(World):
         self.reset()
         self.set_state(WorldState.RUNNING)
         for i in range(self.epochs):
+            print('[SupervisedTrainWorld] Training epoch: ', i, 'of', self.epochs)
+            print('[SupervisedTrainWorld] Logging in: ', self.log_dir)
             self.agent.learn()
 
             if self.stop_running:
