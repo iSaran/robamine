@@ -647,7 +647,9 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
     # torch.cuda.synchronize()
     # print('cuda time', start.elapsed_time(end))
     # print('time:', time.time() - start)
-    normalized_latent = normalizer.transform(latent.detach().cpu().numpy())
+    normalized_latent = latent.detach().cpu().numpy()
+    if normalizer is not None:
+        normalized_latent = normalizer.transform(latent.detach().cpu().numpy())
 
     # surface_edges_ = surface_edges - target_pos
     # rot_2d = np.array([[cos(angle), -sin(angle)],
@@ -1992,5 +1994,3 @@ class ObstacleAvoidanceLoss(nn.Module):
         mycmap = plt.get_cmap('winter')
         surf1 = axs.plot_surface(x_, y_, z, cmap=mycmap)
         fig.colorbar(surf1, ax=axs, shrink=0.5, aspect=5)
-
-
