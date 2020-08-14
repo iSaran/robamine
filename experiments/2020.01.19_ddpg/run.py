@@ -99,7 +99,7 @@ def analyze_multiple_eval_envs(dir_, results_dir):
     analyze_multiple_evals(exps, results_dir, env_name='Env-ICRA')
 
     exps = [
-        {'name': 'Random-Cont', 'path': '../ral-results/env-hard/random-cont', 'action_discrete': False},
+        {'name': 'Random', 'path': '../ral-results/env-hard/random-cont', 'action_discrete': False},
         {'name': 'SplitAC-scr', 'path': '../ral-results/env-hard/splitac-scratch', 'action_discrete': False},
         {'name': 'SplitDQN', 'path': '../ral-results/env-hard/splitdqn', 'action_discrete': True},
         {'name': 'Push-Target', 'path': '../ral-results/env-hard/splitac-modular/push-target', 'action_discrete': False},
@@ -109,11 +109,19 @@ def analyze_multiple_eval_envs(dir_, results_dir):
         exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
     analyze_multiple_evals(exps, results_dir, env_name='Env-Hard')
 
-    exps = [{'name': 'Random-Cont', 'path': '../ral-results/env-very-hard/random-cont', 'action_discrete': False},
-            {'name': 'Push-Target', 'path': '../ral-results/env-very-hard/splitac-modular/push-target', 'action_discrete': False}]
+    exps = [{'name': 'Random', 'path': '../ral-results/env-very-hard/random-cont', 'action_discrete': False},
+            {'name': 'SplitAC-scr', 'path': '../ral-results/env-very-hard/splitac-scratch', 'action_discrete': False},
+            {'name': 'Push-Target', 'path': '../ral-results/env-very-hard/splitac-modular/push-target', 'action_discrete': False},
+            {'name': 'Push-Target-visual', 'path': '../ral-results/env-very-hard/splitac-modular/push-target-visual',
+             'action_discrete': False}]
     for i in range(len(exps)):
         exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
     analyze_multiple_evals(exps, results_dir, env_name='Env-very-hard')
+
+    exps = [{'name': 'Random', 'path': '../ral-results/env-walls/random', 'action_discrete': False}]
+    for i in range(len(exps)):
+        exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
+    analyze_multiple_evals(exps, results_dir, env_name='Env-walls')
 
 def analyze_multiple_evals(exps, results_dir, env_name='Metric'):
     names, dirs = [], []
@@ -140,6 +148,7 @@ def analyze_multiple_evals(exps, results_dir, env_name='Metric'):
                'Deterministic Collision terminals %',
                'Flips terminals %',
                'Empty terminals %',
+               'Invalid Env before termination %',
                'Mean reward per step',
                'Mean actions for singulation',
                'Push target used %',
@@ -147,7 +156,7 @@ def analyze_multiple_evals(exps, results_dir, env_name='Metric'):
                'Extra primitive used %',
                'Model trained for (timesteps)']
 
-    percentage = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14]
+    percentage = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16]
 
     data = [None] * len(names)
     columns = [None] * len(names)
@@ -217,6 +226,7 @@ def analyze_eval_in_scenes(dir, action_discrete=False):
     push_target_used = 0
     push_obstacle_used = 0
     extra_primitive_used = 0
+    invalid_env_before_termination = 0
 
     under = [5, 10, 15, 20]
     singulation_under = OrderedDict()
@@ -246,6 +256,9 @@ def analyze_eval_in_scenes(dir, action_discrete=False):
                 flips += 1
             elif data[i][-1].transition.info['termination_reason'] == 'empty':
                 empties += 1
+            elif data[i][-1].transition.info['termination_reason'] == '':
+                episodes_terminated -= 1
+                invalid_env_before_termination += 1
             else:
                 raise Exception(data[i][-1].transition.info['termination_reason'])
 
@@ -295,6 +308,7 @@ def analyze_eval_in_scenes(dir, action_discrete=False):
                (deterministic_collision_terminals / episodes),
                (flips / episodes),
                (empties / episodes),
+               (invalid_env_before_termination / episodes),
                np.mean(rewards),
                np.mean(steps_singulations),
                push_target_used / timesteps,
