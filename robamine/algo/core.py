@@ -318,17 +318,34 @@ class NetworkModel(Agent):
         self.train_dataset = Dataset()
         self.test_dataset = Dataset()
 
+        if isinstance(self.scaler, str):
+            scaler_x = self.scaler
+            scaler_y = self.scaler
+        else:
+            assert isinstance(self.scaler, list) and len(self.scaler) == 2, \
+                'If you do not provide a string, provide a list w/ len 2, for desired scalers of x and y.'
+            scaler_x = self.scaler[0]
+            scaler_y = self.scaler[1]
+
         # Set up scalers
-        if self.scaler == 'min_max':
+        if scaler_x == 'min_max':
             self.range = [-1, 1]
             self.scaler_x = MinMaxScaler(feature_range=self.range)
-            self.scaler_y = MinMaxScaler(feature_range=self.range)
-        elif self.scaler == 'standard':
+        elif scaler_x == 'standard':
             self.range = [-1, 1]
             self.scaler_x = StandardScaler()
-            self.scaler_y = StandardScaler()
-        elif self.scaler is None:
+        elif scaler_x is None:
             self.scaler_x = None
+        else:
+            raise ValueError(self.name + ': Select scaler between: None, min_max, standard.')
+
+        if scaler_y == 'min_max':
+            self.range = [-1, 1]
+            self.scaler_y = MinMaxScaler(feature_range=self.range)
+        elif scaler_y == 'standard':
+            self.range = [-1, 1]
+            self.scaler_y = StandardScaler()
+        elif scaler_y is None:
             self.scaler_y = None
         else:
             raise ValueError(self.name + ': Select scaler between: None, min_max, standard.')
@@ -351,10 +368,12 @@ class NetworkModel(Agent):
                 del dataset[i]
 
         # Rescale
-        if self.scaler:
+        if self.scaler_x or self.scaler_y:
             data_x, data_y = dataset.to_array()
-            data_x = self.scaler_x.fit_transform(data_x)
-            data_y = self.scaler_y.fit_transform(data_y)
+            if self.scaler_x:
+                data_x = self.scaler_x.fit_transform(data_x)
+            if self.scaler_y:
+                data_y = self.scaler_y.fit_transform(data_y)
             dataset = Dataset.from_array(data_x, data_y)
 
         # Split to train and test datasets
@@ -367,13 +386,13 @@ class NetworkModel(Agent):
         else:
             state_ = state
 
-        if self.scaler:
+        if self.scaler_x:
             inputs = self.scaler_x.transform(state_)
         else:
             inputs = state_.copy()
         s = torch.FloatTensor(inputs).to(self.device)
         prediction = self.network(s).cpu().detach().numpy()
-        if self.scaler:
+        if self.scaler_y:
             prediction = self.scaler_y.inverse_transform(prediction)[0]
 
         return prediction
