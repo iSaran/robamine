@@ -311,6 +311,8 @@ class NetworkModel(Agent):
             self.loss = nn.MSELoss()
         elif self.params['loss'] == 'huber':
             self.loss = nn.SmoothL1Loss()
+        elif self.params['loss'] == 'custom':
+            pass
         else:
             raise ValueError('DynamicsModel: Loss should be mse or huber')
 
