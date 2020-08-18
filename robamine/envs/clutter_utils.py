@@ -599,7 +599,9 @@ class RealState(Feature):
 
 
 def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0, primitive=0, plot=False,
-                             maskout_target=False, crop_area=[128, 128], pooling=True):
+                             maskout_target=False, crop_area=[128, 128], pooling=True, singulation_distance=0.03,
+                             pixels_to_m=0.0012):
+    heightmap_ = heightmap.copy()
     """Angle in deg"""
     # Calculate fused visual feature
     thresholded = np.zeros(heightmap.shape)
@@ -607,12 +609,21 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
         threshold = 0  # assuming that the env doesnt spawn flat
     elif primitive == 1:
         threshold = 2 * target_bounding_box_z + 1.1 * finger_height
+        masks = np.argwhere(mask == 255)
+        center = np.ones((masks.shape[0], 2))
+        center[:, 0] *= mask.shape[0] / 2
+        center[:, 1] *= mask.shape[1] / 2
+        max_dist = np.max(np.linalg.norm(masks - center, axis=1))
+        singulation_distance_in_pxl = int(np.ceil(singulation_distance / pixels_to_m)) + max_dist
+        circle_mask = cv_tools.get_circle_mask(heightmap.shape[0], heightmap.shape[1],
+                                               singulation_distance_in_pxl, inverse=True)
+        heightmap_ = cv_tools.Feature(heightmap_).mask_out(circle_mask).array()
     else:
         raise ValueError()
 
     if threshold < 0:
         threshold = 0
-    thresholded[heightmap > threshold] = 1
+    thresholded[heightmap_ > threshold] = 1
     thresholded[mask > 0] = 0.5
     visual_feature = cv_tools.Feature(thresholded)
     if maskout_target:
