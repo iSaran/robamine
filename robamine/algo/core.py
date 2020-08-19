@@ -303,9 +303,12 @@ class NetworkModel(Agent):
         self.device = self.params.get('device', 'cpu')
         self.scaler = self.params.get('scaler', 'standard')
 
+        weight_decay = self.params.get('weight_decay', 0)
+
         # Create the networks, optimizers and loss
         self.optimizer = optim.Adam(self.network.parameters(),
-                                    lr=self.params['learning_rate'])
+                                    lr=self.params['learning_rate'],
+                                    weight_decay=weight_decay)
 
         if self.params['loss'] == 'mse':
             self.loss = nn.MSELoss()
