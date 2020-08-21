@@ -1449,9 +1449,9 @@ class Actor(core.NetworkModel):
     def predict(self, state):
         prediction = super(Actor, self).predict(state)
         prediction = float(prediction)
-        prediction += int(np.ceil((np.abs(prediction) - np.pi) / (2 * np.pi))) * 2 * np.pi
+        prediction -= np.sign(prediction) * np.int(np.ceil((np.abs(prediction) - np.pi) / (2 * np.pi))) * 2 * np.pi
         prediction = min_max_scale(prediction, range=[-np.pi, np.pi], target_range=[-1, 1])
-        return prediction
+        return np.array([prediction])
 
 
 class PushObstacleSupervisedExp:
@@ -1711,7 +1711,7 @@ class PushObstacleSupervisedExp:
 
                     if self.actor_path is not None:
                         latent = data[0][test_samples[indeces[i, j]]]
-                        angle_rad = actor.predict(latent)
+                        angle_rad = actor.predict(latent)[0]
                         angle_rad = min_max_scale(angle_rad, [-1, 1], [-np.pi, np.pi])
                         x = length * np.cos(- angle_rad)
                         y = length * np.sin(- angle_rad)
@@ -1737,7 +1737,7 @@ class PushObstacleSupervisedExp:
 
                     if self.actor_path is not None:
                         latent = data[0][train_samples[indeces[i, j]]]
-                        angle_rad = actor.predict(latent)
+                        angle_rad = actor.predict(latent)[0]
                         angle_rad = min_max_scale(angle_rad, [-1, 1], [-np.pi, np.pi])
                         x = length * np.cos(- angle_rad)
                         y = length * np.sin(- angle_rad)
@@ -1769,7 +1769,7 @@ class PushObstacleSupervisedExp:
                 feature = push_obstacle_feature(obs, angle=0)
                 action = rng.uniform(-1, 1, 4)
                 action[0] = 1
-                angle = actor_model.predict(feature)
+                angle = actor_model.predict(feature)[0]
                 # print('angle predicted', angle)
                 # angle += int(np.ceil((np.abs(angle) - np.pi) / (2 * np.pi))) * 2 * np.pi
                 # print('angle predicted transformed', angle)
@@ -1817,7 +1817,7 @@ class PushObstacleSupervisedExp:
                 if random_policy:
                     angle = rng.uniform(-1, 1)
                 else:
-                    angle = actor_model.predict(feature)
+                    angle = actor_model.predict(feature)[0]
 
                 # angle += int(np.ceil((np.abs(angle) - np.pi) / (2 * np.pi))) * 2 * np.pi
                 # angle = min_max_scale(angle, range=[-np.pi, np.pi], target_range=[-1, 1])
@@ -1840,8 +1840,315 @@ class PushObstacleSupervisedExp:
             if samples >= n_scenes:
                 break
 
+# --------------------------------------------
+# Combo experiment Push Target + Push Obstacle
+# --------------------------------------------
 
-        self.params['env']['params']['render'] = True
+import robamine.algo.splitddpg as ddpg
+import robamine.algo.util as algo_util
+from robamine.utils.memory import ReplayBuffer
+import robamine.algo.conv_vae as conv_ae
+
+
+class QNetwork(nn.Module):
+    def __init__(self, state_dim, action_dim, hidden_units):
+        super(QNetwork, self).__init__()
+
+        self.hidden_layers = nn.ModuleList()
+        self.hidden_layers.append(nn.Linear(state_dim, hidden_units[0]))
+        i = 0
+        for i in range(1, len(hidden_units)):
+            self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
+
+        self.out = nn.Linear(hidden_units[i], action_dim)
+
+    def forward(self, x):
+        for layer in self.hidden_layers:
+            x = layer(x)
+            x = nn.functional.relu(x)
+        action_prob = self.out(x)
+        return action_prob
+
+class PyTorchModuleWrapper:
+    def __init__(self, nn, device='cpu'):
+        self.nn = nn
+        self.device = device
+
+    def predict(self, state):
+        state_ = torch.FloatTensor(state).to(self.device)
+        return self.nn(state_).detach().cpu().detach().numpy()
+
+class ComboFeature:
+    def __init__(self, ae, scaler):
+        self.ae = ae
+        self.scaler = scaler
+
+    def __call__(self, state, angle=0):
+        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, self.scaler, angle, primitive=0)
+        state_2 = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, None, angle, primitive=1)
+        return np.append(state_, state_2)
+
+
+
+class DQNCombo(core.RLAgent):
+    def __init__(self, params, ae, scaler, push_target_actor, push_obstacle_actor):
+        self.state_dim = clutter.get_observation_dim(-1)
+        action_dim = 2
+        super().__init__(self.state_dim, action_dim, 'DQN', params)
+        state_dim = 2 * (conv_ae.LATENT_DIM + 4)  # TODO: hardcoded the extra dim for surface edges
+
+        self.device = self.params['device']
+
+        self.network, self.target_network = QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device), \
+                                            QNetwork(state_dim, action_dim, self.params['hidden_units']).to(self.device)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=self.params['learning_rate'])
+        self.loss = nn.MSELoss()
+        self.replay_buffer = ReplayBuffer(self.params['replay_buffer_size'])
+        self.learn_step_counter = 0
+
+        self.rng = np.random.RandomState()
+
+        self.info['qnet_loss'] = 0
+        self.epsilon = self.params['epsilon_start']
+        self.info['epsilon'] = self.epsilon
+
+        self.ae = ae
+        self.scaler = scaler
+
+        self.policy = []
+        with open(push_target_actor, 'rb') as file:
+            pretrained_splitddpg = pickle.load(file)
+            actor = ddpg.Actor(int(state_dim / 2), pretrained_splitddpg['action_dim'][0], [400, 300])
+            actor.load_state_dict(pretrained_splitddpg['actor'][0])
+            self.policy.append(PyTorchModuleWrapper(actor, device=self.device))
+        self.policy.append(push_obstacle_actor)
+
+        self.combo_feature = ComboFeature(self.ae, self.scaler)
+
+    def predict(self, state):
+        state_ = self.combo_feature(state)
+        s = torch.FloatTensor(state_).to(self.device)
+        values = self.network(s).cpu().detach().numpy()
+        primitive = np.argmax(values)
+        if primitive == 1:
+            scaler_ = None
+        else:
+            scaler_ = self.scaler
+        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, scaler_, 0, primitive=primitive)
+        action = self.policy[primitive].predict(state_)
+        print('PREDICT: primitive', primitive, action)
+        return np.insert(action, 0, primitive)
+
+    def explore(self, state):
+        self.epsilon = self.params['epsilon_end'] + \
+                       (self.params['epsilon_start'] - self.params['epsilon_end']) * \
+                       math.exp(-1 * self.learn_step_counter / self.params['epsilon_decay'])
+        if self.rng.uniform(0, 1) >= self.epsilon:
+            return self.predict(state)
+        primitive = self.rng.randint(0, self.action_dim)
+
+
+        if primitive == 1:
+            scaler_ = None
+        else:
+            scaler_ = self.scaler
+        state_ = clutter.get_asymmetric_actor_feature_from_dict(state, self.ae, scaler_, 0, primitive=primitive)
+        action = self.policy[primitive].predict(state_)
+        print('EXPLORE: primitive', primitive, action)
+        return np.insert(action, 0, primitive)
+
+    def learn(self, transition):
+        self.info['qnet_loss'] = 0
+
+        transitions = self._transitions(transition)
+        for t in transitions:
+            self.replay_buffer.store(t)
+
+        # If we have not enough samples just keep storing transitions to the
+        # buffer and thus exit.
+        if self.replay_buffer.size() < self.params['batch_size']:
+            return
+
+        # Update target network if necessary
+        # if self.learn_step_counter > self.params['target_net_updates']:
+        #     self.target_network.load_state_dict(self.network.state_dict())
+        #     self.learn_step_counter = 0
+
+        new_target_params = {}
+        for key in self.target_network.state_dict():
+            new_target_params[key] = self.params['tau'] * self.target_network.state_dict()[key] + (
+                    1 - self.params['tau']) * self.network.state_dict()[key]
+        self.target_network.load_state_dict(new_target_params)
+
+        # Sample from replay buffer
+        batch = self.replay_buffer.sample_batch(self.params['batch_size'])
+        batch.terminal = np.array(batch.terminal.reshape((batch.terminal.shape[0], 1)))
+        batch.reward = np.array(batch.reward.reshape((batch.reward.shape[0], 1)))
+        batch.action = np.array(batch.action.reshape((batch.action.shape[0], 1)))
+
+        state = torch.FloatTensor(batch.state).to(self.device)
+        action = torch.LongTensor(batch.action.astype(int)).to(self.device)
+        next_state = torch.FloatTensor(batch.next_state).to(self.device)
+        terminal = torch.FloatTensor(batch.terminal).to(self.device)
+        reward = torch.FloatTensor(batch.reward).to(self.device)
+
+        if self.params['double_dqn']:
+            best_action = self.network(next_state).max(1)[1]  # action selection
+            q_next = self.target_network(next_state).gather(1, best_action.view(self.params['batch_size'],
+                                                                                1))  # action evaluation
+        else:
+            q_next = self.target_network(next_state).max(1)[0].view(self.params['batch_size'], 1)
+
+        q_target = reward + (1 - terminal) * self.params['discount'] * q_next
+        q = self.network(state).gather(1, action)
+        loss = self.loss(q, q_target)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        self.learn_step_counter += 1
+        self.info['qnet_loss'] = loss.detach().cpu().numpy().copy()
+        self.info['epsilon'] = self.epsilon
+
+    @classmethod
+    def load(cls, file_path):
+        model = pickle.load(open(file_path, 'rb'))
+        params = model['params']
+        self = cls(model['state_dim'], model['action_dim'], params)
+        self.load_trainable(model)
+        self.learn_step_counter = model['learn_step_counter']
+        logger.info('Agent loaded from %s', file_path)
+        return self
+
+    def load_trainable(self, input):
+        if isinstance(input, dict):
+            trainable = input
+            logger.warn('Trainable parameters loaded from dictionary.')
+        elif isinstance(input, str):
+            trainable = pickle.load(open(input, 'rb'))
+            logger.warn('Trainable parameters loaded from: ' + input)
+        else:
+            raise ValueError('Dict or string is valid')
+
+        self.network.load_state_dict(trainable['network'])
+        self.target_network.load_state_dict(trainable['target_network'])
+
+    def save(self, file_path):
+        model = {}
+        model['params'] = self.params
+        model['network'] = self.network.state_dict()
+        model['target_network'] = self.target_network.state_dict()
+        model['learn_step_counter'] = self.learn_step_counter
+        model['state_dim'] = self.state_dim
+        model['action_dim'] = self.action_dim
+        pickle.dump(model, open(file_path, 'wb'))
+
+    def q_value(self, state, action):
+        return 0.0
+        state_ = self.combo_feature(state)
+        s = torch.FloatTensor(state_).to(self.device)
+        return self.network(s).cpu().detach().numpy()[int(action[0])]
+
+    def seed(self, seed):
+        self.replay_buffer.seed(seed)
+        self.rng.seed(seed)
+
+    def _transitions(self, transition):
+        transitions = []
+        heightmap_rotations = self.params.get('heightmap_rotations', 1)
+
+        # Create rotated states if needed
+        angle = np.linspace(0, 2 * np.pi, heightmap_rotations, endpoint=False)
+        for j in range(heightmap_rotations):
+            transition.state['init_distance_from_target'] = transition.next_state['init_distance_from_target']
+            state = self.combo_feature(transition.state, angle=angle[j])
+            next_state = self.combo_feature(transition.next_state, angle=angle[j])
+
+            # Rotate action
+            # actions are btn -1, 1. Change the 1st action which is the angle w.r.t. the target:
+            angle_pi = angle[j]
+            if angle[j] > np.pi:
+                angle_pi -= 2 * np.pi
+            angle_pi = min_max_scale(angle_pi, range=[-np.pi, np.pi], target_range=[-1, 1])
+            act = transition.action.copy()
+            if len(act) > 1:
+                act[1] += angle_pi
+                if act[1] > 1:
+                    act[1] = -1 + abs(1 - act[1])
+                elif act[1] < -1:
+                    act[1] = 1 - abs(-1 - act[1])
+
+            # statee = {}
+            # statee['real_state'] = copy.deepcopy(real_state)
+            # statee['point_cloud'] = copy.deepcopy(point_cloud)
+            # next_statee = {}
+            # next_statee['real_state'] = copy.deepcopy(real_state_next)
+            # next_statee['point_cloud'] = copy.deepcopy(point_cloud_next)
+            tran = algo_util.Transition(state=copy.deepcopy(state),
+                              action=transition.action[0],
+                              reward=transition.reward,
+                              next_state=copy.deepcopy(next_state),
+                              terminal=transition.terminal)
+            transitions.append(tran)
+        return transitions
+
+
+class ComboExp:
+    def __init__(self, params, push_target_actor_path, push_obstacle_actor_path, vae_path, seed=0):
+        self.params = copy.deepcopy(params)
+        self.seed = seed
+
+        self.params['env']['params']['render'] = False
+        self.params['env']['params']['target']['max_bounding_box'][2] = 0.01
+        self.params['env']['params']['hardcoded_primitive'] = -1
+
+        push_target_actor = push_target_actor_path
+        push_obstacle_actor = Actor.load(push_obstacle_actor_path)
+
+        # Load autoencoder and scaler
+        ae_path = os.path.join(vae_path, 'model.pkl')
+        normalizer_path = os.path.join(vae_path, 'normalizer.pkl')
+        with open(ae_path, 'rb') as file1:
+            model = torch.load(file1, map_location='cpu')
+        latent_dim = model['encoder.fc.weight'].shape[0]
+        ae_params = ae.params
+        ae_params['device'] = 'cpu'
+        self.autoencoder = ae.ConvVae(latent_dim, ae_params)
+        self.autoencoder.load_state_dict(model)
+        with open(normalizer_path, 'rb') as file2:
+            self.normalizer = pickle.load(file2)
+
+        dqn_params = {'hidden_units': [200, 200],
+                      'learning_rate': 1e-3,
+                      'replay_buffer_size': 1000000,
+                      'epsilon_start': 0.9,
+                      'epsilon_end': 0.05,
+                      'epsilon_decay': 10000,
+                      'device': 'cpu',
+                      'heightmap_rotations': 1,
+                      'batch_size': 32,
+                      'tau': 0.001,
+                      'double_dqn': True,
+                      'discount': 0.99
+                     }
+
+        self.agent = DQNCombo(params=dqn_params, ae=self.autoencoder, scaler=self.normalizer,
+                            push_target_actor=push_target_actor, push_obstacle_actor=push_obstacle_actor)
+
+    def train_eval(self, episodes=10000, eval_episodes=20, eval_every=100, save_every=100):
+        rb_logging.init(directory=self.params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
+
+
+        trainer = TrainEvalWorld(agent=self.agent, env=self.params['env'],
+                                 params={'episodes': episodes,
+                                         'eval_episodes': eval_episodes,
+                                         'eval_every': eval_every,
+                                         'eval_render': False,
+                                         'save_every': save_every})
+        trainer.seed(self.seed)
+        trainer.run()
+        print('Logging dir:', trainer.log_dir)
 
 if __name__ == '__main__':
     pid = os.getpid()
@@ -1928,14 +2235,14 @@ if __name__ == '__main__':
 
     # Push Obstacle Supervised Training
     # ---------------------------------
-
-    # exp = PushObstacleSupervisedExp(params=params,
-    #                                 log_dir=os.path.join(logging_dir, 'push_obstacle_supervised'),
-    #                                 vae_path=os.path.join(logging_dir, 'VAE'),
-    #                                 actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor0/model_40.pkl'),
-    #                                 seed=1,
-    #                                 file_type='pkl',
-    #                                 partial_dataset=None)
+    #
+    exp = PushObstacleSupervisedExp(params=params,
+                                    log_dir=os.path.join(logging_dir, 'push_obstacle_supervised'),
+                                    vae_path=os.path.join(logging_dir, 'VAE'),
+                                    actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
+                                    seed=1,
+                                    file_type='pkl',
+                                    partial_dataset=None)
     # exp.collect_samples(n_samples=5000)
     # exp.create_dataset(rotations=1)
     # exp.merge_datasets(seeds=[0, 1, 2, 3])
@@ -1955,3 +2262,13 @@ if __name__ == '__main__':
     # exp.visual_evaluation()
     # exp.eval_in_scenes(n_scenes=1000, random_policy=False)
 
+
+    # Combo push target push obstacle
+    # ---------------------------------
+
+    exp = ComboExp(params=params,
+                   push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
+                   push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
+                   vae_path=os.path.join(logging_dir, 'VAE'),
+                   seed=0)
+    exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
