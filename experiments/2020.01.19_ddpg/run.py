@@ -2240,11 +2240,11 @@ if __name__ == '__main__':
                                     log_dir=os.path.join(logging_dir, 'push_obstacle_supervised'),
                                     vae_path=os.path.join(logging_dir, 'VAE'),
                                     actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
-                                    seed=1,
+                                    seed=2,
                                     file_type='pkl',
                                     partial_dataset=None)
-    # exp.collect_samples(n_samples=5000)
-    # exp.create_dataset(rotations=1)
+    exp.collect_samples(n_samples=5000)
+    exp.create_dataset(rotations=1)
     # exp.merge_datasets(seeds=[0, 1, 2, 3])
     # exp.scale_outputs()
     # exp.train(hyperparams={'device': 'cpu',
@@ -2266,9 +2266,9 @@ if __name__ == '__main__':
     # Combo push target push obstacle
     # ---------------------------------
 
-    exp = ComboExp(params=params,
-                   push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
-                   push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
-                   vae_path=os.path.join(logging_dir, 'VAE'),
-                   seed=0)
-    exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
+    # exp = ComboExp(params=params,
+    #                push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
+    #                push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
+    #                vae_path=os.path.join(logging_dir, 'VAE'),
+    #                seed=0)
+    # exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
