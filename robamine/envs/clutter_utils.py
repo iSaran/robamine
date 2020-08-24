@@ -833,6 +833,27 @@ def push_obstacle_feature_includes_affordances(obs_dict):
         return False
     return True
 
+def slide_is_eligible(obs_dict):
+    distances = get_distances_from_walls(obs_dict)
+    if np.min(distances) < 0.03:
+        return True
+    return False
+
+def get_valid_primitives(obs_dict, n_primitives=3):
+    valid_primitives = np.zeros(n_primitives, dtype=np.bool)
+
+    valid_primitives[0] = True
+
+    if push_obstacle_feature_includes_affordances(obs_dict):
+        valid_primitives[1] = True
+
+
+    if n_primitives >=3:
+        if slide_is_eligible(obs_dict):
+            valid_primitives[2] = True
+
+    return valid_primitives, np.argwhere(valid_primitives == True).flatten()
+
 
 class PrimitiveFeature:
     def __init__(self, heightmap, mask, angle=0, name=None):
