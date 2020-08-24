@@ -360,6 +360,24 @@ class Quaternion:
     def __str__(self):
         return str(self.w) + " + " + str(self.x) + "i +" + str(self.y) + "j + " + str(self.z)  + "k"
 
+    def rot_x(self, theta):
+        mat = self.rotation_matrix()
+        mat =  np.matmul(mat, rot_x(theta))
+        new = Quaternion.from_rotation_matrix(mat)
+        self.w = new.w
+        self.x = new.x
+        self.y = new.y
+        self.z = new.z
+
+    def rot_y(self, theta):
+        mat = self.rotation_matrix()
+        mat =  np.matmul(mat, rot_x(theta))
+        new = Quaternion.from_rotation_matrix(mat)
+        self.w = new.w
+        self.x = new.x
+        self.y = new.y
+        self.z = new.z
+
     def rot_z(self, theta):
         mat = self.rotation_matrix()
         mat =  np.matmul(mat, rot_z(theta))
