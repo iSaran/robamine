@@ -31,7 +31,7 @@ from robamine.envs.clutter_utils import (TargetObjectConvexHull, get_action_dim,
                                          PushTargetDepthObjectAvoidance, PushObstacle, SingulationCondition,
                                          PushObstacleICRA, PushTargetICRA, PushExtraICRA,
                                          detect_singulation_from_real_state, detect_empty_action_from_real_state,
-                                         detect_target_stuck_on_wall)
+                                         detect_target_stuck_on_wall, get_asymmetric_actor_feature_from_dict)
 
 from robamine.algo.core import InvalidEnvError
 
@@ -48,6 +48,9 @@ from robamine.utils.cv_tools import Feature
 
 import torch
 import copy
+import pickle
+
+import robamine.algo.conv_vae as ae
 
 INFO = True
 DEBUG = False
@@ -552,6 +555,19 @@ class ClutterContWrapper(gym.Env):
         self.rng = np.random.RandomState()
         self.seed = None
 
+        # Load autoencoder and scaler
+        ae_path = os.path.join(self.params['vae_path'], 'model.pkl')
+        normalizer_path = os.path.join(self.params['vae_path'], 'normalizer.pkl')
+        with open(ae_path, 'rb') as file1:
+            model = torch.load(file1, map_location='cpu')
+        latent_dim = model['encoder.fc.weight'].shape[0]
+        ae_params = ae.params
+        ae_params['device'] = 'cpu'
+        self.autoencoder = ae.ConvVae(latent_dim, ae_params)
+        self.autoencoder.load_state_dict(model)
+        with open(normalizer_path, 'rb') as file2:
+            self.autoencoder_scaler = pickle.load(file2)
+
     def reset(self, seed=None):
         if self.env is not None:
             del self.env
@@ -562,7 +578,7 @@ class ClutterContWrapper(gym.Env):
             reset_not_valid = True
             while reset_not_valid:
                 reset_not_valid = False
-                self.env = self.env_type(params=self.params)
+                self.env = self.env_type(params=self.params, autoencoder=self.autoencoder, autoencoder_scaler=self.autoencoder_scaler)
                 try:
                     obs = self.env.reset()
                 except InvalidEnvError as e:
@@ -574,7 +590,8 @@ class ClutterContWrapper(gym.Env):
 
                     reset_not_valid = True
         else:
-            self.env = self.env_type(params=self.params)
+            self.env = self.env_type(params=self.params, autoencoder=self.autoencoder,
+                                     autoencoder_scaler=self.autoencoder_scaler)
             obs = self.env.reset()
 
         self.last_reset_state_dict = self.env.state_dict()
@@ -617,7 +634,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     """
     The class for the Gym environment.
     """
-    def __init__(self, params):
+    def __init__(self, params, autoencoder, autoencoder_scaler):
         self.params = params
         self.log_dir = self.params.get('log_dir', '/tmp')
         path = os.path.join(os.path.dirname(__file__), "assets/xml/robots/clutter.xml")
@@ -740,6 +757,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.raw_depth = None
         self.centroid_pxl = None
         self.singulation_condition = None
+
+        self.autoencoder = autoencoder
+        self.autoencoder_scaler = autoencoder_scaler
 
     def __del__(self):
         if self.viewer is not None:
@@ -1083,7 +1103,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'raw_depth': (480, 640),
                 'centroid_pxl': (2,),
                 'point_cloud': (10000, 3),
-                'pixels_to_m': (1,)}
+                'pixels_to_m': (1,),
+                'push_target_feature': (ae.LATENT_DIM + 4,),
+                'push_obstacle_feature': (ae.LATENT_DIM + 4,)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
@@ -1143,6 +1165,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'centroid_pxl': np.zeros(shapes['centroid_pxl']),
             'point_cloud': np.zeros(shapes['point_cloud']),
             'pixels_to_m': np.array([self.pixels_to_m]),
+            'push_target_feature': np.zeros(shapes['push_target_feature']),
+            'push_obstacle_feature': np.zeros(shapes['push_obstacle_feature']),
         }
 
         if not self._target_is_on_table():
@@ -1160,6 +1184,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         obs_dict['raw_depth'] = self.raw_depth
         obs_dict['centroid_pxl'] = self.centroid_pxl
         obs_dict['point_cloud'] = self.point_cloud.points
+
+        obs_dict['push_target_feature'] = get_asymmetric_actor_feature_from_dict(obs_dict, self.autoencoder,
+                                                                                 self.autoencoder_scaler, angle=0,
+                                                                                 primitive=0)
+        obs_dict['push_obstacle_feature'] = get_asymmetric_actor_feature_from_dict(obs_dict, self.autoencoder, None,
+                                                                                   angle=0,
+                                                                                   primitive=1)
 
         assert set(obs_dict.keys()) == set(shapes.keys())
 
