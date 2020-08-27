@@ -689,13 +689,10 @@ def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, an
     finger_height = obs_dict['finger_height']
     surface_edges = obs_dict['surface_edges']
 
-    if obs_dict['walls']:
-        surface_distances = get_distances_from_walls(obs_dict)
-    else:
-        surface_distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
-                             obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
-                             obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
-                             obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+    surface_distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                         obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                         obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                         obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
 
     surface_distances = np.array([x / 0.5 for x in surface_distances])
 
@@ -1696,13 +1693,10 @@ def preprocess_real_state(obs_dict, max_init_distance=0.1, angle=0, primitive=0)
     surface_edges[:, 2] += target_pose[2]
     state['surface_edges'] = surface_edges[:, :2].copy()
 
-    if obs_dict['walls']:
-        distances = get_distances_from_walls(obs_dict)
-    else:
-        distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
-                     obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
-                     obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
-                     obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+    distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                 obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
 
     state['surface_distances'] = np.array([x / 0.5 for x in distances])
 
