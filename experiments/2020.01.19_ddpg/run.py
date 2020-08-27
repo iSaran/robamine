@@ -2021,10 +2021,10 @@ class DQNCombo(core.RLAgent):
         self.info['epsilon'] = self.epsilon
 
     @classmethod
-    def load(cls, file_path):
+    def load(cls, file_path, push_target_actor, push_obstacle_actor, seed):
         model = pickle.load(open(file_path, 'rb'))
         params = model['params']
-        self = cls(model['state_dim'], model['action_dim'], params)
+        self = cls(params, push_target_actor, push_obstacle_actor, seed)
         self.load_trainable(model)
         self.learn_step_counter = model['learn_step_counter']
         logger.info('Agent loaded from %s', file_path)
@@ -2086,9 +2086,10 @@ class DQNCombo(core.RLAgent):
 
 
 class ComboExp:
-    def __init__(self, params, push_target_actor_path, push_obstacle_actor_path, seed=0):
+    def __init__(self, params, push_target_actor_path, push_obstacle_actor_path, seed=0, friendly_name=''):
         self.params = copy.deepcopy(params)
         self.seed = seed
+        self.friendly_name = friendly_name
 
         self.params['env']['params']['render'] = False
         self.params['env']['params']['target']['max_bounding_box'][2] = 0.01
@@ -2099,6 +2100,9 @@ class ComboExp:
             push_obstacle_actor = PushObstacleRealPolicy()
         else:
             push_obstacle_actor = Actor.load(push_obstacle_actor_path)
+
+        self.push_target_actor = push_target_actor
+        self.push_obstacle_actor = push_obstacle_actor
 
         dqn_params = {'hidden_units': [200, 200],
                       'learning_rate': 1e-3,
@@ -2118,7 +2122,8 @@ class ComboExp:
                               push_obstacle_actor=push_obstacle_actor, seed=self.seed)
 
     def train_eval(self, episodes=10000, eval_episodes=20, eval_every=100, save_every=100):
-        rb_logging.init(directory=self.params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
+        rb_logging.init(directory=self.params['world']['logging_dir'], friendly_name=self.friendly_name,
+                        file_level=logging.INFO)
 
 
         trainer = TrainEvalWorld(agent=self.agent, env=self.params['env'],
@@ -2155,6 +2160,28 @@ class ComboExp:
                 print('reward:', reward, 'action:', action, 'done:', done, 'temrination condiction:', info['termination_reason'])
                 if done:
                     break
+
+
+    def eval_with_render(self):
+        rb_logging.init(directory='/tmp/robamine_logs', friendly_name='', file_level=logging.INFO)
+        directory = os.path.join(self.params['world']['logging_dir'], self.friendly_name)
+        with open(os.path.join(directory, 'config.yml'), 'r') as stream:
+            try:
+                config = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+
+        agent = DQNCombo.load(os.path.join(directory, 'model.pkl'), self.push_target_actor, self.push_obstacle_actor,
+                              self.seed)
+        config['env']['params']['render'] = True
+        config['env']['params']['push']['predict_collision'] = False
+        config['env']['params']['max_timesteps'] = 10
+        config['env']['params']['log_dir'] = '/tmp'
+        config['world']['episodes'] = 10
+        world = EvalWorld(agent, env=config['env'], params=config['world'])
+        world.run()
+
+
 
 if __name__ == '__main__':
     pid = os.getpid()
@@ -2277,5 +2304,7 @@ if __name__ == '__main__':
                    push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
                    # push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
                    push_obstacle_actor_path='real',
+                   friendly_name='combo_dqn',
                    seed=0)
     exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
+    # exp.eval_with_render()
