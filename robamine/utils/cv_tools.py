@@ -208,7 +208,7 @@ class Feature:
         super(Feature, self).__init__()
 
         self.heightmap = heightmap
-        self.size = heightmap.shape
+        self.size = (heightmap.shape[0], heightmap.shape[1])
         self.center = [int(self.size[0] / 2), int(self.size[1] / 2)]
 
     def increase_canvas_size(self, x, y):

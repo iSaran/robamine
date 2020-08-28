@@ -633,7 +633,6 @@ class ClutterContWrapper(gym.Env):
         self.env.load_state_dict(state_dict)
         self.env.reset_model()
 
-
 class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
     """
     The class for the Gym environment.
@@ -996,6 +995,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         color_detector = cv_tools.ColorDetector('red')
         mask = color_detector.detect(bgr)
 
+        #### Yang inputs ####
+        self.raw_color = bgr
+        self.raw_depth = depth
+        self.raw_mask = mask
+        #####################
+
         obstacle_detector = cv_tools.ColorDetector('blue')
         mask_obstacles = obstacle_detector.detect(bgr)
 
@@ -1111,7 +1116,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'push_target_feature': (ae.LATENT_DIM + 4,),
                 'push_obstacle_feature': (ae.LATENT_DIM + 4,)}
 
-    def get_obs(self):
+    def get_obs_(self):
         shapes = self.get_obs_shapes()
 
         # Calculate object poses, bounding boxes and which are above the table
@@ -1207,6 +1212,13 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.obs_dict = obs_dict
         return obs_dict
 
+    def get_obs(self):
+        obs_dict = dict()
+        obs_dict['color_img'] = self.raw_color
+        obs_dict['depth_img'] = self.raw_depth
+        obs_dict['mask_img'] = self.raw_mask
+        return obs_dict
+
     def step(self, action):
         action_ = copy.copy(action)
 
@@ -1244,6 +1256,62 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                                    'extra_data': extra_data,
                                    'collision': collision,
                                    'termination_reason': reason}
+
+    def push_yang(self, position, rotation_angle, push_distance=0.1):
+        push_initial_pos_world = position
+        push_final_pos_world = position + push_distance * np.array(
+            [np.cos(rotation_angle), np.sin(rotation_angle), 0.0])
+
+        push_direction = (push_final_pos_world - push_initial_pos_world) / np.linalg.norm(
+            push_final_pos_world - push_initial_pos_world)
+        x_axis = push_direction
+        y_axis = np.matmul(rot_z(np.pi / 2), x_axis)
+        z_axis = np.array([0, 0, 1])
+        rot_mat = np.transpose(np.array([x_axis, y_axis, z_axis]))
+        push_quat = Quaternion.from_rotation_matrix(rot_mat)
+        push_quat_angle, _ = rot2angleaxis(rot_mat)
+
+        self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1],
+                                                 push_initial_pos_world[2] + 0.01, 1, 0, 0, 0])
+        self.sim_step()
+        # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
+        self.move_joint_to_target(joint_name='finger1', target_position=[None, None, push_initial_pos_world[2]],
+                                  desired_quat=push_quat, duration=0.1)
+        duration = 2
+        end = push_final_pos_world[:2]
+        self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
+                                  desired_quat=push_quat, duration=duration)
+
+    def grasp_yang(self, position, rotation_angle, spread=0.025):
+        f1_initial_pos_world = position + spread * np.array([np.cos(rotation_angle), np.sin(rotation_angle), 0.0])
+        f2_initial_pos_world = position - spread * np.array([np.cos(rotation_angle), np.sin(rotation_angle), 0.0])
+
+        init_z = position[2] + 0.05
+        self.sim.data.set_joint_qpos('finger1', [f1_initial_pos_world[0], f1_initial_pos_world[1], init_z, 1, 0, 0, 0])
+        self.sim.data.set_joint_qpos('finger2', [f2_initial_pos_world[0], f2_initial_pos_world[1], init_z, 1, 0, 0, 0])
+        self.sim_step()
+
+        grasp_z = position[2] - 0.02
+
+        if self.move_joints_to_target([None, None, grasp_z], [None, None, grasp_z], ext_force_policy='avoid'):
+            centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
+            f1f2_dir = (f1_initial_pos_world - f2_initial_pos_world) / np.linalg.norm(
+                f1_initial_pos_world - f2_initial_pos_world)
+            f1f2_dir_1 = np.append(centroid[:2] + f1f2_dir[:2] * 1.1 * self.finger_height, grasp_z)
+            f1f2_dir_2 = np.append(centroid[:2] - f1f2_dir[:2] * 1.1 * self.finger_height, grasp_z)
+            if not self.move_joints_to_target(f1f2_dir_1, f1f2_dir_2, ext_force_policy='stop'):
+                contacts1 = detect_contact(self.sim, 'finger1')
+                contacts2 = detect_contact(self.sim, 'finger2')
+                # if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
+                #     if primitive == 2:
+                #         self.target_grasped_successfully = True
+                #     if primitive == 3:
+                #         self._remove_obstacle_from_table(contacts1[0])
+                #         self.obstacle_grasped_successfully = True
+        else:
+            self.push_stopped_ext_forces = True
+        return 0
+
 
     def do_simulation(self, action):
         primitive = int(action[0])
@@ -1664,7 +1732,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         # return -8 + extra_penalty
         return -0.25
 
-
     def get_reward_real_state_push_obstacle(self, observation, action):
         if self.push_stopped_ext_forces:
             return -1
@@ -2039,7 +2106,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                         'Contact dist of ' + self.sim.model.geom_id2name(contact.geom2) + ' with table: ' + str(
                             contact.dist) + ' > ' + str(threshold) + '. Probably jumped. Timestep: ' + str(
                             self.sim.data.time))
-
 
     def check_target_occlusion(self, number_of_obstacles):
         """

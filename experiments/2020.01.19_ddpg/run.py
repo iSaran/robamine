@@ -2156,13 +2156,151 @@ class ComboExp:
                 if done:
                     break
 
+from robamine.algo.yang.trainer import Trainer
+from robamine.algo.yang.policies import Coordinator
+from robamine.algo.yang.utils import get_push_pix, check_grasp_margin, get_heightmap
+from robamine.utils.mujoco import get_camera_pose
+import cv2
+
+def train_yang(params):
+    future_reward_discount = params['algorithm']['future_reward_discount']
+    force_cpu = params['setup']['force_cpu']
+
+    # Initialize trainer
+    trainer = Trainer(future_reward_discount, is_testing=False, load_snapshot=False,
+                      snapshot_file=None, force_cpu=force_cpu)
+
+    # Define coordination policy (coordinate target-oriented pushing and grasping)
+    coordinator = Coordinator(save_dir=params['world']['logging_dir'], ckpt_file=None)
+
+    # Initialize variables for grasping fail and exploration probability
+    grasp_fail_count = [0]
+    motion_fail_count = [0]
+    explore_prob = 0.505
+
+    params['env']['params']['render'] = True
+    # env = gym.make(params['env']['name'], params=params['env']['params'])
+    env = ClutterContWrapper(params=params['env']['params'])
+    env.reset()
+
+    camera_pose = get_camera_pose(env.env.sim, 'xtion')  # g_wc: camera w.r.t. the world
+
+    fovy = env.env.sim.model.vis.global_.fovy
+    camera = cv_tools.PinholeCamera(fovy, [640, 480])
+
+    workspace_limits = np.asarray([[-0.25, 0.25], [-0.25, 0.25], [-0.01, 0.4]])
+    # workspace_limits = np.asarray([[-0.724, -0.276], [-0.224, 0.224], [-0.0001, 0.4]])
+
+    while True:
+        # seed = np.random.randint(100000000)
+        # seed = 305097549
+        # print('Seed:', seed)
+        rng = np.random.RandomState()
+        rng.seed()
+
+        # Get heightmaps
+        obs = env.reset()
+        color_img = obs['color_img']
+        depth_img = obs['depth_img']
+        mask_img = obs['mask_img']
+
+        color_heightmap, depth_heightmap, mask_heightmap = get_heightmap(
+            color_img, depth_img, mask_img, camera.get_camera_matrix(), camera_pose, workspace_limits,
+            params['setup']['heightmap_resolution'])
+
+        # Compute target border occupancy ratio and target border occupancy norm
+        margin_occupy_ratio, margin_occupy_norm = check_grasp_margin(mask_heightmap, depth_heightmap)
+
+        # Forward the critic and produce push and grasp Q maps
+        push_predictions, grasp_predictions, state_feat = trainer.forward(color_heightmap, depth_heightmap,
+                                                                          mask_heightmap, is_volatile=True)
+
+        # Get pixels location and rotation with highest affordance prediction
+        best_push_pix_ind, push_end_pix_yx = get_push_pix(push_predictions, trainer.model.num_rotations)
+        best_grasp_pix_ind = np.unravel_index(np.argmax(grasp_predictions), grasp_predictions.shape)
+
+        print('Push:', best_push_pix_ind)
+        print('Grasp:', best_grasp_pix_ind)
+
+        # Visualize executed primitive, and affordances
+        if params['logging']['save_visualizations']:
+            push_pred_vis = trainer.get_push_prediction_vis(push_predictions, color_heightmap, best_push_pix_ind,
+                                                            push_end_pix_yx)
+            cv2.imwrite('visualization.push.png', push_pred_vis)
+            grasp_pred_vis = trainer.get_grasp_prediction_vis(grasp_predictions, color_heightmap,best_grasp_pix_ind)
+            cv2.imwrite('visualization.grasp.png', grasp_pred_vis)
+
+        best_push_conf = np.max(push_predictions)
+        best_grasp_conf = np.max(grasp_predictions)
+        print('Primitive confidence scores: %f (push), %f (grasp)' % (best_push_conf, best_grasp_conf))
+
+        # Actor
+        if trainer.iteration < params['algorithm']['stage_epoch']:
+            print('Greedy deterministic policy ...')
+            motion_type = 1 if best_grasp_conf > best_push_conf else 0
+        else:
+            print('Coordination policy ...')
+            syn_input = [best_push_conf, best_grasp_conf, margin_occupy_ratio,
+                         margin_occupy_norm, grasp_fail_count[0]]
+            motion_type = coordinator.predict(syn_input)
+        explore_actions = np.random.uniform() < explore_prob
+        if explore_actions:
+            print('Exploring actions, explore_prob: %f' % explore_prob)
+            motion_type = 1 - 0
+
+        # primitive_action = 'push' if motion_type == 0 else 'grasp'
+        primitive_action = 'grasp'
+
+        print('Primitive action:', primitive_action)
+        if primitive_action == 'push':
+            grasp_fail_count[0] = 0
+            best_pix_ind = best_push_pix_ind
+            predicted_value = np.max(push_predictions)
+        elif primitive_action == 'grasp':
+            best_pix_ind = best_grasp_pix_ind
+            predicted_value = np.max(grasp_predictions)
+
+        # Compute 3D position of each pixel
+        best_rotation_angle = np.deg2rad(best_pix_ind[0] * (360.0 / 16))
+        best_pix_x = best_pix_ind[2]
+        best_pix_y = best_pix_ind[1]
+        print('Action: %s at (%d, %d, %d)' % (primitive_action, best_rotation_angle, best_pix_x, best_pix_y) )
+        primitive_position = [best_pix_x * params['setup']['heightmap_resolution'] + workspace_limits[0][0],
+                              best_pix_y * params['setup']['heightmap_resolution'] + workspace_limits[1][0],
+                              depth_heightmap[best_pix_y][best_pix_x]]
+
+        if primitive_action == 'push':
+            # If pushing, adjust start position, and make sure z value is safe and not too low
+            # finger_width = 0.02
+            # safe_kernel_width = int(np.round((finger_width / 2) / params['setup']['heightmap_resolution']))
+            # local_region = depth_heightmap[
+            #                max(best_pix_y - safe_kernel_width, 0):min(best_pix_y + safe_kernel_width + 1,
+            #                                                           depth_heightmap.shape[0]),
+            #                max(best_pix_x - safe_kernel_width, 0):min(best_pix_x + safe_kernel_width + 1,
+            #                                                           depth_heightmap.shape[1])]
+            # if local_region.size == 0:
+            #     safe_z_position = workspace_limits[2][0]
+            # else:
+            #     safe_z_position = np.max(local_region) + workspace_limits[2][0]
+            # primitive_position[2] = safe_z_position
+            primitive_position[2] += 0.01
+            env.env.push_yang(primitive_position, best_rotation_angle)
+        else:
+            # Avoid collision with floor
+            primitive_position[2] = max(primitive_position[2] - 0.04, workspace_limits[2][0] + 0.02)
+
+            env.env.grasp_yang(primitive_position, best_rotation_angle)
+        # Convert to camera coordinates
+
+
 if __name__ == '__main__':
     pid = os.getpid()
     print('Process ID:', pid)
     hostname = socket.gethostname()
     exp_dir = 'robamine_logs_dream_2020.07.02.18.35.45.636114'
 
-    yml_name = 'params.yml'
+    # yml_name = 'params.yml'
+    yml_name = 'params_yang.yml'
     if hostname == 'dream':
         logging_dir = '/home/espa/robamine_logs/'
     elif hostname == 'triss':
@@ -2177,6 +2315,8 @@ if __name__ == '__main__':
     # logging_dir = '/tmp'
     params['world']['logging_dir'] = logging_dir
     params['env']['params']['vae_path'] = os.path.join(logging_dir, 'VAE')
+
+    train_yang(params)
 
     # Basic runs
     # ----------
@@ -2243,39 +2383,39 @@ if __name__ == '__main__':
     # Push Obstacle Supervised Training
     # ---------------------------------
     #
-    exp = PushObstacleSupervisedExp(params=params,
-                                    log_dir=os.path.join(logging_dir, 'push_obstacle_supervised'),
-                                    vae_path=os.path.join(logging_dir, 'VAE'),
-                                    actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
-                                    seed=1,
-                                    file_type='pkl',
-                                    partial_dataset=None)
-    # exp.collect_samples(n_samples=5000)
-    # exp.create_dataset(rotations=1)
-    # exp.merge_datasets(seeds=[0, 1, 2, 3])
-    # exp.scale_outputs()
-    # exp.train(hyperparams={'device': 'cpu',
-    #                        'scaler': ['standard', None],
-    #                        'learning_rate': 0.001,
-    #                        'batch_size': 8,
-    #                        'loss': 'cos',
-    #                        'hidden_units': [400, 300],
-    #                        'weight_decay': 0,
-    #                        'dropout': 0.0},
-    #           epochs=150,
-    #           save_every=10,
-    #           suffix='0')
-    # exp.visualize_dataset()
-    # exp.visual_evaluation()
-    # exp.eval_in_scenes(n_scenes=1000, random_policy=False)
-
-
-    # Combo push target push obstacle
-    # ---------------------------------
-
-    exp = ComboExp(params=params,
-                   push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
-                   # push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
-                   push_obstacle_actor_path='real',
-                   seed=0)
-    exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
+    # exp = PushObstacleSupervisedExp(params=params,
+    #                                 log_dir=os.path.join(logging_dir, 'push_obstacle_supervised'),
+    #                                 vae_path=os.path.join(logging_dir, 'VAE'),
+    #                                 actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
+    #                                 seed=1,
+    #                                 file_type='pkl',
+    #                                 partial_dataset=None)
+    # # exp.collect_samples(n_samples=5000)
+    # # exp.create_dataset(rotations=1)
+    # # exp.merge_datasets(seeds=[0, 1, 2, 3])
+    # # exp.scale_outputs()
+    # # exp.train(hyperparams={'device': 'cpu',
+    # #                        'scaler': ['standard', None],
+    # #                        'learning_rate': 0.001,
+    # #                        'batch_size': 8,
+    # #                        'loss': 'cos',
+    # #                        'hidden_units': [400, 300],
+    # #                        'weight_decay': 0,
+    # #                        'dropout': 0.0},
+    # #           epochs=150,
+    # #           save_every=10,
+    # #           suffix='0')
+    # # exp.visualize_dataset()
+    # # exp.visual_evaluation()
+    # # exp.eval_in_scenes(n_scenes=1000, random_policy=False)
+    #
+    #
+    # # Combo push target push obstacle
+    # # ---------------------------------
+    #
+    # exp = ComboExp(params=params,
+    #                push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
+    #                # push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
+    #                push_obstacle_actor_path='real',
+    #                seed=0)
+    # exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
