@@ -1111,6 +1111,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'pixels_to_m': (1,),
                 'push_target_feature': (ae.LATENT_DIM + 4,),
                 'push_obstacle_feature': (ae.LATENT_DIM + 4,),
+                'slide_target_feature': (ae.LATENT_DIM + 4,),
                 'walls': (1,)}
 
     def get_obs(self):
@@ -1173,6 +1174,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             'pixels_to_m': np.array([self.pixels_to_m]),
             'push_target_feature': np.zeros(shapes['push_target_feature']),
             'push_obstacle_feature': np.zeros(shapes['push_obstacle_feature']),
+            'slide_target_feature': np.zeros(shapes['slide_target_feature']),
             'walls': np.array([self.params['walls']['use']])
         }
 
@@ -1198,6 +1200,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         obs_dict['push_obstacle_feature'] = get_asymmetric_actor_feature_from_dict(obs_dict, self.autoencoder, None,
                                                                                    angle=0,
                                                                                    primitive=1)
+
+        obs_dict['slide_target_feature'] = obs_dict['push_target_feature'].copy()
+        obs_dict['slide_target_feature'][-4:] = get_distances_from_walls(obs_dict)
 
         assert set(obs_dict.keys()) == set(shapes.keys())
 
@@ -1593,6 +1598,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return 0
 
     def get_reward_real_state_all(self, observation, action):
+        penalty = 0
+        if int(action[0]) == 2:
+            distances_from_walls = get_distances_from_walls(self.obs_dict_prev)
+            min_dist_wall = np.min(distances_from_walls)
+            penalty = - min_max_scale(min_dist_wall, range=[0, 0.25], target_range=[0, 0.25])
+
         if self.push_stopped_ext_forces:
             return -1
 
@@ -1617,9 +1628,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         distances_next = get_distances_in_singulation_proximity(self.obs_dict)
 
         if np.sum(distances_next) < np.sum(distances) - 10:
-            return -0.1
+            return -0.1 + penalty
 
-        return -0.25
+        return -0.25 + penalty
 
     def get_reward_real_state_push_target(self, observation, action):
         # if self.push_stopped_ext_forces:
