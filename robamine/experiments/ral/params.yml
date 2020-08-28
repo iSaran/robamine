@@ -1,0 +1,110 @@
+agent:
+  name: SplitDDPG
+  params:
+    asymmetric: 'asymmetric'  # options: asymmetric, real, visual
+    save_heightmaps_disk: False
+    batch_size: [32, 32]
+    device: cpu
+    gamma: 0.9
+    load_buffers: ''
+    load_nets: ''
+    replay_buffer_size: 1000000
+    tau: 0.001
+    update_iter: [1, 1]
+    actor:
+      hidden_units: [[400, 300], [400, 300]]
+      learning_rate: 0.001
+      preactivation_weight: 0.05
+      autoencoder:
+        model: /home/mkiatos/robamine/logs/VAE/model.pkl
+        scaler: /home/mkiatos/robamine/logs/VAE/normalizer.pkl
+        #model: /home/iason/robamine_logs/2020.01.16.split_ddpg/VAE/model.pkl
+        #scaler: /home/iason/robamine_logs/2020.01.16.split_ddpg/VAE/normalizer.pkl
+      #pretrained:  # Uncomment to use pretrained actors. Comment-out for initialize actors from scratch it if want to initialize actors from scratch
+      #- /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
+      #- /home/iason/Dropbox/projects/phd/clutter/training/2020.01.16.split_ddpg/robamine_logs_2020.02.05.15.20.58.472410_bck/model.pkl
+      start_training_at: 0
+    critic:
+      hidden_units: [[400, 300], [400, 300]]
+      learning_rate: 0.001
+    obs_avoid_loss:
+      bbox_augmentation: 0.008
+      density: 128
+      min_dist_range: [0.002, 0.1]
+      distance_range: [0.0, 0.06]  # Should be the same as env/push/target_init_distance
+    noise:
+      name: Normal
+      sigma: 0.2
+    epsilon:
+      start: 0.9
+      end: 0.05
+      decay: 10000
+    heightmap_rotations: 1
+    n_preloaded_buffer: [1000, 1000]
+    real_state: True
+    rotation_invariant: False
+    env_params:
+      hardcoded_primitive: 0
+      obstacle:
+        max_bounding_box: [.03, .03, .020]
+      push:
+        target_init_distance: [0.0, 0.15]
+  trainable_params: ''
+env:
+  name: ClutterContWrapper-v0
+  params:
+    icra:
+      use: False
+      n_rotations: 8
+      n_primitives: 3
+    hardcoded_primitive: 0
+    max_timesteps: 20
+    real_state: True
+    all_equal_height_prob: 0.2
+    finger:
+      size: 0.005
+      type: sphere
+    nr_of_obstacles:
+      - 1
+      - 13
+    render: false
+    target:
+      min_bounding_box: [.01, .01, .005]
+      max_bounding_box: [.03, .03, .020]
+      probability_box: 1.0
+      enforce_convex_hull: 15
+      randomize_pos: True
+    obstacle:
+      min_bounding_box: [.01, .01, .005]
+      max_bounding_box: [.03, .03, .020]
+      probability_box: 1.0
+      pushable_threshold_coeff: -0.5 # Set -0.5 by default or 1 if standalone push obstacle
+    push:
+      distance: [0.02, 0.10]
+      target_init_distance: [0.0, 0.15]
+      predict_collision: True
+    grasp:
+      spread: [0.05, 0.05]
+      height: [0.01, 0.01]
+      workspace: [0.0, 0.1]
+    feature_normalization_per: 'session'  # available: 'session', 'episode'
+    hug_probability: 0.5
+    walls:
+      use: False
+      singulate: False  # Set false if push target and walls
+    terminal:
+      stuck_on_wall: False  # Set true if push target and walls
+    deterministic_policy: False
+world:
+  comments: ''
+  friendly_name: ''
+  logging_dir: /home/iason/robamine_logs/2020.01.16.split_ddpg
+  name: TrainEval
+  params:
+    episodes: 10000
+    eval_episodes: 10
+    eval_every: 20
+    eval_render: false
+    render: false
+    save_every: 100
+    max_disk_size: 50 # GB
