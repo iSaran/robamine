@@ -272,7 +272,6 @@ class ObsDictSlideTarget(ObsDictPolicy):
     def predict(self, obs_dict):
         return np.array([2])
 
-
 def split_replay_buffer(buffer, nr_buffers, nr_substates):
     """ Splits a buffer with mixed transitions (from different primitives) to
     one buffer per primitive.
@@ -313,8 +312,10 @@ class SplitDQN(core.RLAgent):
         super().__init__(None, None, 'SplitDQN', params)
         torch.manual_seed(seed)
 
-        self.nr_network = 2
-        state_dim = [ae.LATENT_DIM + 4, ae.LATENT_DIM + 4]
+        self.primitive_names = ['push_target_feature', 'push_obstacle_feature', 'slide_target_feature']
+        self.nr_network = len(self.primitive_names)
+        state_dim = [ae.LATENT_DIM + 4, ae.LATENT_DIM + 4, ae.LATENT_DIM + 4]
+        self.policy = [push_target_actor, push_obstacle_actor, ObsDictSlideTarget()]
 
         self.device = self.params['device']
 
@@ -342,12 +343,13 @@ class SplitDQN(core.RLAgent):
         self.rng.seed(seed)
         self.epsilon = self.params['epsilon_start']
 
-        self.policy = [push_target_actor, push_obstacle_actor]
 
     def predict(self, state):
         valid_nets, _ = clutter.get_valid_primitives(state, n_primitives=self.nr_network)
         values = - 1e6 * np.ones(self.nr_network)
-        state_feature = [state['push_target_feature'].copy(), state['push_obstacle_feature']]
+        state_feature = []
+        for name in self.primitive_names:
+            state_feature.append(state[name].copy())
         for i in range(self.nr_network):
             s = torch.FloatTensor(state_feature[i]).to(self.device)
             if valid_nets[i]:
@@ -418,9 +420,8 @@ class SplitDQN(core.RLAgent):
         self.learn_step_counter += 1
 
     def q_value(self, state, action):
-        names = ['push_target_feature', 'push_obstacle_feature']
         i = int(action[0])
-        s = torch.FloatTensor(state[names[i]]).to(self.device)
+        s = torch.FloatTensor(state[self.primitive_names[i]]).to(self.device)
         return float(self.network[i](s).cpu().detach().numpy())
 
     def seed(self, seed):
@@ -464,10 +465,9 @@ class SplitDQN(core.RLAgent):
 
     def _transitions(self, transition):
         # Create rotated states if needed
-        names = ['push_target_feature', 'push_obstacle_feature']
         i = int(transition.action[0])
-        state = transition.state[names[i]]
-        next_state = transition.next_state[names[i]]
+        state = transition.state[self.primitive_names[i]]
+        next_state = transition.next_state[self.primitive_names[i]]
         tran = algo_util.Transition(state=copy.deepcopy(state),
                                     action=transition.action[0],
                                     reward=transition.reward,
@@ -497,15 +497,15 @@ class ComboExp:
         else:
             self.push_obstacle_actor = Actor.load(push_obstacle_actor_path)
 
-        dqn_params = {'hidden_units': [[200, 200], [200, 200]],
+        dqn_params = {'hidden_units': [[200, 200], [200, 200], [200, 200]],
                       'device': 'cpu',
                       'replay_buffer_size': 1000000,
-                      'loss': ['mse', 'mse'],
-                      'learning_rate': [1e-3, 1e-3],
-                      'update_iter': [1, 1],
-                      'n_preloaded_buffer': [4, 4],
+                      'loss': ['mse', 'mse', 'mse'],
+                      'learning_rate': [1e-3, 1e-3, 1e-3],
+                      'update_iter': [1, 1, 1],
+                      'n_preloaded_buffer': [32, 32, 32],
                       'tau': 0.001,
-                      'batch_size': [4, 4],
+                      'batch_size': [32, 32, 32],
                       'discount': 0.99,
 
                       'epsilon_start': 0.9,
@@ -602,7 +602,7 @@ if __name__ == '__main__':
                    push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
                    # push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
                    push_obstacle_actor_path='real',
-                   friendly_name='combo_split_dqn',
+                   friendly_name='combo_split_dqn_sliding',
                    seed=1)
     exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
     # exp.eval_with_render()
