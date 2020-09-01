@@ -1109,7 +1109,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 'point_cloud': (10000, 3),
                 'pixels_to_m': (1,),
                 'push_target_feature': (ae.LATENT_DIM + 4,),
-                'push_obstacle_feature': (ae.LATENT_DIM + 4,)}
+                'push_obstacle_feature': (ae.LATENT_DIM + 2,)}
 
     def get_obs(self):
         shapes = self.get_obs_shapes()
