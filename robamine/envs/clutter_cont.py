@@ -1213,6 +1213,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return obs_dict
 
     def get_obs(self):
+        self.get_heightmap()
         obs_dict = dict()
         obs_dict['color_img'] = self.raw_color
         obs_dict['depth_img'] = self.raw_depth
@@ -1272,7 +1273,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         push_quat_angle, _ = rot2angleaxis(rot_mat)
 
         self.sim.data.set_joint_qpos('finger1', [push_initial_pos_world[0], push_initial_pos_world[1],
-                                                 push_initial_pos_world[2] + 0.01, 1, 0, 0, 0])
+                                                 push_initial_pos_world[2] + 0.05, 1, 0, 0, 0])
         self.sim_step()
         # Move very quickly to push.z with trajectory because finger falls a little after the previous step.
         self.move_joint_to_target(joint_name='finger1', target_position=[None, None, push_initial_pos_world[2]],
@@ -1281,6 +1282,11 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         end = push_final_pos_world[:2]
         self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
                                   desired_quat=push_quat, duration=duration)
+
+        self._move_finger_outside_the_table()
+
+        self.timesteps += 1
+
 
     def grasp_yang(self, position, rotation_angle, spread=0.025):
         f1_initial_pos_world = position + spread * np.array([np.cos(rotation_angle), np.sin(rotation_angle), 0.0])
@@ -1292,6 +1298,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.sim_step()
 
         grasp_z = position[2] - 0.02
+        grasp_z = max(0.02, grasp_z)
 
         if self.move_joints_to_target([None, None, grasp_z], [None, None, grasp_z], ext_force_policy='avoid'):
             centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
@@ -1302,16 +1309,20 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             if not self.move_joints_to_target(f1f2_dir_1, f1f2_dir_2, ext_force_policy='stop'):
                 contacts1 = detect_contact(self.sim, 'finger1')
                 contacts2 = detect_contact(self.sim, 'finger2')
-                # if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
-                #     if primitive == 2:
-                #         self.target_grasped_successfully = True
-                #     if primitive == 3:
-                #         self._remove_obstacle_from_table(contacts1[0])
-                #         self.obstacle_grasped_successfully = True
+                if len(contacts1) == 1 and len(contacts2) == 1 and contacts1[0] == contacts2[0]:
+                    if contacts1[0] == 'target':
+                        self.target_grasped_successfully = True
+                    self._remove_obstacle_from_table(contacts1[0])
+                    self.obstacle_grasped_successfully = True
         else:
             self.push_stopped_ext_forces = True
-        return 0
 
+        self._move_finger_outside_the_table()
+
+        self.timesteps += 1
+
+    def is_target_grasped(self):
+        return self.target_grasped_successfully
 
     def do_simulation(self, action):
         primitive = int(action[0])
@@ -1758,6 +1769,15 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
             return -0.1
 
         return -0.25
+
+    def terminal_state_yang(self, obs):
+        if self.timesteps >= self.max_timesteps:
+            return True
+
+        if self.target_grasped_successfully:
+            return True
+
+        return False
 
     def terminal_state_real_state_push_target(self, obs):
         # Terminal if collision is detected
