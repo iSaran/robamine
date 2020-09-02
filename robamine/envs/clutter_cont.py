@@ -446,12 +446,17 @@ class ClutterXMLGenerator(XMLGenerator):
                                              np.array([-self.surface_size[0], -self.surface_size[1]])),
                                LineSegment2D(np.array([-self.surface_size[0], -self.surface_size[1]]),
                                              np.array([self.surface_size[0], -self.surface_size[1]]))]
+        spawn_on_edge = self.rng.uniform(0, 1) < 0.5
         distance_table = np.linalg.norm(
             LineSegment2D(np.zeros(2), np.array([math.cos(theta), math.sin(theta)])).get_first_intersection_point(
                 table_line_segments))
 
         max_distance = distance_table - math.sqrt(math.pow(target_length, 2) + math.pow(target_width, 2))
-        distance = min(1, abs(self.rng.normal(0, 0.5))) * max_distance
+
+        if spawn_on_edge:
+            distance = max_distance
+        else:
+            distance = min(1, abs(self.rng.normal(0, 0.5))) * max_distance
         target_pos = [distance * math.cos(theta), distance * math.sin(theta), 0.0]
 
         if not self.params['target'].get('randomize_pos', True):
@@ -1599,10 +1604,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def get_reward_real_state_all(self, observation, action):
         penalty = 0
-        if int(action[0]) == 2:
-            distances_from_walls = get_distances_from_walls(self.obs_dict_prev)
-            min_dist_wall = np.min(distances_from_walls)
-            penalty = - min_max_scale(min_dist_wall, range=[0, 0.25], target_range=[0, 0.25])
 
         if self.push_stopped_ext_forces:
             return -1
@@ -1626,6 +1627,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         distances = get_distances_in_singulation_proximity(self.obs_dict_prev)
         distances_next = get_distances_in_singulation_proximity(self.obs_dict)
+
+        if int(action[0]) == 2:
+            return -0.25
+            # distances_from_walls = get_distances_from_walls(self.obs_dict_prev)
+            # min_dist_wall = np.min(distances_from_walls)
+            # penalty = - min_max_scale(min_dist_wall, range=[0, 0.25], target_range=[0, 0.25])
 
         if np.sum(distances_next) < np.sum(distances) - 10:
             return -0.1 + penalty

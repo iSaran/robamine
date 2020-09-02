@@ -835,7 +835,6 @@ def push_obstacle_feature_includes_affordances(obs_dict):
     return True
 
 def slide_is_eligible(obs_dict):
-    return True
     distances = get_distances_from_walls(obs_dict)
     if np.min(distances) < 0.03:
         return True
