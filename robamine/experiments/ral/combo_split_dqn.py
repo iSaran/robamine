@@ -314,7 +314,7 @@ class SplitDQN(core.RLAgent):
         torch.manual_seed(seed)
 
         self.nr_network = 2
-        state_dim = [ae.LATENT_DIM + 4, ae.LATENT_DIM + 4]
+        state_dim = [ae.LATENT_DIM + 4, ae.LATENT_DIM]
 
         self.device = self.params['device']
 
