@@ -20,6 +20,8 @@ import robamine.algo.conv_vae as ae
 import h5py
 import copy
 from robamine.envs.clutter_cont import ClutterContWrapper
+import math
+
 
 
 logger = logging.getLogger('robamine')
@@ -152,17 +154,17 @@ class ActorNet(nn.Module):
         # self.hidden_layers.append(nn.Dropout(p=dropout))
         for i in range(1, len(hidden_units)):
             self.hidden_layers.append(nn.Linear(hidden_units[i - 1], hidden_units[i]))
-            # stdv = 1. / sqrt(self.hidden_layers[i].weight.size(1))
-            stdv = 1e-3
-            self.hidden_layers[-1].weight.data.uniform_(-stdv, stdv)
-            self.hidden_layers[-1].bias.data.uniform_(-stdv, stdv)
+            # stdv = 1. / math.sqrt(self.hidden_layers[i].weight.size(1))
+            # stdv = 1e-3
+            # self.hidden_layers[-1].weight.data.uniform_(-stdv, stdv)
+            # self.hidden_layers[-1].bias.data.uniform_(-stdv, stdv)
             # self.hidden_layers.append(nn.Dropout(p=dropout))
 
         self.out = nn.Linear(hidden_units[-1], 1)
-        # stdv = 1. / sqrt(self.out.weight.size(1))
-        stdv = 1e-3
-        self.out.weight.data.uniform_(-stdv, stdv)
-        self.out.bias.data.uniform_(-stdv, stdv)
+        # stdv = 1. / math.sqrt(self.out.weight.size(1))
+        # stdv = 1e-3
+        # self.out.weight.data.uniform_(-stdv, stdv)
+        # self.out.bias.data.uniform_(-stdv, stdv)
 
     def forward(self, x):
         for layer in self.hidden_layers:
@@ -174,8 +176,8 @@ class ActorNet(nn.Module):
 class Actor(core.NetworkModel):
     def __init__(self, params, inputs=None, outputs=None):
         self.hidden_units = params['hidden_units']
-        inputs = ae.LATENT_DIM + 1
-        self.network = ActorNet(ae.LATENT_DIM + 1, self.hidden_units)
+        inputs = ae.LATENT_DIM
+        self.network = ActorNet(ae.LATENT_DIM, self.hidden_units)
         if params['loss'] == 'cos':
             self.loss = CosLoss()
             params['loss'] = 'custom'
@@ -333,10 +335,10 @@ class PushObstacleSupervisedExp:
         push_obstacle_feature = PushObstacleFeature(self.vae_path)
 
         if self.file_type == 'hdf5':
-            visual_features = dataset_file.create_dataset('features', (n_datapoints, ae.LATENT_DIM + 1), dtype='f')
+            visual_features = dataset_file.create_dataset('features', (n_datapoints, ae.LATENT_DIM), dtype='f')
             actions = dataset_file.create_dataset('action', (n_datapoints,), dtype='f')
         elif self.file_type == 'pkl':
-            visual_features = np.zeros((n_datapoints, ae.LATENT_DIM + 1))
+            visual_features = np.zeros((n_datapoints, ae.LATENT_DIM))
             actions = np.zeros(n_datapoints)
         else:
             raise ValueError()
@@ -474,7 +476,7 @@ class PushObstacleSupervisedExp:
             test_samples = generator.randint(end_dataset * 0.9, end_dataset, total_grid)
             train_samples = generator.randint(0, end_dataset * 0.9, total_grid)
             # test_samples = np.arange(seed * total_grid * 4, seed * total_grid * 4 + total_grid * 4, 4)
-            test_samples = np.arange(0, 64, 1)
+            # test_samples = np.arange(0, 64, 1)
 
             for i in range(grid[0]):
                 for j in range(grid[1]):
@@ -482,11 +484,11 @@ class PushObstacleSupervisedExp:
                     latent = data[0][sample_index][:256]
                     angle_rad = data[1][sample_index]
                     theta = data[0][sample_index][-1]
-                    if theta < 0:
-                        theta += 2 * np.pi
-                    theta -= np.pi / 4
-                    if theta < 0:
-                        theta += 2 * np.pi
+                    # if theta < 0:
+                    #     theta += 2 * np.pi
+                    # theta -= np.pi / 4
+                    # if theta < 0:
+                    #     theta += 2 * np.pi
                     length = 40
                     xy = [length * np.cos(- theta), length * np.sin(- theta)]
                     table_center = np.zeros(2)
@@ -503,7 +505,7 @@ class PushObstacleSupervisedExp:
                     x = length * np.cos(- angle_rad)
                     y = length * np.sin(- angle_rad)
                     ax[i, j].arrow(center_image[0], center_image[1], x, y, head_width=3, color=[1, 0, 0])
-                    ax[i, j].arrow(center_image[0], center_image[1], table_center[0], table_center[1], head_width=3, color=[0.0, 0.0, 1.0])
+                    # ax[i, j].arrow(center_image[0], center_image[1], table_center[0], table_center[1], head_width=3, color=[0.0, 0.0, 1.0])
 
                     if self.actor_path is not None:
                         latent = data[0][test_samples[indeces[i, j]]]
@@ -521,11 +523,11 @@ class PushObstacleSupervisedExp:
                     latent = data[0][sample_index][:256]
                     angle_rad = data[1][sample_index]
                     theta = data[0][sample_index][-1]
-                    if theta < 0:
-                        theta += 2 * np.pi
-                    theta -= np.pi / 4
-                    if theta < 0:
-                        theta += 2 * np.pi
+                    # if theta < 0:
+                    #     theta += 2 * np.pi
+                    # theta -= np.pi / 4
+                    # if theta < 0:
+                    #     theta += 2 * np.pi
                     length = 40
                     xy = [length * np.cos(- theta), length * np.sin(- theta)]
                     table_center = np.zeros(2)
@@ -544,7 +546,7 @@ class PushObstacleSupervisedExp:
                     x = length * np.cos(- angle_rad)
                     y = length * np.sin(- angle_rad)
                     ax_train[i, j].arrow(center_image[0], center_image[1], x, y, head_width=3, color=[1, 0, 0])
-                    ax_train[i, j].arrow(center_image[0], center_image[1], table_center[0], table_center[1], head_width=3, color=[0.0, 0.0, 1.0])
+                    # ax_train[i, j].arrow(center_image[0], center_image[1], table_center[0], table_center[1], head_width=3, color=[0.0, 0.0, 1.0])
 
                     if self.actor_path is not None:
                         latent = data[0][train_samples[indeces[i, j]]]
@@ -557,7 +559,7 @@ class PushObstacleSupervisedExp:
             fig_train.suptitle('Train')
             plt.show()
 
-    def visual_evaluation(self):
+    def visual_evaluation(self, plot=False):
         '''Run environment'''
 
         push_obstacle_feature = PushObstacleFeature(self.vae_path)
@@ -587,6 +589,30 @@ class PushObstacleSupervisedExp:
                 # angle = min_max_scale(angle, range=[-np.pi, np.pi], target_range=[-1, 1])
                 # print('angle predicted transformed 1, 1', angle)
                 action[1] = angle
+
+                if plot:
+                    fig, ax = push_obstacle_feature.plot(obs)
+                    feature = push_obstacle_feature(obs)
+
+                    angle_rad = min_max_scale(action[1], range=[-1, 1], target_range=[-np.pi, np.pi])
+                    theta = feature[-1]
+                    length = 40
+                    xy = [length * np.cos(- theta), length * np.sin(- theta)]
+                    table_center = np.zeros(2)
+                    table_center[0] = xy[0]
+                    table_center[1] = xy[1]
+
+                    center_image = [64, 64]
+                    length = 40
+                    x = length * np.cos(- angle_rad)
+                    y = length * np.sin(- angle_rad)
+                    ax[0].arrow(center_image[0], center_image[1], x, y, head_width=3, color=[1, 0, 0])
+                    ax[0].arrow(center_image[0], center_image[1], table_center[0], table_center[1], head_width=3, color=[0.0, 0.0, 1.0])
+                    ax[1].arrow(center_image[0], center_image[1], x, y, head_width=3, color=[1, 0, 0])
+                    ax[1].arrow(center_image[0], center_image[1], table_center[0], table_center[1], head_width=3, color=[0.0, 0.0, 1.0])
+
+                    plt.show()
+
                 obs_next, reward, done, info = env.step(action)
                 print('reward:', reward, 'action:', action, 'done:', done, 'temrination condiction:',
                       info['termination_reason'])
@@ -651,6 +677,41 @@ class PushObstacleSupervisedExp:
             if samples >= n_scenes:
                 break
 
+    def transform_angle(self):
+        assert self.file_type == 'pkl', 'For now only pkl'
+        dataset_path = os.path.join(self.log_dir, 'dataset.' + self.file_type)
+        dataset_file = open(dataset_path, 'rb')
+        data = pickle.load(dataset_file)
+
+        for i in range(len(data[0])):
+            theta = data[0][i][-1]
+            if theta < 0:
+                theta += 2 * np.pi
+            theta -= np.pi / 4
+            if theta < 0:
+                theta += 2 * np.pi
+            data[0][i][-1] = theta
+
+        dataset_scaled_path = os.path.join(self.log_dir, 'dataset_transformed_angle.' + self.file_type)
+        dataset_scaled_file = open(dataset_scaled_path, 'wb')
+        pickle.dump(data, dataset_scaled_file)
+        dataset_file.close()
+        dataset_scaled_file.close()
+
+    def update(self):
+        assert self.file_type == 'pkl', 'For now only pkl'
+        dataset_path = os.path.join(self.log_dir, 'dataset.' + self.file_type)
+        dataset_file = open(dataset_path, 'rb')
+        data = pickle.load(dataset_file)
+
+        data[0] = np.delete(data[0], [256, 257, 258, 259], axis=1)
+
+        dataset_scaled_path = os.path.join(self.log_dir, 'dataset_remove.' + self.file_type)
+        dataset_scaled_file = open(dataset_scaled_path, 'wb')
+        pickle.dump(data, dataset_scaled_file)
+        dataset_file.close()
+        dataset_scaled_file.close()
+
 if __name__ == '__main__':
     pid = os.getpid()
     print('Process ID:', pid)
@@ -676,14 +737,14 @@ if __name__ == '__main__':
     exp = PushObstacleSupervisedExp(params=params,
                                     log_dir=os.path.join(logging_dir, 'push_obstacle_supervised'),
                                     vae_path=os.path.join(logging_dir, 'VAE'),
-                                    # actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
-                                    actor_path=None,
-                                    seed=10,
+                                    actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic_256size/model_60.pkl'),
+                                    # actor_path=None,
+                                    seed=4,
                                     file_type='pkl',
                                     partial_dataset=None)
-    # exp.collect_samples(n_samples=8000)
-    exp.create_dataset(rotations=1)
-    # exp.merge_datasets(seeds=[1, 4, 10])
+    # exp.collect_samples(n_samples=8000, plot=True)
+    # exp.create_dataset(rotations=1)
+    # exp.merge_datasets(seeds=[0, 1])
     # exp.scale_outputs()
     # exp.train(hyperparams={'device': 'cpu',
     #                        'scaler': ['standard', None],
@@ -695,7 +756,9 @@ if __name__ == '__main__':
     #                        'dropout': 0.0},
     #           epochs=150,
     #           save_every=10,
-    #           suffix='0')
-    # exp.visualize_dataset()
-    # exp.visual_evaluation()
+    #           suffix='_deterministic_256size')
+    exp.visualize_dataset()
+    # exp.visual_evaluation(plot=True)
     # exp.eval_in_scenes(n_scenes=1000, random_policy=False)
+    # exp.transform_angle()
+    # exp.update()

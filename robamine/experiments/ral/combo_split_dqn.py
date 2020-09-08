@@ -600,9 +600,9 @@ if __name__ == '__main__':
 
     exp = ComboExp(params=params,
                    push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
-                   # push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic/model_40.pkl'),
-                   push_obstacle_actor_path='real',
-                   friendly_name='combo_split_dqn',
+                   push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic_256size/model_60.pkl'),
+                   # push_obstacle_actor_path='real',
+                   friendly_name='combo_split_dqn_deterministic_256size',
                    seed=1)
     exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
     # exp.eval_with_render()
