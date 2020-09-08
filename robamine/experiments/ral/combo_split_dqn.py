@@ -268,6 +268,15 @@ class ObsDictPushTarget(ObsDictPolicy):
         action = self.nn(state_).detach().cpu().detach().numpy()
         return np.insert(action, 0, 0)
 
+class ObsDictPushObstacle(ObsDictPolicy):
+    def __init__(self, actor):
+        self.actor = actor
+
+    def predict(self, obs_dict):
+        state_ = obs_dict['push_obstacle_feature'].copy()
+        angle = float(self.actor.predict(state_))
+        return np.array([1, angle])
+
 class ObsDictSlideTarget(ObsDictPolicy):
     def predict(self, obs_dict):
         return np.array([2])
@@ -342,7 +351,7 @@ class SplitDQN(core.RLAgent):
         self.rng.seed(seed)
         self.epsilon = self.params['epsilon_start']
 
-        self.policy = [push_target_actor, push_obstacle_actor]
+        self.policy = [push_target_actor, ObsDictPushObstacle(push_obstacle_actor)]
 
     def predict(self, state):
         valid_nets, _ = clutter.get_valid_primitives(state, n_primitives=self.nr_network)
