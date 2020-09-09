@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import robamine.algo.conv_vae as ae
 import torch.optim as optim
-from robamine.utils.memory import ReplayBuffer
+import robamine.utils.memory as rb_mem
 import robamine.envs.clutter_utils as clutter
 import pickle
 import robamine.algo.splitddpg as ddpg
@@ -22,6 +22,27 @@ import math
 logger = logging.getLogger('robamine')
 
 from robamine.experiments.ral.supervised_push_obstacle import Actor, PushObstacleRealPolicy, ObsDictPolicy
+
+class ReplayBuffer(rb_mem.ReplayBuffer):
+    def sample_batch(self, given_batch_size):
+        batch = []
+
+        if self.count < given_batch_size:
+            batch_size = self.count
+        else:
+            batch_size = given_batch_size
+
+        batch = self.random.sample(self.buffer, batch_size)
+
+        state_batch = np.array([_.state for _ in batch])
+        action_batch = np.array([_.action for _ in batch])
+        reward_batch = np.array([_.reward for _ in batch])
+        next_state_batch = []
+        for i in range(len(batch[0].next_state)):
+            next_state_batch.append(np.array([_.next_state[i] for _ in batch]))
+        terminal_batch = np.array([_.terminal for _ in batch])
+
+        return algo_util.Transition(state_batch, action_batch, reward_batch, next_state_batch, terminal_batch)
 
 # class QNetwork(nn.Module):
 #     def __init__(self, state_dim, action_dim, hidden_units):
@@ -405,7 +426,7 @@ class SplitDQN(core.RLAgent):
         # Calculate maxQ(s_next, a_next) with max over next actions
         q_next = torch.FloatTensor().to(self.device)
         for net in range(self.nr_network):
-            next_state = torch.FloatTensor(batch.next_state).to(self.device)
+            next_state = torch.FloatTensor(batch.next_state[net]).to(self.device)
             q_next_i = self.target_network[net](next_state)
             q_next = torch.cat((q_next, q_next_i), dim=1)
         q_next = q_next.max(1)[0].view(self.params['batch_size'][i], 1)
@@ -476,7 +497,9 @@ class SplitDQN(core.RLAgent):
         names = ['push_target_feature', 'push_obstacle_feature']
         i = int(transition.action[0])
         state = transition.state[names[i]]
-        next_state = transition.next_state[names[i]]
+        next_state = []
+        for name in names:
+            next_state.append(transition.next_state[name])
         tran = algo_util.Transition(state=copy.deepcopy(state),
                                     action=transition.action[0],
                                     reward=transition.reward,
