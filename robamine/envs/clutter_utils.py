@@ -677,7 +677,7 @@ def get_asymmetric_actor_feature(autoencoder, normalizer, heightmap, mask, targe
         plt.show()
 
     if primitive == 1:
-        return np.append(normalized_latent, target_pos)
+        return np.append(normalized_latent, np.arctan2(- target_pos[1], - target_pos[0]))
 
     return np.append(normalized_latent, surface_distances.flatten())
 
