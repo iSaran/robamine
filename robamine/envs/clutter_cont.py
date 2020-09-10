@@ -764,6 +764,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.autoencoder = autoencoder
         self.autoencoder_scaler = autoencoder_scaler
+        self.heightmap_raw = None
+        self.mask_raw = None
 
     def __del__(self):
         if self.viewer is not None:
@@ -1016,6 +1018,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         camera_pose = get_camera_pose(self.sim, 'xtion')  # g_wc: camera w.r.t. the world
         self.target_pos_vision = np.matmul(camera_pose, np.array([centroid_camera[0], centroid_camera[1], centroid_camera[2], 1.0]))[:3]
         self.target_pos_vision[2] /= 2.0
+
+        self.heightmap_raw = cv_tools.Feature(heightmap).crop(193, 193).array()
+        self.mask_raw = cv_tools.Feature(mask).crop(193, 193).array()
 
         self.heightmap = cv_tools.Feature(heightmap).translate(centroid_pxl[0], centroid_pxl[1]).crop(193, 193).array()
         plt.imsave(os.path.join(self.log_dir, 'heightmap.png'), self.heightmap, cmap='gray', vmin=np.min(self.heightmap), vmax=np.max(self.heightmap))
