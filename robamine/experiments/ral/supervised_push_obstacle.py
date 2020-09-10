@@ -89,6 +89,42 @@ class PushObstacleRealPolicy(ObsDictPolicy):
         theta = min_max_scale(theta, range=[-np.pi, np.pi], target_range=[-1, 1])
         return np.array([1, theta])
 
+
+class PushObstacleRealPolicyDeterministic(ObsDictPolicy):
+    def predict(self, state):
+        n_objects = int(state['n_objects'])
+        target_pose = state['object_poses'][0]
+        target_bbox = state['object_bounding_box'][0]
+
+        distances = 100 * np.ones((int(n_objects),))
+        for i in range(1, n_objects):
+            obstacle_pose = state['object_poses'][i]
+            obstacle_bbox = state['object_bounding_box'][i]
+
+            distances[i] = clutter.get_distance_of_two_bbox(target_pose, target_bbox, obstacle_pose, obstacle_bbox)
+
+        closest_obstacles = np.argwhere(distances < 0.03).flatten()
+        angles = 2 * np.pi * np.ones(n_objects)
+        for object in closest_obstacles:
+            object_height = clutter.get_object_height(state['object_poses'][object], state['object_bounding_box'][object])
+
+            # Ignore obstacles below threshold for push obstacle
+            threshold = 2 * state['object_bounding_box'][0][2] + 1.1 * state['finger_height']
+            if object_height < threshold:
+                continue
+
+            direction = state['object_poses'][object][0:2] - target_pose[0:2]
+            direction /= np.linalg.norm(direction)
+            angle = np.arctan2(direction[1], direction[0])
+
+            angles[object] = angle
+
+        object = np.argmin(angles)
+        direction = state['object_poses'][object][0:2] - target_pose[0:2]
+        theta = np.arctan2(direction[1], direction[0])
+        theta = min_max_scale(theta, range=[-np.pi, np.pi], target_range=[-1, 1])
+        return np.array([1, theta])
+
 class PushObstacleFeature:
     def __init__(self, vae_path):
         # Load autoencoder and scaler

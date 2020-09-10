@@ -21,7 +21,7 @@ import math
 
 logger = logging.getLogger('robamine')
 
-from robamine.experiments.ral.supervised_push_obstacle import Actor, PushObstacleRealPolicy, ObsDictPolicy
+from robamine.experiments.ral.supervised_push_obstacle import Actor, PushObstacleRealPolicyDeterministic, ObsDictPolicy
 
 class ReplayBuffer(rb_mem.ReplayBuffer):
     def sample_batch(self, given_batch_size):
@@ -372,12 +372,14 @@ class SplitDQN(core.RLAgent):
         self.rng.seed(seed)
         self.epsilon = self.params['epsilon_start']
 
-        self.policy = [push_target_actor, ObsDictPushObstacle(push_obstacle_actor)]
+        self.policy = [push_target_actor, push_obstacle_actor]
 
     def predict(self, state):
         valid_nets, _ = clutter.get_valid_primitives(state, n_primitives=self.nr_network)
         values = - 1e6 * np.ones(self.nr_network)
-        state_feature = [state['push_target_feature'].copy(), state['push_obstacle_feature']]
+
+        state_feature = [state['push_target_feature'].copy(), state['push_obstacle_feature'].copy()]
+
         for i in range(self.nr_network):
             s = torch.FloatTensor(state_feature[i]).to(self.device)
             if valid_nets[i]:
@@ -393,7 +395,9 @@ class SplitDQN(core.RLAgent):
         if self.rng.uniform(0, 1) >= self.epsilon:
             result = self.predict(state)
             return result
-        primitive = self.rng.randint(0, self.nr_network)
+
+        _, valid_nets = clutter.get_valid_primitives(state, n_primitives=self.nr_network)
+        primitive = int(self.rng.choice(valid_nets, 1))
         action = self.policy[primitive].predict(state)
         return action
 
@@ -525,9 +529,9 @@ class ComboExp:
 
 
         if push_obstacle_actor_path == 'real':
-            self.push_obstacle_actor = PushObstacleRealPolicy()
+            self.push_obstacle_actor = PushObstacleRealPolicyDeterministic()
         else:
-            self.push_obstacle_actor = Actor.load(push_obstacle_actor_path)
+            self.push_obstacle_actor = ObsDictPolicy(Actor.load(push_obstacle_actor_path))
 
         dqn_params = {'hidden_units': [[200, 200], [200, 200]],
                       'device': 'cpu',
@@ -632,9 +636,9 @@ if __name__ == '__main__':
 
     exp = ComboExp(params=params,
                    push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
-                   push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic_256size/model_60.pkl'),
-                   # push_obstacle_actor_path='real',
-                   friendly_name='combo_split_dqn_deterministic_256size',
+                   # push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic_256size/model_60.pkl'),
+                   push_obstacle_actor_path='real',
+                   friendly_name='combo_split_dqn_deterministic_256size_realpushobs',
                    seed=1)
     exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
     # exp.eval_with_render()
