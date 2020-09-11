@@ -48,6 +48,8 @@ if __name__ == '__main__':
     params['env']['params']['vae_path'] = vae_path
 
     params['env']['params']['render'] = True
+    params['env']['params']['hug_probability'] = 0.0
+    params['env']['params']['nr_of_obstacles'] = [10, 13]
     env = ClutterContWrapper(params=params['env']['params'])
 
     obs = env.reset(seed=2)
@@ -105,3 +107,22 @@ if __name__ == '__main__':
     name = 'ae_output'; path = os.path.join(os.path.join(logging_dir, 'generate_paper_figures'), name)
     plt.imsave(path, img, cmap='gray', vmin=np.min(img), vmax=np.max(img))
 
+    action = [0, 0.5, 0]
+    obs, _, _, _ = env.step(action)
+
+    heightmap = obs['heightmap_mask'][0].copy()
+    mask = obs['heightmap_mask'][1].copy()
+    target_bounding_box_z = obs['target_bounding_box'][2].copy()
+    finger_height = obs['finger_height'].copy()
+    surface_distances = [obs['surface_size'][0] - obs['object_poses'][0, 0], \
+                         obs['surface_size'][0] + obs['object_poses'][0, 0], \
+                         obs['surface_size'][1] - obs['object_poses'][0, 1], \
+                         obs['surface_size'][1] + obs['object_poses'][0, 1]]
+    surface_distances = np.array([x / 0.5 for x in surface_distances])
+    target_pos = obs['object_poses'][0, 0:2].copy()
+    visual_feature = clutter.get_actor_visual_feature(heightmap, mask, target_bounding_box_z,
+                                                      finger_height, 0,
+                                                      0, plot=False)
+    img = visual_feature
+    name = 'next_feature'; path = os.path.join(os.path.join(logging_dir, 'generate_paper_figures'), name)
+    plt.imsave(path, img, cmap='gray', vmin=np.min(img), vmax=np.max(img))
