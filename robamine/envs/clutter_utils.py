@@ -597,6 +597,100 @@ class RealState(Feature):
     def dim():
         return 14 * 4 * 3 + 4 + 1 # TODO: hardcoded max n objects
 
+class RealRealState(Feature):
+    def __init__(self, obs_dict, angle=0, sort=True, normalize=True, spherical=False, range_norm=[-1, 1],
+                 translate_wrt_target=False, name=None):
+        '''Angle in rad.'''
+        self.poses = obs_dict['object_poses'][obs_dict['object_above_table']]
+        self.bounding_box = obs_dict['object_bounding_box'][obs_dict['object_above_table']]
+        self.n_objects = self.poses.shape[0]
+        self.max_n_objects = obs_dict['max_n_objects']
+        self.range_norm = range_norm
+        self.translate_wrt_target = translate_wrt_target
+
+        # Calculate principal corners for feature
+        self.features = np.concatenate((self.poses, self.bounding_box), axis=1)
+        self.surface_size = obs_dict['surface_size']
+        self.surface_edges = obs_dict['surface_edges']
+        rot_2d = np.array([[cos(angle), -sin(angle)],
+                           [sin(angle), cos(angle)]])
+        self.surface_edges = np.transpose(np.matmul(rot_2d, np.transpose(self.surface_edges)))
+        if 'surface_distances' in obs_dict:
+            self.surface_distances = obs_dict['surface_distances']
+        else:
+            self.surface_distances = np.zeros(4)
+
+        self.init_distance_from_target = obs_dict['init_distance_from_target'][0]
+
+        if sort:
+            self.sort()
+
+    def sort(self):
+        self.features[1:] = self.features[1:][np.argsort(np.linalg.norm(self.features[1:, 0:2], axis=1))]
+
+    def array(self):
+        array = np.zeros((14, 10))
+        array[0:len(self.features)] = self.features
+        array = array.flatten()
+        array = np.append(array, self.surface_distances.flatten())
+        array = np.append(array, self.init_distance_from_target)
+
+        # assert (array <= 1).all()
+        # assert (array >= -1).all()
+
+        # assert array.shape[0] == self.dim()
+        return array
+
+    def rotate(self, angle):
+        for i in range(self.n_objects):
+            self.principal_corners[i] = self._transform_list_of_points(self.principal_corners[i], pos=np.zeros(3),
+                                                                       quat=Quaternion.from_rotation_matrix(
+                                                                           rot_z(angle)))
+
+    def plot(self, centroids=False, action=None, ax=None):
+        from mpl_toolkits.mplot3d import Axes3D
+        if ax is None:
+            fig = plt.figure()
+            ax = Axes3D(fig)
+
+        color = iter(plt.cm.rainbow(np.linspace(0, 1, self.principal_corners_plot.shape[0])))
+
+        centroids_ = np.mean(self.principal_corners_plot, axis=1)
+        for object in range(self.principal_corners_plot.shape[0]):
+            c = next(color)
+            for corner in range(self.principal_corners_plot.shape[1]):
+                ax.plot([self.principal_corners_plot[object, corner, 0]],
+                        [self.principal_corners_plot[object, corner, 1]],
+                        [self.principal_corners_plot[object, corner, 2]], color=c, marker='o')
+
+                if corner > 0:
+                    ax.plot([self.principal_corners_plot[object, 0, 0], self.principal_corners_plot[object, corner, 0]],
+                            [self.principal_corners_plot[object, 0, 1], self.principal_corners_plot[object, corner, 1]],
+                            [self.principal_corners_plot[object, 0, 2], self.principal_corners_plot[object, corner, 2]],
+                            color=c, linestyle='-')
+
+                if centroids:
+                    ax.plot([centroids_[object, 0]],
+                            [centroids_[object, 1]],
+                            [centroids_[object, 2]], color=c, marker='o')
+
+        if action is not None:
+            init = action[3] * np.array([cos(action[1]), sin(action[1])])
+            final = -action[2] * np.array([cos(action[1]), sin(action[1])])
+            # init += self.poses[0, 0:2]
+            # final += self.poses[0, 0:2]
+            ax.plot([init[0]], [init[1]], [0], color=[0, 0, 0], marker='o')
+            ax.plot([final[0]], [final[1]], [0], color=[1, 1, 1], marker='o')
+            ax.plot([init[0], final[0]], [init[1], final[1]], [0, 0], color=[0, 0, 0], linestyle='-')
+
+        # ax.axis([-0.25, 0.25, -0.25, 0.25])
+        ax.axis('equal')
+        # plt.show()
+
+    @staticmethod
+    def dim():
+        return 14 * 10 + 4 + 1 # TODO: hardcoded max n objects
+
 
 def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0, primitive=0, plot=False,
                              maskout_target=False, crop_area=[128, 128], pooling=True, singulation_distance=0.03,
