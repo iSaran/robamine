@@ -531,7 +531,7 @@ class ComboExp:
         if push_obstacle_actor_path == 'real':
             self.push_obstacle_actor = PushObstacleRealPolicyDeterministic()
         else:
-            self.push_obstacle_actor = ObsDictPolicy(Actor.load(push_obstacle_actor_path))
+            self.push_obstacle_actor = ObsDictPushObstacle(Actor.load(push_obstacle_actor_path))
 
         dqn_params = {'hidden_units': [[200, 200], [200, 200]],
                       'device': 'cpu',
