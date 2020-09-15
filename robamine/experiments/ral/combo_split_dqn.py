@@ -610,7 +610,26 @@ class ComboExp:
         world = EvalWorld(agent, env=config['env'], params=config['world'])
         world.run()
 
+    def eval_in_scenes(self, n_scenes=1000):
+        rb_logging.init(directory=params['world']['logging_dir'], friendly_name=self.friendly_name + '_eval', file_level=logging.INFO)
+        directory = os.path.join(self.params['world']['logging_dir'], self.friendly_name)
+        with open(os.path.join(directory, 'config.yml'), 'r') as stream:
+            try:
+                config = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
 
+        config['env']['params']['render'] = False
+        config['env']['params']['log_dir'] = params['world']['logging_dir']
+        config['env']['params']['deterministic_policy'] = True
+        config['env']['params']['nr_of_obstacles'] = [1, 13]
+        config['world']['episodes'] = n_scenes
+        agent = SplitDQN.load(os.path.join(directory, 'model.pkl'), self.push_target_actor, self.push_obstacle_actor,
+                              self.seed)
+        world = EvalWorld(agent, env=config['env'], params=config['world'])
+        world.seed_list = np.arange(0, n_scenes, 1).tolist()
+        world.run()
+        print('Logging dir:', params['world']['logging_dir'])
 
 if __name__ == '__main__':
     pid = os.getpid()
@@ -636,10 +655,11 @@ if __name__ == '__main__':
 
     exp = ComboExp(params=params,
                    push_target_actor_path=os.path.join(logging_dir, '../ral-results/env-very-hard/splitac-modular/push-target/train/model.pkl'),
-                   # push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic_256size/model_60.pkl'),
-                   push_obstacle_actor_path='real',
-                   friendly_name='combo_split_dqn_deterministic_256size_realpushobs',
+                   push_obstacle_actor_path=os.path.join(logging_dir, 'push_obstacle_supervised/actor_deterministic_256size/model_60.pkl'),
+                   # push_obstacle_actor_path='real',
+                   friendly_name='combo_split_dqn_deterministic_256size',
                    seed=1)
-    exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
+    # exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
     # exp.eval_with_render()
     # exp.check_transition()
+    exp.eval_in_scenes(n_scenes=1000)
