@@ -31,6 +31,16 @@ import h5py
 import copy
 from robamine.envs.clutter_cont import ClutterContWrapper
 
+from robamine.algo.yang.trainer import Trainer
+from robamine.algo.yang.policies import Coordinator
+from robamine.algo.yang.utils import get_push_pix, check_grasp_margin, get_heightmap, check_push_target_oriented, \
+    check_grasp_target_oriented, check_env_depth_change,get_replay_id
+from robamine.algo.yang.logger import Logger
+from robamine.utils.mujoco import get_camera_pose
+import time
+import datetime
+import cv2
+from robamine.algo.core import InvalidEnvError
 
 logger = logging.getLogger('robamine')
 
@@ -2156,45 +2166,44 @@ class ComboExp:
                 if done:
                     break
 
-from robamine.algo.yang.trainer import Trainer
-from robamine.algo.yang.policies import Coordinator
-from robamine.algo.yang.utils import get_push_pix, check_grasp_margin, get_heightmap, check_push_target_oriented, \
-    check_grasp_target_oriented, check_env_depth_change,get_replay_id
-from robamine.algo.yang.logger import Logger
-from robamine.utils.mujoco import get_camera_pose
-import time
-import datetime
-import cv2
-
 
 class GraspingInvisble:
     def __init__(self, params):
+
+        self.params = params
+        self.is_testing = True
 
         # Initialize trainer
         self.trainer = Trainer(params['algorithm']['future_reward_discount'], is_testing=False, load_snapshot=False,
                                snapshot_file=None, force_cpu=params['setup']['force_cpu'])
 
+        if self.is_testing:
+            self.trainer.model.load_state_dict(torch.load(params['logging']['critic_ckpt_file']))
+
         # Define coordination policy (coordinate target-oriented pushing and grasping)
-        self.coordinator = Coordinator(save_dir=params['world']['logging_dir'], ckpt_file=None)
+        self.coordinator = Coordinator(save_dir=params['world']['logging_dir'],
+                                       ckpt_file=params['logging']['coordinator_ckpt_file'])
+        # self.coordinator = Coordinator(save_dir=params['world']['logging_dir'],
+        #                                ckpt_file=None)
 
         # Initialize variables for grasping fail and exploration probability
         self.grasp_fail_count = [0]
         self.motion_fail_count = [0]
-        self.explore_prob = 0.505
+        self.explore_prob = 0.99
 
         # Workspace limits
         self.workspace_limits = np.asarray([[-0.224, 0.224], [-0.224, 0.224], [-0.01, 0.4]])
 
         params['env']['params']['render'] = True
-        self.env = ClutterContWrapper(params=params['env']['params'])
+        self.env = ClutterContWrapper(params=self.params['env']['params'])
 
         # Initialize data logger
         timestamp = time.time()
         timestamp_value = datetime.datetime.fromtimestamp(timestamp)
-        logging_directory = os.path.join(params['world']['logging_dir'], timestamp_value.strftime('%Y-%m-%d.%H:%M:%S'))
+        logging_directory = os.path.join(self.params['world']['logging_dir'], timestamp_value.strftime('%Y-%m-%d.%H:%M:%S'))
         self.logger = Logger(logging_directory)
         self.logger.save_heightmap_info(self.workspace_limits,
-                                        params['setup']['heightmap_resolution'])  # Save heightmap parameters
+                                        self.params['setup']['heightmap_resolution'])  # Save heightmap parameters
 
         self.color_heightmap = []
         self.depth_heightmap = []
@@ -2202,7 +2211,9 @@ class GraspingInvisble:
 
         self.target_grasped = False
 
+
     def train(self):
+        episodes = 0
         while True:
             rng = np.random.RandomState()
             rng.seed()
@@ -2210,7 +2221,18 @@ class GraspingInvisble:
             # Get heightmaps
             self.env.reset()
 
+            self.motion_fail_count[0] = 0
+            self.grasp_fail_count[0] = 0
+
+            steps = 0
+            episodes += 1
+
             while True:
+                try:
+                    obs = self.env.env.get_obs()
+                except InvalidEnvError as e:
+                    break
+
                 obs = self.env.env.get_obs()
                 color_img = obs['color_img']
                 depth_img = obs['depth_img']
@@ -2223,7 +2245,7 @@ class GraspingInvisble:
 
                 self.color_heightmap, self.depth_heightmap, self.mask_heightmap = get_heightmap(
                     color_img, depth_img, mask_img, camera.get_camera_matrix(), camera_pose, self.workspace_limits,
-                    params['setup']['heightmap_resolution'])
+                    self.params['setup']['heightmap_resolution'])
 
                 # Save RGB-D images and RGB-D heightmaps
                 self.logger.save_images(self.trainer.iteration, color_img, depth_img)
@@ -2237,11 +2259,15 @@ class GraspingInvisble:
                 push_predictions, grasp_predictions, state_feat = self.trainer.forward(self.color_heightmap, self.depth_heightmap,
                                                                                        self.mask_heightmap, is_volatile=True)
 
-                # Execute action
-                primitive_action, best_pix_ind, push_end_pix_yx = self.execute_action(push_predictions, grasp_predictions,
-                                                                                      margin_occupy_ratio, margin_occupy_norm)
+                try:
+                    # Execute action
+                    primitive_action, best_pix_ind, push_end_pix_yx = self.execute_action(push_predictions, grasp_predictions,
+                                                                                          margin_occupy_ratio, margin_occupy_norm)
+                except InvalidEnvError as e:
+                    break
 
-                if 'prev_color_img' in locals():
+                if not self.is_testing and 'prev_color_img' in locals():
+
                     # Check if the primitive is target oriented
                     motion_target_oriented = False
                     if prev_primitive_action == 'push':
@@ -2254,13 +2280,13 @@ class GraspingInvisble:
                     if self.env.env.terminal_state_yang(self.mask_heightmap):
                         break
                     else:
-                        # Detect push changes
+                        # Check if the push action increased the space around the target
                         if not prev_target_grasped:
                             margin_increase_threshold = 0.1
                             margin_increase_val = prev_margin_occupy_ratio - margin_occupy_ratio
                             if margin_increase_val > margin_increase_threshold:
                                 margin_increased = True
-                                print('Grasp margin increased: (value: %d)' % margin_increase_val)
+                                print('Grasp margin increased:', margin_increase_val)
 
                     push_effective = margin_increased
                     env_change_detected, _ = check_env_depth_change(prev_depth_heightmap, self.depth_heightmap)
@@ -2282,7 +2308,7 @@ class GraspingInvisble:
                     self.logger.write_to_log('loss-rec', self.trainer.loss_rec)
 
                     # Adjust exploration probability
-                    self.explore_prob = 0.5 * np.power(0.998, self.trainer.iteration) + 0.05
+                    self.explore_prob = 0.5 * np.power(0.9995, self.trainer.iteration) + 0.05
 
                     # Do sampling for experience replay
                     sample_primitive_action = prev_primitive_action
@@ -2315,21 +2341,22 @@ class GraspingInvisble:
                         # if not augment_training and len(trainer.augment_ids):
                         #     augment_training = True
 
-                if self.trainer.iteration % 500 == 0:
-                    self.logger.save_model(self.trainer.iteration, self.trainer.model)
-                    if self.trainer.use_cuda:
-                        self.trainer.model = self.trainer.model.cuda()
+                if not self.is_testing:
+                    if self.trainer.iteration % 500 == 0:
+                        self.logger.save_model(self.trainer.iteration, self.trainer.model)
+                        if self.trainer.use_cuda:
+                            self.trainer.model = self.trainer.model.cuda()
 
                 # Train coordinator
-                # Train coordinator
-                lc, acc = self.coordinator.optimize_model()
-                if lc is not None:
-                    self.trainer.sync_loss.append(lc)
-                    self.trainer.sync_acc.append(acc)
-                    logger.write_to_log('sync-loss', self.sync_loss)
-                    logger.write_to_log('sync-acc', self.trainer.sync_acc)
-                if self.trainer.iteration % 500 == 0:
-                    self.coordinator.save_networks(self.trainer.iteration)
+                if not self.is_testing:
+                    lc, acc = self.coordinator.optimize_model()
+                    if lc is not None:
+                        self.trainer.sync_loss.append(lc)
+                        self.trainer.sync_acc.append(acc)
+                        self.logger.write_to_log('sync-loss', self.trainer.sync_loss)
+                        self.logger.write_to_log('sync-acc', self.trainer.sync_acc)
+                    if self.trainer.iteration % 500 == 0:
+                        self.coordinator.save_networks(self.trainer.iteration)
 
                 # Save information for next training step
                 prev_color_img = color_img.copy()
@@ -2338,8 +2365,7 @@ class GraspingInvisble:
                 prev_depth_heightmap = self.depth_heightmap.copy()
                 prev_mask_heightmap = self.mask_heightmap.copy()
 
-                target_grasped = self.target_grasped
-                prev_target_grasped = target_grasped
+                prev_target_grasped = self.target_grasped
                 prev_primitive_action = primitive_action
                 prev_best_pix_ind = best_pix_ind
                 prev_push_end_pix_yx = push_end_pix_yx
@@ -2347,6 +2373,8 @@ class GraspingInvisble:
 
                 self.trainer.iteration += 1
                 print('Iteration:', self.trainer.iteration)
+                print('Episode:', episodes, 'step:', steps)
+                steps += 1
                 print('--------------------------')
                 print('--------------------------')
 
@@ -2357,33 +2385,41 @@ class GraspingInvisble:
         best_grasp_pix_ind = np.unravel_index(np.argmax(grasp_predictions), grasp_predictions.shape)
 
         # Visualize executed primitive, and affordances
-        if params['logging']['save_visualizations']:
+        if self.params['logging']['save_visualizations']:
             push_pred_vis = self.trainer.get_push_prediction_vis(push_predictions, self.color_heightmap, best_push_pix_ind,
                                                             push_end_pix_yx)
             cv2.imwrite('visualization.push.png', push_pred_vis)
             grasp_pred_vis = self.trainer.get_grasp_prediction_vis(grasp_predictions, self.color_heightmap, best_grasp_pix_ind)
             cv2.imwrite('visualization.grasp.png', grasp_pred_vis)
 
+        # Determine whether grasping or pushing should be executed based on network predictions
         best_push_conf = np.max(push_predictions)
         best_grasp_conf = np.max(grasp_predictions)
         print('Primitive confidence scores: %f (push), %f (grasp)' % (best_push_conf, best_grasp_conf))
 
         # Actor
-        if self.trainer.iteration < params['algorithm']['stage_epoch']:
+        if not self.is_testing and self.trainer.iteration < self.params['algorithm']['stage_epoch']:
             print('Greedy deterministic policy ...')
-            motion_type = 1 if best_grasp_conf > best_push_conf else 0
+            if best_grasp_conf > best_push_conf:
+                motion_type = 1
+            else:
+                motion_type = 0
         else:
             print('Coordination policy ...')
             syn_input = [best_push_conf, best_grasp_conf, margin_occupy_ratio,
                          margin_occupy_norm, self.grasp_fail_count[0]]
             motion_type = self.coordinator.predict(syn_input)
+
         explore_actions = np.random.uniform() < self.explore_prob
-        if explore_actions:
+        if not self.is_testing and explore_actions:
             print('Exploring actions, explore_prob: %f' % self.explore_prob)
             motion_type = 1 - 0
-            motion_type = np.random.randint(0, 2)
+            # motion_type = np.random.randint(0, 2)
 
-        primitive_action = 'push' if motion_type == 0 else 'grasp'
+        if motion_type == 0:
+            primitive_action = 'push'
+        else:
+            primitive_action = 'grasp'
 
         if primitive_action == 'push':
             self.grasp_fail_count[0] = 0
@@ -2402,8 +2438,8 @@ class GraspingInvisble:
         best_pix_x = best_pix_ind[2]
         best_pix_y = best_pix_ind[1]
         print('Action: %s at (%d, %d, %d)' % (primitive_action, best_rotation_angle, best_pix_x, best_pix_y))
-        primitive_position = [best_pix_x * params['setup']['heightmap_resolution'] + self.workspace_limits[0][0],
-                              best_pix_y * params['setup']['heightmap_resolution'] + self.workspace_limits[1][0],
+        primitive_position = [best_pix_x * self.params['setup']['heightmap_resolution'] + self.workspace_limits[0][0],
+                              best_pix_y * self.params['setup']['heightmap_resolution'] + self.workspace_limits[1][0],
                               self.depth_heightmap[best_pix_y][best_pix_x]]
 
         # Save executed primitive
@@ -2419,18 +2455,20 @@ class GraspingInvisble:
             self.env.env.push_yang(primitive_position, best_rotation_angle)
         else:
             self.grasp_fail_count[0] += 1
-            self.env.env.grasp_yang(primitive_position, best_rotation_angle, spread=0.04)
+            self.env.env.grasp_yang(primitive_position, best_rotation_angle, spread=0.035)
 
         self.target_grasped = self.env.env.is_target_grasped()
-        if self.target_grasped:
-            self.motion_fail_count[0] = 0
-            self.grasp_fail_count[0] = 0
+        self.logger.write_to_log('target-grasped', self.trainer.target_grasped_log)
 
-        if 'primitive_action' == 'grasp' and check_grasp_target_oriented(best_pix_ind, self.mask_heightmap):
-            data_label = self.target_grasped
-            print('Collecting classifier data', data_label)
-            print('Syn_Input:', syn_input)
-            self.coordinator.memory.push(syn_input, data_label)
+        if not self.is_testing and self.trainer.iteration >= self.params['algorithm']['stage_epoch']:
+            if primitive_action == 'grasp' and check_grasp_target_oriented(best_pix_ind, self.mask_heightmap):
+                data_label = int(self.target_grasped)
+                self.coordinator.memory.push(syn_input, data_label)
+
+                file = open('dataset.txt', 'a')
+                line = [self.trainer.iteration, syn_input, data_label]
+                file.write("%s\n" % line)
+
 
         return primitive_action, best_pix_ind, push_end_pix_yx
 
@@ -2714,7 +2752,6 @@ def train_yang(params):
             prev_depth_heightmap = depth_heightmap.copy()
             prev_mask_heightmap = mask_heightmap.copy()
 
-            target_grasped = False
             prev_target_grasped = target_grasped
             prev_primitive_action = primitive_action
             prev_best_pix_ind = best_pix_ind

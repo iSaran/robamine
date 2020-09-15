@@ -92,7 +92,8 @@ class PinholeCamera:
 color_params = {
     'red': ([0, 120, 70], [10, 255, 255]),
     'blue': ([100, 150, 0], [140, 255, 255]),
-    'green': ()
+    'green': (),
+    'yellow': ()
 }
 
 

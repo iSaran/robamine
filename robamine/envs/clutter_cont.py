@@ -477,6 +477,15 @@ class ClutterXMLGenerator(XMLGenerator):
         else:
             self.n_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
 
+        # colors = np.zeros((self.params['nr_of_obstacles'][1] + 1, 4))
+        # colors[:, 3] = 1
+        # colors[1] = np.array([1, 0, 0, 1])
+        # colors[2] = np.array([1, 1, 0, 1])
+        # colors[3] = np.array([1, 0, 1, 1])
+        # colors[4] = np.array([0, 1, 1, 1])
+        # colors[5] = np.array([0, 1, 0, 1])
+        # colors[6] = np.array([0.5, 0.5, 0.5, 1])
+        # colors[7:] = np.array([0.5, 0.5, 0.5, 1])
         for i in range(1, self.n_obstacles + 1):
             # Randomize type (box or cylinder)
             temp = self.rng.uniform(0, 1)
@@ -1217,7 +1226,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         obs_dict = dict()
         obs_dict['color_img'] = self.raw_color
         obs_dict['depth_img'] = self.raw_depth
-        obs_dict['mask_img'] = self.raw_mask
+        obs_dict['mask_img'] = cv_tools.Feature(self.raw_mask).normalize(255).array() # binary mask as input to yang20
         return obs_dict
 
     def step(self, action):
@@ -1298,7 +1307,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.sim_step()
 
         grasp_z = position[2] - 0.02
-        grasp_z = max(0.02, grasp_z)
+        grasp_z = max(0.01, grasp_z)
 
         if self.move_joints_to_target([None, None, grasp_z], [None, None, grasp_z], ext_force_policy='avoid'):
             centroid = (f1_initial_pos_world + f2_initial_pos_world) / 2
@@ -1770,11 +1779,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return -0.25
 
-    def terminal_state_yang(self, obs):
+    def terminal_state_yang(self, mask):
         if self.timesteps >= self.max_timesteps:
             return True
 
         if self.target_grasped_successfully:
+            return True
+
+        if (mask == 0).all():
             return True
 
         return False
