@@ -1,0 +1,70 @@
+setup:
+  heightmap_resolution: 0.002
+  random_seed: 1234
+  force_cpu: false
+algorithm:
+  future_reward_discount: 0.5
+  stage_epoch: 1000
+logging:
+  critic_ckpt_file: '/home/mkiatos/robamine/logs/yang/2020-09-15.17:03:30/critic_models/critic-007500.pth'
+  coordinator_ckpt_file: '/home/mkiatos/robamine/logs/yang/2020-09-15.17:03:30/coordinator_models/coordinator-007500.pth'
+  save_visualizations: true
+env:
+  name: ClutterContWrapper-v0
+  params:
+    icra:
+      use: False
+      n_rotations: 8
+      n_primitives: 3
+    hardcoded_primitive: 0
+    max_timesteps: 20
+    real_state: True
+    all_equal_height_prob: 0.2
+    finger:
+      size: 0.005
+      type: sphere
+    nr_of_obstacles:
+      - 8
+      - 8
+    render: false
+    target:
+      min_bounding_box: [.04, .03, .005]
+      max_bounding_box: [.04, .03, .020]
+      probability_box: 1.0
+      enforce_convex_hull: 15
+      randomize_pos: True
+    obstacle:
+      min_bounding_box: [.04, .03, .005]
+      max_bounding_box: [.04, .03, .020]
+      probability_box: 1.0
+      pushable_threshold_coeff: -0.5 # Set -0.5 by default or 1 if standalone push obstacle
+    push:
+      distance: [0.02, 0.10]
+      target_init_distance: [0.0, 0.15]
+      predict_collision: True
+    grasp:
+      spread: [0.05, 0.05]
+      height: [0.01, 0.01]
+      workspace: [0.0, 0.1]
+    feature_normalization_per: 'session'  # available: 'session', 'episode'
+    hug_probability: 0.5
+    walls:
+      use: False
+      singulate: False  # Set false if push target and walls
+    terminal:
+      stuck_on_wall: False  # Set true if push target and walls
+    deterministic_policy: False
+world:
+  comments: ''
+  friendly_name: ''
+  logging_dir: /home/mkiatos/robamine/logs/yang/
+  name: TrainEval
+  params:
+    episodes: 10000
+    eval_episodes: 10
+    eval_every: 20
+    eval_render: false
+    render: false
+    save_every: 100
+    max_disk_size: 50 # GB
+
