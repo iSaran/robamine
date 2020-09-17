@@ -864,7 +864,7 @@ def detect_empty_action_from_real_state(obs_dict, obs_dict_prev):
     poses_prev = obs_dict_prev['object_poses'][obs_dict_prev['object_above_table']][:, 0:3]
     if len(poses) == len(poses_prev):
         error = np.abs(poses - poses_prev)
-        return (error < 1e-3).all()
+        return (error < 5e-3).all()
     return False
 
 def get_distances_from_walls(obs_dict):

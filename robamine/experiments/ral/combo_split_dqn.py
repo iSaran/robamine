@@ -278,6 +278,87 @@ class ReplayBuffer(rb_mem.ReplayBuffer):
 #
 
 
+
+class Episode(core.Episode):
+    def run(self, render=False, init_state=None, seed=None):
+        print('Run episode with seed:', seed)
+        state = self.env.reset(seed=seed)
+        # self.env.load_state_dict(init_state)
+
+        while True:
+            if (render):
+                self.env.render()
+            action = self._action_policy(state)
+
+            next_state, reward, done, info = self.env.step(action)
+            if info['empty']:
+                self.agent.last_was_empty = True
+            print('Run episode with seed:', seed, 'action:', action, 'reward:', reward, 'done:', done,
+                  'termination_reason:', info['termination_reason'])
+            transition = algo_util.Transition(state, action, reward, next_state, done)
+            self._learn(transition)
+            self._update_stats_step(transition, info)
+
+            state = next_state.copy()
+            if done:
+                self.termination_reason = info['termination_reason']
+                break
+
+        self._update_states_episode(info)
+
+
+class TestingEpisode(Episode):
+    def _action_policy(self, state):
+        return self.agent.predict(state)
+
+    def _learn(self, transition):
+        pass
+
+class EvalWorld2(core.EvalWorld):
+    def run_episode(self, i):
+        episode = TestingEpisode(self.agent, self.env)
+
+        # LIke super run episode
+        if self.env_init_states:
+            init_state = self.env_init_states[i]
+        else:
+            init_state = None
+
+        if self.seed_list is not None:
+            seed = self.seed_list[i + self.seed_offset]
+        else:
+            seed = self.rng.randint(0, 999999999)
+
+        episode.run(render=self.render, init_state=init_state, seed=seed)
+
+        # Update tensorboard stats
+        self.stats.update(i, episode.stats)
+        self.episode_stats.append(episode.stats)
+        self.episode_list_data.append(episode.data)
+
+        # Save agent model
+        self.save()
+        if self.save_every and (i + 1) % self.save_every == 0:
+            self.save(suffix='_' + str(i+1))
+
+        # Save the config in YAML file
+        self.experience_time += episode.stats['experience_time']
+        self.update_results(n_iterations = i + 1, n_timesteps = episode.stats['n_timesteps'])
+
+        for i in range (0, episode.stats['n_timesteps']):
+            self.expected_values_file.write(str(episode.stats['q_value'][i]) + ',' + str(episode.stats['monte_carlo_return'][i]) + '\n')
+            self.expected_values_file.flush()
+
+        for i in range(len(episode.stats['actions_performed']) - 1):
+            self.actions_file.write(str(episode.stats['actions_performed'][i]) + ',')
+        self.actions_file.write(str(episode.stats['actions_performed'][-1]) + '\n')
+        self.actions_file.flush()
+
+        print('---')
+        self.episode_list_data.calc()
+        print(self.episode_list_data.__str__())
+
+
 class ObsDictPushTarget(ObsDictPolicy):
     def __init__(self, nn, device='cpu'):
         self.nn = nn
@@ -373,8 +454,15 @@ class SplitDQN(core.RLAgent):
         self.epsilon = self.params['epsilon_start']
 
         self.policy = [push_target_actor, push_obstacle_actor]
+        self.last_was_empty = False
 
     def predict(self, state):
+
+        if self.last_was_empty:
+            action = self.policy[0].predict(state)
+            self.last_was_empty = False
+            return action
+
         valid_nets, _ = clutter.get_valid_primitives(state, n_primitives=self.nr_network)
         values = - 1e6 * np.ones(self.nr_network)
 
@@ -606,7 +694,8 @@ class ComboExp:
         config['env']['params']['push']['predict_collision'] = False
         config['env']['params']['max_timesteps'] = 10
         config['env']['params']['log_dir'] = '/tmp'
-        config['world']['episodes'] = 10
+        config['env']['params']['deterministic_policy'] = True
+        config['world']['episodes'] = 20
         world = EvalWorld(agent, env=config['env'], params=config['world'])
         world.run()
 
@@ -623,11 +712,12 @@ class ComboExp:
         config['env']['params']['log_dir'] = params['world']['logging_dir']
         config['env']['params']['deterministic_policy'] = True
         config['env']['params']['nr_of_obstacles'] = [1, 13]
+        config['env']['params']['obstacle']['pushable_threshold_coeff'] = 1
         config['world']['episodes'] = n_scenes
         agent = SplitDQN.load(os.path.join(directory, 'model.pkl'), self.push_target_actor, self.push_obstacle_actor,
                               self.seed)
-        world = EvalWorld(agent, env=config['env'], params=config['world'])
-        world.seed_list = np.arange(0, n_scenes, 1).tolist()
+        world = EvalWorld2(agent, env=config['env'], params=config['world'])
+        world.seed_list = np.arange(0, n_scenes, 100).tolist()
         world.run()
         print('Logging dir:', params['world']['logging_dir'])
 

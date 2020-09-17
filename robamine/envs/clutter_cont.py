@@ -1241,14 +1241,22 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
         self.heightmap_prev = self.heightmap.copy()
 
+
+        empty = False
+        if self.params['deterministic_policy'] and detect_empty_action_from_real_state(self.obs_dict,
+                                                                                       self.obs_dict_prev):
+            empty = True
+
         collision = False
         if reason == 'collision':
             collision = True
+
         return obs, reward, done, {'experience_time': experience_time,
                                    'success': self.success,
                                    'extra_data': extra_data,
                                    'collision': collision,
-                                   'termination_reason': reason}
+                                   'termination_reason': reason,
+                                   'empty': empty}
 
     def do_simulation(self, action):
         primitive = int(action[0])
@@ -1705,9 +1713,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 return True, 'deterministic_collision'
             return True, 'collision'
 
-        if self.params['deterministic_policy'] and detect_empty_action_from_real_state(self.obs_dict,
-                                                                                       self.obs_dict_prev):
-            return True, 'empty'
 
         # If the object has fallen from the table
         if obs['object_poses'][0][2] < 0:
