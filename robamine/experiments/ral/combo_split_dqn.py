@@ -717,7 +717,7 @@ class ComboExp:
         agent = SplitDQN.load(os.path.join(directory, 'model.pkl'), self.push_target_actor, self.push_obstacle_actor,
                               self.seed)
         world = EvalWorld2(agent, env=config['env'], params=config['world'])
-        world.seed_list = np.arange(0, n_scenes, 100).tolist()
+        world.seed_list = np.arange(0, n_scenes, 1).tolist()
         world.run()
         print('Logging dir:', params['world']['logging_dir'])
 
