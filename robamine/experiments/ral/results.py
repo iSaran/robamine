@@ -39,7 +39,8 @@ def analyze_multiple_eval_envs(dir_, results_dir):
         exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
     analyze_multiple_evals(exps, results_dir, env_name='Env-very-hard')
 
-    exps = [{'name': 'Random', 'path': '../ral-results/env-walls/random', 'action_discrete': False}]
+    exps = [{'name': 'Random', 'path': '../ral-results/env-walls/random', 'action_discrete': False},
+            {'name': 'Combo', 'path': '../ral-results/env-walls/splitac-modular/combo', 'action_discrete': False}]
     for i in range(len(exps)):
         exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
     analyze_multiple_evals(exps, results_dir, env_name='Env-walls')
