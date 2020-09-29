@@ -709,10 +709,17 @@ class ComboExp:
                 print(exc)
 
         config['env']['params']['render'] = False
+        config['env']['params']['push']['predict_collision'] = True
         config['env']['params']['log_dir'] = params['world']['logging_dir']
         config['env']['params']['deterministic_policy'] = True
-        config['env']['params']['nr_of_obstacles'] = [1, 13]
+        config['env']['params']['nr_of_obstacles'] = [8, 13]
         config['env']['params']['obstacle']['pushable_threshold_coeff'] = 1
+        # config['env']['params']['target']['randomize_pos'] = False
+        # config['env']['params']['target']['min_bounding_box'] = [.03, .02, .005]
+        # config['env']['params']['target']['max_bounding_box'] = [.03, .02, .020]
+        # config['env']['params']['obstacle']['min_bounding_box'] = [.03, .02, .005]
+        # config['env']['params']['obstacle']['max_bounding_box'] = [.03, .02, .020]
+        # config['env']['params']['hug_probability'] = 0.0
         config['world']['episodes'] = n_scenes
         agent = SplitDQN.load(os.path.join(directory, 'model.pkl'), self.push_target_actor, self.push_obstacle_actor,
                               self.seed)
