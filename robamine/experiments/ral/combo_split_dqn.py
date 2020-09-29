@@ -714,7 +714,7 @@ class ComboExp:
         config['env']['params']['deterministic_policy'] = True
         config['env']['params']['nr_of_obstacles'] = [8, 13]
         config['env']['params']['obstacle']['pushable_threshold_coeff'] = 1
-        # config['env']['params']['target']['randomize_pos'] = False
+        config['env']['params']['target']['randomize_pos'] = False
         # config['env']['params']['target']['min_bounding_box'] = [.03, .02, .005]
         # config['env']['params']['target']['max_bounding_box'] = [.03, .02, .020]
         # config['env']['params']['obstacle']['min_bounding_box'] = [.03, .02, .005]
