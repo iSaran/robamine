@@ -1498,11 +1498,8 @@ class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
                 # patch_center_camera = patch_center_image
                 patch_center__ = np.matmul(camera_pose, np.array(
                     [patch_center_camera[0], patch_center_camera[1], 0, 1.0]))[:2]
-                x_init_ = patch_center__[0] - obs_dict['object_poses'][0, 0]
-                y_init_ = patch_center__[1] - obs_dict['object_poses'][0, 1]
-                if np.linalg.norm([x_init_, y_init_]) < np.linalg.norm([x_init, y_init]):
-                    x_init = x_init_
-                    y_init = y_init_
+                x_init = patch_center__[0] - obs_dict['object_poses'][0, 0]
+                y_init = patch_center__[1] - obs_dict['object_poses'][0, 1]
                 break
             r += step
 
