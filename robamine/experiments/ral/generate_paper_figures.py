@@ -23,6 +23,29 @@ from robamine.experiments.ral.supervised_push_obstacle import PushObstacleFeatur
 
 logger = logging.getLogger('robamine')
 
+def save_image(path, name, img):
+    mypath = os.path.join(path, name)
+    plt.imsave(mypath, img, cmap='gray', vmin=np.min(img), vmax=np.max(img))
+
+def get_visual_representation(obs, primitive):
+    heightmap = obs['heightmap_mask'][0].copy()
+    mask = obs['heightmap_mask'][1].copy()
+    target_bounding_box_z = obs['target_bounding_box'][2].copy()
+    finger_height = obs['finger_height'].copy()
+    surface_distances = [obs['surface_size'][0] - obs['object_poses'][0, 0], \
+                         obs['surface_size'][0] + obs['object_poses'][0, 0], \
+                         obs['surface_size'][1] - obs['object_poses'][0, 1], \
+                         obs['surface_size'][1] + obs['object_poses'][0, 1]]
+    surface_distances = np.array([x / 0.5 for x in surface_distances])
+    target_pos = obs['object_poses'][0, 0:2].copy()
+    visual_feature = clutter.get_actor_visual_feature(heightmap, mask, target_bounding_box_z,
+                                                      finger_height, 0,
+                                                      primitive, plot=False)
+    visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0],
+                                                               visual_feature.shape[1]).to('cpu')
+    ae_output = autoencoder(visual_feature).detach().cpu().numpy()[0, 0, :, :]
+    visual_feature = visual_feature.detach().cpu().numpy()[0, 0, :, :]
+    return visual_feature, ae_output
 
 if __name__ == '__main__':
     pid = os.getpid()
@@ -65,67 +88,27 @@ if __name__ == '__main__':
     autoencoder.load_state_dict(model)
 
     fig, ax = plt.subplots()
+    fig_path = os.path.join(logging_dir, 'generate_paper_figures')
 
-    img = env.env.heightmap_raw
-    name = 'heightmap'
-    path = os.path.join(os.path.join(logging_dir, 'generate_paper_figures'), name)
-    plt.imsave(path, img, cmap='gray', vmin=np.min(img), vmax=np.max(img))
-
-    img = env.env.mask_raw
-    name = 'mask'
-    path = os.path.join(os.path.join(logging_dir, 'generate_paper_figures'), name)
-    plt.imsave(path, img, cmap='gray', vmin=np.min(img), vmax=np.max(img))
-
-    img = env.env.mask_raw
-    path = os.path.join(os.path.join(logging_dir, 'generate_paper_figures'), name)
-    plt.imsave(path, img, cmap='gray', vmin=np.min(img), vmax=np.max(img))
+    save_image(fig_path, 'heightmap', env.env.heightmap_raw)
+    save_image(fig_path, 'mask', env.env.mask_raw)
 
     name = 'haha'
-    heightmap = obs['heightmap_mask'][0].copy()
-    mask = obs['heightmap_mask'][1].copy()
-    target_bounding_box_z = obs['target_bounding_box'][2].copy()
-    finger_height = obs['finger_height'].copy()
-    surface_distances = [obs['surface_size'][0] - obs['object_poses'][0, 0], \
-                              obs['surface_size'][0] + obs['object_poses'][0, 0], \
-                              obs['surface_size'][1] - obs['object_poses'][0, 1], \
-                              obs['surface_size'][1] + obs['object_poses'][0, 1]]
-    surface_distances = np.array([x / 0.5 for x in surface_distances])
-    target_pos = obs['object_poses'][0, 0:2].copy()
-    visual_feature = clutter.get_actor_visual_feature(heightmap, mask, target_bounding_box_z,
-                                                      finger_height, 0,
-                                                      0, plot=False)
-    visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0],
-                                                               visual_feature.shape[1]).to('cpu')
-    ae_output = autoencoder(visual_feature).detach().cpu().numpy()[0, 0, :, :]
-    visual_feature = visual_feature.detach().cpu().numpy()[0, 0, :, :]
 
-    img = visual_feature
-    name = 'feature'; path = os.path.join(os.path.join(logging_dir, 'generate_paper_figures'), name)
-    plt.imsave(path, img, cmap='gray', vmin=np.min(img), vmax=np.max(img))
+    v, v_hat = get_visual_representation(obs, 0)
+    save_image(fig_path, 'push_target_v', v)
+    save_image(fig_path, 'push_target_v_hat', v_hat)
 
-    img = ae_output
-    name = 'ae_output'; path = os.path.join(os.path.join(logging_dir, 'generate_paper_figures'), name)
-    plt.imsave(path, img, cmap='gray', vmin=np.min(img), vmax=np.max(img))
+    v, v_hat = get_visual_representation(obs, 1)
+    save_image(fig_path, 'push_obstacle_v', v)
+    save_image(fig_path, 'push_obstacle_v_hat', v_hat)
 
     action = [0, 0.5, 0]
     obs, _, _, _ = env.step(action)
 
-    heightmap = obs['heightmap_mask'][0].copy()
-    mask = obs['heightmap_mask'][1].copy()
-    target_bounding_box_z = obs['target_bounding_box'][2].copy()
-    finger_height = obs['finger_height'].copy()
-    surface_distances = [obs['surface_size'][0] - obs['object_poses'][0, 0], \
-                         obs['surface_size'][0] + obs['object_poses'][0, 0], \
-                         obs['surface_size'][1] - obs['object_poses'][0, 1], \
-                         obs['surface_size'][1] + obs['object_poses'][0, 1]]
-    surface_distances = np.array([x / 0.5 for x in surface_distances])
-    target_pos = obs['object_poses'][0, 0:2].copy()
-    visual_feature = clutter.get_actor_visual_feature(heightmap, mask, target_bounding_box_z,
-                                                      finger_height, 0,
-                                                      0, plot=False)
-    img = visual_feature
-    name = 'next_feature'; path = os.path.join(os.path.join(logging_dir, 'generate_paper_figures'), name)
-    plt.imsave(path, img, cmap='gray', vmin=np.min(img), vmax=np.max(img))
+    v, v_hat = get_visual_representation(obs, 0)
+    save_image(fig_path, 'next_push_target_v', v)
+    save_image(fig_path, 'next_push_target_v_hat', v_hat)
 
 
     params['env']['params']['render'] = True

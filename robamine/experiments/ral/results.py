@@ -37,7 +37,7 @@ def analyze_multiple_eval_envs(dir_, results_dir):
             {'name': 'Yang', 'path': '../ral-results/env-very-hard/yang',
              'action_discrete': False},
             {'name': 'Combo', 'path': '../ral-results/env-very-hard/splitac-modular/combo', 'action_discrete': False},
-            {'name': 'Combo', 'path': '../ral-results/env-very-hard/splitac-modular/combo813', 'action_discrete': False}]
+            {'name': 'Combo813', 'path': '../ral-results/env-very-hard/splitac-modular/combo813', 'action_discrete': False}]
     for i in range(len(exps)):
         exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
     analyze_multiple_evals(exps, results_dir, env_name='Env-very-hard')
