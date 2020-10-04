@@ -83,6 +83,7 @@ env:
       distance: [0.02, 0.10]
       target_init_distance: [0.0, 0.15]
       predict_collision: True
+      obstacle_avoid: True
     grasp:
       spread: [0.05, 0.05]
       height: [0.01, 0.01]
