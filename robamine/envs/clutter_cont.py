@@ -1281,14 +1281,31 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     #                                object_height=self.target_bounding_box[2],
                     #                                finger_size=self.finger_height)
 
+                    if self.params['push'].get('obstacle_avoid', True):
+
+                        push = PushTargetDepthObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
+                                                              push_distance_range=self.params['push']['distance'],
+                                                              init_distance_range=self.params['push']['target_init_distance'],
+                                                              finger_length=self.finger_length,
+                                                              finger_height=self.finger_height,
+                                                              target_height=self.target_bounding_box[2],
+                                                              camera=self.camera,
+                                                              pixels_to_m=self.pixels_to_m,
+                                                              rgb_to_camera_frame=self.rgb_to_camera_frame,
+                                                              camera_pose=get_camera_pose(self.sim, 'xtion'))
+                        self.init_distance_from_target = push.init_distance_from_target
+                        push.translate(self.obs_dict['object_poses'][0, :2])
+
+                    else:
+
                     # push = PushTargetReal(theta=action[1], push_distance=action[2], distance=action[3],
 
-                    # push = PushTargetReal(theta=action[1], push_distance=1, distance=action[2],
-                    #                       push_distance_range=self.params['push']['distance'],
-                    #                       init_distance_range=self.params['push']['target_init_distance'],
-                    #                       object_height=self.target_bounding_box[2],
-                    #                       finger_size=self.finger_height)
-                    # push.translate(self.obs_dict['object_poses'][0, :2])
+                        push = PushTargetReal(theta=action[1], push_distance=action[2], distance=action[3],
+                                              push_distance_range=self.params['push']['distance'],
+                                              init_distance_range=self.params['push']['target_init_distance'],
+                                              object_height=self.target_bounding_box[2],
+                                              finger_size=self.finger_height)
+                        push.translate(self.obs_dict['object_poses'][0, :2])
 
                     # push = PushTargetRealObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
                     #                                       push_distance_range=self.params['push']['distance'],
@@ -1297,19 +1314,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     #                                       target_height=self.target_bounding_box[2])
                     # self.init_distance_from_target = push.init_distance_from_target
                     # push.translate(self.obs_dict['object_poses'][0, :2])
-
-                    push = PushTargetDepthObjectAvoidance(self.obs_dict, angle=action[1], push_distance=action[2],
-                                                          push_distance_range=self.params['push']['distance'],
-                                                          init_distance_range=self.params['push']['target_init_distance'],
-                                                          finger_length=self.finger_length,
-                                                          finger_height=self.finger_height,
-                                                          target_height=self.target_bounding_box[2],
-                                                          camera=self.camera,
-                                                          pixels_to_m=self.pixels_to_m,
-                                                          rgb_to_camera_frame=self.rgb_to_camera_frame,
-                                                          camera_pose=get_camera_pose(self.sim, 'xtion'))
-                    self.init_distance_from_target = push.init_distance_from_target
-                    push.translate(self.obs_dict['object_poses'][0, :2])
 
                 else:
                     push = PushTarget(theta=action[1],

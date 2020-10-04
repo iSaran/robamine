@@ -1446,7 +1446,6 @@ class PushTargetRealObjectAvoidance(PushTargetRealCartesian):
         super(PushTargetRealObjectAvoidance, self).__init__(x_init=x_init, y_init=y_init, push_distance=push_distance_,
                                                             object_height=target_height, finger_size=finger_size)
 
-
 class PushTargetDepthObjectAvoidance(PushTargetRealCartesian):
     def __init__(self, obs_dict, angle, push_distance, push_distance_range, init_distance_range, target_height,
                  finger_length, finger_height, pixels_to_m, camera, rgb_to_camera_frame, camera_pose):
