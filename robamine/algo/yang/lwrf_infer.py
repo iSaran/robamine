@@ -3,9 +3,9 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
-from light_weight_refinenet.models.resnet import rf_lw50
-from light_weight_refinenet.utils.visualize import *
-from light_weight_refinenet.utils.helpers import prepare_img
+from robamine.algo.yang.light_weight_refinenet.models.resnet import rf_lw50
+from robamine.algo.yang.light_weight_refinenet.utils.visualize import *
+from robamine.algo.yang.light_weight_refinenet.utils.helpers import prepare_img
 
 
 class LwrfInfer:
@@ -61,7 +61,7 @@ class LwrfInfer:
 
         return self.res
 
-    def display_instances(self, overlay=False, title=""):
+    def display_instances(self, overlay=False, title="seg_results"):
         if not os.path.exists(self.save_path):
             os.mkdir(self.save_path)
         colors = self.color_map[np.array(self.res['class_ids'])]/255

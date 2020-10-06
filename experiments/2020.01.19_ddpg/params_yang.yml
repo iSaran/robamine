@@ -6,8 +6,8 @@ algorithm:
   future_reward_discount: 0.5
   stage_epoch: 1000
 logging:
-  critic_ckpt_file: '/home/mkiatos/robamine/logs/yang/2020-09-15.17:03:30/critic_models/critic-007500.pth'
-  coordinator_ckpt_file: '/home/mkiatos/robamine/logs/yang/2020-09-15.17:03:30/coordinator_models/coordinator-007500.pth'
+  critic_ckpt_file: '/home/mkiatos/robamine/logs/yang/2020-09-22.11:37:43/critic_models/critic-008000.pth'
+  coordinator_ckpt_file: '/home/mkiatos/robamine/logs/yang/2020-09-22.11:37:43/coordinator_models/coordinator-008000.pth'
   save_visualizations: true
 env:
   name: ClutterContWrapper-v0
@@ -17,25 +17,25 @@ env:
       n_rotations: 8
       n_primitives: 3
     hardcoded_primitive: 0
-    max_timesteps: 20
+    max_timesteps: 15
     real_state: True
     all_equal_height_prob: 0.2
     finger:
       size: 0.005
       type: sphere
     nr_of_obstacles:
-      - 8
-      - 8
+      - 7
+      - 7
     render: false
     target:
-      min_bounding_box: [.04, .03, .005]
-      max_bounding_box: [.04, .03, .020]
+      min_bounding_box: [.03, .02, .005]
+      max_bounding_box: [.03, .02, .020]
       probability_box: 1.0
       enforce_convex_hull: 15
-      randomize_pos: True
+      randomize_pos: False
     obstacle:
-      min_bounding_box: [.04, .03, .005]
-      max_bounding_box: [.04, .03, .020]
+      min_bounding_box: [.03, .02, .005]
+      max_bounding_box: [.03, .02, .020]
       probability_box: 1.0
       pushable_threshold_coeff: -0.5 # Set -0.5 by default or 1 if standalone push obstacle
     push:
@@ -47,7 +47,7 @@ env:
       height: [0.01, 0.01]
       workspace: [0.0, 0.1]
     feature_normalization_per: 'session'  # available: 'session', 'episode'
-    hug_probability: 0.5
+    hug_probability: 0.0
     walls:
       use: False
       singulate: False  # Set false if push target and walls

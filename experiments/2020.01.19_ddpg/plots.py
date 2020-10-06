@@ -12,7 +12,7 @@ def plot_epsilon_yang():
     x = np.arange(0, 10000, 1)
     epsilon = []
     for i in x:
-        epsilon.append(0.5 * np.power(0.9995, i) + 0.05)
+        epsilon.append(0.99 * np.power(0.9995, i) + 0.05)
 
     plt.plot(x, epsilon)
     plt.show()
@@ -71,5 +71,6 @@ def plot_normal():
 
     plt.hist(data, bins = 100)
     plt.show()
+
 if __name__ == '__main__':
     plot_epsilon_yang()

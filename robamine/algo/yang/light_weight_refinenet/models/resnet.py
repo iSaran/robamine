@@ -33,8 +33,8 @@ import torch
 
 import numpy as np
 
-from light_weight_refinenet.utils.helpers import maybe_download
-from light_weight_refinenet.utils.layer_factory import conv1x1, conv3x3, CRPBlock
+from robamine.algo.yang.light_weight_refinenet.utils.helpers import maybe_download
+from robamine.algo.yang.light_weight_refinenet.utils.layer_factory import conv1x1, conv3x3, CRPBlock
 
 data_info = {
     7 : 'Person',

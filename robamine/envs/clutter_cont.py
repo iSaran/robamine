@@ -382,7 +382,7 @@ class ClutterXMLGenerator(XMLGenerator):
     def seed(self, seed):
         self.rng.seed(seed)
 
-    def generate_random_xml(self, surface_length_range=[0.25, 0.25], surface_width_range=[0.25, 0.25]):
+    def generate_random_xml(self, surface_length_range=[0.224, 0.224], surface_width_range=[0.224, 0.224]):
 
         finger_size = self.params['finger']['size']
 
@@ -477,15 +477,15 @@ class ClutterXMLGenerator(XMLGenerator):
         else:
             self.n_obstacles = self.params['nr_of_obstacles'][0] + self.rng.randint(self.params['nr_of_obstacles'][1] - self.params['nr_of_obstacles'][0] + 1)  # 5 to 25 obstacles
 
-        # colors = np.zeros((self.params['nr_of_obstacles'][1] + 1, 4))
-        # colors[:, 3] = 1
-        # colors[1] = np.array([1, 0, 0, 1])
-        # colors[2] = np.array([1, 1, 0, 1])
-        # colors[3] = np.array([1, 0, 1, 1])
-        # colors[4] = np.array([0, 1, 1, 1])
-        # colors[5] = np.array([0, 1, 0, 1])
-        # colors[6] = np.array([0.5, 0.5, 0.5, 1])
-        # colors[7:] = np.array([0.5, 0.5, 0.5, 1])
+        colors = np.zeros((self.params['nr_of_obstacles'][1] + 1, 4))
+        colors[:, 3] = 1
+        colors[1] = np.array([1.0, 1.0, 0.0, 1]) # yellow
+        colors[2] = np.array([1.0, 0.0, 1.0, 1]) # magenta
+        colors[3] = np.array([0.0, 1.0, 0.0, 1]) # green
+        colors[4] = np.array([0.0, 0.0, 1.0, 1]) # blue
+        colors[5] = np.array([0.0, 1.0, 1.0, 1]) # cyan
+        colors[6] = np.array([1.0, 1.0, 1.0, 1])  # white
+        # colors[7] = np.array([0.51, 0.18, 0.0, 1])  # black
         for i in range(1, self.n_obstacles + 1):
             # Randomize type (box or cylinder)
             temp = self.rng.uniform(0, 1)
@@ -527,7 +527,7 @@ class ClutterXMLGenerator(XMLGenerator):
             r = self.rng.exponential(0.01) + target_length + max(x, y)
             theta = self.rng.uniform(0, 2 * math.pi)
             pos = [r * math.cos(theta) + target_pos[0], r * math.sin(theta) + target_pos[1], z]
-            obstacle = self.get_obstacle(index=i, type=type, pos=pos, size=[x, y, z])
+            obstacle = self.get_obstacle(index=i, type=type, pos=pos, size=[x, y, z], rgba=colors[i])
             self.worldbody.append(obstacle)
 
         # Setup fingers
@@ -773,6 +773,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.autoencoder = autoencoder
         self.autoencoder_scaler = autoencoder_scaler
 
+        self.obstacle_colors = ['red', 'yellow', 'magenta', 'green', 'blue', 'cyan']
+
     def __del__(self):
         if self.viewer is not None:
             glfw.make_context_current(self.viewer.window)
@@ -781,6 +783,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         glfw.destroy_window(self.offscreen.opengl_context.window)
 
     def reset_model(self):
+        self.singulation = False
+
         self.sim_step()
         dims = self.get_object_dimensions('target', self.surface_normal)
 
@@ -1001,8 +1005,9 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.raw_depth = depth
 
         # Calculate masks
-        color_detector = cv_tools.ColorDetector('red')
-        mask = color_detector.detect(bgr)
+        color_detector = cv_tools.ColorDetector()
+        self.obstacles_masks, self.obstacles_colors = color_detector.detect_all(bgr)
+        mask = color_detector.detect(bgr, color='red')
 
         #### Yang inputs ####
         self.raw_color = bgr
@@ -1010,8 +1015,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.raw_mask = mask
         #####################
 
-        obstacle_detector = cv_tools.ColorDetector('blue')
-        mask_obstacles = obstacle_detector.detect(bgr)
+        obstacle_detector = cv_tools.ColorDetector()
+        mask_obstacles = obstacle_detector.detect(bgr, color='blue')
 
         cv2.imwrite(os.path.join(self.log_dir, 'initial_mask.png'), mask)
         if len(np.argwhere(mask > 0)) < 200:
@@ -1222,11 +1227,16 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return obs_dict
 
     def get_obs(self):
-        self.get_heightmap()
+        try:
+            self.get_heightmap()
+            mask = cv_tools.Feature(self.raw_mask).normalize(255).array() # binary mask as input to yang20
+        except InvalidEnvError as e:
+            mask = np.zeros_like(self.raw_color)
+
         obs_dict = dict()
         obs_dict['color_img'] = self.raw_color
         obs_dict['depth_img'] = self.raw_depth
-        obs_dict['mask_img'] = cv_tools.Feature(self.raw_mask).normalize(255).array() # binary mask as input to yang20
+        obs_dict['mask_img'] = mask
         return obs_dict
 
     def step(self, action):
@@ -1322,7 +1332,14 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                     if contacts1[0] == 'target':
                         self.target_grasped_successfully = True
                     self._remove_obstacle_from_table(contacts1[0])
-                    self.obstacle_grasped_successfully = True
+
+                    if contacts1[0] != 'target':
+                        obj_id = int(contacts1[0].strip('object'))
+                        if obj_id < 6:
+                            color = self.obstacle_colors[obj_id]
+                            id = self.obstacles_colors.index(color)
+                            self.grasped_obstacle_mask = self.obstacles_masks[id]
+                            self.obstacle_grasped_successfully = True
         else:
             self.push_stopped_ext_forces = True
 
@@ -1780,13 +1797,21 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return -0.25
 
     def terminal_state_yang(self, mask):
-        if self.timesteps >= self.max_timesteps:
-            return True
-
         if self.target_grasped_successfully:
             return True
 
-        if (mask == 0).all():
+        if self.timesteps >= self.max_timesteps:
+            return True
+
+        if not self._target_is_on_table():
+            return True
+
+        try:
+            obs = self.get_obs_()
+            if detect_singulation_from_real_state(obs, singulate_from_walls=False):
+                self.singulation = True
+                return True
+        except InvalidEnvError as e:
             return True
 
         return False
@@ -1967,7 +1992,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         return True
 
     def move_joints_to_target(self, target_position, target_position2, duration=1, duration2=1,
-                              ext_force_policy = 'avoid', avoid_threshold=0.1, stop_threshold=5):
+                              ext_force_policy = 'avoid', avoid_threshold=5, stop_threshold=5):
         assert ext_force_policy == 'avoid' or ext_force_policy == 'ignore' or ext_force_policy == 'stop'
         init_time = self.time
         desired_quat = Quaternion()
