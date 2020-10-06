@@ -7,7 +7,6 @@ setup(name='robamine',
       author_email='iasons@auth.gr',
       install_requires=['tensorflow==1.12.0', \
                         'gym==0.12.1', \
-                        'mujoco-py==1.50.1.68', \
                         'sphinx', \
                         'sphinxcontrib-bibtex', \
                         'pandas==0.24.2', \
@@ -18,7 +17,7 @@ setup(name='robamine',
                         'PyQt5==5.12.3',\
                         'torch==1.1.0',\
                         'open3d-python==0.6.0.0',\
-                        'sklearn==0.22.1',
+                        'scikit-learn==0.22.1',
                         'h5py==2.10.0',
                         'seaborn==0.9.1']
 )

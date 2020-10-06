@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 import cv2
-import open3d
+# import open3d
 import math
 from sklearn.decomposition import PCA
 from robamine.utils.orientation import rot_z, rot_x, rot2angleaxis
