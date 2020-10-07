@@ -259,8 +259,9 @@ class Feature:
         super(Feature, self).__init__()
 
         self.heightmap = heightmap
-        self.size = heightmap.shape
+        self.size = (heightmap.shape[1],heightmap.shape[0])
         self.center = [int(self.size[0] / 2), int(self.size[1] / 2)]
+
 
     def increase_canvas_size(self, x, y):
         assert x >= self.size[0] and y >= self.size[1]
@@ -281,8 +282,8 @@ class Feature:
         """
         Crop the height map around the center with the given size
         """
-        cropped_heightmap = self.heightmap[self.center[0] - x:self.center[0] + x,
-                                           self.center[1] - y:self.center[1] + y]
+        cropped_heightmap = self.heightmap[self.center[1] - x:self.center[1] + x,
+                                           self.center[0] - y:self.center[0] + y]
         return Feature(cropped_heightmap)
 
     def mask_in(self, mask):
