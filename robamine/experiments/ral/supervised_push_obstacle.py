@@ -19,7 +19,7 @@ from robamine.utils.math import min_max_scale
 import robamine.algo.conv_vae as ae
 import h5py
 import copy
-from robamine.envs.clutter_cont import ClutterContWrapper
+# from robamine.envs.clutter_cont import ClutterContWrapper
 import math
 
 
