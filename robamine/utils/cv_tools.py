@@ -88,6 +88,24 @@ class PinholeCamera:
         y = (p[1] - self.cy) * z / self.f
         return np.array([x, y, z])
 
+class RealsenseCamera:
+    def __init__(self):
+        self.width, self.height = 1280, 720
+        self.f = 894.187
+        self.cx = 642.957
+        self.cy = 361.011
+
+    def get_camera_matrix(self):
+        camera_matrix = np.array(((self.f, 0, self.cx),
+                                  (0, self.f, self.cy),
+                                  (0, 0, 1)))
+        return camera_matrix
+
+    def back_project(self, p, z):
+        # z /= 1000.0
+        x = (p[0] - self.cx) * z / self.f
+        y = (p[1] - self.cy) * z / self.f
+        return np.array([x, y, z])
 
 color_params = {
     'red': ([0, 50, 50], [20, 255, 255], [0, 0, 255]),
