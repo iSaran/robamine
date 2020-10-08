@@ -464,6 +464,7 @@ class SplitDQN(core.RLAgent):
             return action
 
         valid_nets, _ = clutter.get_valid_primitives(state, n_primitives=self.nr_network)
+        print('valid_nets:', valid_nets)
         values = - 1e6 * np.ones(self.nr_network)
 
         state_feature = [state['push_target_feature'].copy(), state['push_obstacle_feature'].copy()]
@@ -472,6 +473,8 @@ class SplitDQN(core.RLAgent):
             s = torch.FloatTensor(state_feature[i]).to(self.device)
             if valid_nets[i]:
                 values[i] = float(self.network[i](s).cpu().detach().numpy())
+        print('q_values:', values)
+
         primitive = np.argmax(values)
         action = self.policy[primitive].predict(state)
         return action

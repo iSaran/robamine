@@ -82,6 +82,18 @@ class PushTargetDepthObjectAvoidance(clt_util.PushTargetRealCartesian):
             if (np.abs(patch_image) < 3e-3).all():
                 z = depth[patch_center[0], patch_center[1]]
                 patch_center_ = patch_center.copy()
+
+                self.end_point = -np.array([100 * np.cos(angle_), -100 * np.sin(angle_)])
+                fig, ax = plt.subplots()
+                ax.imshow(heightmap)
+                ax.arrow(patch_center_[1], patch_center_[0], self.end_point[0], self.end_point[1], head_width=10, color=[1, 0, 0])
+                rect = patches.Rectangle((patch_y, patch_x), patch_size, patch_size, linewidth=1, edgecolor='r', facecolor='none')
+                ax.add_patch(rect)
+                # plt.show()
+                path = os.path.join(PATH,'heightmap_with_action.png')
+                fig.savefig(path)
+
+
                 patch_center_[0] = patch_center[1]
                 patch_center_[1] = patch_center[0]
                 # print('patch_center:', patch_center_)
@@ -195,7 +207,7 @@ class ClutterReal:
         obs_dict['heightmap_mask'][1, :] = self.mask
         obs_dict['target_pos'] = self.target_pos.copy()
         obs_dict['object_poses'][0, :3] = self.target_pos.copy()
-        obs_dict['target_bounding_box'][2] = self.target_pos[2] * 2
+        obs_dict['target_bounding_box'][2] = self.target_pos[2]
 
         obs_dict['push_target_feature'] = clt_util.get_asymmetric_actor_feature_from_dict(obs_dict, self.autoencoder,
                                                                                  self.autoencoder_scaler, angle=0,
@@ -203,6 +215,13 @@ class ClutterReal:
         obs_dict['push_obstacle_feature'] = clt_util.get_asymmetric_actor_feature_from_dict(obs_dict, self.autoencoder, None,
                                                                                    angle=0,
                                                                                    primitive=1)
+        print('push target feature min max', np.min(obs_dict['push_target_feature']), np.max(obs_dict['push_target_feature']))
+
+        print('push obstacle feature', obs_dict['push_obstacle_feature'])
+        print('push obstacle feature min max', np.min(obs_dict['push_obstacle_feature']), np.max(obs_dict['push_obstacle_feature']))
+
+        
+        print('surface limits:', obs_dict['push_target_feature'][-4:])
         self.obs_dict = obs_dict.copy()
         return obs_dict
 
@@ -290,7 +309,7 @@ class ClutterReal:
         # print('target height: ', self.target_height)
 
     def get_visual_representation(self, primitive):
-        visual_feature = clt_util.get_actor_visual_feature(self.heightmap, self.mask, self.target_height/2.0,
+        visual_feature = clt_util.get_actor_visual_feature(self.heightmap, self.mask, self.target_pos[2],
                                                         self.finger_height, angle=0,
                                                         primitive=primitive, plot=False)
         visual_feature = torch.FloatTensor(visual_feature).reshape(1, 1, visual_feature.shape[0],
@@ -303,14 +322,20 @@ class ClutterReal:
         ae_output[ae_output <= 0.25 ] = 0
 
         # ae_output[ae_output < 1 and ae_output > 0.25] = 0.5
-        save_img(visual_feature, 'visual_feature')
-        save_img(ae_output, 'ae_output')
+        save_img(visual_feature, 'visual_feature' + str(primitive))
+        save_img(ae_output, 'ae_output' + str(primitive))
         return visual_feature, ae_output
 
     def step(self):
         obs = self.get_obs()
         self.get_visual_representation(0)
+        self.get_visual_representation(1)
         action = self.agent.predict(obs)
+        print('action from agent:', action)
+
+        
+
+
         if action[0] == 0:
             push = PushTargetDepthObjectAvoidance(heightmap=self.heightmap_full_frame, depth=self.depth_raw,
                                                   centroid_pxl_=self.target_pos_pxl, target_pos=self.target_pos,
@@ -338,8 +363,9 @@ class ClutterReal:
             'final_y': self.push_final[1],
             'height': self.push_init[2]
         }
-        with open(os.path.join(PATH, 'action.pkl'), 'wb') as f:
-            pickle.dump(action_dict, f)
+
+        with open(os.path.join(PATH, 'action'), 'wb') as f:
+            np.savetxt(f, np.append(self.push_init, self.push_final))
 
     def show(self):
         print('target_pos:', self.target_pos)

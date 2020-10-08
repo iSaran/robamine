@@ -913,9 +913,9 @@ def push_obstacle_feature_includes_affordances(obs_dict):
     finger_height = obs_dict['finger_height']
     # pixels_to_m = obs_dict['pixels_to_m'][0]
     # push_distance = obs_dict['push_distance_range'][1]
-    singulation_distance_in_pxl = 20
+    singulation_distance_in_pxl = 40
     crop_area = [singulation_distance_in_pxl, singulation_distance_in_pxl]
-
+    print('targer bounding box z', target_bounding_box_z)
     visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0,
                                               primitive=1, plot=False, maskout_target=True, crop_area=crop_area,
                                               pooling=False)
