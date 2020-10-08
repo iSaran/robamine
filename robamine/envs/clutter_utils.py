@@ -781,7 +781,7 @@ def get_asymmetric_actor_feature_from_dict(obs_dict, autoencoder, normalizer, an
     mask = obs_dict['heightmap_mask'][1]
     target_bounding_box_z = obs_dict['target_bounding_box'][2]
     finger_height = obs_dict['finger_height']
-    surface_edges = obs_dict['surface_edges']
+    # surface_edges = obs_dict['surface_edges']
 
     surface_distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
                  obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
@@ -911,9 +911,9 @@ def push_obstacle_feature_includes_affordances(obs_dict):
     mask = obs_dict['heightmap_mask'][1]
     target_bounding_box_z = obs_dict['target_bounding_box'][2]
     finger_height = obs_dict['finger_height']
-    pixels_to_m = obs_dict['pixels_to_m'][0]
-    push_distance = obs_dict['push_distance_range'][1]
-    singulation_distance_in_pxl = int(np.ceil(push_distance / pixels_to_m))
+    # pixels_to_m = obs_dict['pixels_to_m'][0]
+    # push_distance = obs_dict['push_distance_range'][1]
+    singulation_distance_in_pxl = 20
     crop_area = [singulation_distance_in_pxl, singulation_distance_in_pxl]
 
     visual_feature = get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_height, angle=0,

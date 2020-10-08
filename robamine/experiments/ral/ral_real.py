@@ -84,15 +84,15 @@ class PushTargetDepthObjectAvoidance(clt_util.PushTargetRealCartesian):
                 patch_center_ = patch_center.copy()
                 patch_center_[0] = patch_center[1]
                 patch_center_[1] = patch_center[0]
-                print('patch_center:', patch_center_)
+                # print('patch_center:', patch_center_)
                 patch_center_image = camera.back_project(patch_center_, z)
-                print('patch_center_image:', patch_center_image)
+                # print('patch_center_image:', patch_center_image)
                 rgb_to_camera_frame = np.eye(3)
                 patch_center_camera = np.matmul(rgb_to_camera_frame, patch_center_image)
                 # patch_center_camera = patch_center_image
                 patch_center__ = np.matmul(camera_pose, np.array(
                     [patch_center_camera[0], patch_center_camera[1], 0, 1.0]))[:2]
-                print('patch_center__:', patch_center__)
+                # print('patch_center__:', patch_center__)
                 x_init = patch_center__[0] - target_pos[0]
                 y_init = patch_center__[1] - target_pos[1]
                 break
@@ -116,6 +116,7 @@ class ClutterReal:
 
         # Surface limits in pixels
         self.surface_limits = [0.25, -0.25, 0.25, -0.25]
+        self.surface_size = [0.25, 0.25]
         self.surface_limits_px = [330, 1050, 0, 720]
         self.finger_height = 0.001
         self.finger_length = 0.015
@@ -158,6 +159,52 @@ class ClutterReal:
                               0)
 
         self.obs_dict = {}
+        self.push_init, self.push_final = None, None
+
+
+    @staticmethod
+    def get_obs_shapes():
+        """
+        Provides the shapes of the observation returned by the env. The shapes should be constants and should not change
+        dynamically, because we want them to store them in arrays like h5py.
+        """
+        return {'finger_height': (1,),
+                'finger_length': (1,),
+                'heightmap_mask': (2, 386, 386),
+                'surface_size': (2,),
+                'target_pos': (3,),
+                'target_bounding_box': (3,),
+                'object_poses': (1, 7)}
+
+
+    def get_obs(self):
+        shapes = self.get_obs_shapes()
+
+        obs_dict = {
+            'finger_height': np.array([self.finger_height]),
+            'finger_length': np.array([self.finger_length]),
+            'heightmap_mask': np.zeros(shapes['heightmap_mask']),
+            'surface_size': np.array(self.surface_size),
+            'target_pos': np.zeros(shapes['target_pos']),
+            'target_bounding_box': np.zeros(shapes['target_bounding_box']),
+            'object_poses': np.zeros(shapes['object_poses']),
+        }
+
+        self.get_heightmap()
+        obs_dict['heightmap_mask'][0, :] = self.heightmap
+        obs_dict['heightmap_mask'][1, :] = self.mask
+        obs_dict['target_pos'] = self.target_pos.copy()
+        obs_dict['object_poses'][0, :3] = self.target_pos.copy()
+        obs_dict['target_bounding_box'][2] = self.target_pos[2] * 2
+
+        obs_dict['push_target_feature'] = clt_util.get_asymmetric_actor_feature_from_dict(obs_dict, self.autoencoder,
+                                                                                 self.autoencoder_scaler, angle=0,
+                                                                                 primitive=0)
+        obs_dict['push_obstacle_feature'] = clt_util.get_asymmetric_actor_feature_from_dict(obs_dict, self.autoencoder, None,
+                                                                                   angle=0,
+                                                                                   primitive=1)
+        self.obs_dict = obs_dict.copy()
+        return obs_dict
 
     def get_heightmap(self):
         # Load grabbed images
@@ -187,14 +234,14 @@ class ClutterReal:
 
         # Calc target pos pxl
         self.target_pos_pxl = target_object.centroid.astype(np.int32)
-        print('target_pos_pxl', self.target_pos_pxl)
+        # print('target_pos_pxl', self.target_pos_pxl)
 
         # Calc target pos wrt world
         z = depth[self.target_pos_pxl[1],  self.target_pos_pxl[0]]
         centroid_image = self.camera.back_project(self.target_pos_pxl, z)
         self.target_pos = np.matmul(self.camera_pose, np.array([centroid_image[0], centroid_image[1], centroid_image[2], 1.0]))[:3]
         self.target_pos[2] /= 2.0
-        print('target pos', self.target_pos)
+        # print('target pos', self.target_pos)
 
         # Dilate mask due to depth inaccuracies
         kernel = np.ones((2, 2), np.uint8)
@@ -208,7 +255,7 @@ class ClutterReal:
         # Extract heighmap
         # plt.imshow(depth); plt.show()
         max_depth = np.max(depth)
-        print('max depth', max_depth)
+        # print('max depth', max_depth)
         depth[depth == 0] = max_depth
         depth[depth > max_depth - 0.02] = max_depth
         heightmap = max_depth - depth
@@ -240,11 +287,9 @@ class ClutterReal:
         self.mask = mask.copy()
         # self.surface_distances =
         self.target_height = self.target_pos[2] * 2
-        print('target height: ', self.target_height)
+        # print('target height: ', self.target_height)
 
     def get_visual_representation(self, primitive):
-        surface_distances = [0, 0, 0, 0]
-        surface_distances = np.array([x / 0.5 for x in surface_distances])
         visual_feature = clt_util.get_actor_visual_feature(self.heightmap, self.mask, self.target_height/2.0,
                                                         self.finger_height, angle=0,
                                                         primitive=primitive, plot=False)
@@ -252,8 +297,8 @@ class ClutterReal:
                                                                 visual_feature.shape[1]).to('cpu')
         ae_output = self.autoencoder(visual_feature).detach().cpu().numpy()[0, 0, :, :]
         visual_feature = visual_feature.detach().cpu().numpy()[0, 0, :, :]
-        print('max', np.max(ae_output))
-        print('min', np.min(ae_output))
+        # print('max', np.max(ae_output))
+        # print('min', np.min(ae_output))
         ae_output[ae_output >= 0.75] = 1
         ae_output[ae_output <= 0.25 ] = 0
 
@@ -262,18 +307,53 @@ class ClutterReal:
         save_img(ae_output, 'ae_output')
         return visual_feature, ae_output
 
-    def get_action(self):
-        # forward pass from model
-        state = {}
-        state["push_target_feature"] = 
-        self.agent.predict()
-        action = [0, 0, 1]
-        push = PushTargetDepthObjectAvoidance(heightmap=self.heightmap_full_frame, depth=self.depth_raw, centroid_pxl_=self.target_pos_pxl, target_pos=self.target_pos, angle=action[1], push_distance=action[2], push_distance_range=self.params['push']['distance'],
-                                           finger_length=self.finger_height, finger_height=self.finger_height, target_height=self.target_height,
-                                           camera=self.camera, pixels_to_m=self.pixels_to_m, camera_pose=self.camera_pose)
+    def step(self):
+        obs = self.get_obs()
+        self.get_visual_representation(0)
+        action = self.agent.predict(obs)
+        if action[0] == 0:
+            push = PushTargetDepthObjectAvoidance(heightmap=self.heightmap_full_frame, depth=self.depth_raw,
+                                                  centroid_pxl_=self.target_pos_pxl, target_pos=self.target_pos,
+                                                  angle=action[1], push_distance=action[2],
+                                                  push_distance_range=self.params['push']['distance'],
+                                                  finger_length=self.finger_height, finger_height=self.finger_height,
+                                                  target_height=self.target_height / 2,
+                                                  camera=self.camera, pixels_to_m=self.pixels_to_m,
+                                                  camera_pose=self.camera_pose)
+        elif action[0] == 1:
+            push = clt_util.PushObstacle(theta=action[1],
+                                push_distance=1,  # use maximum distance for now
+                                push_distance_range=self.params['push']['distance'],
+                                object_height=self.target_height,
+                                finger_height=self.finger_height)
 
         push.translate(self.target_pos[:2])
-        print('push init', push.get_init_pos(), 'push final', push.get_final_pos())
+
+        self.push_init = push.get_init_pos()
+        self.push_final = push.get_final_pos()
+        action_dict = {
+            'init_x': self.push_init[0],
+            'init_y': self.push_init[1],
+            'final_x': self.push_final[0],
+            'final_y': self.push_final[1],
+            'height': self.push_init[2]
+        }
+        with open(os.path.join(PATH, 'action.pkl'), 'wb') as f:
+            pickle.dump(action_dict, f)
+
+    def show(self):
+        print('target_pos:', self.target_pos)
+        print('target_pos_pxl:', self.target_pos_pxl)
+
+        surface_distances = [self.obs_dict['surface_size'][0] - self.target_pos[0], \
+                             self.obs_dict['surface_size'][0] + self.target_pos[0], \
+                             self.obs_dict['surface_size'][1] - self.target_pos[1], \
+                             self.obs_dict['surface_size'][1] + self.target_pos[1]]
+        surface_distances = np.array([x / 0.5 for x in surface_distances])
+        print('surface_distaces:', surface_distances)
+        print('self.push_init:', self.push_init)
+        print('self.push_final:', self.push_final)
+
 
 
 if __name__ == '__main__':
@@ -287,7 +367,7 @@ if __name__ == '__main__':
     elif hostname == 'triss':
         logging_dir = '/home/iason/robamine_logs/2020.01.16.split_ddpg/'
         PATH = '/home/iason/ws/ral/comms'
-        MODELS_PATH = '/home/iason/robamine_logs/2020.01.16.split_ddpg/VAE'
+        MODELS_PATH = '/home/iason/ws/ral/models'
     elif hostname == 'iti-479':
         logging_dir = '/home/mkiatos/robamine/logs/'
     elif hostname == 'pc':
@@ -303,6 +383,8 @@ if __name__ == '__main__':
     
 
     clutter = ClutterReal(params['env']['params'])
-    clutter.get_heightmap()
-    clutter.get_visual_representation(1)
-    clutter.get_action()
+    clutter.step()
+    clutter.show()
+    # clutter.get_heightmap()
+    # clutter.get_visual_representation(1)
+    # clutter.get_action()
