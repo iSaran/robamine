@@ -90,66 +90,34 @@ class PinholeCamera:
 
 
 color_params = {
-    'red': ([0, 50, 50], [20, 255, 255], [0, 0, 255]),
-    'blue': ([100, 150, 0], [140, 255, 255], [255, 0, 0]),
-    'green': ([40, 40, 40], [70, 255, 255], [0, 255, 0]),
-    'cyan': ([80, 100, 100], [100, 255, 255], [255, 255, 0]),
-    'yellow': ([20, 100, 100], [40, 255, 255], [0, 255, 255]),
-    'magenta': ([140, 100, 100], [160, 255, 255], [255, 0, 255]),
-    'white': ([0, 0, 230], [180, 25, 255], [255, 255, 255]),
+    'red': ([0, 120, 70], [10, 255, 255]),
+    'blue': ([100, 150, 0], [140, 255, 255]),
+    'green': ()
 }
 
 
 class ColorDetector:
-    def __init__(self, params=color_params):
+    def __init__(self, color, params=color_params):
         super(ColorDetector, self).__init__()
-        self.params = params
+
+        self.boundaries = params[color]
 
     '''
     Detects the given color in a bgr image
     img: image in BGR format
     '''
-    def detect(self, img, color, plot=False):
+    def detect(self, img, plot=False):
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        boundaries = self.params[color]
-        lower = np.array(boundaries[0])
-        upper = np.array(boundaries[1])
+        lower = np.array(self.boundaries[0])
+        upper = np.array(self.boundaries[1])
 
         # find the colors within the specified boundaries and apply the mask
         mask = cv2.inRange(hsv, lower, upper)
         if plot:
-            cv2.imshow(color, mask)
+            cv2.imshow('mask', mask)
             cv2.waitKey()
 
         return mask
-
-    def detect_all(self, img, plot=False):
-        masked_image = np.zeros(img.shape, dtype=np.uint8)
-
-        masks = []
-        detected_colors = []
-        for color in self.params:
-            mask = self.detect(img, color=color)
-            if (mask == 0).all():
-                continue
-            else:
-                masks.append(mask)
-                detected_colors.append(color)
-
-            masked_image = self.apply_mask(masked_image, mask, color=self.params[color][2])
-
-        if plot:
-            cv2.imshow('masked_image', masked_image)
-            cv2.waitKey()
-
-        return masks, detected_colors
-
-    def apply_mask(self, img, mask, color):
-        """Apply the given mask to the image.
-        """
-        for c in range(3):
-            img[:, :, c] = np.where(mask == 255, color[c], img[:, :, c])
-        return img
 
     def get_centroid(self, mask):
         indeces = np.argwhere(mask > 0)
@@ -230,7 +198,6 @@ class ColorDetector:
         for id in indices:
             height += depth[id[0]][id[1]]
         return height / indices.shape[0]
-
 
 
 class Feature:
