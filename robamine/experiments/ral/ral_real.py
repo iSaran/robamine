@@ -157,6 +157,8 @@ class ClutterReal:
         self.agent = combo.SplitDQN.load(os.path.join(MODELS_PATH, 'default/combo.pkl'), self.push_target_actor, self.push_obstacle_actor,
                               0)
 
+        self.obs_dict = {}
+
     def get_heightmap(self):
         # Load grabbed images
         with open(os.path.join(PATH, 'rgbd.pkl'), 'rb') as f:
@@ -165,28 +167,22 @@ class ClutterReal:
         # Calc rgb/depth blacked
         rgb[:, :self.surface_limits_px[0]] = 256
         rgb[:, self.surface_limits_px[1]:] = 256
-        # plt.imshow(rgb); plt.show()
         save_img(rgb, 'rgb_blacked')
         depth[:, :self.surface_limits_px[0]] = 0
         depth[:, self.surface_limits_px[1]:] = 0
         depth[depth > 0.7] = 0.64
         depth[depth < 0.5] = 0.64
         self.depth_raw = depth.copy()
-        # plt.imshow(depth); plt.show()
         save_img(depth, 'depth_blacked')
-        print('depth: min:', np.min(depth), 'max:', np.max(depth))
 
         # Calc mask
         color_detector = cv_tools.ColorDetector()
         mask = color_detector.detect(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), color='yellow')
         save_img(mask, 'mask')
-        # plt.imshow(mask); plt.show()
-        mask_points = np.argwhere(mask > 0)
         convex_mask = np.zeros(mask.shape, dtype=np.uint8)
         target_object = clt_util.TargetObjectConvexHull(mask)
         cv2.fillPoly(convex_mask, pts=[target_object.get_limits().astype(np.int32)], color=(255, 255, 255))
         save_img(convex_mask, 'convex_mask')
-        # plt.imshow(convex_mask); plt.show()
         mask = convex_mask
 
         # Calc target pos pxl
@@ -203,8 +199,7 @@ class ClutterReal:
         # Dilate mask due to depth inaccuracies
         kernel = np.ones((2, 2), np.uint8)
         mask = cv2.dilate(mask, kernel, iterations=5)
-        # plt.imshow(mask); plt.show()
-        save_img(mask, 'mask_translated_dilated')
+        save_img(mask, 'mask_dilated')
 
         rgb_mask = rgb.copy()
         rgb_mask[mask == 255] = 255
@@ -218,6 +213,7 @@ class ClutterReal:
         depth[depth > max_depth - 0.02] = max_depth
         heightmap = max_depth - depth
         # plt.imshow(heightmap); plt.show()
+        save_img(heightmap, 'heightmap_full_frame')
 
 
         # Crop and scale heighmap and mask
@@ -231,6 +227,8 @@ class ClutterReal:
         mask = cv2.resize(mask, (386, 386), interpolation = cv2.INTER_AREA)
         mask[mask > 0] = 255
         # mask2 = color_detector.detect(cv2.cvtColor(rgb_cropped, cv2.COLOR_RGB2BGR), color='yellow')
+        save_img(heightmap, 'heightmap')
+        save_img(mask, 'mask')
 
         # # Smooth heightmap for autoencoder
         # kernel = np.ones((3, 3), np.float32) / 25
