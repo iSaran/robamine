@@ -45,6 +45,16 @@ def save_img(img, name='untitled', gray=True):
     else:
         plt.imsave(path, img)
 
+def draw_action(img, init_pxl, theta, mult):
+    angle = min_max_scale(theta, range=[-1, 1], target_range=[-np.pi, np.pi])
+    end_point = mult * 200 * np.array([np.cos(angle), -np.sin(angle)])
+    fig, ax = plt.subplots()
+    ax.imshow(img)
+    ax.arrow(init_pxl[1], init_pxl[0], end_point[0], end_point[1], head_width=10, color=[1, 0, 0])
+    path = os.path.join(PATH,'rgb_with_action.png')
+    fig.savefig(path)
+
+
 class PushTargetDepthObjectAvoidance(clt_util.PushTargetRealCartesian):
     def __init__(self, heightmap, depth, centroid_pxl_, target_pos, angle, push_distance, push_distance_range, target_height,
                  finger_length, finger_height, pixels_to_m, camera, camera_pose):
@@ -82,6 +92,8 @@ class PushTargetDepthObjectAvoidance(clt_util.PushTargetRealCartesian):
             if (np.abs(patch_image) < 3e-3).all():
                 z = depth[patch_center[0], patch_center[1]]
                 patch_center_ = patch_center.copy()
+                self.patch_center = patch_center.copy()
+
 
                 self.end_point = -np.array([100 * np.cos(angle_), -100 * np.sin(angle_)])
                 fig, ax = plt.subplots()
@@ -125,6 +137,7 @@ class ClutterReal:
         self.mask = None
         self.target_pos_pxl = None
         self.target_pos = None
+        self.rgb = None
 
         # Surface limits in pixels
         self.surface_limits = [0.25, -0.25, 0.25, -0.25]
@@ -234,6 +247,7 @@ class ClutterReal:
         rgb[:, :self.surface_limits_px[0]] = 256
         rgb[:, self.surface_limits_px[1]:] = 256
         save_img(rgb, 'rgb_blacked')
+        self.rgb = rgb.copy()
         depth[:, :self.surface_limits_px[0]] = 0
         depth[:, self.surface_limits_px[1]:] = 0
         depth[depth > 0.7] = 0.64
@@ -294,7 +308,7 @@ class ClutterReal:
         mask[mask > 0] = 255
         # mask2 = color_detector.detect(cv2.cvtColor(rgb_cropped, cv2.COLOR_RGB2BGR), color='yellow')
         save_img(heightmap, 'heightmap')
-        save_img(mask, 'mask')
+        save_img(mask, 'resized_mask')
 
         # # Smooth heightmap for autoencoder
         # kernel = np.ones((3, 3), np.float32) / 25
@@ -345,12 +359,19 @@ class ClutterReal:
                                                   target_height=self.target_height / 2,
                                                   camera=self.camera, pixels_to_m=self.pixels_to_m,
                                                   camera_pose=self.camera_pose)
+            init_pxl = push.patch_center
+            draw_action(self.rgb, init_pxl, action[1], -1)
         elif action[0] == 1:
             push = clt_util.PushObstacle(theta=action[1],
                                 push_distance=1,  # use maximum distance for now
                                 push_distance_range=self.params['push']['distance'],
                                 object_height=self.target_height,
                                 finger_height=self.finger_height)
+            init_pxl = np.zeros(2)
+            init_pxl[0] = self.target_pos_pxl[1]
+            init_pxl[1] = self.target_pos_pxl[0]
+            draw_action(self.rgb, init_pxl, action[1], 1)
+
 
         push.translate(self.target_pos[:2])
 
