@@ -702,7 +702,7 @@ def get_actor_visual_feature(heightmap, mask, target_bounding_box_z, finger_heig
     if primitive == 0:
         threshold = 0  # assuming that the env doesnt spawn flat
     elif primitive == 1:
-        threshold = 2 * target_bounding_box_z + 1.1 * finger_height
+        threshold = 2 * target_bounding_box_z + 10 * finger_height
         masks = np.argwhere(mask == 255)
         if masks.size != 0:
             center = np.ones((masks.shape[0], 2))
@@ -928,15 +928,28 @@ def push_obstacle_feature_includes_affordances(obs_dict):
     return True
 
 def slide_is_eligible(obs_dict):
-    distances = get_distances_from_walls(obs_dict)
+    distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                 obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
     if np.min(distances) < 0.03:
         return True
     return False
 
 def get_valid_primitives(obs_dict, n_primitives=3):
+
+    distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                 obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                 obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+
+
     valid_primitives = np.zeros(n_primitives, dtype=np.bool)
 
-    valid_primitives[0] = True
+    if np.min(distances) < 0.03:
+        valid_primitives[0] = False
+    else:
+        valid_primitives[0] = True
 
     if push_obstacle_feature_includes_affordances(obs_dict):
         valid_primitives[1] = True

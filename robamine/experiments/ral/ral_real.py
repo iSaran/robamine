@@ -37,6 +37,7 @@ from robamine.experiments.ral.supervised_push_obstacle import Actor, PushObstacl
 
 PATH = '/home/iason/ral_exp'
 MODELS_PATH = None
+ENV = "walls"
 
 def save_img(img, name='untitled', gray=True):
     path = os.path.join(PATH, name + '.png')
@@ -171,16 +172,16 @@ class ClutterReal:
             self.autoencoder_scaler = pickle.load(file2)
 
         # Load actors
-        push_target_actor_path = os.path.join(MODELS_PATH, 'default/push_target.pkl')
+        push_target_actor_path = os.path.join(MODELS_PATH, ENV + '/push_target.pkl')
         with open(push_target_actor_path, 'rb') as file:
             pretrained_splitddpg = pickle.load(file)
             actor = ddpg.Actor(ae.LATENT_DIM + 4, pretrained_splitddpg['action_dim'][0], [400, 300])
             actor.load_state_dict(pretrained_splitddpg['actor'][0])
         self.push_target_actor = combo.ObsDictPushTarget(actor)
-        push_obstacle_actor_path = os.path.join(MODELS_PATH, 'default/push_obstacle.pkl')
+        push_obstacle_actor_path = os.path.join(MODELS_PATH, ENV + '/push_obstacle.pkl')
         self.push_obstacle_actor = combo.ObsDictPushObstacle(Actor.load(push_obstacle_actor_path))
 
-        self.agent = combo.SplitDQN.load(os.path.join(MODELS_PATH, 'default/combo.pkl'), self.push_target_actor, self.push_obstacle_actor,
+        self.agent = combo.SplitDQN.load(os.path.join(MODELS_PATH, ENV + '/combo.pkl'), self.push_target_actor, self.push_obstacle_actor,
                               0)
 
         self.obs_dict = {}
@@ -228,6 +229,21 @@ class ClutterReal:
         obs_dict['push_obstacle_feature'] = clt_util.get_asymmetric_actor_feature_from_dict(obs_dict, self.autoencoder, None,
                                                                                    angle=0,
                                                                                    primitive=1)
+        
+        obs_dict['slide_target_feature'] = obs_dict['push_target_feature'].copy()
+        distances = [obs_dict['surface_size'][0] - obs_dict['object_poses'][0, 0], \
+                    obs_dict['surface_size'][0] + obs_dict['object_poses'][0, 0], \
+                    obs_dict['surface_size'][1] - obs_dict['object_poses'][0, 1], \
+                    obs_dict['surface_size'][1] + obs_dict['object_poses'][0, 1]]
+        for i in range(len(distances)):
+            distances[i] -= 0.03
+            if distances[i] < 0:
+                distances[i] = 0
+            distances[i] /= 0.5
+        obs_dict['slide_target_feature'][-4:] = np.array(distances)
+
+
+        # obs_dict['slide_target_feature'][-4:] = get_distances_from_walls(obs_dict)
         print('push target feature min max', np.min(obs_dict['push_target_feature']), np.max(obs_dict['push_target_feature']))
 
         print('push obstacle feature', obs_dict['push_obstacle_feature'])
@@ -346,10 +362,7 @@ class ClutterReal:
         self.get_visual_representation(1)
         action = self.agent.predict(obs)
         print('action from agent:', action)
-
         
-
-
         if action[0] == 0:
             push = PushTargetDepthObjectAvoidance(heightmap=self.heightmap_full_frame, depth=self.depth_raw,
                                                   centroid_pxl_=self.target_pos_pxl, target_pos=self.target_pos,
