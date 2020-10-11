@@ -64,7 +64,7 @@ class PushTargetDepthObjectAvoidance(clt_util.PushTargetRealCartesian):
         # TODO: The patch has unit orientation and is the norm of the finger length. Optimally the patch should be
         # calculated using an oriented square.
         # patch_size = 2 * int(math.ceil(np.linalg.norm([finger_length, finger_length]) / pixels_to_m))
-        patch_size = 35
+        patch_size = 30
         centroid_pxl = np.zeros(2, dtype=np.int32)
         centroid_pxl[0] = centroid_pxl_[1]
         centroid_pxl[1] = centroid_pxl_[0]
@@ -290,7 +290,7 @@ class ClutterReal:
         max_depth = np.max(depth)
         # print('max depth', max_depth)
         depth[depth == 0] = max_depth
-        depth[depth > max_depth - 0.02] = max_depth
+        depth[depth > max_depth - 0.025] = max_depth
         heightmap = max_depth - depth
         # plt.imshow(heightmap); plt.show()
         save_img(heightmap, 'heightmap_full_frame')
@@ -361,6 +361,8 @@ class ClutterReal:
                                                   camera_pose=self.camera_pose)
             init_pxl = push.patch_center
             draw_action(self.rgb, init_pxl, action[1], -1)
+            push.translate(self.target_pos[:2])
+
         elif action[0] == 1:
             push = clt_util.PushObstacle(theta=action[1],
                                 push_distance=1,  # use maximum distance for now
@@ -371,9 +373,20 @@ class ClutterReal:
             init_pxl[0] = self.target_pos_pxl[1]
             init_pxl[1] = self.target_pos_pxl[0]
             draw_action(self.rgb, init_pxl, action[1], 1)
+            push.translate(self.target_pos[:2])
 
+        elif action[0] == 2:
+            direction = self.target_pos[:2] / np.linalg.norm(self.target_pos[:2])
+            push_init = np.array(self.target_pos[:2])
+            dist = 0.05
+            height = 0.035
+            push_final = push_init - dist * direction
+            push = clt_util.PushAction2D(push_init, push_final, z=height)
 
-        push.translate(self.target_pos[:2])
+            push_init_target = push_final + 0.06 * direction
+            push_final_target = push_init_target - 0.1 * direction
+            push2 = clt_util.PushAction2D(push_init_target, push_final_target, z=height / 1.5)
+
 
         self.push_init = push.get_init_pos()
         self.push_final = push.get_final_pos()
@@ -386,7 +399,11 @@ class ClutterReal:
         }
 
         with open(os.path.join(PATH, 'action'), 'wb') as f:
-            np.savetxt(f, np.append(self.push_init, self.push_final))
+            push = np.append(self.push_init, self.push_final)
+            if action[0] == 2:
+                push = np.append(push, push2.get_init_pos())
+                push = np.append(push, push2.get_final_pos())
+            np.savetxt(f, push)
 
     def show(self):
         print('target_pos:', self.target_pos)
