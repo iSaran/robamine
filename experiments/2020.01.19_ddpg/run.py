@@ -2267,7 +2267,8 @@ class GraspingInvisble:
                         self.success_rate.append(0)
                     self.no_of_actions.append(steps)
 
-                    print('Episode:', episodes, ', Success_rate:', np.mean(self.success_rate), ', mean_actions:', np.mean(self.no_of_actions))
+                    print('episode:', episodes, ', success_rate:', np.mean(self.success_rate), ', mean_actions:', np.mean(self.no_of_actions),
+                          'std:', np.std(self.no_of_actions), 'min:', np.min(self.no_of_actions), 'max:', np.max(self.no_of_actions))
 
                     self.target_grasped = False
                     break
@@ -2596,8 +2597,8 @@ if __name__ == '__main__':
     params['env']['params']['vae_path'] = os.path.join(logging_dir, 'VAE')
 
     # train_yang(params)
-    # grasping_invisble = GraspingInvisble(params)
-    # grasping_invisble.train()
+    grasping_invisble = GraspingInvisble(params)
+    grasping_invisble.train()
     # Basic runs
     # ----------
 
@@ -2699,4 +2700,4 @@ if __name__ == '__main__':
     #                push_obstacle_actor_path='real',
     #                seed=0)
     # exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
-    detect_target_mask()
+    # detect_target_mask()
