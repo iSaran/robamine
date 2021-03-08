@@ -44,7 +44,8 @@ def analyze_multiple_eval_envs(dir_, results_dir):
 
     exps = [{'name': 'Random', 'path': '../ral-results/env-walls/random', 'action_discrete': False},
             {'name': 'Combo', 'path': '../ral-results/env-walls/splitac-modular/combo', 'action_discrete': False},
-            {'name': 'Combo-2', 'path': '../ral-results/env-walls/with_2', 'action_discrete': False}]
+            {'name': 'Combo-2', 'path': '../ral-results/env-walls/with_2', 'action_discrete': False},
+            {'name': 'Yang-code', 'path': '../ral-results/yang_code', 'action_discrete': False}]
     for i in range(len(exps)):
         exps[i]['path'] = os.path.join(dir_, exps[i]['path'])
     analyze_multiple_evals(exps, results_dir, env_name='Env-walls')
@@ -78,12 +79,15 @@ def analyze_multiple_evals(exps, results_dir, env_name='Metric'):
                'Invalid Env before termination %',
                'Mean reward per step',
                'Mean actions for singulation',
+               'Std actions for singulation',
+               'Min actions for singulation',
+               'Max actions for singulation',
                'Push target used %',
                'Push Obstacle used %',
                'Extra primitive used %',
                'Model trained for (timesteps)']
 
-    percentage = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16]
+    percentage = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 17, 18, 19]
 
     data = [None] * len(names)
     columns = [None] * len(names)
@@ -237,6 +241,9 @@ def analyze_eval_in_scenes(dir, action_discrete=False):
                (invalid_env_before_termination / episodes),
                np.mean(rewards),
                np.mean(steps_singulations),
+               np.std(steps_singulations),
+               np.min(steps_singulations),
+               np.max(steps_singulations),
                push_target_used / timesteps,
                push_obstacle_used / timesteps,
                extra_primitive_used / timesteps,

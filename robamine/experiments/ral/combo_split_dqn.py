@@ -467,12 +467,16 @@ class SplitDQN(core.RLAgent):
         values = - 1e6 * np.ones(self.nr_network)
 
         state_feature = [state['push_target_feature'].copy(), state['push_obstacle_feature'].copy()]
+        print('push obstacle feature:', state['push_obstacle_feature'])
+        print('min max', np.min(state['push_obstacle_feature']), np.max(state['push_obstacle_feature']))
 
         for i in range(self.nr_network):
             s = torch.FloatTensor(state_feature[i]).to(self.device)
             if valid_nets[i]:
                 values[i] = float(self.network[i](s).cpu().detach().numpy())
         primitive = np.argmax(values)
+        x = input('action:')
+        primitive = int(x)
         action = self.policy[primitive].predict(state)
         return action
 
@@ -695,12 +699,15 @@ class ComboExp:
         config['env']['params']['max_timesteps'] = 10
         config['env']['params']['log_dir'] = '/tmp'
         config['env']['params']['deterministic_policy'] = True
+        config['env']['params']['nr_of_obstacles'] = [11, 13]
+        config['env']['params']['target']['randomize_pos'] = False
         config['world']['episodes'] = 20
         world = EvalWorld(agent, env=config['env'], params=config['world'])
+        world.seed_list = np.arange(0, 10, 1).tolist()
         world.run()
 
     def eval_in_scenes(self, n_scenes=1000):
-        rb_logging.init(directory=params['world']['logging_dir'], friendly_name=self.friendly_name + '_eval', file_level=logging.INFO)
+        rb_logging.init(directory=params['world']['logging_dir'], friendly_name=self.friendly_name + '_eval_test', file_level=logging.INFO)
         directory = os.path.join(self.params['world']['logging_dir'], self.friendly_name)
         with open(os.path.join(directory, 'config.yml'), 'r') as stream:
             try:
@@ -757,6 +764,6 @@ if __name__ == '__main__':
                    friendly_name='combo_split_dqn_deterministic_256size',
                    seed=1)
     # exp.train_eval(episodes=10000, eval_episodes=20, eval_every=100, save_every=100)
-    # exp.eval_with_render()
+    exp.eval_with_render()
     # exp.check_transition()
-    exp.eval_in_scenes(n_scenes=1000)
+    # exp.eval_in_scenes(n_scenes=1000)

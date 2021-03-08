@@ -767,6 +767,7 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
         self.heightmap_raw = None
         self.mask_raw = None
 
+        print('------------', get_body_names(self.sim.model).index('target'))
     def __del__(self):
         if self.viewer is not None:
             glfw.make_context_current(self.viewer.window)
@@ -1378,7 +1379,6 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                 else:
                     self.move_joint_to_target(joint_name='finger1', target_position=[end[0], end[1], None],
                                               desired_quat=push_quat, duration=duration)
-
             else:
                 init_z = 2 * self.target_bounding_box[2] + 0.05 + self.finger_height
                 self.sim.data.set_joint_qpos('finger1',
@@ -1459,9 +1459,12 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
 
     def viewer_setup(self):
         # Set the camera configuration (spherical coordinates)
+        # self.viewer.trackbodyid = 10
         self.viewer.cam.distance = 0.75
-        self.viewer.cam.elevation = -90  # default -90
-        self.viewer.cam.azimuth = 90
+        self.viewer.cam.elevation = -29.3  # default -90
+        # self.viewer.cam.elevation = -90  # default -90
+        self.viewer.cam.azimuth = -120.6
+        # self.viewer.cam.azimuth = 90
 
     def get_reward(self, observation, action):
         if self.params.get('real_state', False):
@@ -2053,6 +2056,8 @@ class ClutterCont(mujoco_env.MujocoEnv, utils.EzPickle):
                         'Contact dist of ' + self.sim.model.geom_id2name(contact.geom2) + ' with table: ' + str(
                             contact.dist) + ' > ' + str(threshold) + '. Probably jumped. Timestep: ' + str(
                             self.sim.data.time))
+
+        # print(self.viewer.cam.distance, self.viewer.cam.elevation, self.viewer.cam.azimuth)
 
 
     def check_target_occlusion(self, number_of_obstacles):

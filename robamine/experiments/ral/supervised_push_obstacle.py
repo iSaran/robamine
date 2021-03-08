@@ -266,8 +266,9 @@ class PushObstacleSupervisedExp:
         generator.seed(self.seed)
         seed_scenes = generator.randint(0, 1e7, n_samples)
 
-        if plot:
-            self.params['env']['params']['render'] = True
+        # if plot:
+        self.params['env']['params']['render'] = True
+        self.params['env']['params']['target']['randomize_pos'] = False
         env = ClutterContWrapper(params=self.params['env']['params'])
 
         keywords = ['heightmap_mask', 'target_bounding_box', 'finger_height', 'surface_edges', 'surface_size',
@@ -778,7 +779,7 @@ if __name__ == '__main__':
                                     seed=4,
                                     file_type='pkl',
                                     partial_dataset=None)
-    # exp.collect_samples(n_samples=8000, plot=True)
+    exp.collect_samples(n_samples=8000, plot=False)
     # exp.create_dataset(rotations=1)
     # exp.merge_datasets(seeds=[0, 1])
     # exp.scale_outputs()
@@ -793,7 +794,7 @@ if __name__ == '__main__':
     #           epochs=150,
     #           save_every=10,
     #           suffix='_deterministic_256size')
-    exp.visualize_dataset()
+    # exp.visualize_dataset()
     # exp.visual_evaluation(plot=True)
     # exp.eval_in_scenes(n_scenes=1000, random_policy=False)
     # exp.transform_angle()
