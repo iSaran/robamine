@@ -19,10 +19,55 @@ from robamine.algo.util import OrnsteinUhlenbeckActionNoise, NormalNoise, Transi
 
 logger = logging.getLogger('robamine')
 
+import robamine.algo.core as core
+
+
 
 # General functions for training and rendered eval
 # ------------------------------------------------
+class EvalWorld2(core.EvalWorld):
+    def run_episode(self, i):
+        episode = TestingEpisode(self.agent, self.env)
 
+        # LIke super run episode
+        if self.env_init_states:
+            init_state = self.env_init_states[i]
+        else:
+            init_state = None
+
+        if self.seed_list is not None:
+            seed = self.seed_list[i + self.seed_offset]
+        else:
+            seed = self.rng.randint(0, 999999999)
+
+        episode.run(render=self.render, init_state=init_state, seed=seed)
+
+        # Update tensorboard stats
+        self.stats.update(i, episode.stats)
+        self.episode_stats.append(episode.stats)
+        self.episode_list_data.append(episode.data)
+
+        # Save agent model
+        self.save()
+        if self.save_every and (i + 1) % self.save_every == 0:
+            self.save(suffix='_' + str(i+1))
+
+        # Save the config in YAML file
+        self.experience_time += episode.stats['experience_time']
+        self.update_results(n_iterations = i + 1, n_timesteps = episode.stats['n_timesteps'])
+
+        for i in range (0, episode.stats['n_timesteps']):
+            self.expected_values_file.write(str(episode.stats['q_value'][i]) + ',' + str(episode.stats['monte_carlo_return'][i]) + '\n')
+            self.expected_values_file.flush()
+
+        for i in range(len(episode.stats['actions_performed']) - 1):
+            self.actions_file.write(str(episode.stats['actions_performed'][i]) + ',')
+        self.actions_file.write(str(episode.stats['actions_performed'][-1]) + '\n')
+        self.actions_file.flush()
+
+        print('---')
+        self.episode_list_data.calc()
+        print(self.episode_list_data.__str__())
 class SplitDDPGNoObsAvoid(SplitDDPG):
     '''
     In info dict it saves for each primitive the loss of the critic and the loss
@@ -151,8 +196,8 @@ def train_eval(params):
     agent = SplitDDPGNoObsAvoid(None, None, params['agent']['params'])
     trainer = TrainEvalWorld(agent=agent, env=params['env'],
                              params={'episodes': 10000,
-                                     'eval_episodes': 20,
-                                     'eval_every': 100,
+                                     'eval_episodes': 1,
+                                     'eval_every': 5000,
                                      'eval_render': False,
                                      'save_every': 100})
 
@@ -175,13 +220,23 @@ def eval_with_render(dir):
     config['env']['params']['safe'] = False
     config['env']['params']['log_dir'] = '/tmp'
     config['world']['episodes'] = 10
-    world = EvalWorld.load(dir, overwrite_config=config)
+    agent = SplitDDPGNoObsAvoid.load(os.path.join(dir, 'model.pkl'))
+    world = EvalWorld2(agent, env=config['env'], params=config['world'])
+#     world.seed_list = np.arange(0, n_scenes, 1).tolist()
+# world.run()
+# print('Logging dir:', params['world']['logging_dir'])
+#
+#
+#
+#
+#
+#     world = EvalWorld.load(dir, overwrite_config=config)
     # world.seed_list = np.arange(33, 40, 1).tolist()
     world.seed(100)
     world.run()
 
 def eval_in_scenes(params, dir, n_scenes=1000):
-    rb_logging.init(directory=params['world']['logging_dir'], friendly_name='', file_level=logging.INFO)
+    rb_logging.init(directory=params['world']['logging_dir'], friendly_name='eval', file_level=logging.INFO)
     with open(os.path.join(dir, 'config.yml'), 'r') as stream:
         try:
             config = yaml.safe_load(stream)
@@ -192,9 +247,10 @@ def eval_in_scenes(params, dir, n_scenes=1000):
     config['env']['params']['safe'] = True
     config['env']['params']['log_dir'] = params['world']['logging_dir']
     config['env']['params']['deterministic_policy'] = True
-    config['env']['params']['nr_of_obstacles'] = [1, 13]
+    config['env']['params']['nr_of_obstacles'] = [8, 13]
     config['world']['episodes'] = n_scenes
-    world = EvalWorld.load(dir, overwrite_config=config)
+    agent = SplitDDPGNoObsAvoid.load(os.path.join(dir, 'model.pkl'))
+    world = EvalWorld(agent, env=config['env'], params=config['world'])
     world.seed_list = np.arange(0, n_scenes, 1).tolist()
     world.run()
     print('Logging dir:', params['world']['logging_dir'])
@@ -224,6 +280,5 @@ if __name__ == '__main__':
     params['agent']['params']['actor']['autoencoder']['scaler'] = os.path.join(os.path.join(logging_dir, 'VAE'), 'normalizer.pkl')
     params['env']['params']['push']['obstacle_avoid'] = False
 
-    train_eval(params)
-
-
+#    train_eval(params)
+    eval_in_scenes(params, '/home/mkiatos/robamine/logs/push_target_without_obs_avoid')
